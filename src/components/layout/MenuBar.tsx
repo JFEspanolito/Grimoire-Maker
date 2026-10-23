@@ -8,6 +8,8 @@ import { ProjectArchiveActions } from '../project/ProjectArchiveActions'
 import mark from '../../assets/grimoire-mark.svg'
 import styles from './MenuBar.module.css'
 import { ModManager } from '../mods/ModManager'
+import { useImportSection } from '../../stores/explorerStore'
+import { NewProjectDialog } from '../project/NewProjectDialog'
 
 type Panel = 'files' | 'templates' | 'snippets'
 interface Props {
@@ -19,9 +21,11 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const actions = useFileSystem()
   const print = usePrint()
   const workspace = useDocumentStore((s) => s.workspaceRoot)
+  const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
   const bar = useRef<HTMLElement>(null)
   const closeMenus = () => bar.current?.querySelectorAll('details[open]').forEach((menu) => menu.removeAttribute('open'))
   useEffect(() => {
@@ -46,12 +50,15 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
     <details name="application-menu">
       <summary>File</summary>
       <div className={styles.menu}>
+        <button onClick={() => void run(actions.createNewFile)}>New File…</button>
+        <button onClick={() => { closeMenus(); setNewProjectOpen(true) }}>New Project…</button>
         <button onClick={() => void run(() => actions.openFile())}>Open File…</button>
+        <button onClick={() => void run(actions.openWorkspace)}>Open Folder…</button>
+        <hr />
         <button disabled={readOnly} onClick={() => void run(actions.saveFile)}>Save</button>
         <button onClick={() => void run(actions.saveAll)}>Save All</button>
         <hr />
-        <button disabled={!workspace} onClick={() => void run(() => actions.importInto('Draft'))}>Import to Draft…</button>
-        <button disabled={!workspace} onClick={() => void run(() => actions.importInto('Research'))}>Import to Research…</button>
+        <button disabled={!workspace || !importSection} title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'} onClick={() => void run(() => actions.importInto())}>Import…</button>
         <hr />
         <button disabled={readOnly} onClick={() => void run(print)}>Export PDF…</button>
       </div>
@@ -81,5 +88,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
     <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
     <span className={styles.name}>GRIMOIRE MAKER</span>
     {error && <span role="alert" className={styles.error}>{error}</span>}
-  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}</>
+  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}
+    {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
+  </>
 }

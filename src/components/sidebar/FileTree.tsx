@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import {
   DndContext,
+  DragOverlay,
+  pointerWithin,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -13,12 +16,14 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { splitBinder } from '../../lib/binder'
 import type { FileNode } from '../../types/document'
+import { useExplorerStore } from '../../stores/explorerStore'
 
 type Editing =
   | { kind: 'new-file' | 'new-folder'; dir: string }
   | { kind: 'rename'; path: string }
 
 interface TreeContext {
+  root: string | null
   selected: string | null
   editing: Editing | null
   collapsed: ReadonlySet<string>
@@ -32,6 +37,7 @@ interface TreeContext {
 }
 
 const parentOf = (path: string): string => path.slice(0, path.lastIndexOf('/'))
+const actionButton = 'rounded px-2 py-1 hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-30 disabled:pointer-events-none'
 
 function InlineInput({
   initial = '',
@@ -61,8 +67,9 @@ function InlineInput({
 }
 
 function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
-  const drag = useDraggable({ id: node.path })
-  const drop = useDroppable({ id: node.path, disabled: !node.isDirectory })
+  const sectionRoot = ['Draft', 'Research', 'Trash'].some((section) => node.path.toLowerCase() === `${ctx.root}/${section}`.toLowerCase())
+  const drag = useDraggable({ id: node.path, disabled: sectionRoot })
+  const drop = useDroppable({ id: node.path, data: { directory: node.isDirectory ? node.path : parentOf(node.path) } })
   const expanded = !ctx.collapsed.has(node.path)
   const renaming = ctx.editing?.kind === 'rename' && ctx.editing.path === node.path
   const creatingHere =
@@ -75,7 +82,8 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
     <InlineInput initial={node.name} onSubmit={ctx.onSubmit} onCancel={ctx.onCancel} />
   ) : (
     <div
-      ref={drag.setNodeRef}
+      ref={(element) => { drag.setNodeRef(element); drop.setNodeRef(element) }}
+      data-tree-path={node.path}
       {...drag.listeners}
       {...drag.attributes}
       className={[
@@ -129,7 +137,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
   )
 
   return (
-    <li ref={node.isDirectory ? drop.setNodeRef : undefined}>
+    <li>
       {row}
       {node.isDirectory && expanded && (
         <ul className="ml-2.5 text-left">
@@ -151,18 +159,24 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
   )
 }
 
+function RootDrop({ path, children }: { path: string | null; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: path ?? '__none__', disabled: !path, data: { directory: path } })
+  return <ul ref={setNodeRef} className={`min-h-8 rounded text-left ${isOver ? 'ring-1 ring-amber-400' : ''}`}>{children}</ul>
+}
+
 export function FileTree() {
   const tree = useDocumentStore((s) => s.tree)
   const root = useDocumentStore((s) => s.workspaceRoot)
   const recent = useSessionStore((s) => s.recentWorkspaces)
   const workspaceError = useSessionStore((s) => s.workspaceError)
-  const { openWorkspace, openRecent, openFile, openFolder, createFile, createFolder, renameEntry, moveEntry, importInto } =
+  const { openWorkspace, openRecent, openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
     useFileSystem()
   const [selected, setSelected] = useState<FileNode | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
   const [editing, setEditing] = useState<Editing | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ node: FileNode; x: number; y: number } | null>(null)
+  const [draggedPath, setDraggedPath] = useState<string | null>(null)
 
   useEffect(() => {
     if (!menu) return
@@ -177,7 +191,6 @@ export function FileTree() {
   }, [menu])
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
-  const rootDrop = useDroppable({ id: root ?? '__none__', disabled: !root })
   const binder = splitBinder(tree)
   const nodes = binder
     ? [binder.draft, binder.research, binder.trash, ...binder.other].filter((node): node is FileNode => node !== null)
@@ -220,11 +233,18 @@ export function FileTree() {
   }
 
   const onDragEnd = (event: DragEndEvent) => {
+    setDraggedPath(null)
     const from = String(event.active.id)
-    const dir = event.over ? String(event.over.id) : null
-    if (!dir || parentOf(from) === dir) return
+    const dir = event.over?.data.current?.directory
+    if (typeof dir !== 'string' || from === dir || dir.startsWith(`${from}/`) || parentOf(from) === dir) return
+    if (['Draft', 'Research', 'Trash'].some((section) => from.toLowerCase() === `${root}/${section}`.toLowerCase())) return
     const name = from.slice(from.lastIndexOf('/') + 1)
-    void run(() => moveEntry(from, `${dir}/${name}`))
+    void run(async () => {
+      const to = `${dir}/${name}`
+      await moveEntry(from, to)
+      setSelected((current) => current?.path === from ? { ...current, path: to } : current)
+      useExplorerStore.getState().selectPath(to)
+    })
   }
 
   const trashPath = binder?.trash?.path ?? (root ? `${root}/Trash` : null)
@@ -239,10 +259,11 @@ export function FileTree() {
   }
 
   const ctx: TreeContext = {
+    root,
     selected: selected?.path ?? null,
     editing,
     collapsed,
-    onSelect: setSelected,
+    onSelect: (node) => { setSelected(node); useExplorerStore.getState().selectPath(node.path) },
     onToggle: (path) => setCollapsed((current) => {
       const next = new Set(current)
       if (next.has(path)) next.delete(path)
@@ -253,7 +274,7 @@ export function FileTree() {
     onSubmit: (name) => void onSubmit(name),
     onCancel: () => setEditing(null),
     onStartRename: (path) => setEditing({ kind: 'rename', path }),
-    onContextMenu: (node, x, y) => { setSelected(node); setMenu({ node, x, y }) },
+    onContextMenu: (node, x, y) => { setSelected(node); useExplorerStore.getState().selectPath(node.path); setMenu({ node, x, y }) },
   }
 
   const creatingAtRoot = editing && editing.kind !== 'rename' && editing.dir === root
@@ -264,7 +285,7 @@ export function FileTree() {
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Files</h2>
         <div className="flex items-center gap-2 text-xs">
           <button
-            className="disabled:opacity-30"
+            className={actionButton}
             title="New file"
             disabled={!root}
             onClick={() => startCreate('new-file')}
@@ -272,21 +293,17 @@ export function FileTree() {
             + File
           </button>
           <button
-            className="disabled:opacity-30"
+            className={actionButton}
             title="New folder"
             disabled={!root}
             onClick={() => startCreate('new-folder')}
           >
             + Folder
           </button>
-          <button className="underline" onClick={openWorkspace}>
+          <button className={actionButton} onClick={() => void run(openWorkspace)}>
             Open
           </button>
         </div>
-      </div>
-      <div className="mb-2 flex flex-wrap gap-2 text-xs" aria-label="Import files">
-        <button type="button" disabled={!root} className="disabled:opacity-30" onClick={() => void run(() => importInto('Draft'))}>Import to Draft</button>
-        <button type="button" disabled={!root} className="disabled:opacity-30" onClick={() => void run(() => importInto('Research'))}>Import to Research</button>
       </div>
       {recent.length > 0 && (
         <select
@@ -307,11 +324,14 @@ export function FileTree() {
       )}
       {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
       {workspaceError && <p className="mb-2 text-xs text-amber-400" role="alert">{workspaceError}</p>}
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <ul
-          ref={rootDrop.setNodeRef}
-          className={`min-h-8 rounded text-left ${rootDrop.isOver ? 'ring-1 ring-amber-400' : ''}`}
-        >
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}
+        onDragStart={({ active }) => setDraggedPath(String(active.id))} onDragCancel={() => setDraggedPath(null)}
+        collisionDetection={(args) => {
+          const collisions = pointerWithin(args)
+          const rows = collisions.filter((hit) => hit.id !== root)
+          return rows.length ? rows : collisions
+        }}>
+        <RootDrop path={root}>
           {creatingAtRoot && (
             <li>
               <InlineInput
@@ -324,7 +344,10 @@ export function FileTree() {
           {nodes.map((n) => (
             <Node key={n.path} node={n} ctx={ctx} />
           ))}
-        </ul>
+        </RootDrop>
+        {draggedPath && createPortal(<DragOverlay dropAnimation={null} style={{ pointerEvents: 'none' }}>
+          <div className="rounded border border-amber-400 bg-neutral-900 px-3 py-1 text-sm text-white shadow-lg">{draggedPath.split('/').pop()}</div>
+        </DragOverlay>, document.body)}
       </DndContext>
       {menu && (
         <div role="menu" aria-label={`${menu.node.name} actions`}

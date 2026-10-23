@@ -8,6 +8,7 @@ import { EditorToolbar } from '../editor/EditorToolbar'
 import { PagePreview } from '../editor/PagePreview'
 import { DocumentTabs } from './DocumentTabs'
 import styles from './DocumentWorkspace.module.css'
+import { useExplorerStore } from '../../stores/explorerStore'
 
 const FilePreview = lazy(() => import('../viewers/FilePreview').then((module) => ({ default: module.FilePreview })))
 
@@ -16,6 +17,7 @@ export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; 
   const viewMode = useSettingsStore((s) => s.viewMode)
   const activePath = useDocumentStore((s) => s.document.path)
   const focus = (pane: 0 | 1) => {
+    useExplorerStore.getState().selectPath(null)
     focusPane(pane)
     const path = useTabStore.getState().panes[pane]
     if (path && /\.md$/i.test(path)) useDocumentStore.getState().activate(path)

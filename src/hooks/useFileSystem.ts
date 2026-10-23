@@ -14,7 +14,9 @@ import {
   withAppStateLock,
   type AppState,
 } from '../lib/appState'
-import { remapPath, setupBinder, splitBinder } from '../lib/binder'
+import { remapPath, splitBinder } from '../lib/binder'
+import { initializeProject } from '../lib/newProject'
+import { currentImportSection, useExplorerStore } from '../stores/explorerStore'
 import { serializeDocument } from '../lib/frontmatter'
 import { applyTemplateFiles } from '../lib/templateActions'
 import type { Template } from '../lib/templates'
@@ -116,13 +118,13 @@ export function useFileSystem() {
 
   const activateWorkspace = useCallback(async (root: string) => {
     if (!(await saveAllDocuments())) return
-    await setupBinder({ exists, mkdir }, root)
+    const demo = await initializeProject({ exists, mkdir, readDir, writeTextFile }, root)
     const tree = await readTree(root)
     const previous = await loadAppState()
     const lastFile = previous.lastWorkspace === root && previous.lastFile?.startsWith(`${root}/`)
       && await exists(previous.lastFile) ? previous.lastFile : null
     const binder = splitBinder(tree)
-    const initial = lastFile ?? firstMarkdown(binder
+    const initial = lastFile ?? demo ?? firstMarkdown(binder
       ? [binder.draft, binder.research, ...binder.other].filter((node): node is FileNode => node !== null)
       : tree)
     const markdown = initial && /\.md$/i.test(initial)
@@ -131,6 +133,7 @@ export function useFileSystem() {
     useDocumentStore.getState().resetDocuments()
     if (!initial || markdown) loadFromRaw(initial, raw)
     useTabStore.getState().reset(initial)
+    useExplorerStore.getState().selectPath(null)
     useSessionStore.getState().setWorkspaceError(null)
     await remember((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
   }, [loadFromRaw, saveAllDocuments, remember, setWorkspace])
@@ -142,6 +145,21 @@ export function useFileSystem() {
     if (typeof dir !== 'string') return
     await runFileAction(() => activateWorkspace(dir.replaceAll('\\', '/')))
   }, [activateWorkspace])
+
+  const createProject = async (name: string): Promise<boolean> => {
+    if (!isTauri()) return false
+    const clean = validateName(name)
+    const parent = await open({ directory: true, recursive: true, title: `Choose a location for ${clean}` })
+    if (typeof parent !== 'string') return false
+    const path = `${parent.replaceAll('\\', '/').replace(/\/$/, '')}/${clean}`
+    return runFileAction(async () => {
+      if (await exists(path)) throw new Error(`"${path}" already exists. Use Open Folder instead.`)
+      if (!(await saveAllDocuments())) return false
+      await mkdir(path)
+      await activateWorkspace(path)
+      return useDocumentStore.getState().workspaceRoot === path
+    })
+  }
 
   /** Reopens a remembered folder; one that no longer opens is dropped from the list. */
   const openRecent = useCallback(
@@ -214,6 +232,7 @@ export function useFileSystem() {
       const target = selected.replaceAll('\\', '/')
       const current = useDocumentStore.getState().document
       if (useTabStore.getState().active === target) {
+        useExplorerStore.getState().selectPath(target)
         useTabStore.getState().open(target, newTab)
         return
       }
@@ -230,6 +249,7 @@ export function useFileSystem() {
         else store.activate(target)
       } else store.deactivate()
       useTabStore.getState().open(target, newTab || !!dirty)
+      useExplorerStore.getState().selectPath(target)
       if (previous && !useTabStore.getState().paths.includes(previous)) useDocumentStore.getState().forget(previous)
       useSettingsStore.getState().setViewMode('edit')
       await remember((s) => ({ ...s, lastFile: target }))
@@ -341,9 +361,34 @@ export function useFileSystem() {
     throw e
   }), [setWorkspace])
 
-  const importInto = useCallback((section: ImportSection) => runFileAction(async () => {
+  const createNewFile = async () => {
+    if (!isTauri()) return
+    const path = await runFileAction(async () => {
+      const current = useDocumentStore.getState().document
+      if (!current.path && current.dirty && !(await persistCurrentDocument())) return null
+      const root = useDocumentStore.getState().workspaceRoot
+      const section = currentImportSection() ?? 'Draft'
+      const selected = await save({
+        title: 'New Markdown File',
+        defaultPath: root ? `${root}/${section}/untitled.md` : 'untitled.md',
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      })
+      if (!selected) return null
+      const target = selected.replaceAll('\\', '/')
+      if (!/\.md$/i.test(target)) throw new Error('New files must use the .md extension.')
+      if (await exists(target)) throw new Error(`"${target}" already exists. Use Open File instead.`)
+      await writeTextFile(target, '', { createNew: true })
+      await refreshTree()
+      return target
+    })
+    if (path) await openFile(path, true)
+  }
+
+  const importInto = useCallback((requestedSection?: ImportSection) => runFileAction(async () => {
     const root = useDocumentStore.getState().workspaceRoot
     if (!root || !isTauri()) return
+    const section = requestedSection ?? currentImportSection()
+    if (!section) throw new Error('Select Draft or Research to import files.')
     const selected = await open({ multiple: true, directory: false, title: `Import into ${section}` })
     if (!selected) return
     try {
@@ -360,6 +405,8 @@ export function useFileSystem() {
     saveAll,
     openRestored: (path: string) => runFileAction(() => activateWorkspace(path.replaceAll('\\', '/'))),
     importInto,
+    createProject,
+    createNewFile,
     openWorkspace,
     openRecent,
     restoreSession,

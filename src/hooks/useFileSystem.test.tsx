@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { open, save } from '@tauri-apps/plugin-dialog'
-import { exists, mkdir, readDir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
+import { exists, mkdir, readDir, readTextFile, writeTextFile, readFile, writeFile, stat, rename } from '@tauri-apps/plugin-fs'
 import { invoke } from '@tauri-apps/api/core'
 import { loadAppState, updateAppState, type AppState } from '../lib/appState'
 import { applyTemplateFiles } from '../lib/templateActions'
 import { useDocumentStore } from '../stores/documentStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useTabStore } from '../stores/tabStore'
+import { useExplorerStore } from '../stores/explorerStore'
 import { useFileSystem } from './useFileSystem'
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }))
@@ -20,6 +21,9 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   readTextFile: vi.fn(),
   rename: vi.fn(),
   writeTextFile: vi.fn(),
+  readFile: vi.fn(),
+  writeFile: vi.fn(),
+  stat: vi.fn(),
 }))
 vi.mock('../lib/appState', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/appState')>()),
@@ -47,6 +51,7 @@ beforeEach(async () => {
   useDocumentStore.getState().resetDocuments()
   useDocumentStore.getState().loadFromRaw(null, '')
   useTabStore.getState().reset(null)
+  useExplorerStore.getState().selectPath(null)
   useDocumentStore.getState().setWorkspace(null, [])
   useSessionStore.getState().setRecentWorkspaces([])
   vi.mocked(open).mockResolvedValue('/workspace')
@@ -67,6 +72,67 @@ beforeEach(async () => {
   )
   root = createRoot(document.createElement('div'))
   await act(async () => root?.render(<Harness onReady={(value) => { actions = value }} />))
+})
+
+describe('new files and projects', () => {
+  it('creates a separate named project with the demo and remembers it', async () => {
+    expect(await actions.createProject('My Grimoire')).toBe(true)
+    expect(open).toHaveBeenCalledWith({ directory: true, recursive: true, title: 'Choose a location for My Grimoire' })
+    expect(mkdir).toHaveBeenCalledWith('/workspace/My Grimoire')
+    expect(writeTextFile).toHaveBeenCalledWith('/workspace/My Grimoire/Draft/Chapter 1/Welcome.md', expect.stringContaining('# Welcome to Grimoire Maker'), { createNew: true })
+    expect(useDocumentStore.getState().workspaceRoot).toBe('/workspace/My Grimoire')
+    expect(state.lastWorkspace).toBe('/workspace/My Grimoire')
+    expect(useTabStore.getState().active).toBe('/workspace/My Grimoire/Draft/Chapter 1/Welcome.md')
+  })
+
+  it('cancels project creation without creating folders', async () => {
+    vi.mocked(open).mockResolvedValueOnce(null)
+    expect(await actions.createProject('Cancelled')).toBe(false)
+    expect(mkdir).not.toHaveBeenCalled()
+    expect(writeTextFile).not.toHaveBeenCalled()
+  })
+
+  it('rejects an existing project folder without changing the workspace', async () => {
+    directories.add('/workspace/Existing')
+    await expect(actions.createProject('Existing')).rejects.toThrow('already exists')
+    expect(mkdir).not.toHaveBeenCalled()
+    expect(useDocumentStore.getState().workspaceRoot).toBeNull()
+  })
+
+  it('keeps unsaved text and creates nothing when saving before a new project is cancelled', async () => {
+    useDocumentStore.getState().setBody('Keep these notes')
+    vi.mocked(save).mockResolvedValueOnce(null)
+    expect(await actions.createProject('Cancelled')).toBe(false)
+    expect(mkdir).not.toHaveBeenCalled()
+    expect(useDocumentStore.getState().document.body).toBe('Keep these notes')
+  })
+
+  it('creates a Markdown file in a new tab while preserving the dirty current file', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().loadFromRaw('/workspace/Draft/old.md', 'Old')
+    useDocumentStore.getState().setBody('Unsaved')
+    useTabStore.getState().reset('/workspace/Draft/old.md')
+    vi.mocked(readTextFile).mockResolvedValueOnce('')
+    await actions.createNewFile()
+    expect(save).toHaveBeenCalledWith({ title: 'New Markdown File', defaultPath: '/workspace/Draft/untitled.md', filters: [{ name: 'Markdown', extensions: ['md'] }] })
+    expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/untitled.md', '', { createNew: true })
+    expect(useTabStore.getState().paths).toEqual(['/workspace/Draft/old.md', '/workspace/Draft/untitled.md'])
+    expect(useDocumentStore.getState().buffers['/workspace/Draft/old.md']).toMatchObject({ body: 'Unsaved', dirty: true })
+    expect(useDocumentStore.getState().document.body).toBe('')
+  })
+
+  it('does not overwrite an existing file through New File', async () => {
+    directories.add('/workspace/Draft/untitled.md')
+    await expect(actions.createNewFile()).rejects.toThrow('already exists')
+    expect(writeTextFile).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when New File is cancelled', async () => {
+    vi.mocked(save).mockResolvedValueOnce(null)
+    await actions.createNewFile()
+    expect(writeTextFile).not.toHaveBeenCalled()
+    expect(useTabStore.getState().paths).toEqual([])
+  })
 })
 
 describe('switching Markdown files', () => {
@@ -234,6 +300,8 @@ describe('workspace opening', () => {
     expect(useDocumentStore.getState().tree.map((node) => node.name)).toEqual(['Draft', 'Research', 'Trash'])
     expect(state.lastWorkspace).toBe('/workspace')
     expect(save).not.toHaveBeenCalled()
+    expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/Chapter 1/Welcome.md', expect.stringContaining('# Welcome to Grimoire Maker'), { createNew: true })
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/Chapter 1/Welcome.md')
   })
 
   it('opens an existing Draft document instead of leaving the welcome page visible', async () => {
@@ -295,7 +363,7 @@ describe('workspace opening', () => {
     await Promise.all([actions.restoreSession(), actions.restoreSession()])
 
     expect(invoke).toHaveBeenCalledTimes(1)
-    expect(mkdir).toHaveBeenCalledTimes(3)
+    expect(mkdir).toHaveBeenCalledTimes(4)
   })
 
   it('keeps a remembered project when restoration fails instead of forgetting it silently', async () => {
@@ -358,6 +426,47 @@ describe('project rename', () => {
     await expect(actions.renameWorkspace('Existing')).rejects.toThrow('Destination already exists')
     expect(useDocumentStore.getState().workspaceRoot).toBe('/workspace')
     expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/chapter.md')
+  })
+})
+
+describe('contextual imports and binder moves', () => {
+  it.each(['Draft', 'Research'] as const)('imports into the active file section: %s', async (section) => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useTabStore.getState().reset(`/workspace/${section}/chapter/note.md`)
+    vi.mocked(open).mockResolvedValueOnce(['/incoming/picture.png'])
+    vi.mocked(stat).mockResolvedValue({ size: 3, isFile: true } as Awaited<ReturnType<typeof stat>>)
+    vi.mocked(readFile).mockResolvedValue(new Uint8Array([1, 2, 3]))
+    await actions.importInto()
+    expect(open).toHaveBeenCalledWith({ multiple: true, directory: false, title: `Import into ${section}` })
+    expect(writeFile).toHaveBeenCalledWith(`/workspace/${section}/picture.png`, new Uint8Array([1, 2, 3]), { createNew: true })
+  })
+
+  it('uses the clicked section instead of the active document', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useTabStore.getState().reset('/workspace/Draft/note.md')
+    useExplorerStore.getState().selectPath('/workspace/Research')
+    vi.mocked(open).mockResolvedValueOnce(['/incoming/note.md'])
+    vi.mocked(stat).mockResolvedValue({ size: 1, isFile: true } as Awaited<ReturnType<typeof stat>>)
+    vi.mocked(readFile).mockResolvedValue(new Uint8Array([42]))
+    await actions.importInto()
+    expect(writeFile).toHaveBeenCalledWith('/workspace/Research/note.md', new Uint8Array([42]), { createNew: true })
+  })
+
+  it.each([
+    ['Draft', 'Research'], ['Draft', 'Trash'], ['Research', 'Draft'],
+    ['Research', 'Trash'], ['Trash', 'Draft'], ['Trash', 'Research'],
+  ])('moves %s to %s without losing unsaved text or tabs', async (from, to) => {
+    const source = `/workspace/${from}/note.md`
+    const target = `/workspace/${to}/note.md`
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().loadFromRaw(source, 'Saved')
+    useDocumentStore.getState().setBody('Unsaved')
+    useTabStore.getState().reset(source)
+    await actions.moveEntry(source, target)
+    expect(rename).toHaveBeenCalledWith(source, target)
+    expect(useTabStore.getState().active).toBe(target)
+    expect(useDocumentStore.getState().document).toMatchObject({ path: target, body: 'Unsaved', dirty: true })
+    expect(writeTextFile).not.toHaveBeenCalled()
   })
 })
 

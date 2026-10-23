@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
@@ -8,6 +9,7 @@ import { resolveTheme } from '../../lib/themes'
 import { PAGE_SIZES, type PageSizeId, type ViewMode } from '../../types/document'
 import { ProjectName } from './ProjectName'
 import { useTabStore } from '../../stores/tabStore'
+import { useImportSection } from '../../stores/explorerStore'
 import styles from './Toolbar.module.css'
 
 const btn = styles.button
@@ -24,7 +26,15 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
   visiblePanels: Record<Panel, boolean>
   onTogglePanel: (panel: Panel) => void
 }) {
-  const { openFile, saveFile } = useFileSystem()
+  const { openFile, saveFile, importInto } = useFileSystem()
+  const importSection = useImportSection()
+  const [importError, setImportError] = useState('')
+  const importFiles = async () => {
+    setImportError('')
+    try { await importInto() } catch (cause) {
+      setImportError(cause instanceof Error ? cause.message : String(cause))
+    }
+  }
   const exportPdf = usePrint()
   const { pageSize, columns, theme, viewMode, setPageSize, setColumns, setTheme, setViewMode } =
     useSettingsStore()
@@ -45,9 +55,15 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
       <button className={btn} disabled={readOnly} onClick={() => void saveFile().catch(() => undefined)}>
         Save
       </button>
+      <button type="button" className={btn} disabled={!importSection}
+        title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'}
+        onClick={() => void importFiles()}>
+        Import
+      </button>
       <button className={btn} disabled={readOnly} onClick={exportPdf}>
         Export PDF
       </button>
+      {importError && <span role="alert" className="text-xs text-red-400">{importError}</span>}
       </div>
       <div className={styles.group} role="group" aria-label="Panels">
         {(['files', 'templates', 'snippets'] as const).map((panel) => (

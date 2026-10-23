@@ -3,6 +3,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { useDocumentStore } from '../../stores/documentStore'
 import { FileTree } from './FileTree'
+import { useExplorerStore } from '../../stores/explorerStore'
+import { useTabStore } from '../../stores/tabStore'
+import { Toolbar } from '../layout/Toolbar'
+
+vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
 
 const openFileMock = vi.hoisted(() => vi.fn())
 const moveEntryMock = vi.hoisted(() => vi.fn())
@@ -23,19 +28,28 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount())
   root = null
   useDocumentStore.getState().setWorkspace(null, [])
+  useExplorerStore.getState().selectPath(null)
+  useTabStore.getState().reset(null)
 })
 
 describe('project explorer', () => {
-  it('imports into the selected binder section', async () => {
-    useDocumentStore.getState().setWorkspace('/book', [])
+  it('imports from the toolbar immediately before Export PDF into the selected binder section', async () => {
+    useDocumentStore.getState().setWorkspace('/book', ['Draft', 'Research', 'Trash'].map((name) => ({ name, path: `/book/${name}`, isDirectory: true, children: [] })))
     const container = document.createElement('div')
     root = createRoot(container)
-    await act(async () => root?.render(<FileTree />))
+    await act(async () => root?.render(<><Toolbar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><FileTree /></>))
     for (const section of ['Draft', 'Research']) {
-      const button = Array.from(container.querySelectorAll('button')).find((item) => item.textContent === `Import to ${section}`)
-      await act(async () => button?.click())
-      expect(importIntoMock).toHaveBeenCalledWith(section)
+      await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Collapse ${section}"]`)?.click())
+      const buttons = Array.from(container.querySelectorAll('button')).filter((item) => item.textContent === 'Import')
+      expect(buttons).toHaveLength(1)
+      expect(buttons[0].closest('header')).not.toBeNull()
+      expect(buttons[0].nextElementSibling?.textContent).toBe('Export PDF')
+      expect(buttons[0].title).toBe(`Import into ${section}`)
+      await act(async () => buttons[0].click())
+      expect(importIntoMock).toHaveBeenCalledWith()
     }
+    await act(async () => useTabStore.getState().open('/book/Draft/open.md'))
+    expect(container.querySelector<HTMLButtonElement>('[title="Import into Draft"]')).not.toBeNull()
   })
   it('shows the open project and the binder sections in Draft, Research, Trash order', async () => {
     useDocumentStore.getState().setWorkspace('/projects/My Grimoire', [
