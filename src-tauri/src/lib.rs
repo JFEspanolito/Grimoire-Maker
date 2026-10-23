@@ -27,6 +27,7 @@ pub fn run() {
             commands::workspace::restore_workspace,
             commands::workspace::rename_workspace,
             commands::workspace::open_folder,
+            commands::mods::open_mods_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Grimoire Maker");

@@ -1,0 +1,121 @@
+/// <reference types="node" />
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import * as fs from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+const scope = vi.hoisted(() => ({ root: '', rejectRename: false, picked: '', saved: '', reads: [] as string[] }))
+vi.mock('@tauri-apps/api/path', () => ({ appConfigDir: async () => scope.root, join: async (...parts: string[]) => parts.join('/') }))
+vi.mock('@tauri-apps/plugin-fs', async () => {
+  const f = await import('node:fs/promises')
+  return {
+    readFile: (p: string) => f.readFile(p).then(b => new Uint8Array(b)),
+    writeFile: (p: string, bytes: Uint8Array) => f.writeFile(p, bytes),
+    remove: (p: string) => f.rm(p, { recursive: true }),
+    exists: async (p: string) => f.access(p).then(() => true, () => false),
+    mkdir: (p: string) => f.mkdir(p, { recursive: true }),
+    readDir: async (p: string) => (await f.readdir(p, { withFileTypes: true })).map(e => ({ name: e.name, isDirectory: e.isDirectory(), isFile: e.isFile(), isSymlink: e.isSymbolicLink() })),
+    readTextFile: (p: string) => { scope.reads.push(p); return f.readFile(p, 'utf8') },
+    stat: (p: string) => f.stat(p),
+    writeTextFile: (p: string, text: string, options?: { createNew?: boolean }) => f.writeFile(p, text, { flag: options?.createNew ? 'wx' : 'w' }),
+    rename: (from: string, to: string) => { if (scope.rejectRename) throw new Error('probe rename failed'); return f.rename(from, to) },
+  }
+})
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: async () => scope.picked, save: async () => scope.saved }))
+import { createTemplateZip, readTemplateZip } from './templatePackage'
+import { importTemplateZip, exportTemplateZip, applyTemplateFiles } from './templateActions'
+import { prepareModLibrary, MOD_EXAMPLES } from './modLibrary'
+import { useModStore } from '../stores/modStore'
+import { useTemplateStore } from '../stores/templateStore'
+import { loadUserTemplates } from './templates'
+const put = async (relative: string, text: string) => { const p = `${scope.root}/${relative}`; await fs.mkdir(p.slice(0, p.lastIndexOf('/')), { recursive: true }); await fs.writeFile(p, text) }
+beforeEach(async () => {
+  scope.root = (await fs.mkdtemp(join(tmpdir(), 'grimoire-mod-integration-'))).replaceAll('\\', '/')
+  scope.rejectRename = false
+  scope.picked = ''
+  scope.saved = ''
+  scope.reads = []
+  await prepareModLibrary()
+  await put('Mods/Snippets/Community/nested/01-note.md', '---\nsnippetName: Custom note\n---\n## Custom')
+  await useModStore.getState().reload()
+  await useModStore.getState().setEnabled('Snippets/community', true)
+})
+afterEach(async () => {
+  const temporary = (await fs.realpath(tmpdir())).replaceAll('\\', '/')
+  const root = (await fs.realpath(scope.root)).replaceAll('\\', '/')
+  if (!root.startsWith(`${temporary}/grimoire-mod-integration-`)) throw new Error('Invalid integration cleanup boundary')
+  await fs.rm(scope.root, { recursive: true, force: true })
+})
+it('real temporary filesystem seeds examples, discovers custom nested Markdown and ignores JavaScript and broken/linked packages', async () => {
+ await prepareModLibrary()
+ expect(Object.keys(MOD_EXAMPLES).filter(p => p.startsWith('Templates/'))).toHaveLength(3)
+ await put('Mods/Snippets/Community/nested/01-note.md', '---\nsnippetName: Custom note\n---\n## Custom')
+ await put('Mods/Snippets/Community/ignored.js', 'throw Error("must not run")')
+ await put('Mods/Plugins/probe/index.js', 'throw Error("must not run")')
+ await put('Mods/Templates/broken/README.md', 'missing index')
+ await put('outside/index.md', '# Outside')
+ await fs.symlink(`${scope.root}/outside`, `${scope.root}/Mods/Templates/linked`, 'junction')
+ await useModStore.getState().reload()
+ expect(useModStore.getState().snippets.find(s => s.label === 'Custom note')?.markdown).toBe('## Custom')
+ expect(useModStore.getState().errors.join()).toContain('index.md')
+ expect(useTemplateStore.getState().templates.some(t => t.id === 'linked')).toBe(false)
+ expect(scope.reads.some(p => p.endsWith('.js') || p.includes('/Plugins/'))).toBe(false)
+ expect(useTemplateStore.getState().templates).toHaveLength(3)
+})
+it('toggle serializes with refresh and survives a module-level app restart without builtins fallback', async () => {
+ await Promise.all([useModStore.getState().setEnabled('Snippets/community', false), useModStore.getState().reload(), useModStore.getState().setEnabled('Snippets/community', true)])
+ expect(useModStore.getState().snippets.some(s => s.label === 'Custom note')).toBe(true)
+ await useModStore.getState().setEnabled('Snippets/community', false)
+ for (const mod of useModStore.getState().mods.filter(m => m.kind === 'Templates')) await useModStore.getState().setEnabled(mod.id, false)
+ vi.resetModules()
+ const restarted = (await import('../stores/modStore')).useModStore
+ const restartedTemplates = (await import('../stores/templateStore')).useTemplateStore
+ await restarted.getState().reload()
+ expect(restarted.getState().snippets.some(s => s.label === 'Custom note')).toBe(false)
+ expect(restartedTemplates.getState().templates).toEqual([])
+})
+it('publication failure keeps exact preference bytes and active catalog, then recovers', async () => {
+ await useModStore.getState().setEnabled('Snippets/community', false)
+ const before = await fs.readFile(`${scope.root}/mods.json`, 'utf8')
+ const snippets = useModStore.getState().snippets
+ scope.rejectRename = true
+ await expect(useModStore.getState().setEnabled('Snippets/community', true)).rejects.toThrow('probe rename failed')
+ expect(await fs.readFile(`${scope.root}/mods.json`, 'utf8')).toBe(before)
+ expect(useModStore.getState().snippets).toEqual(snippets)
+ scope.rejectRename = false
+ await useModStore.getState().setEnabled('Snippets/community', true)
+ expect(useModStore.getState().snippets.some(s => s.label === 'Custom note')).toBe(true)
+})
+it('standalone folder remains projectless but chapter/assets packages require a project', async () => {
+ await put('templates/oldpack/index.md', '# Standalone')
+ await put('templates/chapters/index.md', '# Chapters')
+ await put('templates/chapters/chapters/01.md', '# First')
+ await put('templates/assets/index.md', '# Assets')
+ await put('templates/assets/assets/map.txt', 'map')
+ const current = await loadUserTemplates(new Set())
+ expect(current.templates.find(t => t.id === 'oldpack')?.requiresProject).toBe(false)
+ expect(current.templates.find(t => t.id === 'chapters')?.requiresProject).toBe(true)
+ expect(current.templates.find(t => t.id === 'assets')?.requiresProject).toBe(true)
+})
+it('ZIP import routes into Mods, export round-trips, application preserves prior Draft content', async () => {
+ const encode = (s: string) => new TextEncoder().encode(s)
+ const files = { 'index.md': encode('---\ntitle: Imported\n---\n# Imported'), 'chapters/01.md': encode('# First'), 'assets/map.png': new Uint8Array([1,2,3]), 'snippets/loot.md': encode('## Loot') }
+ scope.picked = `${scope.root}/downloaded.zip`
+ scope.saved = `${scope.root}/exported.zip`
+ await fs.writeFile(scope.picked, createTemplateZip(files))
+ const id = await importTemplateZip()
+ expect(id).toBe('downloaded')
+ const { templates } = await loadUserTemplates(new Set(), { dir: `${scope.root}/Mods/Templates`, reservedIds: [] })
+ const imported = templates.find(t => t.id === id)!
+ expect(imported.requiresProject).toBe(true)
+ expect(imported.snippets).toHaveLength(1)
+ expect(await exportTemplateZip(imported)).toBe(true)
+ const normalize = (f: Record<string, Uint8Array>) => Object.fromEntries(Object.entries(f).map(([k,v]) => [k, Array.from(v)]))
+ expect(normalize(readTemplateZip(new Uint8Array(await fs.readFile(scope.saved))))).toEqual(normalize(files))
+ await put('project/Draft/downloaded/index.md', '# Existing')
+ const index = await applyTemplateFiles(imported, `${scope.root}/project`)
+ expect(index).toBe(`${scope.root}/project/Draft/downloaded-1/index.md`)
+ expect(await fs.readFile(`${scope.root}/project/Draft/downloaded/index.md`, 'utf8')).toBe('# Existing')
+ expect(await fs.readFile(index, 'utf8')).toContain('# Imported')
+ expect(await fs.readFile(`${scope.root}/project/Draft/downloaded-1/chapters/01.md`, 'utf8')).toBe('# First')
+ expect(new Uint8Array(await fs.readFile(`${scope.root}/project/Draft/downloaded-1/assets/map.png`))).toEqual(files['assets/map.png'])
+})

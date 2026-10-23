@@ -286,7 +286,7 @@ export function useFileSystem() {
 
   const applyTemplate = useCallback((template: Template) => runFileAction(async (): Promise<boolean> => {
     const root = useDocumentStore.getState().workspaceRoot
-    if (!root && template.location?.kind === 'package') {
+    if (!root && template.location?.kind === 'package' && template.requiresProject !== false) {
       throw new Error('Open a project folder to apply a package template')
     }
     if (useDocumentStore.getState().document.dirty && !(await persistCurrentDocument())) return false

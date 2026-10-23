@@ -1,4 +1,4 @@
-import { exists, readDir, readTextFile } from '@tauri-apps/plugin-fs'
+import { readDir, readTextFile, stat } from '@tauri-apps/plugin-fs'
 import { parseDocument } from './frontmatter'
 import {
   applyStyle,
@@ -18,6 +18,8 @@ export interface Template {
   body: string
   builtin: boolean
   snippets?: TemplateSnippet[]
+  /** Packages with chapters/assets require a project; a standalone index can fill an untitled editor. */
+  requiresProject?: boolean
   /** Where a community template lives on disk, so it can be exported. */
   location?: { kind: 'package' | 'file'; path: string }
 }
@@ -57,6 +59,7 @@ export interface UserTemplates {
 }
 
 async function readCapped(path: string): Promise<string> {
+  if ((await stat(path)).size > MAX_FILE_BYTES) throw new Error(`${path.split('/').pop()} is larger than 512 KB`)
   const text = await readTextFile(path)
   if (text.length > MAX_FILE_BYTES) throw new Error(`${path.split('/').pop()} is larger than 512 KB`)
   return text
@@ -68,17 +71,25 @@ async function readCapped(path: string): Promise<string> {
  * A package theme is registered as theme `<id>`, so its CSS must target
  * `[data-theme='<id>']`. Bad entries are reported in `errors`, never fatal.
  */
-export async function loadUserTemplates(takenThemeIds: Set<string>): Promise<UserTemplates> {
-  const dir = await ensureConfigSubdir('templates')
+export interface TemplateScanOptions {
+  dir?: string
+  allowedFolders?: Set<string>
+  reservedIds?: string[]
+  styleId?: string
+}
+
+export async function loadUserTemplates(takenThemeIds: Set<string>, options: TemplateScanOptions = {}): Promise<UserTemplates> {
+  const dir = options.dir ?? await ensureConfigSubdir('templates')
   const templates: Template[] = []
   const themes: ThemeInfo[] = []
   const errors: string[] = []
   const css: string[] = []
-  const seen = new Set(OFFICIAL_TEMPLATES.map((t) => t.id))
+  const seen = new Set(options.reservedIds ?? OFFICIAL_TEMPLATES.map((t) => t.id))
 
   const entries = (await readDir(dir)).sort((a, b) => a.name.localeCompare(b.name))
   for (const entry of entries) {
-    if (entry.name.startsWith('.')) continue
+    if (entry.name.startsWith('.') || entry.isSymlink) continue
+    if (options.allowedFolders && (!entry.isDirectory || !options.allowedFolders.has(entry.name))) continue
     const isPackage = entry.isDirectory
     if (!isPackage && !entry.name.toLowerCase().endsWith('.md')) continue
     const id = isPackage ? entry.name : entry.name.replace(/\.md$/i, '')
@@ -91,13 +102,17 @@ export async function loadUserTemplates(takenThemeIds: Set<string>): Promise<Use
       continue
     }
     try {
+      const children = isPackage ? await readDir(`${dir}/${id}`) : []
+      if (isPackage && !children.some((file) => file.name === 'index.md' && !file.isDirectory && !file.isSymlink)) {
+        throw new Error('A regular index.md file is required')
+      }
       const raw = await readCapped(isPackage ? `${dir}/${id}/index.md` : `${dir}/${entry.name}`)
       const { frontmatter, body } = parseDocument(raw)
       const label = String(frontmatter.templateName ?? id)
       delete frontmatter.templateName
 
       const themePath = `${dir}/${id}/theme.css`
-      if (isPackage && (await exists(themePath))) {
+      if (isPackage && children.some((file) => file.name === 'theme.css' && !file.isDirectory && !file.isSymlink)) {
         try {
           const themeCss = await readCapped(themePath)
           if (!hasThemeSelector(themeCss, id)) throw new Error(`no [data-theme='${id}'] selector found`)
@@ -123,6 +138,7 @@ export async function loadUserTemplates(takenThemeIds: Set<string>): Promise<Use
         frontmatter,
         body,
         builtin: false,
+        requiresProject: isPackage && children.some((file) => file.name === 'chapters' || file.name === 'assets'),
         snippets: packageSnippets.snippets,
         location: isPackage
           ? { kind: 'package', path: `${dir}/${id}` }
@@ -133,6 +149,6 @@ export async function loadUserTemplates(takenThemeIds: Set<string>): Promise<Use
     }
   }
 
-  applyStyle('grimoire-template-themes', css.join('\n'))
+  applyStyle(options.styleId ?? 'grimoire-template-themes', css.join('\n'))
   return { dir, templates, themes, errors }
 }

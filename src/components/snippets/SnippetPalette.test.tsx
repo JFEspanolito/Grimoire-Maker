@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { OFFICIAL_TEMPLATES } from '../../lib/templates'
 import { useTemplateStore } from '../../stores/templateStore'
+import { useModStore } from '../../stores/modStore'
 import { SNIPPET_GROUPS, SNIPPETS } from './snippets'
 import { SnippetPalette } from './SnippetPalette'
 
@@ -13,9 +14,20 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount())
   root = null
   useTemplateStore.setState({ templates: OFFICIAL_TEMPLATES })
+  useModStore.setState({ ready: false, snippets: [] })
 })
 
 describe('snippet palette', () => {
+  it('uses the enabled folder catalog without restoring disabled built-in examples', async () => {
+    useModStore.setState({ ready: true, snippets: [] })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<SnippetPalette editor={null} />))
+    expect(container.querySelectorAll('details')).toHaveLength(0)
+    await act(async () => useModStore.setState({ snippets: [{ id: 'mod:my/one', label: 'Custom note', group: 'My Notes', markdown: '# Note' }] }))
+    expect(container.querySelector('summary')?.textContent).toContain('My Notes')
+    expect(container.querySelector('button')?.textContent).toBe('Custom note')
+  })
   it('renders each group as an initially expanded, collapsible section', () => {
     const container = document.createElement('div')
     container.innerHTML = renderToStaticMarkup(<SnippetPalette editor={null} />)

@@ -2,8 +2,9 @@ import { DndContext, useDraggable, type DragEndEvent } from '@dnd-kit/core'
 import type { Editor } from '@tiptap/react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTemplateStore } from '../../stores/templateStore'
+import { useModStore } from '../../stores/modStore'
 import type { TemplateSnippet } from '../../lib/templateSnippets'
-import { SNIPPET_GROUPS, SNIPPETS, type Snippet } from './snippets'
+import { SNIPPETS, type Snippet } from './snippets'
 
 type PaletteSnippet = Snippet | TemplateSnippet
 
@@ -30,9 +31,11 @@ function DraggableSnippet({ snippet, onInsert }: { snippet: PaletteSnippet; onIn
 export function SnippetPalette({ editor }: { editor: Editor | null }) {
   const canInsert = useSettingsStore((s) => s.viewMode === 'edit')
   const templates = useTemplateStore((s) => s.templates)
+  const ready = useModStore((s) => s.ready)
+  const folderSnippets = useModStore((s) => s.snippets)
   const custom = templates.flatMap((template) => template.snippets ?? [])
-  const snippets: PaletteSnippet[] = [...SNIPPETS, ...custom]
-  const groups = [...new Set<string>([...SNIPPET_GROUPS, ...custom.map((snippet) => snippet.group)])]
+  const snippets: PaletteSnippet[] = [...(ready ? folderSnippets : SNIPPETS), ...custom]
+  const groups = [...new Set(snippets.map((snippet) => snippet.group))]
   const insert = (snippet: PaletteSnippet) => {
     if (canInsert) editor?.chain().focus().insertContent('markdown' in snippet ? snippet.markdown : snippet.node).run()
   }

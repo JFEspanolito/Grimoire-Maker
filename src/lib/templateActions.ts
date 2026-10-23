@@ -3,7 +3,7 @@ import { exists, mkdir, readDir, readFile, remove, rename, stat, writeFile } fro
 import { collectPackage, createTemplateDocuments, installPackage, type ProjectPackageFs } from './templateIo'
 import { LIMITS, PackageError, createTemplateZip } from './templatePackage'
 import { OFFICIAL_TEMPLATES, type Template } from './templates'
-import { ensureConfigSubdir } from './themes'
+import { prepareModLibrary } from './modLibrary'
 import { serializeDocument } from './frontmatter'
 
 const tauriFs: ProjectPackageFs = {
@@ -28,7 +28,7 @@ export async function importTemplateZip(): Promise<string | null> {
   // Inflating is capped separately; this keeps a huge file from being read into memory at all.
   if ((await stat(path)).size > LIMITS.totalBytes) throw new PackageError('The archive is too large')
 
-  const dir = await ensureConfigSubdir('templates')
+  const { templates: dir } = await prepareModLibrary()
   return installPackage(
     tauriFs,
     dir,

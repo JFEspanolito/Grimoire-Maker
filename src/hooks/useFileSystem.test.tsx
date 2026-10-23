@@ -313,6 +313,20 @@ describe('applying templates', () => {
     location: { kind: 'package' as const, path: '/config/templates/pack' },
   }
 
+  it('applies a standalone folder template without requiring a project', async () => {
+    expect(await actions.applyTemplate({ ...template, requiresProject: false })).toBe(true)
+    expect(useDocumentStore.getState().document.body).toBe('# Starting chapter')
+    expect(useDocumentStore.getState().document.path).toBeNull()
+    expect(applyTemplateFiles).not.toHaveBeenCalled()
+  })
+
+  it('keeps project-dependent packages blocked without modifying the editor', async () => {
+    useDocumentStore.getState().loadFromRaw(null, '# Notes')
+    await expect(actions.applyTemplate({ ...template, requiresProject: true })).rejects.toThrow('Open a project folder')
+    expect(useDocumentStore.getState().document.body).toBe('# Notes')
+    expect(applyTemplateFiles).not.toHaveBeenCalled()
+  })
+
   it('creates project documents and opens the index without Save As for a clean editor', async () => {
     useDocumentStore.getState().setWorkspace('/workspace', [])
 

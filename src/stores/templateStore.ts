@@ -1,7 +1,5 @@
 import { create } from 'zustand'
-import { OFFICIAL_TEMPLATES, loadUserTemplates, type Template } from '../lib/templates'
-import { BUILTIN_THEMES } from '../lib/themes'
-import { useThemeStore } from './themeStore'
+import { OFFICIAL_TEMPLATES, type Template } from '../lib/templates'
 
 interface TemplateState {
   templates: Template[]
@@ -18,11 +16,8 @@ export const useTemplateStore = create<TemplateState>((set) => ({
   errors: [],
   reload: async () => {
     try {
-      const themeStore = useThemeStore.getState()
-      const taken = new Set([...BUILTIN_THEMES, ...themeStore.userThemes].map((t) => t.id))
-      const { dir, templates, themes, errors } = await loadUserTemplates(taken)
-      themeStore.setTemplateThemes(themes)
-      set({ templates: [...OFFICIAL_TEMPLATES, ...templates], dir, errors })
+      const { useModStore } = await import('./modStore')
+      await useModStore.getState().reload()
     } catch (e) {
       set({ errors: [`Could not read the templates folder: ${e instanceof Error ? e.message : String(e)}`] })
     }

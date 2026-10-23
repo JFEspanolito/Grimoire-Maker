@@ -37,7 +37,7 @@ function TemplateList({
 
 type Notice = { kind: 'ok' | 'error'; text: string }
 
-/** Official presets plus community templates dropped into (or imported as .zip into) the templates folder. */
+/** Browser presets plus enabled folder templates, including compatible legacy packages. */
 export function TemplateCatalog() {
   const { applyTemplate } = useFileSystem()
   const { templates, dir, errors, reload } = useTemplateStore()
@@ -87,7 +87,7 @@ export function TemplateCatalog() {
           <TemplateList items={official} onApply={apply} onExport={(t) => void exportZip(t)} />
           {community.length > 0 && (
             <>
-              <h3 className="text-xs uppercase tracking-wide text-white/40">Community</h3>
+              <h3 className="text-xs uppercase tracking-wide text-white/40">Installed</h3>
               <TemplateList items={community} onApply={apply} onExport={(t) => void exportZip(t)} />
             </>
           )}

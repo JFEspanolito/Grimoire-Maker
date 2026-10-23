@@ -7,6 +7,7 @@ import { useTabStore } from '../../stores/tabStore'
 import { ProjectArchiveActions } from '../project/ProjectArchiveActions'
 import mark from '../../assets/grimoire-mark.svg'
 import styles from './MenuBar.module.css'
+import { ModManager } from '../mods/ModManager'
 
 type Panel = 'files' | 'templates' | 'snippets'
 interface Props {
@@ -19,6 +20,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const print = usePrint()
   const workspace = useDocumentStore((s) => s.workspaceRoot)
   const [error, setError] = useState('')
+  const [modsOpen, setModsOpen] = useState(false)
   const bar = useRef<HTMLElement>(null)
   const closeMenus = () => bar.current?.querySelectorAll('details[open]').forEach((menu) => menu.removeAttribute('open'))
   useEffect(() => {
@@ -31,7 +33,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
     setError('')
     try { await action() } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
   }
-  return <nav ref={bar} className={styles.bar} aria-label="Application menu"
+  return <><nav ref={bar} className={styles.bar} aria-label="Application menu"
     onKeyDown={(event) => {
       if (event.key === 'Escape') {
         const summary = (event.target as Element).closest('details')?.querySelector('summary')
@@ -75,7 +77,8 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <button onClick={() => void run(() => useSettingsStore.getState().setViewMode('pages'))}>Page Preview</button>
       </div>
     </details>
+    <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
     <span className={styles.name}>GRIMOIRE MAKER</span>
     {error && <span role="alert" className={styles.error}>{error}</span>}
-  </nav>
+  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}</>
 }
