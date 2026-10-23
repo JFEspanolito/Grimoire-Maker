@@ -11,7 +11,8 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useThemeStore } from './stores/themeStore'
 import { useTemplateStore } from './stores/templateStore'
 import { resolveTheme } from './lib/themes'
-import { isTauri } from './hooks/useFileSystem'
+import { isTauri, useFileSystem } from './hooks/useFileSystem'
+import { watchSettings } from './lib/appState'
 
 export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null)
@@ -19,6 +20,22 @@ export default function App() {
   const themes = useThemeStore((s) => s.themes)
   const reloadThemes = useThemeStore((s) => s.reload)
   const reloadTemplates = useTemplateStore((s) => s.reload)
+  const { restoreSession } = useFileSystem()
+
+  // Reopen last session first, then start saving page-setup changes: subscribing
+  // earlier would overwrite the saved settings with the defaults.
+  useEffect(() => {
+    if (!isTauri()) return
+    let cancelled = false
+    let unwatch = () => {}
+    void restoreSession().then(() => {
+      if (!cancelled) unwatch = watchSettings()
+    })
+    return () => {
+      cancelled = true
+      unwatch()
+    }
+  }, [restoreSession])
 
   // Mods live in a folder: scan on start and whenever the window regains focus,
   // so a theme edited in an external editor shows up without restarting.

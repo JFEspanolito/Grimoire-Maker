@@ -1,9 +1,19 @@
 import { useCallback } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs'
 import { useDocumentStore } from '../stores/documentStore'
+import { useSessionStore } from '../stores/sessionStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import {
+  forgetWorkspace,
+  loadAppState,
+  rememberWorkspace,
+  updateAppState,
+  type AppState,
+} from '../lib/appState'
 import { emitPluginEvent } from '../plugins/plugin-manager'
-import type { FileNode } from '../types/document'
+import { PAGE_SIZES, type FileNode } from '../types/document'
 
 export const isTauri = (): boolean => '__TAURI_INTERNALS__' in window
 
@@ -35,6 +45,16 @@ function validateName(name: string): string {
 export function useFileSystem() {
   const { loadFromRaw, toRaw, markSaved, setWorkspace, setPath } = useDocumentStore.getState()
 
+  /** Persists a change to what survives a restart; a failed write never blocks the user. */
+  const remember = useCallback(async (change: (state: AppState) => AppState) => {
+    try {
+      const state = await updateAppState(change)
+      useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
+    } catch (e) {
+      console.warn('Could not save app state', e)
+    }
+  }, [])
+
   const openWorkspace = useCallback(async () => {
     if (!isTauri()) return
     // `recursive` grants the fs scope to subfolders, needed outside $HOME/$DOCUMENT/$DESKTOP.
@@ -42,7 +62,23 @@ export function useFileSystem() {
     if (typeof dir !== 'string') return
     const root = dir.replaceAll('\\', '/')
     setWorkspace(root, await readTree(root))
-  }, [setWorkspace])
+    await remember(rememberWorkspace(root))
+  }, [setWorkspace, remember])
+
+  /** Reopens a remembered folder; one that no longer opens is dropped from the list. */
+  const openRecent = useCallback(
+    async (path: string) => {
+      try {
+        await invoke('restore_workspace', { path })
+        setWorkspace(path, await readTree(path))
+      } catch (e) {
+        await remember(forgetWorkspace(path))
+        throw new Error(`Could not open "${path}": ${e instanceof Error ? e.message : String(e)}`)
+      }
+      await remember(rememberWorkspace(path))
+    },
+    [setWorkspace, remember],
+  )
 
   const refreshTree = useCallback(async () => {
     const root = useDocumentStore.getState().workspaceRoot
@@ -97,9 +133,33 @@ export function useFileSystem() {
       const target = path ?? (await open({ filters: [{ name: 'Markdown', extensions: ['md'] }] }))
       if (typeof target !== 'string') return
       loadFromRaw(target, await readTextFile(target))
+      await remember((s) => ({ ...s, lastFile: target }))
     },
-    [loadFromRaw],
+    [loadFromRaw, remember],
   )
+
+  /** Brings back last session: page setup, workspace folder and the file that was open. */
+  const restoreSession = useCallback(async () => {
+    if (!isTauri()) return
+    const state = await loadAppState()
+    useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
+
+    const { pageSize, columns, theme } = state.settings
+    const settings = useSettingsStore.getState()
+    if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
+    if (columns === 1 || columns === 2) settings.setColumns(columns)
+    if (typeof theme === 'string') settings.setTheme(theme)
+
+    const { lastWorkspace, lastFile } = state
+    if (!lastWorkspace) return
+    try {
+      await openRecent(lastWorkspace)
+    } catch (e) {
+      console.warn(e)
+      return
+    }
+    if (lastFile?.startsWith(`${lastWorkspace}/`) && (await exists(lastFile))) await openFile(lastFile)
+  }, [openRecent, openFile])
 
   const saveFile = useCallback(async () => {
     if (!isTauri()) return
@@ -109,10 +169,13 @@ export function useFileSystem() {
     await writeTextFile(path, toRaw())
     markSaved(path)
     emitPluginEvent('document:saved')
-  }, [toRaw, markSaved])
+    await remember((s) => ({ ...s, lastFile: path }))
+  }, [toRaw, markSaved, remember])
 
   return {
     openWorkspace,
+    openRecent,
+    restoreSession,
     openFile,
     saveFile,
     createFile,

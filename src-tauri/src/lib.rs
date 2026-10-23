@@ -10,6 +10,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::files::list_markdown_files,
             commands::export::export_pdf,
+            commands::workspace::restore_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Grimoire Maker");
