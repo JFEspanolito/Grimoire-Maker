@@ -4,8 +4,6 @@ use std::path::Path;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_fs::FsExt;
 
-const STATE_FILE: &str = "state.json";
-
 fn normalize(path: &str) -> String {
     path.replace('\\', "/").trim_end_matches('/').to_string()
 }
@@ -16,7 +14,7 @@ fn is_remembered(app: &AppHandle, path: &str) -> Result<bool, String> {
         .path()
         .app_config_dir()
         .map_err(|e| e.to_string())?
-        .join(STATE_FILE);
+        .join(crate::config::STATE_FILE);
     let Ok(raw) = fs::read_to_string(state_path) else {
         return Ok(false);
     };
