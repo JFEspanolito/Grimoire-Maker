@@ -35,3 +35,20 @@
     break-before: page;
   }
 }
+
+/* Export container: laid out off-screen so Paged.js can measure, shown only when printing. */
+.print-root {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+}
+
+@media print {
+  body.exporting #root {
+    display: none !important;
+  }
+
+  body.exporting .print-root {
+    position: static;
+  }
+}

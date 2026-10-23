@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
-import { invoke } from '@tauri-apps/api/core'
+import { save } from '@tauri-apps/plugin-dialog'
 import { useDocumentStore } from '../stores/documentStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { exportPdf } from '../lib/exportPdf'
 import { isTauri } from './useFileSystem'
 
 /**
@@ -10,9 +11,19 @@ import { isTauri } from './useFileSystem'
  */
 export function usePrint() {
   return useCallback(async () => {
-    const { pageSize, bleedMm } = useSettingsStore.getState()
-    const title = useDocumentStore.getState().document.frontmatter.title ?? 'grimoire'
     if (!isTauri()) return window.print()
-    await invoke('export_pdf', { options: { pageSize, bleedMm, title } })
+    const { pageSize, columns, theme, bleedMm, marginMm } = useSettingsStore.getState()
+    const title = useDocumentStore.getState().document.frontmatter.title ?? 'grimoire'
+    const outputPath = await save({
+      defaultPath: `${title}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    })
+    if (!outputPath) return
+    try {
+      await exportPdf({ pageSize, columns, theme, bleedMm, marginMm, outputPath })
+    } catch (e) {
+      console.error('PDF export failed', e)
+      window.alert(`PDF export failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }, [])
 }
