@@ -43,6 +43,9 @@ export const Statblock = blockNode('statblock', 'statblock', 'block+')
 /** Read-aloud / ambience box. */
 export const ReadAloud = blockNode('readAloud', 'read-aloud', 'block+')
 
+/** Character sheet: a titled block holding editable attribute grids and lists. */
+export const CharacterSheet = blockNode('characterSheet', 'character-sheet', 'block+')
+
 export const STATBLOCK_TEMPLATE = {
   type: 'statblock',
   content: [

@@ -226,3 +226,28 @@ body,
 .grimoire-content .selectedCell {
   background: rgb(245 158 11 / 0.25);
 }
+
+/* Character sheet: a framed block; its attribute grids are ordinary tables. */
+.grimoire-content .character-sheet {
+  border: 1.5px solid var(--accent);
+  background: var(--statblock-bg);
+  padding: 0.6em 0.9em;
+  margin: 0.8em 0;
+  break-inside: avoid;
+}
+
+.grimoire-content .character-sheet h3 {
+  margin-top: 0;
+  border-bottom: 1px solid var(--accent);
+}
+
+.grimoire-content .character-sheet h4 {
+  font-family: var(--heading-font);
+  color: var(--heading-color);
+  margin: 0.8em 0 0.2em;
+}
+
+.grimoire-content .character-sheet td,
+.grimoire-content .character-sheet th {
+  text-align: center;
+}

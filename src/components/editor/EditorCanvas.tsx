@@ -5,7 +5,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import { Markdown } from 'tiptap-markdown'
 import { useDocumentStore } from '../../stores/documentStore'
 import { emitPluginEvent, setPluginHost } from '../../plugins/plugin-manager'
-import { ReadAloud, Statblock } from './extensions/blocks'
+import { CharacterSheet, ReadAloud, Statblock } from './extensions/blocks'
 import { GrimoireImageNode } from './extensions/imageNode'
 import { TableExtensions } from './extensions/tables'
 import { PageView } from './PageView'
@@ -30,6 +30,7 @@ export function EditorCanvas({ onReady }: Props) {
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Statblock,
       ReadAloud,
+      CharacterSheet,
       Markdown.configure({ html: true, tightLists: true, breaks: false }),
     ],
     content: body,

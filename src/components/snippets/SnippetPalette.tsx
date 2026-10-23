@@ -3,7 +3,7 @@ import type { Editor } from '@tiptap/react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { SNIPPETS, type Snippet, type SnippetGroup } from './snippets'
 
-const GROUPS: SnippetGroup[] = ['Blocks', 'Tables']
+const GROUPS: SnippetGroup[] = ['Character sheets', 'Blocks', 'Tables']
 
 function DraggableSnippet({ snippet, onInsert }: { snippet: Snippet; onInsert: () => void }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: snippet.id })
