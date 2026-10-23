@@ -55,7 +55,11 @@ export function EditorCanvas({ onReady }: Props) {
   }, [editor, body])
 
   return (
-    <PageView>
+    <PageView onPageClick={(event) => {
+      if (event.target instanceof Element && !event.target.closest('.ProseMirror')) {
+        editor?.commands.focus(undefined, { scrollIntoView: false })
+      }
+    }}>
       <EditorContent editor={editor} className="grimoire-content" />
     </PageView>
   )
