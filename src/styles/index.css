@@ -191,3 +191,38 @@ body,
 .grimoire-content .grimoire-image {
   break-inside: avoid;
 }
+
+/* Tables (encounter and loot tables, attribute grids). */
+.grimoire-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+  font-size: 0.95em;
+}
+
+.grimoire-content tr {
+  break-inside: avoid;
+}
+
+.grimoire-content th,
+.grimoire-content td {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  padding: 0.25em 0.5em;
+  text-align: left;
+  vertical-align: top;
+}
+
+.grimoire-content th {
+  background: var(--statblock-bg);
+  color: var(--heading-color);
+  font-family: var(--heading-font);
+}
+
+.grimoire-content td > p,
+.grimoire-content th > p {
+  margin: 0;
+}
+
+.grimoire-content .selectedCell {
+  background: rgb(245 158 11 / 0.25);
+}

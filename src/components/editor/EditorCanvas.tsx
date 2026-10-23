@@ -7,6 +7,7 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { emitPluginEvent, setPluginHost } from '../../plugins/plugin-manager'
 import { ReadAloud, Statblock } from './extensions/blocks'
 import { GrimoireImageNode } from './extensions/imageNode'
+import { TableExtensions } from './extensions/tables'
 import { PageView } from './PageView'
 
 function getMarkdown(editor: Editor): string {
@@ -25,6 +26,7 @@ export function EditorCanvas({ onReady }: Props) {
     extensions: [
       StarterKit,
       GrimoireImageNode,
+      ...TableExtensions,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Statblock,
       ReadAloud,

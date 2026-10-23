@@ -4,6 +4,7 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { importImage } from '../../lib/images'
 import { ImageControls, type ImageAttrs } from './ImageControls'
+import { TableControls } from './TableControls'
 
 interface Action {
   id: string
@@ -135,6 +136,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
               ]),
             ),
             image: e.isActive('image') ? (e.getAttributes('image') as ImageAttrs) : null,
+            inTable: e.isActive('table'),
           }
         : null,
   })
@@ -199,6 +201,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         {error && <span className="text-xs text-red-400">{error}</span>}
       </div>
       {editor && state?.image && <ImageControls editor={editor} attrs={state.image} />}
+      {editor && state?.inTable && <TableControls editor={editor} />}
     </>
   )
 }
