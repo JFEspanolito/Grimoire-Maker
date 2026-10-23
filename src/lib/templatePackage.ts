@@ -17,6 +17,13 @@ const REMOTE_CSS = [
   /url\(\s*['"]?\s*(?:https?:)?\/\//i,
 ]
 
+/** Windows treats these as devices whatever the extension, so writing one can hang or fail. */
+const RESERVED_NAME = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i
+const FORBIDDEN_CHARS = /[<>"|?*]/
+const hasControlChars = (value: string): boolean => [...value].some((c) => c.charCodeAt(0) < 32)
+const MAX_SEGMENT = 100
+const MAX_PATH = 200
+
 const isJunk = (segments: string[]): boolean =>
   segments.some((s) => s.startsWith('.') || s === '__MACOSX')
 
@@ -27,9 +34,26 @@ function checkPath(name: string): string[] {
     name.startsWith('/') ||
     name.includes('\\') ||
     /^[a-zA-Z]:/.test(name) ||
-    segments.some((s) => s === '' || s === '.' || s === '..' || s.includes(':'))
+    name.length > MAX_PATH ||
+    FORBIDDEN_CHARS.test(name) ||
+    hasControlChars(name) ||
+    segments.some(
+      (s) =>
+        s === '' ||
+        s === '.' ||
+        s === '..' ||
+        s.includes(':') ||
+        s.length > MAX_SEGMENT ||
+        /[. ]$/.test(s) ||
+        RESERVED_NAME.test(s.split('.')[0]),
+    )
   if (unsafe) throw new PackageError(`Unsafe path in archive: "${name}"`)
   return segments
+}
+
+/** Whether a package-relative path is something a template package may contain. */
+export function isPackageFile(relativePath: string): boolean {
+  return !isJunk(relativePath.split('/')) && ALLOWED_EXTENSIONS.has(extensionOf(relativePath))
 }
 
 function extensionOf(name: string): string {
@@ -65,6 +89,7 @@ export function readTemplateZip(bytes: Uint8Array): Record<string, Uint8Array> {
   let failure: PackageError | null = null
   let entries = 0
   let total = 0
+  const seen = new Set<string>()
 
   const fail = (message: string): void => {
     failure ??= new PackageError(message)
@@ -80,6 +105,9 @@ export function readTemplateZip(bytes: Uint8Array): Record<string, Uint8Array> {
     try {
       const segments = checkPath(file.name)
       if (isJunk(segments)) return
+      // Case-insensitive filesystems would merge these into one file.
+      if (seen.has(file.name.toLowerCase())) return fail(`Duplicate file in archive: "${file.name}"`)
+      seen.add(file.name.toLowerCase())
       if (!ALLOWED_EXTENSIONS.has(extensionOf(file.name))) {
         return fail(`File type not allowed in a template: "${file.name}"`)
       }

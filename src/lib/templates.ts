@@ -16,6 +16,8 @@ export interface Template {
   frontmatter: Frontmatter
   body: string
   builtin: boolean
+  /** Where a community template lives on disk, so it can be exported. */
+  location?: { kind: 'package' | 'file'; path: string }
 }
 
 const MAX_FILE_BYTES = 512 * 1024
@@ -74,6 +76,7 @@ export async function loadUserTemplates(takenThemeIds: Set<string>): Promise<Use
 
   const entries = (await readDir(dir)).sort((a, b) => a.name.localeCompare(b.name))
   for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue
     const isPackage = entry.isDirectory
     if (!isPackage && !entry.name.toLowerCase().endsWith('.md')) continue
     const id = isPackage ? entry.name : entry.name.replace(/\.md$/i, '')
@@ -107,7 +110,16 @@ export async function loadUserTemplates(takenThemeIds: Set<string>): Promise<Use
       }
 
       seen.add(id)
-      templates.push({ id, label, frontmatter, body, builtin: false })
+      templates.push({
+        id,
+        label,
+        frontmatter,
+        body,
+        builtin: false,
+        location: isPackage
+          ? { kind: 'package', path: `${dir}/${id}` }
+          : { kind: 'file', path: `${dir}/${entry.name}` },
+      })
     } catch (e) {
       errors.push(`${entry.name}: ${e instanceof Error ? e.message : String(e)}`)
     }

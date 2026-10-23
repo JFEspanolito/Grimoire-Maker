@@ -15,6 +15,8 @@
     "fs:allow-rename",
     "fs:allow-copy-file",
     "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-stat",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "$HOME/**" }, { "path": "$DOCUMENT/**" }, { "path": "$DESKTOP/**" },

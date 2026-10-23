@@ -3,31 +3,74 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTemplateStore } from '../../stores/templateStore'
 import { serializeDocument } from '../../lib/frontmatter'
+import { exportTemplateZip, importTemplateZip } from '../../lib/templateActions'
 import type { Template } from '../../lib/templates'
+import { isTauri } from '../../hooks/useFileSystem'
 import { PAGE_SIZES } from '../../types/document'
 
-function TemplateList({ items, onApply }: { items: Template[]; onApply: (t: Template) => void }) {
+function TemplateList({
+  items,
+  onApply,
+  onExport,
+}: {
+  items: Template[]
+  onApply: (t: Template) => void
+  onExport?: (t: Template) => void
+}) {
   return (
     <ul className="flex flex-col gap-1">
       {items.map((t) => (
-        <li key={t.id}>
-          <button className="text-sm hover:underline" onClick={() => onApply(t)}>
+        <li key={t.id} className="flex items-center justify-between gap-2">
+          <button className="text-left text-sm hover:underline" onClick={() => onApply(t)}>
             {t.label}
           </button>
+          {onExport && (
+            <button
+              className="shrink-0 text-xs text-white/50 hover:text-white"
+              title="Export as .zip"
+              onClick={() => onExport(t)}
+            >
+              ⤓ zip
+            </button>
+          )}
         </li>
       ))}
     </ul>
   )
 }
 
-/** Official presets plus community templates dropped into the user templates folder. */
+type Notice = { kind: 'ok' | 'error'; text: string }
+
+/** Official presets plus community templates dropped into (or imported as .zip into) the templates folder. */
 export function TemplateCatalog() {
   const loadFromRaw = useDocumentStore((s) => s.loadFromRaw)
-  const { templates, dir, errors } = useTemplateStore()
+  const { templates, dir, errors, reload } = useTemplateStore()
   const [open, setOpen] = useState(false)
+  const [notice, setNotice] = useState<Notice | null>(null)
 
   const official = templates.filter((t) => t.builtin)
   const community = templates.filter((t) => !t.builtin)
+
+  /** Runs a file action; a returned string is shown as the result, null means it was cancelled. */
+  const run = async (action: () => Promise<string | null>) => {
+    try {
+      const text = await action()
+      setNotice(text ? { kind: 'ok', text } : null)
+    } catch (e) {
+      setNotice({ kind: 'error', text: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
+  const importZip = () =>
+    run(async () => {
+      const id = await importTemplateZip()
+      if (!id) return null
+      await reload()
+      return `Imported "${id}"`
+    })
+
+  const exportZip = (t: Template) =>
+    run(async () => ((await exportTemplateZip(t)) ? `Exported "${t.label}"` : null))
 
   const apply = (t: Template) => {
     loadFromRaw(null, serializeDocument(t.frontmatter, t.body))
@@ -56,8 +99,18 @@ export function TemplateCatalog() {
           {community.length > 0 && (
             <>
               <h3 className="text-xs uppercase tracking-wide text-white/40">Community</h3>
-              <TemplateList items={community} onApply={apply} />
+              <TemplateList items={community} onApply={apply} onExport={(t) => void exportZip(t)} />
             </>
+          )}
+          {isTauri() && (
+            <button className="self-start text-xs underline" onClick={() => void importZip()}>
+              Import .zip…
+            </button>
+          )}
+          {notice && (
+            <p className={`text-xs ${notice.kind === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+              {notice.text}
+            </p>
           )}
           {errors.length > 0 && (
             <p className="text-xs text-amber-400" title={errors.join('\n')}>

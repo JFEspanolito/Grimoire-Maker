@@ -104,3 +104,30 @@ describe('packageIdFromFileName', () => {
     expect(packageIdFromFileName('???.zip', new Set())).toBe('template')
   })
 })
+
+describe('readTemplateZip: Windows-specific names', () => {
+  it.each([
+    ['a reserved device name', 'con.md'],
+    ['a reserved device name with a folder', 'assets/NUL.png'],
+    ['a reserved name with a numbered port', 'chapters/com1.md'],
+    ['a name ending in a dot', 'chapters/one.md.'],
+    ['a folder ending in a space', 'chapters /one.md'],
+    ['characters Windows forbids in names', 'chapters/a?b.md'],
+    ['a control character in the name', 'chapters/a\u0001b.md'],
+    ['an over-long name', `chapters/${'a'.repeat(150)}.md`],
+  ])('rejects %s', (_label, name) => {
+    expect(() => readTemplateZip(zip({ 'index.md': INDEX, [name]: '# x' }))).toThrow(PackageError)
+  })
+
+  it('rejects two entries that differ only by letter case, which collide on Windows and macOS', () => {
+    expect(() => readTemplateZip(zip({ 'index.md': INDEX, 'chapters/One.md': '# a', 'chapters/one.md': '# b' }))).toThrow(
+      /duplicate/i,
+    )
+  })
+
+  it('still accepts ordinary names that merely contain a reserved word', () => {
+    expect(() =>
+      readTemplateZip(zip({ 'index.md': INDEX, 'chapters/console-notes.md': '# x', 'assets/auxiliary.png': 'x' })),
+    ).not.toThrow()
+  })
+})
