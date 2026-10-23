@@ -23,10 +23,11 @@ function TemplateList({
           {onExport && (
             <button
               className="shrink-0 text-xs text-white/50 hover:text-white"
-              title="Export as .zip"
+              title="Export template"
+              aria-label={`Export ${t.label}`}
               onClick={() => onExport(t)}
             >
-              ⤓ zip
+              ⤓
             </button>
           )}
         </li>
@@ -93,7 +94,7 @@ export function TemplateCatalog() {
           )}
           {isTauri() && (
             <button className="self-start text-xs underline" onClick={() => void importZip()}>
-              Import .zip…
+              Import…
             </button>
           )}
           {notice && (
