@@ -1,0 +1,5 @@
+.shell { display: flex; height: 100vh; flex-direction: column; background: #262523; color: #f0eee9; }
+.body { display: flex; min-height: 0; flex: 1; }
+.sidebar { display: flex; flex-direction: column; width: 14rem; min-width: 0; flex-shrink: 0; overflow-y: auto; border-right: 1px solid #ffffff18; }
+.main { display: flex; min-width: 0; flex: 1; flex-direction: column; background: #302f2c; }
+.snippets { display: flex; width: 16rem; flex-shrink: 0; flex-direction: column; overflow-y: auto; border-left: 1px solid #ffffff18; }

@@ -1,0 +1,17 @@
+/* @name: Sci-Fi */
+[data-theme='sci-fi'] {
+  --page-bg: #edf2ef;
+  --page-fg: #172a31;
+  --page-font: 'Bahnschrift', 'Trebuchet MS', sans-serif;
+  --heading-font: 'Bahnschrift', 'Trebuchet MS', sans-serif;
+  --heading-color: #1c5360;
+  --accent: #28717a;
+  --statblock-bg: #dae5e2;
+  --readaloud-bg: #dce9e7;
+}
+[data-theme='sci-fi'] .grimoire-content h1,
+[data-theme='sci-fi'] .grimoire-content h2 {
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  border-bottom: 1px solid var(--accent);
+}

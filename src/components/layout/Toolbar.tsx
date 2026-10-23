@@ -8,8 +8,9 @@ import { resolveTheme } from '../../lib/themes'
 import { PAGE_SIZES, type PageSizeId, type ViewMode } from '../../types/document'
 import { ProjectName } from './ProjectName'
 import { useTabStore } from '../../stores/tabStore'
+import styles from './Toolbar.module.css'
 
-const btn = 'rounded px-2 py-1 text-sm hover:bg-white/10'
+const btn = styles.button
 
 const VIEWS: [ViewMode, string][] = [
   ['edit', 'Edit'],
@@ -33,7 +34,8 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
   const split = useTabStore((s) => s.split)
 
   return (
-    <header className="flex items-center gap-2 border-b border-white/10 px-3 py-1.5">
+    <header className={styles.toolbar}>
+      <div className={styles.group} role="group" aria-label="Document actions">
       <ProjectName />
       {dirty && <span className="text-amber-400" title="Unsaved document changes">•</span>}
       <button className={btn} onClick={() => void openFile().catch(() => undefined)}>
@@ -45,7 +47,8 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
       <button className={btn} onClick={exportPdf}>
         Export PDF
       </button>
-      <div className="flex gap-1" aria-label="Panels">
+      </div>
+      <div className={styles.group} role="group" aria-label="Panels">
         {(['files', 'templates', 'snippets'] as const).map((panel) => (
           <button
             key={panel}
@@ -59,7 +62,7 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
           </button>
         ))}
       </div>
-      <span className="mx-2 h-4 w-px bg-white/20" />
+      <div className={styles.group} role="group" aria-label="Page setup">
       <select
         aria-label="Page size"
         value={pageSize}
@@ -81,6 +84,8 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
         <option value={1} className="text-black">1 column</option>
         <option value={2} className="text-black">2 columns</option>
       </select>
+      </div>
+      <div className={styles.group} role="group" aria-label="Appearance and preview">
       <select
         aria-label="View"
         title="Edit the sheet, or preview the paginated pages and facing spreads"
@@ -112,7 +117,8 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
           {themeErrors.length} theme error{themeErrors.length > 1 ? 's' : ''}
         </span>
       )}
-      <span className="ml-auto flex gap-1">
+      </div>
+      <span className={styles.tools} role="group" aria-label="Editor tools">
         {commands.map((c) => (
           <button key={c.id} className={btn} onClick={c.run}>
             {c.label}

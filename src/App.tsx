@@ -13,10 +13,10 @@ import { useTemplateStore } from './stores/templateStore'
 import { resolveTheme } from './lib/themes'
 import { isTauri, useFileSystem } from './hooks/useFileSystem'
 import { watchSettings } from './lib/appState'
-import { ProjectArchiveActions } from './components/project/ProjectArchiveActions'
-import { useDocumentStore } from './stores/documentStore'
 import { useTabStore } from './stores/tabStore'
 import { useUnsavedClose } from './hooks/useUnsavedClose'
+import { MenuBar } from './components/layout/MenuBar'
+import styles from './App.module.css'
 
 export default function App() {
   useUnsavedClose()
@@ -26,8 +26,7 @@ export default function App() {
   const themes = useThemeStore((s) => s.themes)
   const reloadThemes = useThemeStore((s) => s.reload)
   const reloadTemplates = useTemplateStore((s) => s.reload)
-  const { restoreSession, openRestored } = useFileSystem()
-  const workspaceRoot = useDocumentStore((s) => s.workspaceRoot)
+  const { restoreSession } = useFileSystem()
   const activeTab = useTabStore((s) => s.active)
   const hasTabs = useTabStore((s) => s.paths.length > 0)
   const activeEditor = hasTabs && !activeTab ? null : editor
@@ -68,21 +67,21 @@ export default function App() {
 
   return (
     <PluginProvider>
-      <div data-theme={resolveTheme(theme, themes)} className="flex h-screen flex-col bg-neutral-900 text-neutral-100">
+      <div data-theme={resolveTheme(theme, themes)} className={styles.shell}>
+        <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
         <Toolbar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
-        <ProjectArchiveActions workspacePath={workspaceRoot} onRestored={openRestored} />
-        <div className="flex min-h-0 flex-1">
+        <div className={styles.body}>
           {(visiblePanels.files || visiblePanels.templates) && (
-            <aside className="w-56 shrink-0 overflow-y-auto border-r border-white/10">
+            <aside className={styles.sidebar}>
               {visiblePanels.files && <FileTree />}
               {visiblePanels.templates && <TemplateCatalog />}
             </aside>
           )}
-          <main className="flex min-w-0 flex-1 flex-col bg-neutral-800">
+          <main className={styles.main}>
             <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
           </main>
           {visiblePanels.snippets && (
-            <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-white/10">
+            <aside className={styles.snippets}>
               <SnippetPalette editor={activeEditor} />
             </aside>
           )}
