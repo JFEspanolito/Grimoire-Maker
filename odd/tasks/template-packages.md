@@ -10,9 +10,9 @@ Objective: spec module 4.3 remainder: community template packages as .zip, auxil
 ## Tasks
 - T1 | S1 | inline | status: done | commit: a379397 | Zip reading/writing and package validation (pure, tested)
 - T2 | S1,S2 | inline | status: done (import/export dialogs not exercised in a running app) | commit: 1c4dce9 | Import .zip and export a package from the catalog (fs wiring, UI)
-- T3 | S3 | inline | status: done | commit: pending | Auxiliary chapters materialized under unique Draft folder on apply
-- T4 | S4 | inline | status: done | commit: pending | Package Markdown snippets loaded into collapsible palette groups
-- T5 | S3,S4 | inline | status: pending | commit: - | Run integration checks and fix observed bugs after implementation
+- T3 | S3 | inline | status: done | commit: bce1595 | Auxiliary chapters materialized under unique Draft folder on apply
+- T4 | S4 | inline | status: done | commit: bce1595 | Package Markdown snippets loaded into collapsible palette groups
+- T5 | S3,S4 | inline | status: done | commit: pending | Run integration checks and fix observed bugs after implementation
 
 ## Log
 - L1 (2026-10-22): "sí," (continue with the next module; the previous message listed template .zip packages first)
@@ -30,3 +30,4 @@ Objective: spec module 4.3 remainder: community template packages as .zip, auxil
 - L13 (2026-10-23): "luego bugs, al final". The already-implemented zip import/export was verified in code before work on T3/T4; bug fixes follow feature work. Engram mirror pending because the runtime session identity is unavailable.
 - L14: The binder introduced after the original T3 assumption made a nested project folder inappropriate. T3 will materialize `index.md`, `chapters/`, and `assets/` inside a unique `Draft/<template-id>/` folder; package snippets and theme remain installed with the template.
 - L15: T3/T4 RED: createTemplateDocuments and readTemplateSnippets did not exist. GREEN: `pnpm test` 144/144, `pnpm build` passed, `pnpm lint` only 3 existing warnings, `git diff --check` passed. Official presets now export an `index.md` zip; package snippets round-trip with zip import/export. Desktop dialogs were not exercised in a running Tauri window. T5 bug pass remains.
+- L16: T5 bug pass found and reproduced two defects: the new snippet loader followed a symlinked `snippets` folder outside its package, and a failed chapter write left a visible partial template folder. The loader now checks the package directory entry and isolates listing failures; application writes into a hidden staging directory, renames it only after `index.md` is complete, and removes staging on failure. RED tests observed both failures; GREEN: `pnpm test` 146/146, `pnpm build`, `pnpm lint` with the same 3 existing warnings, `git diff --check`. Native Tauri UI and dialogs remain untested.

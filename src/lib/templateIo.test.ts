@@ -10,6 +10,7 @@ class FakeFs implements PackageFs {
   writes: string[] = []
   symlinks = new Set<string>()
   mkdirs: string[] = []
+  failWriteSuffix: string | null = null
 
   async readFile(path: string) {
     const data = this.files.get(path)
@@ -17,8 +18,27 @@ class FakeFs implements PackageFs {
     return data
   }
   async writeFile(path: string, data: Uint8Array) {
+    if (this.failWriteSuffix && path.endsWith(this.failWriteSuffix)) throw new Error('Disk full')
     this.files.set(path, data)
     this.writes.push(path)
+  }
+  async rename(from: string, to: string) {
+    for (const [path, data] of [...this.files]) {
+      if (path.startsWith(`${from}/`)) {
+        this.files.delete(path)
+        this.files.set(`${to}${path.slice(from.length)}`, data)
+      }
+    }
+    for (const path of [...this.dirs]) {
+      if (path === from || path.startsWith(`${from}/`)) {
+        this.dirs.delete(path)
+        this.dirs.add(`${to}${path.slice(from.length)}`)
+      }
+    }
+  }
+  async removeDir(path: string) {
+    for (const file of [...this.files.keys()]) if (file.startsWith(`${path}/`)) this.files.delete(file)
+    for (const dir of [...this.dirs]) if (dir === path || dir.startsWith(`${path}/`)) this.dirs.delete(dir)
   }
   async mkdir(path: string) {
     this.dirs.add(path)
@@ -142,11 +162,26 @@ describe('createTemplateDocuments', () => {
     })
 
     expect(index).toBe('/project/Draft/pack-1/index.md')
-    expect(fs.writes.at(-1)).toBe(index)
+    expect(fs.writes.at(-1)).toMatch(/\/index\.md$/)
     expect(strFromU8(fs.files.get('/project/Draft/pack-1/chapters/one.md')!)).toBe('# One')
     expect(Array.from(fs.files.get('/project/Draft/pack-1/assets/map.png')!)).toEqual([1, 2])
     expect(fs.files.has('/project/Draft/pack-1/snippets/encounter.md')).toBe(false)
     expect(fs.files.has('/project/Draft/pack-1/theme.css')).toBe(false)
     expect(fs.files.has('/project/Draft/pack/index.md')).toBe(false)
+  })
+
+  it('leaves no partial template folder when a file write fails', async () => {
+    const packageRoot = `${DIR}/pack`
+    fs.files.set(`${packageRoot}/index.md`, strToU8('# Start'))
+    fs.files.set(`${packageRoot}/chapters/one.md`, strToU8('# One'))
+    fs.failWriteSuffix = '/chapters/one.md'
+
+    await expect(createTemplateDocuments(fs, '/project/Draft', {
+      id: 'pack', label: 'Pack', frontmatter: {}, body: '# Start', builtin: false,
+      location: { kind: 'package', path: packageRoot },
+    })).rejects.toThrow('Disk full')
+
+    expect([...fs.files.keys()].some((path) => path.startsWith('/project/Draft/'))).toBe(false)
+    expect([...fs.dirs].some((path) => path.startsWith('/project/Draft/'))).toBe(false)
   })
 })

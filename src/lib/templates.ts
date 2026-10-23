@@ -114,7 +114,7 @@ export async function loadUserTemplates(takenThemeIds: Set<string>): Promise<Use
       seen.add(id)
       const packageRoot = `${dir}/${id}`
       const packageSnippets = isPackage
-        ? await readTemplateSnippets({ exists, readDir, readTextFile }, packageRoot, id, label)
+        ? await readTemplateSnippets({ readDir, readTextFile }, packageRoot, id, label)
         : { snippets: [], errors: [] }
       errors.push(...packageSnippets.errors)
       templates.push({

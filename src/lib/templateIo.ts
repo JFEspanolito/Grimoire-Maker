@@ -18,6 +18,11 @@ export interface PackageFs {
   readDir(path: string): Promise<{ name: string; isDirectory: boolean; isSymlink?: boolean }[]>
 }
 
+export interface ProjectPackageFs extends PackageFs {
+  rename(from: string, to: string): Promise<void>
+  removeDir(path: string): Promise<void>
+}
+
 /**
  * Unpacks a template zip into `<dir>/<id>/` and returns the id. The archive is fully
  * validated before the first byte is written. `index.md` goes last: a package cut short by
@@ -81,29 +86,37 @@ export async function collectPackage(fs: PackageFs, root: string): Promise<Recor
 }
 
 /** Materializes a template in Draft without replacing any existing project document. */
-export async function createTemplateDocuments(fs: PackageFs, draft: string, template: Template): Promise<string> {
+export async function createTemplateDocuments(fs: ProjectPackageFs, draft: string, template: Template): Promise<string> {
   if (!/^[A-Za-z0-9_-]+$/.test(template.id)) throw new PackageError('Invalid template id')
   let folder = `${draft}/${template.id}`
   for (let suffix = 1; await fs.exists(folder); suffix++) folder = `${draft}/${template.id}-${suffix}`
+  const staging = `${draft}/.${template.id}.tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
   const packageFiles = template.location?.kind === 'package'
     ? await collectPackage(fs, template.location.path)
     : {}
   const documents = Object.fromEntries(Object.entries(packageFiles).filter(([name]) =>
-    name.startsWith('chapters/') || name.startsWith('assets/')))
+    (name.startsWith('chapters/') && /\.md$/i.test(name)) || name.startsWith('assets/')))
   documents['index.md'] = new TextEncoder().encode(serializeDocument(template.frontmatter, template.body))
 
-  const folders = new Set<string>([folder])
+  const folders = new Set<string>([staging])
   for (const name of Object.keys(documents)) {
     for (let at = name.indexOf('/'); at !== -1; at = name.indexOf('/', at + 1)) {
-      folders.add(`${folder}/${name.slice(0, at)}`)
+      folders.add(`${staging}/${name.slice(0, at)}`)
     }
   }
-  for (const path of [...folders].sort((a, b) => a.length - b.length)) await fs.mkdir(path)
-  for (const [name, bytes] of Object.entries(documents).sort(([a], [b]) => a.localeCompare(b))) {
-    if (name !== 'index.md') await fs.writeFile(`${folder}/${name}`, bytes)
+  try {
+    for (const path of [...folders].sort((a, b) => a.length - b.length)) await fs.mkdir(path)
+    for (const [name, bytes] of Object.entries(documents).sort(([a], [b]) => a.localeCompare(b))) {
+      if (name !== 'index.md') await fs.writeFile(`${staging}/${name}`, bytes)
+    }
+    await fs.writeFile(`${staging}/index.md`, documents['index.md'])
+    if (await fs.exists(folder)) throw new PackageError(`"${folder}" already exists`)
+    await fs.rename(staging, folder)
+  } catch (error) {
+    try { await fs.removeDir(staging) } catch { /* Preserve the original write error. */ }
+    throw error
   }
   const index = `${folder}/index.md`
-  await fs.writeFile(index, documents['index.md'])
   return index
 }

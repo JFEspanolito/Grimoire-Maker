@@ -1,18 +1,20 @@
 import { open, save } from '@tauri-apps/plugin-dialog'
-import { exists, mkdir, readDir, readFile, stat, writeFile } from '@tauri-apps/plugin-fs'
-import { collectPackage, createTemplateDocuments, installPackage, type PackageFs } from './templateIo'
+import { exists, mkdir, readDir, readFile, remove, rename, stat, writeFile } from '@tauri-apps/plugin-fs'
+import { collectPackage, createTemplateDocuments, installPackage, type ProjectPackageFs } from './templateIo'
 import { LIMITS, PackageError, createTemplateZip } from './templatePackage'
 import { OFFICIAL_TEMPLATES, type Template } from './templates'
 import { ensureConfigSubdir } from './themes'
 import { serializeDocument } from './frontmatter'
 
-const tauriFs: PackageFs = {
+const tauriFs: ProjectPackageFs = {
   readFile,
   writeFile: (path, data) => writeFile(path, data),
   mkdir: (path) => mkdir(path, { recursive: true }),
   exists,
   readDir: async (path) =>
     (await readDir(path)).map((e) => ({ name: e.name, isDirectory: e.isDirectory, isSymlink: e.isSymlink })),
+  rename,
+  removeDir: (path) => remove(path, { recursive: true }),
 }
 
 const ZIP_FILTER = [{ name: 'Template package', extensions: ['zip'] }]

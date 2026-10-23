@@ -9,6 +9,7 @@ import { exportTemplateZip } from './templateActions'
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }))
 vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: vi.fn(), mkdir: vi.fn(), readDir: vi.fn(), readFile: vi.fn(), stat: vi.fn(), writeFile: vi.fn(),
+  rename: vi.fn(), remove: vi.fn(),
   readTextFile: vi.fn(),
 }))
 

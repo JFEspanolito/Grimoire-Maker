@@ -8,7 +8,6 @@ export interface TemplateSnippet {
 }
 
 interface SnippetFs {
-  exists(path: string): Promise<boolean>
   readDir(path: string): Promise<{ name: string; isDirectory: boolean; isSymlink?: boolean }[]>
   readTextFile(path: string): Promise<string>
 }
@@ -18,10 +17,27 @@ export async function readTemplateSnippets(
   fs: SnippetFs, root: string, templateId: string, group: string,
 ): Promise<{ snippets: TemplateSnippet[]; errors: string[] }> {
   const dir = `${root}/snippets`
-  if (!(await fs.exists(dir))) return { snippets: [], errors: [] }
   const snippets: TemplateSnippet[] = []
   const errors: string[] = []
-  for (const entry of (await fs.readDir(dir)).sort((a, b) => a.name.localeCompare(b.name))) {
+  try {
+    const directory = (await fs.readDir(root)).find((entry) => entry.name === 'snippets')
+    if (!directory) return { snippets, errors }
+    if (!directory.isDirectory || directory.isSymlink) {
+      errors.push(`${templateId}/snippets: expected a real directory, not a symlink or file`)
+      return { snippets, errors }
+    }
+  } catch (error) {
+    errors.push(`${templateId}/snippets: ${error instanceof Error ? error.message : String(error)}`)
+    return { snippets, errors }
+  }
+  let entries: Awaited<ReturnType<SnippetFs['readDir']>>
+  try {
+    entries = await fs.readDir(dir)
+  } catch (error) {
+    errors.push(`${templateId}/snippets: ${error instanceof Error ? error.message : String(error)}`)
+    return { snippets, errors }
+  }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     if (entry.isDirectory || entry.isSymlink || entry.name.startsWith('.') || !/\.md$/i.test(entry.name)) continue
     try {
       const raw = await fs.readTextFile(`${dir}/${entry.name}`)
