@@ -188,6 +188,10 @@ export function useFileSystem() {
     [moveEntry],
   )
 
+  const openFolder = useCallback(async (path: string) => {
+    await invoke('open_folder', { path })
+  }, [])
+
   const openFile = useCallback(
     (path?: string, newTab = false) => runFileAction(async () => {
       if (!isTauri()) return
@@ -317,6 +321,7 @@ export function useFileSystem() {
     createFile,
     createFolder,
     renameEntry,
+    openFolder,
     renameWorkspace,
     moveEntry,
   }

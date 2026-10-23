@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
@@ -169,6 +170,51 @@ pub fn rename_workspace(app: AppHandle, path: String, name: String) -> Result<St
     })
 }
 
+fn open_folder_in(
+    state_path: &Path,
+    folder: &Path,
+    launch: impl FnOnce(&Path) -> Result<(), String>,
+) -> Result<(), String> {
+    if !folder.is_dir() {
+        return Err("The selected path is not a folder".into());
+    }
+    let raw = fs::read_to_string(state_path).map_err(|e| e.to_string())?;
+    let state: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let root = state
+        .get("lastWorkspace")
+        .and_then(Value::as_str)
+        .ok_or("No active project folder")?;
+    let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
+    let selected = fs::canonicalize(folder).map_err(|e| e.to_string())?;
+    if !selected.starts_with(root) {
+        return Err("The folder is outside the active project".into());
+    }
+    launch(folder)
+}
+
+/// Opens an active-project directory in the operating system's file explorer.
+#[tauri::command]
+pub fn open_folder(app: AppHandle, path: String) -> Result<(), String> {
+    let state_path = app
+        .path()
+        .app_config_dir()
+        .map_err(|e| e.to_string())?
+        .join(crate::config::STATE_FILE);
+    open_folder_in(&state_path, Path::new(&path), |folder| {
+        #[cfg(target_os = "windows")]
+        let program = "explorer.exe";
+        #[cfg(target_os = "macos")]
+        let program = "open";
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let program = "xdg-open";
+        Command::new(program)
+            .arg(folder)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +311,42 @@ mod tests {
             assert!(!valid_project_name(name), "{name:?} must be rejected");
         }
         assert!(valid_project_name("My Grimoire"));
+    }
+
+    #[test]
+    fn opens_only_directories_inside_the_active_project() {
+        let base =
+            std::env::temp_dir().join(format!("grimoire-open-folder-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let project = base.join("Project");
+        let chapter = project.join("Draft/chapter.md");
+        fs::create_dir_all(chapter.parent().unwrap()).unwrap();
+        fs::create_dir_all(base.join("Outside")).unwrap();
+        fs::write(&chapter, "# Chapter").unwrap();
+        let state_path = base.join("state.json");
+        fs::write(
+            &state_path,
+            format!(
+                r#"{{"lastWorkspace":"{}"}}"#,
+                normalize(&project.to_string_lossy())
+            ),
+        )
+        .unwrap();
+
+        let mut launched = false;
+        open_folder_in(&state_path, &project.join("Draft"), |_| {
+            launched = true;
+            Ok(())
+        })
+        .unwrap();
+        assert!(launched);
+        assert!(
+            open_folder_in(&state_path, &base.join("Outside"), |_| panic!(
+                "must not launch"
+            ))
+            .is_err()
+        );
+        assert!(open_folder_in(&state_path, &chapter, |_| panic!("must not launch")).is_err());
+        fs::remove_dir_all(base).unwrap();
     }
 }

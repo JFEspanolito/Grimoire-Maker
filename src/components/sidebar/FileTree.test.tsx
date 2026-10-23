@@ -6,10 +6,12 @@ import { FileTree } from './FileTree'
 
 const openFileMock = vi.hoisted(() => vi.fn())
 const moveEntryMock = vi.hoisted(() => vi.fn())
+const openFolderMock = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/useFileSystem', () => ({
   useFileSystem: () => ({
     openWorkspace: vi.fn(), openRecent: vi.fn(), openFile: openFileMock,
     createFile: vi.fn(), createFolder: vi.fn(), renameEntry: vi.fn(), renameWorkspace: vi.fn(), moveEntry: moveEntryMock,
+    openFolder: openFolderMock,
   }),
 }))
 
@@ -118,5 +120,22 @@ describe('project explorer', () => {
     expect(moveEntryMock).toHaveBeenCalledWith(
       '/projects/My Grimoire/Draft/Chapter.md', '/projects/My Grimoire/Trash/Chapter.md',
     )
+  })
+
+  it('opens a folder in the system file explorer from its context menu', async () => {
+    useDocumentStore.getState().setWorkspace('/projects/My Grimoire', [
+      { name: 'Draft', path: '/projects/My Grimoire/Draft', isDirectory: true, children: [] },
+    ])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    const folder = Array.from(container.querySelectorAll('li > div')).find((row) => row.textContent?.includes('Draft'))
+    await act(async () => folder?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })))
+
+    const action = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+      .find((button) => button.textContent === 'Open Folder')
+    expect(action).toBeDefined()
+    await act(async () => action?.click())
+    expect(openFolderMock).toHaveBeenCalledWith('/projects/My Grimoire/Draft')
   })
 })

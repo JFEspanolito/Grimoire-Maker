@@ -155,7 +155,7 @@ export function FileTree() {
   const root = useDocumentStore((s) => s.workspaceRoot)
   const recent = useSessionStore((s) => s.recentWorkspaces)
   const workspaceError = useSessionStore((s) => s.workspaceError)
-  const { openWorkspace, openRecent, openFile, createFile, createFolder, renameEntry, moveEntry } =
+  const { openWorkspace, openRecent, openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
     useFileSystem()
   const [selected, setSelected] = useState<FileNode | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
@@ -326,10 +326,17 @@ export function FileTree() {
           className="fixed z-50 min-w-36 rounded border border-white/20 bg-neutral-800 p-1 shadow-xl"
           style={{ left: menu.x, top: menu.y }}
           onPointerDown={(event) => event.stopPropagation()}>
-          <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
-            onClick={() => { const node = menu.node; setMenu(null); if (node.isDirectory && collapsed.has(node.path)) ctx.onToggle(node.path); else if (!node.isDirectory) void run(() => openFile(node.path)) }}>
-            Open
-          </button>
+          {menu.node.isDirectory ? (
+            <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
+              onClick={() => { const path = menu.node.path; setMenu(null); void run(() => openFolder(path)) }}>
+              Open Folder
+            </button>
+          ) : (
+            <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
+              onClick={() => { const path = menu.node.path; setMenu(null); void run(() => openFile(path)) }}>
+              Open
+            </button>
+          )}
           {!menu.node.isDirectory && (
             <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
               onClick={() => { const path = menu.node.path; setMenu(null); void run(() => openFile(path, true)) }}>
