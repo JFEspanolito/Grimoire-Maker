@@ -19,6 +19,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const actions = useFileSystem()
   const print = usePrint()
   const workspace = useDocumentStore((s) => s.workspaceRoot)
+  const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
   const bar = useRef<HTMLElement>(null)
@@ -45,14 +46,14 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
     <details name="application-menu">
       <summary>File</summary>
       <div className={styles.menu}>
-        <button onClick={() => void run(() => actions.openFile())}>Open Markdown…</button>
-        <button onClick={() => void run(actions.saveFile)}>Save</button>
+        <button onClick={() => void run(() => actions.openFile())}>Open File…</button>
+        <button disabled={readOnly} onClick={() => void run(actions.saveFile)}>Save</button>
         <button onClick={() => void run(actions.saveAll)}>Save All</button>
         <hr />
         <button disabled={!workspace} onClick={() => void run(() => actions.importInto('Draft'))}>Import to Draft…</button>
         <button disabled={!workspace} onClick={() => void run(() => actions.importInto('Research'))}>Import to Research…</button>
         <hr />
-        <button onClick={() => void run(print)}>Export PDF…</button>
+        <button disabled={readOnly} onClick={() => void run(print)}>Export PDF…</button>
       </div>
     </details>
     <details name="application-menu">
@@ -74,7 +75,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <hr />
         <button onClick={() => void run(() => useTabStore.getState().toggleSplit())}>Toggle Split View</button>
         <button onClick={() => void run(() => useSettingsStore.getState().setViewMode('edit'))}>Edit</button>
-        <button onClick={() => void run(() => useSettingsStore.getState().setViewMode('pages'))}>Page Preview</button>
+        <button disabled={readOnly} onClick={() => void run(() => useSettingsStore.getState().setViewMode('pages'))}>Page Preview</button>
       </div>
     </details>
     <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>

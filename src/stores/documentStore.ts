@@ -7,6 +7,7 @@ interface DocumentState {
   document: GrimoireDocument
   buffers: Record<string, GrimoireDocument>
   activate: (path: string) => void
+  deactivate: () => void
   setBodyForPath: (path: string | null, body: string) => void
   markSnapshotSaved: (path: string, snapshot: GrimoireDocument) => void
   remapDocuments: (from: string, to: string) => void
@@ -33,6 +34,9 @@ function updateDocument(state: DocumentState, document: GrimoireDocument) {
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   buffers: {},
   resetDocuments: () => set({ document: emptyDocument(), buffers: {} }),
+  deactivate: () => set((state) => ({ document: emptyDocument(), buffers: {
+    ...state.buffers, ...(state.document.path ? { [state.document.path]: state.document } : {}),
+  } })),
   activate: (path) => set((state) => state.buffers[path] ? { document: state.buffers[path] } : {}),
   forget: (path) => set((state) => {
     const buffers = { ...state.buffers }

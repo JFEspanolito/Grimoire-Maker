@@ -34,7 +34,7 @@ export default function App() {
   const { restoreSession } = useFileSystem()
   const activeTab = useTabStore((s) => s.active)
   const hasTabs = useTabStore((s) => s.paths.length > 0)
-  const activeEditor = hasTabs && !activeTab ? null : editor
+  const activeEditor = hasTabs && (!activeTab || !/\.md$/i.test(activeTab)) ? null : editor
   const togglePanel = (panel: keyof typeof visiblePanels) =>
     setVisiblePanels((current) => ({ ...current, [panel]: !current[panel] }))
 

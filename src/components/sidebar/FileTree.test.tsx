@@ -151,4 +151,19 @@ describe('project explorer', () => {
     await act(async () => action?.click())
     expect(openFolderMock).toHaveBeenCalledWith('/projects/My Grimoire/Draft')
   })
+
+  it('opens the containing folder from a file context menu', async () => {
+    useDocumentStore.getState().setWorkspace('/book', [
+      { name: 'notes.md', path: '/book/Research/notes.md', isDirectory: false },
+    ])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    await act(async () => container.querySelector('li > div')?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })))
+    const action = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+      .find((button) => button.textContent === 'Open Containing Folder')
+    expect(action).toBeDefined()
+    await act(async () => action?.click())
+    expect(openFolderMock).toHaveBeenCalledWith('/book/Research')
+  })
 })

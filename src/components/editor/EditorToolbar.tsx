@@ -47,6 +47,13 @@ const ACTIONS: Action[][] = [
       isActive: (e) => e.isActive('italic'),
     },
     {
+      id: 'underline',
+      label: 'U',
+      title: 'Underline',
+      run: (e) => e.chain().focus().toggleUnderline().run(),
+      isActive: (e) => e.isActive('underline'),
+    },
+    {
       id: 'strike',
       label: 'S',
       title: 'Strikethrough',
@@ -175,7 +182,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
                   aria-pressed={a.isActive ? (current?.active ?? false) : undefined}
                   disabled={!editor || !(current?.enabled ?? true)}
                   className={`${btn} ${current?.active ? 'bg-white/20' : ''} ${
-                    a.id === 'bold' ? 'font-bold' : a.id === 'italic' ? 'italic' : ''
+                    a.id === 'bold' ? 'font-bold' : a.id === 'italic' ? 'italic' : a.id === 'underline' ? 'underline' : ''
                   }`}
                   // Keep the editor selection: a button press must not steal focus first.
                   onMouseDown={(e) => e.preventDefault()}
@@ -199,7 +206,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         </button>
         {error && <span className="text-xs text-red-400">{error}</span>}
       </div>
-      {editor && state?.image && <ImageControls editor={editor} attrs={state.image} />}
+      <ImageControls editor={editor} attrs={state?.image ?? null} />
       {editor && state?.inTable && <TableControls editor={editor} />}
     </>
   )

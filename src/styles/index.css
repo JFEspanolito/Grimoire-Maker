@@ -35,6 +35,34 @@ body,
 .grimoire-content p { margin: 0 0 0.6em; }
 .grimoire-content img { max-width: 100%; }
 
+/* Restore document formatting removed by the UI reset, including print previews. */
+.grimoire-content ul { list-style: disc outside; }
+.grimoire-content ol { list-style: decimal outside; }
+.grimoire-content ul,
+.grimoire-content ol {
+  margin: 0.6em 0;
+  padding-left: 1.5em;
+}
+.grimoire-content li > p { margin-bottom: 0.25em; }
+
+.grimoire-content blockquote {
+  margin: 0.8em 0;
+  padding: 0.25em 0 0.25em 1em;
+  border-left-width: 3px;
+  border-left-style: solid;
+  border-left-color: var(--accent, currentColor);
+  font-style: italic;
+}
+
+.grimoire-content hr {
+  height: 0;
+  margin: 1em 0;
+  border: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+  border-top-color: var(--accent, currentColor);
+}
+
 .grimoire-content .statblock {
   background: var(--statblock-bg);
   border-top: 2px solid var(--accent);
@@ -157,6 +185,22 @@ body,
   outline: 2px solid #f59e0b;
 }
 
+.grimoire-image-resize {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 2px solid white;
+  background: #f59e0b;
+  transform: translate(-50%, -50%);
+  cursor: nwse-resize;
+  touch-action: none;
+  z-index: 3;
+}
+
+.grimoire-image-resize:focus-visible { outline: 2px solid #2563eb; }
+.page-preview .grimoire-image-resize { display: none; }
+
 .grimoire-image-chip {
   display: block;
   font: 11px system-ui, sans-serif;
@@ -165,7 +209,8 @@ body,
 }
 
 @media print {
-  .grimoire-image-chip {
+  .grimoire-image-chip,
+  .grimoire-image-resize {
     display: none;
   }
 }

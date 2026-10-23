@@ -32,6 +32,7 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
   const dirty = useDocumentStore((s) => s.document.dirty)
   const commands = usePluginRegistry((s) => s.commands)
   const split = useTabStore((s) => s.split)
+  const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
 
   return (
     <header className={styles.toolbar}>
@@ -41,10 +42,10 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
       <button className={btn} onClick={() => void openFile().catch(() => undefined)}>
         Open
       </button>
-      <button className={btn} onClick={() => void saveFile().catch(() => undefined)}>
+      <button className={btn} disabled={readOnly} onClick={() => void saveFile().catch(() => undefined)}>
         Save
       </button>
-      <button className={btn} onClick={exportPdf}>
+      <button className={btn} disabled={readOnly} onClick={exportPdf}>
         Export PDF
       </button>
       </div>
@@ -88,6 +89,7 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
       <div className={styles.group} role="group" aria-label="Appearance and preview">
       <select
         aria-label="View"
+        disabled={readOnly}
         title="Edit the sheet, or preview the paginated pages and facing spreads"
         value={viewMode}
         onChange={(e) => setViewMode(e.target.value as ViewMode)}

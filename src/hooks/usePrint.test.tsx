@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { exportPdf } from '../lib/exportPdf'
 import { usePrint } from './usePrint'
+import { useTabStore } from '../stores/tabStore'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/plugin-dialog', () => ({ save: vi.fn() }))
@@ -19,6 +20,7 @@ function Harness() {
   return null
 }
 beforeEach(async () => {
+  useTabStore.getState().reset(null)
   vi.clearAllMocks()
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   vi.spyOn(window, 'alert').mockImplementation(() => {})
@@ -27,6 +29,13 @@ beforeEach(async () => {
   await act(async () => root.render(<Harness />))
 })
 afterEach(async () => { await act(async () => root.unmount()); vi.restoreAllMocks() })
+it('does not export an inactive Markdown editor while a binary preview is focused', async () => {
+  useTabStore.getState().reset('/reference.pdf')
+  await print()
+  expect(invoke).not.toHaveBeenCalled()
+  expect(save).not.toHaveBeenCalled()
+  expect(exportPdf).not.toHaveBeenCalled()
+})
 it('preserves Windows save-path export and cancel', async () => {
   vi.mocked(invoke).mockResolvedValue('file')
   vi.mocked(save).mockResolvedValueOnce('/book.pdf').mockResolvedValueOnce(null)

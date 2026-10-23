@@ -189,7 +189,9 @@ fn open_folder_in(
     if !selected.starts_with(root) {
         return Err("The folder is outside the active project".into());
     }
-    launch(folder)
+    // Use native separators for the OS launcher rather than the UI's portable paths.
+    let launch_path: std::path::PathBuf = folder.components().collect();
+    launch(&launch_path)
 }
 
 /// Opens an active-project directory in the operating system's file explorer.
@@ -334,8 +336,11 @@ mod tests {
         .unwrap();
 
         let mut launched = false;
-        open_folder_in(&state_path, &project.join("Draft"), |_| {
+        let normalized_folder = normalize(&project.join("Draft").to_string_lossy());
+        open_folder_in(&state_path, Path::new(&normalized_folder), |folder| {
             launched = true;
+            #[cfg(target_os = "windows")]
+            assert!(!folder.as_os_str().to_string_lossy().contains('/'));
             Ok(())
         })
         .unwrap();

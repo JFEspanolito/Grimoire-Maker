@@ -70,6 +70,60 @@ beforeEach(async () => {
 })
 
 describe('switching Markdown files', () => {
+  it('restores a remembered PDF without reading it as Markdown', async () => {
+    state = { ...emptyState(), lastWorkspace: '/workspace', lastFile: '/workspace/Research/ref.pdf' }
+    directories.add('/workspace/Research/ref.pdf')
+    await actions.openRecent('/workspace')
+    expect(useTabStore.getState().active).toBe('/workspace/Research/ref.pdf')
+    expect(useDocumentStore.getState().document.path).toBeNull()
+    expect(readTextFile).not.toHaveBeenCalled()
+  })
+  it('keeps the active preview remembered when saving background Markdown buffers', async () => {
+    useDocumentStore.getState().loadFromRaw('/a.md', 'A')
+    useTabStore.getState().reset('/a.md')
+    useDocumentStore.getState().setBody('unsaved')
+    await actions.openFile('/reference.pdf')
+    await actions.saveAll()
+    expect(writeTextFile).toHaveBeenCalledWith('/a.md', 'unsaved')
+    expect(useTabStore.getState().active).toBe('/reference.pdf')
+    expect(state.lastFile).toBe('/reference.pdf')
+    expect(useDocumentStore.getState().buffers['/a.md'].dirty).toBe(false)
+  })
+  it('replaces a clean tab on ordinary open and discards its cached buffer', async () => {
+    useDocumentStore.getState().loadFromRaw('/a.md', 'A')
+    useTabStore.getState().reset('/a.md')
+    await actions.openFile('/b.md')
+    expect(useTabStore.getState().paths).toEqual(['/b.md'])
+    expect(useDocumentStore.getState().buffers['/a.md']).toBeUndefined()
+  })
+  it('retains edits made while the next file is loading', async () => {
+    useDocumentStore.getState().loadFromRaw('/a.md', 'A')
+    useTabStore.getState().reset('/a.md')
+    vi.mocked(readTextFile).mockImplementationOnce(async () => {
+      useDocumentStore.getState().setBody('typed while loading')
+      return 'B'
+    })
+    await actions.openFile('/b.md')
+    expect(useTabStore.getState().paths).toEqual(['/a.md', '/b.md'])
+    expect(useDocumentStore.getState().buffers['/a.md'].body).toBe('typed while loading')
+    expect(writeTextFile).not.toHaveBeenCalled()
+  })
+  it.each(['/photo.png', '/reference.pdf', '/notes.docx'])('opens %s read-only without parsing or saving binary bytes', async (path) => {
+    useDocumentStore.getState().loadFromRaw('/a.md', 'A')
+    useTabStore.getState().reset('/a.md')
+    useDocumentStore.getState().setBody('unsaved A')
+    await actions.openFile(path)
+    expect(useTabStore.getState().paths).toEqual(['/a.md', path])
+    expect(useTabStore.getState().active).toBe(path)
+    expect(useDocumentStore.getState().buffers[path]).toBeUndefined()
+    await actions.saveFile()
+    expect(readTextFile).not.toHaveBeenCalled()
+    expect(writeTextFile).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+    await actions.closeTab(path)
+    expect(useDocumentStore.getState().document.body).toBe('unsaved A')
+    expect(useDocumentStore.getState().document.dirty).toBe(true)
+  })
   it('preserves the focused document for restart when saving all buffers', async () => {
     useDocumentStore.getState().loadFromRaw('/a.md', 'A')
     useTabStore.getState().reset('/a.md')

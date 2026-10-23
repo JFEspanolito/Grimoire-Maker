@@ -1,5 +1,8 @@
-import { useContext, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
+import { Fragment, Slice } from '@tiptap/pm/model'
+import { NodeSelection } from '@tiptap/pm/state'
+import { dropPoint } from '@tiptap/pm/transform'
 import { useDocumentStore } from '../../../stores/documentStore'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { loadImageUrl, revokeImageUrl } from '../../../lib/images'
@@ -14,7 +17,7 @@ const ANCHOR_LABEL: Record<string, string> = {
 }
 
 /** Canvas rendering of an image node: resolves the stored path and applies the layout attributes. */
-export function ImageView({ node, selected, updateAttributes }: NodeViewProps) {
+export function ImageView({ node, selected, updateAttributes, editor, getPos }: NodeViewProps) {
   const activePath = useDocumentStore((s) => s.document.path)
   const panePath = useContext(DocumentPathContext)
   const documentPath = panePath === undefined ? activePath : panePath
@@ -22,6 +25,32 @@ export function ImageView({ node, selected, updateAttributes }: NodeViewProps) {
   const [shown, setShown] = useState<{ src: string; url: string } | null>(null)
   const [failure, setFailure] = useState<{ src: string; message: string } | null>(null)
   const stopDrag = useRef<(() => void) | null>(null)
+  const imageRef = useRef<HTMLImageElement>(null)
+  const [corner, setCorner] = useState<{ left: number; top: number } | null>(null)
+
+  const placeHandle = () => {
+    const image = imageRef.current
+    const page = image?.closest('.grimoire-page')
+    if (!image || !page) return
+    const bounds = page.getBoundingClientRect()
+    const rect = image.getBoundingClientRect()
+    if (!bounds.width || !rect.width) return
+    const scale = PAGE_SIZES[useSettingsStore.getState().pageSize].widthMm / bounds.width
+    const next = { left: (rect.left + rect.width - bounds.left) * scale, top: (rect.top + rect.height - bounds.top) * scale }
+    setCorner((old) => old?.left === next.left && old.top === next.top ? old : next)
+  }
+
+  useLayoutEffect(() => {
+    if (!selected) return
+    placeHandle()
+    const image = imageRef.current
+    const page = image?.closest('.grimoire-page')
+    if (!image || !page || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(placeHandle)
+    observer.observe(image)
+    observer.observe(page)
+    return () => observer.disconnect()
+  }, [selected, shown, widthMm, anchor, align, xMm, yMm])
 
   useEffect(() => () => stopDrag.current?.(), [])
 
@@ -33,11 +62,19 @@ export function ImageView({ node, selected, updateAttributes }: NodeViewProps) {
     const pageRect = page.getBoundingClientRect()
     const imageRect = image.getBoundingClientRect()
     if (!pageRect.width || !imageRect.width) return
+    // Own this gesture before the browser generates a text-selection/native drag.
+    event.preventDefault()
+    event.stopPropagation()
+    stopDrag.current?.()
+    const nodePosition = getPos()
+    if (typeof nodePosition === 'number') editor.commands.setNodeSelection(nodePosition)
+    image.setPointerCapture?.(event.pointerId)
     const { widthMm: pageWidthMm, heightMm: pageHeightMm } = PAGE_SIZES[useSettingsStore.getState().pageSize]
     const startX = event.clientX
     const startY = event.clientY
     const pointerId = event.pointerId
-    const originalStyle = { position: image.style.position, left: image.style.left, top: image.style.top }
+    const originalStyle = { position: image.style.position, left: image.style.left, top: image.style.top, width: image.style.width, margin: image.style.margin }
+    const renderedWidthMm = imageRect.width * pageWidthMm / pageRect.width
     let moved = false
     let position: ReturnType<typeof positionImageOnPage> = null
 
@@ -45,9 +82,14 @@ export function ImageView({ node, selected, updateAttributes }: NodeViewProps) {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', cancel)
+      image.removeEventListener('lostpointercapture', cancel)
+      if (image.hasPointerCapture?.(pointerId)) image.releasePointerCapture(pointerId)
       image.style.position = originalStyle.position
       image.style.left = originalStyle.left
       image.style.top = originalStyle.top
+      image.style.width = originalStyle.width
+      image.style.margin = originalStyle.margin
+      placeHandle()
       stopDrag.current = null
     }
     const move = (next: PointerEvent) => {
@@ -61,21 +103,105 @@ export function ImageView({ node, selected, updateAttributes }: NodeViewProps) {
       image.style.position = 'absolute'
       image.style.left = `${position.xMm}mm`
       image.style.top = `${position.yMm}mm`
+      image.style.width = `${renderedWidthMm}mm`
+      image.style.margin = '0'
+      placeHandle()
       next.preventDefault()
     }
     const finish = (next: PointerEvent) => {
       if (next.pointerId !== pointerId) return
       cleanup()
-      if (moved && position) updateAttributes({ anchor: 'free', xMm: position.xMm, yMm: position.yMm })
+      if (!moved || !position) return
+      const from = getPos()
+      const current = typeof from === 'number' ? editor.state.doc.nodeAt(from) : null
+      if (current?.type.name === 'image' && current.attrs.anchor === 'flow' && typeof from === 'number') {
+        // Flow images move as document blocks; dragging must not change text placement.
+        const hit = editor.view.posAtCoords({ left: next.clientX, top: next.clientY })
+        if (!hit) return
+        const destination = dropPoint(editor.state.doc, hit.pos, new Slice(Fragment.from(current), 0, 0))
+        if (destination === null || (destination >= from && destination <= from + current.nodeSize)) return
+        const transaction = editor.state.tr.delete(from, from + current.nodeSize)
+        const insertion = transaction.mapping.map(destination)
+        transaction.insert(insertion, current)
+        transaction.setSelection(NodeSelection.create(transaction.doc, insertion))
+        editor.view.dispatch(transaction)
+      } else if (current?.type.name === 'image') {
+        updateAttributes({ anchor: 'free', align: 'none', xMm: position.xMm, yMm: position.yMm, widthMm: renderedWidthMm })
+      }
     }
     const cancel = (next: PointerEvent) => {
       if (next.pointerId === pointerId) cleanup()
     }
-    stopDrag.current?.()
     stopDrag.current = cleanup
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', finish)
     window.addEventListener('pointercancel', cancel)
+    image.addEventListener('lostpointercapture', cancel)
+  }
+
+  const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return
+    const image = imageRef.current
+    const page = image?.closest('.grimoire-page')
+    if (!image || !page) return
+    const pageRect = page.getBoundingClientRect()
+    const rect = image.getBoundingClientRect()
+    if (!pageRect.width || !rect.width || !rect.height) return
+    event.preventDefault()
+    event.stopPropagation()
+    stopDrag.current?.()
+    const handle = event.currentTarget
+    const pointerId = event.pointerId
+    handle.setPointerCapture?.(pointerId)
+    const startX = event.clientX
+    const startY = event.clientY
+    const originalWidth = image.style.width
+    const pageSize = PAGE_SIZES[useSettingsStore.getState().pageSize]
+    const mmPerPx = pageSize.widthMm / pageRect.width
+    const ratio = rect.height / rect.width
+    const startWidth = rect.width * mmPerPx
+    const available = anchor === 'free'
+      ? Math.min(pageSize.widthMm - (rect.left - pageRect.left) * mmPerPx,
+        (pageSize.heightMm - (rect.top - pageRect.top) * mmPerPx) / ratio)
+      : (image.parentElement?.getBoundingClientRect().width || pageRect.width) * mmPerPx
+    const maximum = Math.max(5, Math.min(500, available))
+    let nextWidth = startWidth
+    let moved = false
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', cancel)
+      handle.removeEventListener('lostpointercapture', cancel)
+      if (handle.hasPointerCapture?.(pointerId)) handle.releasePointerCapture(pointerId)
+      image.style.width = originalWidth
+      stopDrag.current = null
+      placeHandle()
+    }
+    const move = (next: PointerEvent) => {
+      if (next.pointerId !== pointerId) return
+      const dx = next.clientX - startX
+      const dy = next.clientY - startY
+      if (!moved && Math.hypot(dx, dy) < 3) return
+      moved = true
+      // Project the corner movement onto the image's original aspect ratio.
+      const delta = (dx + dy * ratio) / (1 + ratio * ratio) * mmPerPx
+      nextWidth = Math.round(Math.max(5, Math.min(maximum, startWidth + delta)) * 100) / 100
+      image.style.width = `${nextWidth}mm`
+      placeHandle()
+      next.preventDefault()
+    }
+    const finish = (next: PointerEvent) => {
+      if (next.pointerId !== pointerId) return
+      cleanup()
+      // One transaction per gesture keeps resizing a single undoable operation.
+      if (moved) updateAttributes({ widthMm: nextWidth })
+    }
+    const cancel = (next: PointerEvent) => { if (next.pointerId === pointerId) cleanup() }
+    stopDrag.current = cleanup
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', cancel)
+    handle.addEventListener('lostpointercapture', cancel)
   }
 
   useEffect(() => {
@@ -122,16 +248,35 @@ export function ImageView({ node, selected, updateAttributes }: NodeViewProps) {
       )}
       {url ? (
         <img
+          ref={imageRef}
           src={url}
           alt={alt ?? ''}
           draggable={false}
           style={imageStyle}
           onPointerDown={startDrag}
+          onLoad={placeHandle}
+          onDragStart={(event) => { event.preventDefault(); event.stopPropagation() }}
         />
       ) : (
         <span className="grimoire-image-chip" contentEditable={false}>
           {error ? `Image not found: ${src}` : 'Loading image…'}
         </span>
+      )}
+      {url && selected && corner && (anchor === 'flow' || anchor === 'free') && (
+        <button type="button" contentEditable={false} className="grimoire-image-resize"
+          aria-label="Resize image" title="Drag to resize proportionally; arrow keys adjust width"
+          style={{ left: `${corner.left}mm`, top: `${corner.top}mm` }}
+          onPointerDown={startResize}
+          onKeyDown={(event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+            event.preventDefault()
+            event.stopPropagation()
+            const delta = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1
+            const image = imageRef.current
+            const page = image?.closest('.grimoire-page')?.getBoundingClientRect()
+            const current = widthMm ?? (image && page?.width ? image.getBoundingClientRect().width * PAGE_SIZES[useSettingsStore.getState().pageSize].widthMm / page.width : 40)
+            updateAttributes({ widthMm: Math.min(500, Math.max(5, current + delta)) })
+          }} />
       )}
     </NodeViewWrapper>
   )

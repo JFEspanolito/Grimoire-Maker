@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, type MouseEvent } from 'react'
+import { TextSelection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
@@ -10,6 +11,7 @@ import { GrimoireImageNode } from './extensions/imageNode'
 import { TableExtensions } from './extensions/tables'
 import { PageView } from './PageView'
 import { DocumentPathContext } from './DocumentPathContext'
+import { registerSnippetDropTarget } from '../../lib/snippetDrop'
 
 function getMarkdown(editor: Editor): string {
   return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()
@@ -45,6 +47,8 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     },
   })
 
+  useEffect(() => editor ? registerSnippetDropTarget(editor) : undefined, [editor])
+
   useEffect(() => {
     if (!editor || !active) return
     onReady(editor)
@@ -60,12 +64,17 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     if (editor && getMarkdown(editor) !== body) editor.commands.setContent(body, { emitUpdate: false })
   }, [editor, body])
 
+  const focusWritingArea = (event: MouseEvent<HTMLDivElement>) => {
+    if (!editor || event.button !== 0 || !(event.target instanceof Element)) return
+    const target = event.target
+    if (target.closest('button, input, select, textarea, a, [contenteditable="false"]')) return
+    if (target !== editor.view.dom && target.closest('.ProseMirror')) return
+    event.preventDefault()
+    editor.commands.focus(editor.state.selection instanceof TextSelection ? undefined : 'end', { scrollIntoView: false })
+  }
+
   return (
-    <DocumentPathContext value={documentPath}><PageView onPageClick={(event) => {
-      if (event.target instanceof Element && !event.target.closest('.ProseMirror')) {
-        editor?.commands.focus(undefined, { scrollIntoView: false })
-      }
-    }}>
+    <DocumentPathContext value={documentPath}><PageView onPageClick={focusWritingArea} onPagePointerDown={focusWritingArea}>
       <EditorContent editor={editor} className="grimoire-content" />
     </PageView></DocumentPathContext>
   )

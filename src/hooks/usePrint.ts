@@ -7,6 +7,7 @@ import { exportPdf, PDF_ROUTE, type PdfRoute } from '../lib/exportPdf'
 import { resolveTheme } from '../lib/themes'
 import { useThemeStore } from '../stores/themeStore'
 import { isTauri } from './useFileSystem'
+import { useTabStore } from '../stores/tabStore'
 
 /**
  * Export pipeline: the webview paginates with Paged.js (print.css) and the
@@ -15,6 +16,8 @@ import { isTauri } from './useFileSystem'
 export function usePrint() {
   const pending = useRef(false)
   return async () => {
+    const active = useTabStore.getState().active
+    if (active && !/\.md$/i.test(active)) return
     if (pending.current) return
     pending.current = true
     try {

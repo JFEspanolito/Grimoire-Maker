@@ -1,4 +1,4 @@
-import type { CSSProperties, MouseEventHandler, ReactNode } from 'react'
+import type { CSSProperties, MouseEventHandler, PointerEventHandler, ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { PAGE_SIZES } from '../../types/document'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
@@ -7,7 +7,7 @@ import { usePluginRegistry } from '../../plugins/plugin-manager'
  * Virtual physical sheet. Real pagination (Paged.js) runs at export time; the
  * canvas shows one sheet at true millimetre size with column layout applied.
  */
-export function PageView({ children, onPageClick }: { children: ReactNode; onPageClick?: MouseEventHandler<HTMLDivElement> }) {
+export function PageView({ children, onPageClick, onPagePointerDown }: { children: ReactNode; onPageClick?: MouseEventHandler<HTMLDivElement>; onPagePointerDown?: PointerEventHandler<HTMLDivElement> }) {
   const { pageSize, columns, marginMm } = useSettingsStore()
   const overlays = usePluginRegistry((s) => s.overlays)
   const size = PAGE_SIZES[pageSize]
@@ -21,7 +21,7 @@ export function PageView({ children, onPageClick }: { children: ReactNode; onPag
 
   return (
     <div className="mx-auto my-8 w-fit">
-      <div className="grimoire-page relative shadow-xl" style={style} onClick={onPageClick}>
+      <div className="grimoire-page relative shadow-xl" style={style} onClick={onPageClick} onPointerDown={onPagePointerDown}>
         {children}
         {overlays.map(({ id, component: Overlay }) => (
           <Overlay key={id} />

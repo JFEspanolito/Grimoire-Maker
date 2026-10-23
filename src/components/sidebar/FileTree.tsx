@@ -91,6 +91,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
       }}
       onContextMenu={(event) => {
         event.preventDefault()
+        event.stopPropagation()
         ctx.onContextMenu(node, event.clientX, event.clientY)
       }}
     >
@@ -339,6 +340,12 @@ export function FileTree() {
             <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
               onClick={() => { const path = menu.node.path; setMenu(null); void run(() => openFile(path)) }}>
               Open
+            </button>
+          )}
+          {!menu.node.isDirectory && (
+            <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
+              onClick={() => { const path = parentOf(menu.node.path); setMenu(null); void run(() => openFolder(path)) }}>
+              Open Containing Folder
             </button>
           )}
           {!menu.node.isDirectory && (

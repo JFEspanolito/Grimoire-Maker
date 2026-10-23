@@ -7,6 +7,9 @@ import { useTemplateStore } from '../../stores/templateStore'
 import { useModStore } from '../../stores/modStore'
 import { SNIPPET_GROUPS, SNIPPETS } from './snippets'
 import { SnippetPalette } from './SnippetPalette'
+import { Editor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { Markdown } from 'tiptap-markdown'
 
 let root: Root | null = null
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
@@ -18,6 +21,19 @@ afterEach(async () => {
 })
 
 describe('snippet palette', () => {
+  it('still inserts a Markdown snippet at the cursor on double-click', async () => {
+    useModStore.setState({ ready: true, snippets: [{ id: 'note', label: 'Note', group: 'Notes', markdown: '## Inserted note' }] })
+    const editor = new Editor({ extensions: [StarterKit, Markdown], content: '<p>First</p><p>Last</p>',
+      editorProps: { handleScrollToSelection: () => true } })
+    editor.commands.setTextSelection(8)
+    const container = document.createElement('div')
+    root = createRoot(container)
+    try {
+      await act(async () => root?.render(<SnippetPalette editor={editor} />))
+      await act(async () => container.querySelector('button')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
+      expect(editor.getHTML()).toBe('<p>First</p><h2>Inserted note</h2><p>Last</p>')
+    } finally { await act(async () => root?.unmount()); root = null; editor.destroy() }
+  })
   it('uses the enabled folder catalog without restoring disabled built-in examples', async () => {
     useModStore.setState({ ready: true, snippets: [] })
     const container = document.createElement('div')

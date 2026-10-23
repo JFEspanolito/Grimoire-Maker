@@ -25,12 +25,16 @@ export const useTabStore = create<TabState>((set) => ({
   toggleSplit: () => set((state) => state.split
     ? { split: false, activePane: 0, panes: [state.active, null] }
     : { split: true, panes: [state.active, state.paths.find((path) => path !== state.active) ?? null] }),
-  open: (path) => set((state) => {
+  open: (path, newTab = false) => set((state) => {
     const panes: [string | null, string | null] = [...state.panes]
     panes[state.activePane] = path
     // A document is mounted once: selecting it in the other pane swaps assignments.
     if (panes[1 - state.activePane] === path) panes[1 - state.activePane] = state.panes[state.activePane]
-    return { paths: state.paths.includes(path) ? state.paths : [...state.paths, path], active: path, panes }
+    const paths = state.paths.includes(path) ? state.paths
+      : !newTab && state.active && state.paths.includes(state.active)
+        ? state.paths.map((current) => current === state.active ? path : current)
+        : [...state.paths, path]
+    return { paths, active: path, panes }
   }),
   reset: (path) => set({ paths: path ? [path] : [], active: path, panes: [path, null], activePane: 0, split: false }),
   remap: (from, to) => set((state) => ({

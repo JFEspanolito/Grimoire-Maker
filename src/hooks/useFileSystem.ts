@@ -94,9 +94,9 @@ export function useFileSystem() {
     if (!path) return false
     await writeTextFile(path, serializeDocument(snapshot.frontmatter, snapshot.body))
     useDocumentStore.getState().markSnapshotSaved(path, snapshot)
-    if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path)
+    if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path, true)
     emitPluginEvent('document:saved')
-    await remember((s) => ({ ...s, lastFile: useDocumentStore.getState().document.path }))
+    await remember((s) => ({ ...s, lastFile: useTabStore.getState().active }))
     return true
   }, [remember])
 
@@ -125,10 +125,11 @@ export function useFileSystem() {
     const initial = lastFile ?? firstMarkdown(binder
       ? [binder.draft, binder.research, ...binder.other].filter((node): node is FileNode => node !== null)
       : tree)
-    const raw = initial ? await readTextFile(initial) : ''
+    const markdown = initial && /\.md$/i.test(initial)
+    const raw = markdown ? await readTextFile(initial) : ''
     setWorkspace(root, tree)
     useDocumentStore.getState().resetDocuments()
-    loadFromRaw(initial, raw)
+    if (!initial || markdown) loadFromRaw(initial, raw)
     useTabStore.getState().reset(initial)
     useSessionStore.getState().setWorkspaceError(null)
     await remember((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
@@ -208,19 +209,29 @@ export function useFileSystem() {
   const openFile = useCallback(
     (path?: string, newTab = false) => runFileAction(async () => {
       if (!isTauri()) return
-      const target = path ?? (await open({ filters: [{ name: 'Markdown', extensions: ['md'] }] }))
-      if (typeof target !== 'string') return
+      const selected = path ?? (await open({ filters: [{ name: 'Documents and images', extensions: ['md', 'pdf', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'] }] }))
+      if (typeof selected !== 'string') return
+      const target = selected.replaceAll('\\', '/')
       const current = useDocumentStore.getState().document
-      if (current.path === target) {
+      if (useTabStore.getState().active === target) {
         useTabStore.getState().open(target, newTab)
         return
       }
-      if (!/\.md$/i.test(target)) throw new Error('Only Markdown files can be edited. Imported assets remain available in the project folder.')
       if (!current.path && current.dirty && !(await persistCurrentDocument())) return
       if (current.path && !useTabStore.getState().paths.includes(current.path)) useTabStore.getState().open(current.path, true)
-      if (useDocumentStore.getState().buffers[target]) useDocumentStore.getState().activate(target)
-      else loadFromRaw(target, await readTextFile(target))
-      useTabStore.getState().open(target, newTab)
+      const markdown = /\.md$/i.test(target)
+      const raw = markdown && !useDocumentStore.getState().buffers[target] ? await readTextFile(target) : null
+      // Read the latest buffer after I/O: typing while a file loads must retain its tab.
+      const previous = useTabStore.getState().active
+      const store = useDocumentStore.getState()
+      const dirty = previous ? store.buffers[previous]?.dirty || (store.document.path === previous && store.document.dirty) : false
+      if (markdown) {
+        if (raw !== null) loadFromRaw(target, raw)
+        else store.activate(target)
+      } else store.deactivate()
+      useTabStore.getState().open(target, newTab || !!dirty)
+      if (previous && !useTabStore.getState().paths.includes(previous)) useDocumentStore.getState().forget(previous)
+      useSettingsStore.getState().setViewMode('edit')
       await remember((s) => ({ ...s, lastFile: target }))
     }).catch((e: unknown) => {
       useSessionStore.getState().setWorkspaceError(`Could not open file: ${e instanceof Error ? e.message : String(e)}`)
@@ -259,7 +270,7 @@ export function useFileSystem() {
   const saveFile = useCallback(() => runFileAction(async () => {
     if (!isTauri()) return
     const tabs = useTabStore.getState()
-    if (tabs.paths.length && !tabs.active) return
+    if (tabs.paths.length && (!tabs.active || !/\.md$/i.test(tabs.active))) return
     await persistCurrentDocument()
   }).catch((e: unknown) => {
     useSessionStore.getState().setWorkspaceError(`Could not save file: ${e instanceof Error ? e.message : String(e)}`)
@@ -276,7 +287,8 @@ export function useFileSystem() {
     useTabStore.getState().remove(path)
     useDocumentStore.getState().forget(path)
     const next = useTabStore.getState().active
-    if (next) useDocumentStore.getState().activate(next)
+    if (next && /\.md$/i.test(next)) useDocumentStore.getState().activate(next)
+    else if (next) useDocumentStore.getState().deactivate()
     else loadFromRaw(null, '')
     await remember((state) => ({ ...state, lastFile: next }))
   }).catch((error: unknown) => {

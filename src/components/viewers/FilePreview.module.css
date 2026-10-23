@@ -1,0 +1,18 @@
+.preview { min-height: 100%; color: #e8e4dc; background: #242424; }
+.header { display: flex; justify-content: space-between; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid #ffffff20; font-size: .8rem; }
+.header span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header span:last-child { flex-shrink: 0; color: #ffffff80; }
+.notice { padding: 1rem; font-size: .85rem; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .75rem 1rem; font-size: .8rem; }
+.controls button, .controls select { background: #ffffff12; border: 1px solid #ffffff25; border-radius: .3rem; padding: .3rem .6rem; }
+.controls button:disabled { opacity: .4; }
+.controls option { background: #242424; }
+.imageArea { padding: 1rem; overflow: auto; }
+.fitImage { display: block; max-width: 100%; max-height: 75vh; margin: auto; object-fit: contain; }
+.actualImage { display: block; max-width: none; }
+.word { margin: 1rem; padding: 2rem; background: #fff; color: #222; font-family: Georgia, serif; overflow-wrap: anywhere; }
+.word p { margin: 0 0 .75rem; white-space: pre-wrap; }
+.word table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+.word td { border: 1px solid #aaa; padding: .5rem; vertical-align: top; }
+.pdf { padding: 1rem; overflow: auto; }
+.pdf canvas { display: block; margin: auto; background: white; }
