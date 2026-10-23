@@ -51,3 +51,98 @@ body,
   font-style: italic;
   break-inside: avoid;
 }
+
+/* Images: layout attributes come from the node (data-*), see extensions/image.ts. */
+.grimoire-page {
+  isolation: isolate;
+}
+
+/* Anchored images position against the sheet, so the content root must not be a containing block. */
+.grimoire-content .ProseMirror {
+  position: static;
+}
+
+.grimoire-image {
+  margin: 0 0 0.6em;
+  max-width: 100%;
+}
+
+.grimoire-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  box-sizing: border-box;
+}
+
+.grimoire-image[data-align='left'] {
+  float: left;
+  margin: 0 4mm 2mm 0;
+}
+
+.grimoire-image[data-align='right'] {
+  float: right;
+  margin: 0 0 2mm 4mm;
+}
+
+.grimoire-image[data-align='center'] img {
+  margin-inline: auto;
+}
+
+.grimoire-image[data-frame='simple'] img {
+  border: 0.4mm solid var(--accent);
+  padding: 1.5mm;
+  background: var(--page-bg);
+}
+
+.grimoire-image[data-frame='double'] img {
+  border: 1.2mm double var(--accent);
+  padding: 1mm;
+  background: var(--page-bg);
+}
+
+.grimoire-image[data-frame='shadow'] img {
+  box-shadow: 0 1mm 3mm rgb(0 0 0 / 0.35);
+}
+
+/* Header, footer and background images leave the text flow and pin to the sheet. */
+.grimoire-image[data-anchor='header'] img,
+.grimoire-image[data-anchor='footer'] img,
+.grimoire-image[data-anchor='background'] img {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.grimoire-image[data-anchor='header'] img {
+  top: 0;
+}
+
+.grimoire-image[data-anchor='footer'] img {
+  bottom: 0;
+}
+
+.grimoire-image[data-anchor='background'] img {
+  top: 0;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+}
+
+.grimoire-image[data-selected='true'] img {
+  outline: 2px solid #f59e0b;
+}
+
+.grimoire-image-chip {
+  display: block;
+  font: 11px system-ui, sans-serif;
+  color: #78716c;
+  user-select: none;
+}
+
+@media print {
+  .grimoire-image-chip {
+    display: none;
+  }
+}

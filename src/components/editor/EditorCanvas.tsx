@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Image from '@tiptap/extension-image'
 import TextAlign from '@tiptap/extension-text-align'
 import { Markdown } from 'tiptap-markdown'
 import { useDocumentStore } from '../../stores/documentStore'
 import { emitPluginEvent, setPluginHost } from '../../plugins/plugin-manager'
 import { ReadAloud, Statblock } from './extensions/blocks'
+import { GrimoireImageNode } from './extensions/imageNode'
 import { PageView } from './PageView'
 
 function getMarkdown(editor: Editor): string {
@@ -24,7 +24,7 @@ export function EditorCanvas({ onReady }: Props) {
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Image,
+      GrimoireImageNode,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Statblock,
       ReadAloud,

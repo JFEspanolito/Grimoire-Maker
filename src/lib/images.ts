@@ -1,0 +1,62 @@
+import { open } from '@tauri-apps/plugin-dialog'
+import { copyFile, exists, mkdir, readFile } from '@tauri-apps/plugin-fs'
+
+const MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+}
+
+const dirOf = (path: string): string => path.slice(0, path.lastIndexOf('/'))
+const isInline = (src: string): boolean => /^(https?:|data:|blob:)/i.test(src)
+const isAbsolute = (src: string): boolean => /^[a-zA-Z]:[\\/]|^\//.test(src)
+
+/**
+ * Turns an image `src` from the document into something an `<img>` can load.
+ * Files are read through the fs plugin (so only folders the app may read are
+ * reachable) and exposed as blob URLs; relative paths resolve against the
+ * document's folder. The caller owns the returned blob URL and must revoke it.
+ */
+export async function loadImageUrl(src: string, documentPath: string | null): Promise<string> {
+  if (isInline(src)) return src
+  const path = isAbsolute(src)
+    ? src.replaceAll('\\', '/')
+    : documentPath
+      ? `${dirOf(documentPath)}/${src}`
+      : null
+  if (!path) throw new Error('Save the document to show images with relative paths')
+  const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
+  const bytes = await readFile(path)
+  return URL.createObjectURL(new Blob([bytes], { type: MIME[ext] ?? 'application/octet-stream' }))
+}
+
+export const revokeImageUrl = (url: string): void => {
+  if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+}
+
+/**
+ * Lets the user pick an image and copies it into `assets/` next to the document,
+ * so the project stays self-contained. Returns the relative path to store in the
+ * Markdown, or null if the dialog was cancelled.
+ */
+export async function importImage(documentPath: string): Promise<string | null> {
+  const picked = await open({ filters: [{ name: 'Images', extensions: Object.keys(MIME) }] })
+  if (typeof picked !== 'string') return null
+
+  const source = picked.replaceAll('\\', '/')
+  const assets = `${dirOf(documentPath)}/assets`
+  if (!(await exists(assets))) await mkdir(assets, { recursive: true })
+
+  const original = source.slice(source.lastIndexOf('/') + 1)
+  const dot = original.lastIndexOf('.')
+  const stem = original.slice(0, dot).replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'image'
+  const ext = original.slice(dot).toLowerCase()
+
+  let name = `${stem}${ext}`
+  for (let n = 1; await exists(`${assets}/${name}`); n++) name = `${stem}-${n}${ext}`
+  await copyFile(source, `${assets}/${name}`)
+  return `assets/${name}`
+}

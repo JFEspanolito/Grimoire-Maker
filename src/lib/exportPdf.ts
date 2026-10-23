@@ -37,6 +37,8 @@ export async function exportPdf(request: ExportRequest): Promise<void> {
   content.className = 'grimoire-page'
   content.style.columnCount = String(request.columns)
   content.innerHTML = `<div class="grimoire-content"><div class="ProseMirror">${source.innerHTML}</div></div>`
+  // Editor-only labels would add lines Paged.js measures but the printer never draws.
+  content.querySelectorAll('.grimoire-image-chip').forEach((chip) => chip.remove())
   const pages = document.createElement('div')
   printRoot.append(pages)
   document.body.append(printRoot)

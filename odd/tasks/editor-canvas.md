@@ -7,11 +7,13 @@ Objective: spec module 4.1 (editor and layout canvas), done in order. Branch: ma
 - S4: "Soporte nativo para maquetación a dos columnas con balanceo automático de texto."
 
 ## Tasks
-- T1 | S1 | inline | status: pending | commit: -  | Formatting toolbar for the editor
-- T2 | S2 | inline | status: pending | commit: -  | Image node: insert, align/wrap, size, frame, opacity, anchor; Markdown round trip
+- T1 | S1 | inline | status: done | commit: baf1baa | Formatting toolbar for the editor
+- T2 | S2 | inline | status: done (anchored-image PDF fidelity unverified) | commit: see git log (feat(editor): image node) | Image node: insert, align/wrap, size, frame, opacity, anchor; Markdown round trip
 - T3 | S3 | inline | status: pending | commit: -  | Page and spread views via Paged.js preview
 - T4 | S4 | inline | status: pending | commit: -  | Column balancing and block break rules
 
 ## Log
 - L1 (2026-10-22): "empieza con 1, en orden." (context: module 1 of the gap list = Editor 4.1: no formatting toolbar; images only the base extension; viewMode in the store without UI or spreads; column balancing is only CSS column-count)
 - L2 route declaration: all tasks inline; no Writer trigger (units are sequential and dependent on the shared editor files).
+- L3: T2 evidence: RED = image.test.ts failed to resolve ./image; GREEN = 4 vitest tests pass (plain image stays Markdown, styled image round-trips as <img data-*>, anchors round-trip, alt text cannot break out of the attribute). Added devDependencies vitest + jsdom and `pnpm test`.
+- L4: T2 limits: header/footer/background anchoring is CSS absolute positioning against the sheet; not verified inside the Paged.js export. Text alignment buttons were left out of the toolbar on purpose: plain Markdown cannot store paragraph alignment, so it would be lost on reload.

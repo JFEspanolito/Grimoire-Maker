@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "src/components/editor/extensions/image.ts"
+        ],
+        "createdAt": "2026-10-23T05:19:51.661Z",
+        "reason": "model triage: template string serializes a real <img src> into Markdown, not a placeholder image"
+      }
+    ]
+  }
+}

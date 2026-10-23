@@ -1,4 +1,9 @@
+import { useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
+import { useDocumentStore } from '../../stores/documentStore'
+import { useFileSystem } from '../../hooks/useFileSystem'
+import { importImage } from '../../lib/images'
+import { ImageControls, type ImageAttrs } from './ImageControls'
 
 interface Action {
   id: string
@@ -114,48 +119,86 @@ const btn = 'min-w-8 rounded px-2 py-1 text-sm hover:bg-white/10 disabled:opacit
 
 /** Formatting controls for the active editor; each button reflects the current selection. */
 export function EditorToolbar({ editor }: { editor: Editor | null }) {
+  const { saveFile } = useFileSystem()
+  const [error, setError] = useState<string | null>(null)
+
   // Re-evaluates the per-button state on every transaction, so active styling follows the caret.
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) =>
       e
-        ? Object.fromEntries(
-            ACTIONS.flat().map((a) => [
-              a.id,
-              { active: a.isActive?.(e) ?? false, enabled: a.canRun?.(e) ?? true },
-            ]),
-          )
+        ? {
+            actions: Object.fromEntries(
+              ACTIONS.flat().map((a) => [
+                a.id,
+                { active: a.isActive?.(e) ?? false, enabled: a.canRun?.(e) ?? true },
+              ]),
+            ),
+            image: e.isActive('image') ? (e.getAttributes('image') as ImageAttrs) : null,
+          }
         : null,
   })
 
+  const insertImage = async () => {
+    if (!editor) return
+    try {
+      setError(null)
+      // Images are copied next to the document, so it needs a location first.
+      if (!useDocumentStore.getState().document.path) await saveFile()
+      const documentPath = useDocumentStore.getState().document.path
+      if (!documentPath) return
+      const src = await importImage(documentPath)
+      if (src) editor.chain().focus().setImage({ src, alt: '' }).run()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   return (
-    <div
-      role="toolbar"
-      aria-label="Formatting"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/10 bg-neutral-900 px-3 py-1"
-    >
-      {ACTIONS.map((group, i) => (
-        <div key={i} className="flex items-center gap-0.5">
-          {group.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              title={a.title}
-              aria-label={a.title}
-              aria-pressed={a.isActive ? (state?.[a.id]?.active ?? false) : undefined}
-              disabled={!editor || !(state?.[a.id]?.enabled ?? true)}
-              className={`${btn} ${state?.[a.id]?.active ? 'bg-white/20' : ''} ${
-                a.id === 'bold' ? 'font-bold' : a.id === 'italic' ? 'italic' : ''
-              }`}
-              // Keep the editor selection: a button press must not steal focus first.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => editor && a.run(editor)}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      ))}
-    </div>
+    <>
+      <div
+        role="toolbar"
+        aria-label="Formatting"
+        className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-white/10 bg-neutral-900 px-3 py-1"
+      >
+        {ACTIONS.map((group, i) => (
+          <div key={i} className="flex items-center gap-0.5">
+            {group.map((a) => {
+              const current = state?.actions[a.id]
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  title={a.title}
+                  aria-label={a.title}
+                  aria-pressed={a.isActive ? (current?.active ?? false) : undefined}
+                  disabled={!editor || !(current?.enabled ?? true)}
+                  className={`${btn} ${current?.active ? 'bg-white/20' : ''} ${
+                    a.id === 'bold' ? 'font-bold' : a.id === 'italic' ? 'italic' : ''
+                  }`}
+                  // Keep the editor selection: a button press must not steal focus first.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => editor && a.run(editor)}
+                >
+                  {a.label}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+        <button
+          type="button"
+          className={btn}
+          disabled={!editor}
+          title="Insert image (copied to the assets folder next to the document)"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => void insertImage()}
+        >
+          🖼 Image
+        </button>
+        {error && <span className="text-xs text-red-400">{error}</span>}
+      </div>
+      {editor && state?.image && <ImageControls editor={editor} attrs={state.image} />}
+    </>
   )
 }
