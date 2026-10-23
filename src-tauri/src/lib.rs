@@ -16,6 +16,7 @@ pub fn run() {
             commands::files::list_markdown_files,
             commands::export::export_pdf,
             commands::workspace::restore_workspace,
+            commands::workspace::rename_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Grimoire Maker");

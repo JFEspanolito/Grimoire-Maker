@@ -1,9 +1,7 @@
 import { DndContext, useDraggable, type DragEndEvent } from '@dnd-kit/core'
 import type { Editor } from '@tiptap/react'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { SNIPPETS, type Snippet, type SnippetGroup } from './snippets'
-
-const GROUPS: SnippetGroup[] = ['Character sheets', 'Blocks', 'Tables']
+import { SNIPPET_GROUPS, SNIPPETS, type Snippet } from './snippets'
 
 function DraggableSnippet({ snippet, onInsert }: { snippet: Snippet; onInsert: () => void }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: snippet.id })
@@ -46,13 +44,18 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
       <div className="flex flex-col gap-2 p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Snippets</h2>
         {!canInsert && <p className="text-xs text-amber-400">Switch to Edit view to insert snippets.</p>}
-        {GROUPS.map((group) => (
-          <section key={group} className="flex flex-col gap-2" aria-label={group}>
-            <h3 className="text-xs uppercase tracking-wide text-white/40">{group}</h3>
-            {SNIPPETS.filter((s) => s.group === group).map((snippet) => (
-              <DraggableSnippet key={snippet.id} snippet={snippet} onInsert={() => insert(snippet)} />
-            ))}
-          </section>
+        {SNIPPET_GROUPS.map((group) => (
+          <details key={group} open className="group" aria-label={group}>
+            <summary className="flex cursor-pointer list-none items-center gap-2 rounded px-1 py-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:bg-white/5 [&::-webkit-details-marker]:hidden">
+              <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">▸</span>
+              {group}
+            </summary>
+            <div className="mt-2 flex flex-col gap-2">
+              {SNIPPETS.filter((s) => s.group === group).map((snippet) => (
+                <DraggableSnippet key={snippet.id} snippet={snippet} onInsert={() => insert(snippet)} />
+              ))}
+            </div>
+          </details>
         ))}
       </div>
     </DndContext>

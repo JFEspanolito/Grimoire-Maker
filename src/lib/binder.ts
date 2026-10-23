@@ -55,3 +55,8 @@ export function remapPath(current: string | null, from: string, to: string): str
   if (current === from) return to
   return current.startsWith(`${from}/`) ? to + current.slice(from.length) : current
 }
+
+/** The workspace directory is the single source of truth for the project name. */
+export function projectName(root: string | null): string {
+  return root?.replaceAll('\\', '/').replace(/\/+$/, '').split('/').pop() || 'No project'
+}

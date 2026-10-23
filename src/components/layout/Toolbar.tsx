@@ -6,6 +6,7 @@ import { usePrint } from '../../hooks/usePrint'
 import { useThemeStore } from '../../stores/themeStore'
 import { resolveTheme } from '../../lib/themes'
 import { PAGE_SIZES, type PageSizeId, type ViewMode } from '../../types/document'
+import { ProjectName } from './ProjectName'
 
 const btn = 'rounded px-2 py-1 text-sm hover:bg-white/10'
 
@@ -15,31 +16,47 @@ const VIEWS: [ViewMode, string][] = [
   ['spreads', 'Spreads'],
 ]
 
-export function Toolbar() {
+type Panel = 'files' | 'templates' | 'snippets'
+
+export function Toolbar({ visiblePanels, onTogglePanel }: {
+  visiblePanels: Record<Panel, boolean>
+  onTogglePanel: (panel: Panel) => void
+}) {
   const { openFile, saveFile } = useFileSystem()
   const exportPdf = usePrint()
   const { pageSize, columns, theme, viewMode, setPageSize, setColumns, setTheme, setViewMode } =
     useSettingsStore()
   const { themes, dir: themesDir, errors: themeErrors } = useThemeStore()
-  const title = useDocumentStore((s) => s.document.frontmatter.title)
   const dirty = useDocumentStore((s) => s.document.dirty)
   const commands = usePluginRegistry((s) => s.commands)
 
   return (
     <header className="flex items-center gap-2 border-b border-white/10 px-3 py-1.5">
-      <strong className="mr-2 text-sm">
-        {title ?? 'Untitled'}
-        {dirty && ' •'}
-      </strong>
-      <button className={btn} onClick={() => openFile()}>
+      <ProjectName />
+      {dirty && <span className="text-amber-400" title="Unsaved document changes">•</span>}
+      <button className={btn} onClick={() => void openFile().catch(() => undefined)}>
         Open
       </button>
-      <button className={btn} onClick={saveFile}>
+      <button className={btn} onClick={() => void saveFile().catch(() => undefined)}>
         Save
       </button>
       <button className={btn} onClick={exportPdf}>
         Export PDF
       </button>
+      <div className="flex gap-1" aria-label="Panels">
+        {(['files', 'templates', 'snippets'] as const).map((panel) => (
+          <button
+            key={panel}
+            type="button"
+            className={`${btn} ${visiblePanels[panel] ? 'bg-white/10' : ''}`}
+            aria-label={`${visiblePanels[panel] ? 'Hide' : 'Show'} ${panel} panel`}
+            aria-pressed={visiblePanels[panel]}
+            onClick={() => onTogglePanel(panel)}
+          >
+            {panel[0].toUpperCase() + panel.slice(1)}
+          </button>
+        ))}
+      </div>
       <span className="mx-2 h-4 w-px bg-white/20" />
       <select
         aria-label="Page size"

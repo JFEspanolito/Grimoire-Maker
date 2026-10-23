@@ -51,7 +51,7 @@ export function EditorCanvas({ onReady }: Props) {
 
   // External body changes (file open) reload the editor; own edits are no-ops.
   useEffect(() => {
-    if (editor && getMarkdown(editor) !== body) editor.commands.setContent(body)
+    if (editor && getMarkdown(editor) !== body) editor.commands.setContent(body, { emitUpdate: false })
   }, [editor, body])
 
   return (

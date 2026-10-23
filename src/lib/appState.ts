@@ -57,14 +57,19 @@ export async function loadAppState(): Promise<AppState> {
 // Read-modify-write is serialised so two quick updates cannot overwrite each other.
 let queue: Promise<unknown> = Promise.resolve()
 
+/** Runs native state mutations after pending frontend writes, without letting later writes overtake them. */
+export function withAppStateLock<T>(operation: () => Promise<T>): Promise<T> {
+  const next = queue.then(operation)
+  queue = next.catch(() => undefined)
+  return next
+}
+
 export function updateAppState(change: (state: AppState) => AppState): Promise<AppState> {
-  const next = queue.then(async () => {
+  return withAppStateLock(async () => {
     const state = change(await loadAppState())
     await writeTextFile(await statePath(), JSON.stringify(state, null, 2))
     return state
   })
-  queue = next.catch(() => undefined)
-  return next
 }
 
 export const rememberWorkspace =

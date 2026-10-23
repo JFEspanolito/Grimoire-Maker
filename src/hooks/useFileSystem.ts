@@ -5,13 +5,15 @@ import { exists, mkdir, readDir, readTextFile, rename, writeTextFile } from '@ta
 import { useDocumentStore } from '../stores/documentStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useTabStore } from '../stores/tabStore'
 import {
-  forgetWorkspace,
   loadAppState,
   rememberWorkspace,
   updateAppState,
+  withAppStateLock,
   type AppState,
 } from '../lib/appState'
+import { remapPath, setupBinder, splitBinder } from '../lib/binder'
 import { emitPluginEvent } from '../plugins/plugin-manager'
 import { PAGE_SIZES, type FileNode } from '../types/document'
 
@@ -33,6 +35,32 @@ async function readTree(dir: string): Promise<FileNode[]> {
 }
 
 const parentOf = (path: string): string => path.slice(0, path.lastIndexOf('/'))
+let pendingRestore: Promise<void> | null = null
+let fileActionQueue: Promise<unknown> = Promise.resolve()
+
+function runFileAction<T>(action: () => Promise<T>): Promise<T> {
+  const next = fileActionQueue.then(action)
+  fileActionQueue = next.catch(() => undefined)
+  return next
+}
+
+function remapTree(nodes: FileNode[], from: string, to: string): FileNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    path: remapPath(node.path, from, to) ?? node.path,
+    children: node.children ? remapTree(node.children, from, to) : undefined,
+  }))
+}
+
+function firstMarkdown(nodes: FileNode[]): string | null {
+  for (const node of nodes) {
+    if (node.isDirectory) {
+      const found = firstMarkdown(node.children ?? [])
+      if (found) return found
+    } else if (/\.md$/i.test(node.name)) return node.path
+  }
+  return null
+}
 
 function validateName(name: string): string {
   const trimmed = name.trim()
@@ -52,32 +80,61 @@ export function useFileSystem() {
       useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
     } catch (e) {
       console.warn('Could not save app state', e)
+      useSessionStore.getState().setWorkspaceError(`Could not save session: ${e instanceof Error ? e.message : String(e)}`)
     }
   }, [])
+
+  const persistCurrentDocument = useCallback(async (): Promise<boolean> => {
+    let path = useDocumentStore.getState().document.path
+    path ??= await save({ filters: [{ name: 'Markdown', extensions: ['md'] }] })
+    if (!path) return false
+    await writeTextFile(path, toRaw())
+    markSaved(path)
+    useTabStore.getState().open(path)
+    emitPluginEvent('document:saved')
+    await remember((s) => ({ ...s, lastFile: path }))
+    return true
+  }, [toRaw, markSaved, remember])
+
+  const activateWorkspace = useCallback(async (root: string) => {
+    const current = useDocumentStore.getState().document
+    if (current.dirty && !(await persistCurrentDocument())) return
+    await setupBinder({ exists, mkdir }, root)
+    const tree = await readTree(root)
+    const previous = await loadAppState()
+    const lastFile = previous.lastWorkspace === root && previous.lastFile?.startsWith(`${root}/`)
+      && await exists(previous.lastFile) ? previous.lastFile : null
+    const binder = splitBinder(tree)
+    const initial = lastFile ?? firstMarkdown(binder
+      ? [binder.draft, binder.research, ...binder.other].filter((node): node is FileNode => node !== null)
+      : tree)
+    const raw = initial ? await readTextFile(initial) : ''
+    setWorkspace(root, tree)
+    loadFromRaw(initial, raw)
+    useTabStore.getState().reset(initial)
+    useSessionStore.getState().setWorkspaceError(null)
+    await remember((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
+  }, [loadFromRaw, persistCurrentDocument, remember, setWorkspace])
 
   const openWorkspace = useCallback(async () => {
     if (!isTauri()) return
     // `recursive` grants the fs scope to subfolders, needed outside $HOME/$DOCUMENT/$DESKTOP.
     const dir = await open({ directory: true, recursive: true })
     if (typeof dir !== 'string') return
-    const root = dir.replaceAll('\\', '/')
-    setWorkspace(root, await readTree(root))
-    await remember(rememberWorkspace(root))
-  }, [setWorkspace, remember])
+    await runFileAction(() => activateWorkspace(dir.replaceAll('\\', '/')))
+  }, [activateWorkspace])
 
   /** Reopens a remembered folder; one that no longer opens is dropped from the list. */
   const openRecent = useCallback(
     async (path: string) => {
       try {
         await invoke('restore_workspace', { path })
-        setWorkspace(path, await readTree(path))
+        await runFileAction(() => activateWorkspace(path))
       } catch (e) {
-        await remember(forgetWorkspace(path))
         throw new Error(`Could not open "${path}": ${e instanceof Error ? e.message : String(e)}`)
       }
-      await remember(rememberWorkspace(path))
     },
-    [setWorkspace, remember],
+    [activateWorkspace],
   )
 
   const refreshTree = useCallback(async () => {
@@ -117,6 +174,7 @@ export function useFileSystem() {
       const current = useDocumentStore.getState().document.path
       if (current === from) setPath(to)
       else if (current?.startsWith(`${from}/`)) setPath(to + current.slice(from.length))
+      useTabStore.getState().remap(from, to)
       await refreshTree()
     },
     [refreshTree, setPath],
@@ -128,49 +186,98 @@ export function useFileSystem() {
   )
 
   const openFile = useCallback(
-    async (path?: string) => {
+    (path?: string, newTab = false) => runFileAction(async () => {
       if (!isTauri()) return
       const target = path ?? (await open({ filters: [{ name: 'Markdown', extensions: ['md'] }] }))
       if (typeof target !== 'string') return
+      const current = useDocumentStore.getState().document
+      if (current.path === target) {
+        useTabStore.getState().open(target, newTab)
+        return
+      }
+      if (current.dirty && !(await persistCurrentDocument())) return
       loadFromRaw(target, await readTextFile(target))
+      useTabStore.getState().open(target, newTab)
       await remember((s) => ({ ...s, lastFile: target }))
-    },
-    [loadFromRaw, remember],
+    }).catch((e: unknown) => {
+      useSessionStore.getState().setWorkspaceError(`Could not open file: ${e instanceof Error ? e.message : String(e)}`)
+      throw e
+    }),
+    [loadFromRaw, persistCurrentDocument, remember],
   )
 
   /** Brings back last session: page setup, workspace folder and the file that was open. */
-  const restoreSession = useCallback(async () => {
+  const restoreSession = useCallback((): Promise<void> => {
+    if (!isTauri()) return Promise.resolve()
+    if (pendingRestore) return pendingRestore
+    pendingRestore = (async () => {
+      const state = await loadAppState()
+      useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
+
+      const { pageSize, columns, theme } = state.settings
+      const settings = useSettingsStore.getState()
+      if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
+      if (columns === 1 || columns === 2) settings.setColumns(columns)
+      if (typeof theme === 'string') settings.setTheme(theme)
+
+      const { lastWorkspace } = state
+      if (!lastWorkspace) return
+      try {
+        await openRecent(lastWorkspace)
+      } catch (e) {
+        console.warn(e)
+        useSessionStore.getState().setWorkspaceError(e instanceof Error ? e.message : String(e))
+        return
+      }
+    })().finally(() => { pendingRestore = null })
+    return pendingRestore
+  }, [openRecent])
+
+  const saveFile = useCallback(() => runFileAction(async () => {
     if (!isTauri()) return
-    const state = await loadAppState()
-    useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
+    await persistCurrentDocument()
+  }).catch((e: unknown) => {
+    useSessionStore.getState().setWorkspaceError(`Could not save file: ${e instanceof Error ? e.message : String(e)}`)
+    throw e
+  }), [persistCurrentDocument])
 
-    const { pageSize, columns, theme } = state.settings
-    const settings = useSettingsStore.getState()
-    if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
-    if (columns === 1 || columns === 2) settings.setColumns(columns)
-    if (typeof theme === 'string') settings.setTheme(theme)
-
-    const { lastWorkspace, lastFile } = state
-    if (!lastWorkspace) return
-    try {
-      await openRecent(lastWorkspace)
-    } catch (e) {
-      console.warn(e)
+  const closeTab = useCallback((path: string) => runFileAction(async () => {
+    const tabs = useTabStore.getState()
+    if (!tabs.paths.includes(path)) return
+    if (tabs.active !== path) {
+      tabs.remove(path)
       return
     }
-    if (lastFile?.startsWith(`${lastWorkspace}/`) && (await exists(lastFile))) await openFile(lastFile)
-  }, [openRecent, openFile])
+    if (useDocumentStore.getState().document.dirty && !(await persistCurrentDocument())) return
+    const next = tabs.paths.find((candidate) => candidate !== path) ?? null
+    const raw = next ? await readTextFile(next) : ''
+    useTabStore.getState().remove(path)
+    loadFromRaw(next, raw)
+    if (next) useTabStore.getState().open(next)
+    await remember((state) => ({ ...state, lastFile: next }))
+  }), [loadFromRaw, persistCurrentDocument, remember])
 
-  const saveFile = useCallback(async () => {
-    if (!isTauri()) return
-    let path = useDocumentStore.getState().document.path
-    path ??= await save({ filters: [{ name: 'Markdown', extensions: ['md'] }] })
-    if (!path) return
-    await writeTextFile(path, toRaw())
-    markSaved(path)
-    emitPluginEvent('document:saved')
-    await remember((s) => ({ ...s, lastFile: path }))
-  }, [toRaw, markSaved, remember])
+  const renameWorkspace = useCallback((name: string) => runFileAction(async () => {
+    if (!isTauri()) throw new Error('Project renaming is available in the desktop app')
+    const current = useDocumentStore.getState()
+    const root = current.workspaceRoot
+    if (!root) throw new Error('Open a project folder before renaming it')
+    const next = await withAppStateLock(() => invoke<string>('rename_workspace', { path: root, name }))
+    const state = useDocumentStore.getState()
+    if (state.workspaceRoot === root) {
+      const path = remapPath(state.document.path, root, next)
+      if (path && path !== state.document.path) setPath(path)
+      useTabStore.getState().remap(root, next)
+      setWorkspace(next, remapTree(state.tree, root, next))
+      setWorkspace(next, await readTree(next))
+    }
+    useSessionStore.getState().setRecentWorkspaces((await loadAppState()).recentWorkspaces)
+    useSessionStore.getState().setWorkspaceError(null)
+    return next
+  }).catch((e: unknown) => {
+    useSessionStore.getState().setWorkspaceError(`Could not rename project: ${e instanceof Error ? e.message : String(e)}`)
+    throw e
+  }), [setPath, setWorkspace])
 
   return {
     openWorkspace,
@@ -178,9 +285,11 @@ export function useFileSystem() {
     restoreSession,
     openFile,
     saveFile,
+    closeTab,
     createFile,
     createFolder,
     renameEntry,
+    renameWorkspace,
     moveEntry,
   }
 }

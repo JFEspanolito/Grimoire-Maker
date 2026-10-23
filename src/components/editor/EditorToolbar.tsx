@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { useDocumentStore } from '../../stores/documentStore'
-import { useFileSystem } from '../../hooks/useFileSystem'
 import { importImage } from '../../lib/images'
 import { ImageControls, type ImageAttrs } from './ImageControls'
 import { TableControls } from './TableControls'
@@ -120,7 +119,6 @@ const btn = 'min-w-8 rounded px-2 py-1 text-sm hover:bg-white/10 disabled:opacit
 
 /** Formatting controls for the active editor; each button reflects the current selection. */
 export function EditorToolbar({ editor }: { editor: Editor | null }) {
-  const { saveFile } = useFileSystem()
   const [error, setError] = useState<string | null>(null)
 
   // Re-evaluates the per-button state on every transaction, so active styling follows the caret.
@@ -145,10 +143,11 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
     if (!editor) return
     try {
       setError(null)
-      // Images are copied next to the document, so it needs a location first.
-      if (!useDocumentStore.getState().document.path) await saveFile()
       const documentPath = useDocumentStore.getState().document.path
-      if (!documentPath) return
+      if (!documentPath) {
+        setError('Save this document as Markdown before importing an image. Then click Image again to choose a PNG, JPG, GIF, WebP, or SVG file.')
+        return
+      }
       const src = await importImage(documentPath)
       if (src) editor.chain().focus().setImage({ src, alt: '' }).run()
     } catch (e) {

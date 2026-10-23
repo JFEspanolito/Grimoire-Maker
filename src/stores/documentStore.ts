@@ -2,14 +2,6 @@ import { create } from 'zustand'
 import type { FileNode, Frontmatter, GrimoireDocument } from '../types/document'
 import { parseDocument, serializeDocument } from '../lib/frontmatter'
 
-const WELCOME = `# Welcome to Grimoire Maker
-
-Start writing your adventure here. Drag blocks from the **Snippets** palette,
-or edit the Markdown directly: the page view is the source of truth.
-
-> Read-aloud boxes and statblocks are stored as plain Markdown blocks.
-`
-
 interface DocumentState {
   document: GrimoireDocument
   workspaceRoot: string | null
@@ -28,7 +20,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   document: {
     path: null,
     frontmatter: { title: 'Untitled Grimoire', pageSize: 'a4', columns: 2, theme: 'parchment' },
-    body: WELCOME,
+    body: '',
     dirty: false,
   },
   workspaceRoot: null,

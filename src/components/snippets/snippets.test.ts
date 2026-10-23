@@ -4,7 +4,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import { CharacterSheet, ReadAloud, Statblock } from '../editor/extensions/blocks'
 import { TableExtensions } from '../editor/extensions/tables'
-import { SNIPPETS, findSnippet } from './snippets'
+import { SNIPPET_GROUPS, SNIPPETS, findSnippet } from './snippets'
 
 let editor: Editor | null = null
 
@@ -33,6 +33,18 @@ afterEach(() => {
 })
 
 describe('snippet catalog', () => {
+  it('groups the built-in snippets under Dungeons and Dragons', () => {
+    expect(SNIPPET_GROUPS).toContain('Dungeons and Dragons')
+    expect(SNIPPETS.every((snippet) => SNIPPET_GROUPS.includes(snippet.group))).toBe(true)
+    expect(SNIPPETS.filter((snippet) => snippet.group === 'Dungeons and Dragons').map((snippet) => snippet.id)).toEqual([
+      'character-sheet',
+      'statblock',
+      'read-aloud',
+      'encounter-table',
+      'loot-table',
+    ])
+  })
+
   it('has unique ids', () => {
     const ids = SNIPPETS.map((s) => s.id)
     expect(new Set(ids).size).toBe(ids.length)
