@@ -169,3 +169,38 @@ grimoire-maker/
 3. Integrar `@tiptap/react` con serialización a Markdown (`tiptap-markdown`).
 4. Implementar el lienzo base con estilos CSS de página física (A4 y Letter) y división en columnas.
 5. Desarrollar el componente del primer nodo custom (bloque de estadísticas / statblock) con `@dnd-kit`.
+
+
+---
+
+## 7. Pending and Bugs
+### Pendings
+  5. Import Files: Permitir importar archivos tanto en Draft como Research)
+  6. Rust: compresión y empaquetado de proyectos; la exportación PDF solo existe en Windows.
+  7. Multi Tab: Permitir tener más de 1 archivo abierto, en pestañas independientes.
+     - Añadir un botón arriba derecha a lado de "Toggle Print Ruler" para doble vista, es decir, 2 pestañas en paralelo abiertas en 2 vistas independientes.
+     - Renombrar "Toggle Print Ruler" por "Ruler".
+  8. Estructura y estilo:
+     - Falta el tema sci-fi (se puede hacer como mod).
+     - No se usan CSS Modules, solo Tailwind.
+     - Falta src/assets.
+     - No hay barra de menús.
+     - Agrupar barras, menús, botones, por función.
+  9. Control de Versiones:
+     - Añadir una sección pequeña como tab o algo inferior izquierda, que permita usar git como control de versiones (como hace vscode que tenemos un panel para ver cambios y hacer commits).
+
+  4. Plugins:
+     - Quisiera algo más simple que fuera fácil de gestionar, ejemplo
+       -- Carpeta llamada Mods
+       -- Dentro de Mods 3 carpetas más... "Snippets", "Plugins", "Templates"
+       -- Esas carpetas tendrán subcarpetas con los mods que la comunidad genere.
+       -- De ejemplo pondrémos nuestros templates, snippets de D&D y como plugin tenemos el "Ruler"
+       -- La idea es que cualquiera pueda generar mods, añadirlos a esta ruta y reiniciar la app y tome los mods.
+       -- Crearemos un Mod Manager menú, para decir cuales se activan y cuales no.
+
+### Bugs
+- No puedo arrastrar las imagenes para colocarlas donde yo quiera dentro de la hoja
+- No puedo hacer clic derecho open folder en el file explorer
+- Al dar clic en la hoja sobre el borde, header, o cualquier zona fuera de [blue box] que muestra la ruler (la zona donde se edita), el sistema lo detecta como "nada", y aparenta dar a entender al usuario qué no puede editar su texto... si dar clic fuera del margen azul dentro de la page, que auto focus en la zona donde sí puedo escribir.
+- Open in a new tab, perfecto, si el archivo tiene "cambios sin guardar" que sea la forma por defecto de abrir otro archivo, si no hay cambios que lo reemplace como ya lo hace.
+- Añadir soporte para ver pdfs, words e img, si abro el archivo desde el file explorer a una tab, así podemos ver el contenido si no, no tiene sentido.
