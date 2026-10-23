@@ -17,7 +17,8 @@ export const PAGE_SIZES: Record<PageSizeId, PageSize> = {
 
 export type ViewMode = 'single' | 'spread'
 
-export type ThemeId = 'parchment' | 'modern' | 'dark-fantasy'
+/** Theme file name without `.css`; built-ins plus any mod in the user themes folder. */
+export type ThemeId = string
 
 export interface Frontmatter {
   title?: string

@@ -3,7 +3,9 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
-import { PAGE_SIZES, type PageSizeId, type ThemeId } from '../../types/document'
+import { useThemeStore } from '../../stores/themeStore'
+import { resolveTheme } from '../../lib/themes'
+import { PAGE_SIZES, type PageSizeId } from '../../types/document'
 
 const btn = 'rounded px-2 py-1 text-sm hover:bg-white/10'
 
@@ -11,6 +13,7 @@ export function Toolbar() {
   const { openFile, saveFile } = useFileSystem()
   const exportPdf = usePrint()
   const { pageSize, columns, theme, setPageSize, setColumns, setTheme } = useSettingsStore()
+  const { themes, dir: themesDir, errors: themeErrors } = useThemeStore()
   const title = useDocumentStore((s) => s.document.frontmatter.title)
   const dirty = useDocumentStore((s) => s.document.dirty)
   const commands = usePluginRegistry((s) => s.commands)
@@ -54,14 +57,22 @@ export function Toolbar() {
       </select>
       <select
         aria-label="Theme"
-        value={theme}
-        onChange={(e) => setTheme(e.target.value as ThemeId)}
+        title={[themesDir && `Custom themes folder: ${themesDir}`, ...themeErrors].filter(Boolean).join('\n')}
+        value={resolveTheme(theme, themes)}
+        onChange={(e) => setTheme(e.target.value)}
         className="rounded bg-transparent text-sm"
       >
-        <option value="parchment" className="text-black">Parchment</option>
-        <option value="modern" className="text-black">Modern</option>
-        <option value="dark-fantasy" className="text-black">Dark fantasy</option>
+        {themes.map((t) => (
+          <option key={t.id} value={t.id} className="text-black">
+            {t.name}
+          </option>
+        ))}
       </select>
+      {themeErrors.length > 0 && (
+        <span className="text-xs text-amber-400" title={themeErrors.join('\n')}>
+          {themeErrors.length} theme error{themeErrors.length > 1 ? 's' : ''}
+        </span>
+      )}
       <span className="ml-auto flex gap-1">
         {commands.map((c) => (
           <button key={c.id} className={btn} onClick={c.run}>

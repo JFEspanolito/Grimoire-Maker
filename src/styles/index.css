@@ -1,7 +1,4 @@
 @import 'tailwindcss';
-@import './themes/parchment.css';
-@import './themes/modern.css';
-@import './themes/dark-fantasy.css';
 @import './print.css';
 
 html,

@@ -3,6 +3,8 @@ import { save } from '@tauri-apps/plugin-dialog'
 import { useDocumentStore } from '../stores/documentStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { exportPdf } from '../lib/exportPdf'
+import { resolveTheme } from '../lib/themes'
+import { useThemeStore } from '../stores/themeStore'
 import { isTauri } from './useFileSystem'
 
 /**
@@ -20,7 +22,11 @@ export function usePrint() {
     })
     if (!outputPath) return
     try {
-      await exportPdf({ pageSize, columns, theme, bleedMm, marginMm, outputPath })
+      await exportPdf({
+        pageSize,
+        columns,
+        theme: resolveTheme(theme, useThemeStore.getState().themes),
+        bleedMm, marginMm, outputPath })
     } catch (e) {
       console.error('PDF export failed', e)
       window.alert(`PDF export failed: ${e instanceof Error ? e.message : String(e)}`)
