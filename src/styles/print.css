@@ -1,0 +1,37 @@
+/* Paged.js / CSS Paged Media rules. Page size is injected at export time. */
+@page {
+  size: A4;
+  margin: 15mm;
+  bleed: 3mm;
+  marks: crop cross;
+}
+
+@page :left {
+  margin-right: 20mm;
+}
+
+@page :right {
+  margin-left: 20mm;
+}
+
+@media print {
+  body {
+    background: none;
+  }
+
+  aside,
+  header {
+    display: none !important;
+  }
+
+  .grimoire-page {
+    box-shadow: none;
+    margin: 0;
+    width: auto !important;
+    padding: 0 !important;
+  }
+
+  .grimoire-content h1 {
+    break-before: page;
+  }
+}

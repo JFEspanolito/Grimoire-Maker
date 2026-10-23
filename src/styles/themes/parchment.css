@@ -1,0 +1,10 @@
+[data-theme='parchment'] {
+  --page-bg: #f4e8c8;
+  --page-fg: #2b2118;
+  --page-font: Georgia, 'Times New Roman', serif;
+  --heading-font: 'Palatino Linotype', Georgia, serif;
+  --heading-color: #58180d;
+  --accent: #9c2b1a;
+  --statblock-bg: #fdf1dc;
+  --readaloud-bg: #e9dcb8;
+}

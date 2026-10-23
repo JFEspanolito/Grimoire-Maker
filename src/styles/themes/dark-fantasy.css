@@ -1,0 +1,10 @@
+[data-theme='dark-fantasy'] {
+  --page-bg: #1b1713;
+  --page-fg: #d9cdb4;
+  --page-font: Georgia, 'Times New Roman', serif;
+  --heading-font: 'Palatino Linotype', Georgia, serif;
+  --heading-color: #c9a34a;
+  --accent: #8c1c13;
+  --statblock-bg: #261f19;
+  --readaloud-bg: #2d251d;
+}

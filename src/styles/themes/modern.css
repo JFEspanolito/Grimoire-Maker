@@ -1,0 +1,10 @@
+[data-theme='modern'] {
+  --page-bg: #ffffff;
+  --page-fg: #1c1c1e;
+  --page-font: system-ui, sans-serif;
+  --heading-font: system-ui, sans-serif;
+  --heading-color: #0f3d6b;
+  --accent: #1f6feb;
+  --statblock-bg: #f3f6fb;
+  --readaloud-bg: #eef2f7;
+}

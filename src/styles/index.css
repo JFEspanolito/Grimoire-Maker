@@ -1,0 +1,56 @@
+@import 'tailwindcss';
+@import './themes/parchment.css';
+@import './themes/modern.css';
+@import './themes/dark-fantasy.css';
+@import './print.css';
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+.grimoire-page {
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: var(--page-font);
+  column-gap: 8mm;
+  box-sizing: content-box;
+}
+
+.grimoire-content .ProseMirror {
+  outline: none;
+}
+
+.grimoire-content h1,
+.grimoire-content h2,
+.grimoire-content h3 {
+  font-family: var(--heading-font);
+  color: var(--heading-color);
+  break-after: avoid;
+}
+
+.grimoire-content h1 { font-size: 2rem; margin: 0 0 0.5em; }
+.grimoire-content h2 { font-size: 1.5rem; margin: 1em 0 0.4em; }
+.grimoire-content h3 { font-size: 1.15rem; margin: 0.8em 0 0.3em; }
+.grimoire-content p { margin: 0 0 0.6em; }
+.grimoire-content img { max-width: 100%; }
+
+.grimoire-content .statblock {
+  background: var(--statblock-bg);
+  border-top: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding: 0.6em 0.8em;
+  margin: 0.8em 0;
+  break-inside: avoid;
+}
+
+.grimoire-content .read-aloud {
+  background: var(--readaloud-bg);
+  border-left: 4px solid var(--accent);
+  padding: 0.6em 0.9em;
+  margin: 0.8em 0;
+  font-style: italic;
+  break-inside: avoid;
+}
