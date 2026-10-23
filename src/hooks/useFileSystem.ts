@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
-import { exists, mkdir, readDir, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs'
+import { exists, mkdir, readDir, readTextFile, rename, writeTextFile, readFile, writeFile, stat } from '@tauri-apps/plugin-fs'
+import { importFiles, type ImportSection } from '../lib/fileImport'
 import { useDocumentStore } from '../stores/documentStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -310,7 +311,21 @@ export function useFileSystem() {
     throw e
   }), [setPath, setWorkspace])
 
+  const importInto = useCallback((section: ImportSection) => runFileAction(async () => {
+    const root = useDocumentStore.getState().workspaceRoot
+    if (!root || !isTauri()) return
+    const selected = await open({ multiple: true, directory: false, title: `Import into ${section}` })
+    if (!selected) return
+    try {
+      await importFiles(root, section, Array.isArray(selected) ? selected : [selected], { exists, stat, readFile, writeFile })
+    } finally {
+      // Earlier files in a multi-selection remain visible if a later copy fails.
+      await refreshTree()
+    }
+  }), [refreshTree])
+
   return {
+    importInto,
     openWorkspace,
     openRecent,
     restoreSession,

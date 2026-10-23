@@ -7,11 +7,13 @@ import { FileTree } from './FileTree'
 const openFileMock = vi.hoisted(() => vi.fn())
 const moveEntryMock = vi.hoisted(() => vi.fn())
 const openFolderMock = vi.hoisted(() => vi.fn())
+const importIntoMock = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/useFileSystem', () => ({
   useFileSystem: () => ({
     openWorkspace: vi.fn(), openRecent: vi.fn(), openFile: openFileMock,
     createFile: vi.fn(), createFolder: vi.fn(), renameEntry: vi.fn(), renameWorkspace: vi.fn(), moveEntry: moveEntryMock,
     openFolder: openFolderMock,
+    importInto: importIntoMock,
   }),
 }))
 
@@ -24,6 +26,17 @@ afterEach(async () => {
 })
 
 describe('project explorer', () => {
+  it('imports into the selected binder section', async () => {
+    useDocumentStore.getState().setWorkspace('/book', [])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    for (const section of ['Draft', 'Research']) {
+      const button = Array.from(container.querySelectorAll('button')).find((item) => item.textContent === `Import to ${section}`)
+      await act(async () => button?.click())
+      expect(importIntoMock).toHaveBeenCalledWith(section)
+    }
+  })
   it('shows the open project and the binder sections in Draft, Research, Trash order', async () => {
     useDocumentStore.getState().setWorkspace('/projects/My Grimoire', [
       { name: 'Trash', path: '/projects/My Grimoire/Trash', isDirectory: true, children: [] },

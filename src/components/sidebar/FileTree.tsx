@@ -155,7 +155,7 @@ export function FileTree() {
   const root = useDocumentStore((s) => s.workspaceRoot)
   const recent = useSessionStore((s) => s.recentWorkspaces)
   const workspaceError = useSessionStore((s) => s.workspaceError)
-  const { openWorkspace, openRecent, openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
+  const { openWorkspace, openRecent, openFile, openFolder, createFile, createFolder, renameEntry, moveEntry, importInto } =
     useFileSystem()
   const [selected, setSelected] = useState<FileNode | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
@@ -282,6 +282,10 @@ export function FileTree() {
             Open
           </button>
         </div>
+      </div>
+      <div className="mb-2 flex flex-wrap gap-2 text-xs" aria-label="Import files">
+        <button type="button" disabled={!root} className="disabled:opacity-30" onClick={() => void run(() => importInto('Draft'))}>Import to Draft</button>
+        <button type="button" disabled={!root} className="disabled:opacity-30" onClick={() => void run(() => importInto('Research'))}>Import to Research</button>
       </div>
       {recent.length > 0 && (
         <select
