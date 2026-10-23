@@ -74,6 +74,17 @@ describe('GrimoireImage markdown', () => {
     }
   })
 
+  it('round-trips a freely placed image inside the sheet', () => {
+    const attrs = { src: 'assets/map.png', anchor: 'free', xMm: 42.5, yMm: 91.25 }
+    const source = createEditor({ type: 'doc', content: [{ type: 'image', attrs }] })
+    const markdown = markdownOf(source)
+    expect(markdown).toContain('data-x-mm="42.5"')
+    expect(markdown).toContain('data-y-mm="91.25"')
+
+    const reread = createEditor(markdown)
+    expect(firstImage(reread)).toMatchObject(attrs)
+  })
+
   it('does not leak attribute-breaking characters from alt text', () => {
     const attrs = { src: 'a.png', alt: '"><script>x</script>', align: 'left' }
     const markdown = markdownOf(

@@ -8,6 +8,8 @@ export interface ImageAttrs {
   frame: ImageFrame
   opacity: number
   anchor: ImageAnchor
+  xMm: number | null
+  yMm: number | null
 }
 
 const ALIGNS: [ImageAlign, string][] = [
@@ -29,6 +31,7 @@ const ANCHORS: [ImageAnchor, string][] = [
   ['header', 'Page header'],
   ['footer', 'Page footer'],
   ['background', 'Page background'],
+  ['free', 'Free position'],
 ]
 
 const field = 'flex items-center gap-1 text-xs text-white/60'

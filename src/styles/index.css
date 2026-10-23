@@ -9,11 +9,12 @@ body,
 }
 
 .grimoire-page {
+  position: relative;
   background: var(--page-bg);
   color: var(--page-fg);
   font-family: var(--page-font);
   column-gap: 8mm;
-  box-sizing: content-box;
+  box-sizing: border-box;
 }
 
 .grimoire-content .ProseMirror {
@@ -113,6 +114,28 @@ body,
   width: 100%;
   max-width: none;
   margin: 0;
+}
+
+.grimoire-image[data-anchor='free'] {
+  height: 0;
+  margin: 0;
+}
+
+.grimoire-image[data-anchor='free'] img {
+  position: absolute;
+  margin: 0;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+
+.grimoire-image img {
+  cursor: grab;
+  touch-action: none;
+}
+
+.grimoire-image img:active {
+  cursor: grabbing;
 }
 
 .grimoire-image[data-anchor='header'] img {
