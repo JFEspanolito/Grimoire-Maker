@@ -96,7 +96,7 @@ export function useFileSystem() {
     useDocumentStore.getState().markSnapshotSaved(path, snapshot)
     if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path)
     emitPluginEvent('document:saved')
-    await remember((s) => ({ ...s, lastFile: path }))
+    await remember((s) => ({ ...s, lastFile: useDocumentStore.getState().document.path }))
     return true
   }, [remember])
 

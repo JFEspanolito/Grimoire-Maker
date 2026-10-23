@@ -1,0 +1,25 @@
+.panel { min-width: 0; border-top: 1px solid var(--color-border, #454045); padding: .65rem; color: inherit; font-size: .75rem; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.header h3 { margin: 0; font-size: .8rem; font-weight: 600; }
+.panel button { border: 1px solid var(--color-border, #57515b); border-radius: .35rem; padding: .25rem .45rem; background: transparent; color: inherit; cursor: pointer; }
+.panel button:hover:not(:disabled) { background: color-mix(in srgb, currentColor 10%, transparent); }
+.panel button:disabled { opacity: .5; cursor: default; }
+.panel button:focus-visible, .panel textarea:focus-visible, .diff pre:focus-visible { outline: 2px solid var(--color-accent, #ba935c); outline-offset: 2px; }
+.hint { margin: .45rem 0; opacity: .7; line-height: 1.45; }
+.warning { margin: .5rem 0; color: var(--color-accent, #d1ad74); line-height: 1.4; }
+.error { margin: .5rem 0; color: #f08e8e; white-space: pre-wrap; overflow-wrap: anywhere; }
+.branch { margin: .6rem 0; overflow: hidden; text-overflow: ellipsis; }
+.files { max-height: 12rem; overflow: auto; }
+.group h4 { display: flex; justify-content: space-between; margin: .45rem 0 .2rem; font-size: .72rem; }
+.group ul { list-style: none; margin: 0; padding: 0; }
+.group li { display: flex; gap: .2rem; margin-bottom: .15rem; }
+.group .file { display: flex; align-items: center; gap: .35rem; flex: 1; min-width: 0; text-align: left; border: 0; }
+.file span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.code { width: 1ch; flex-shrink: 0; font-family: monospace; }
+.action { flex-shrink: 0; min-width: 1.65rem; }
+.commit { display: grid; gap: .35rem; margin-top: .55rem; }
+.commit textarea { resize: vertical; min-height: 3rem; max-height: 8rem; width: 100%; box-sizing: border-box; padding: .4rem; border: 1px solid var(--color-border, #57515b); border-radius: .35rem; background: transparent; color: inherit; font: inherit; }
+.diff { margin-top: .5rem; }
+.diff summary { cursor: pointer; overflow-wrap: anywhere; }
+.diff pre { max-height: 16rem; overflow: auto; white-space: pre; font-size: .65rem; padding: .35rem; background: rgb(0 0 0 / .15); }
+.empty p { margin: .5rem 0; }

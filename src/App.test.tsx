@@ -22,6 +22,7 @@ vi.mock('./components/layout/DocumentTabs', () => ({ DocumentTabs: () => null })
 vi.mock('./components/editor/EditorCanvas', () => ({ EditorCanvas: () => null }))
 vi.mock('./components/editor/EditorToolbar', () => ({ EditorToolbar: () => null }))
 vi.mock('./components/editor/PagePreview', () => ({ PagePreview: () => null }))
+vi.mock('./components/version-control/VersionControlPanel', () => ({ VersionControlPanel: () => <div>Git controls</div> }))
 vi.mock('./plugins/PluginContext', () => ({ PluginProvider: ({ children }: { children: React.ReactNode }) => children }))
 
 let root: Root | null = null
@@ -42,4 +43,13 @@ it('hides each horizontal panel independently and restores it', async () => {
       .find((button) => button.textContent === `Show ${panel}`)?.click())
     expect(container.textContent).toContain(`${panel[0].toUpperCase()}${panel.slice(1)} panel`)
   }
+})
+
+it('opens source control from the lower-left Git control', async () => {
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root?.render(<App />))
+  expect(container.textContent).not.toContain('Git controls')
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-controls="source-control-panel"]')?.click())
+  expect(container.textContent).toContain('Git controls')
 })

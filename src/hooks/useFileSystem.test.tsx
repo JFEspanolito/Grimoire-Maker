@@ -70,6 +70,19 @@ beforeEach(async () => {
 })
 
 describe('switching Markdown files', () => {
+  it('preserves the focused document for restart when saving all buffers', async () => {
+    useDocumentStore.getState().loadFromRaw('/a.md', 'A')
+    useTabStore.getState().reset('/a.md')
+    useDocumentStore.getState().setBody('edited A')
+    await actions.openFile('/b.md')
+    useDocumentStore.getState().setBody('edited B')
+    await actions.openFile('/a.md')
+    await actions.saveAll()
+    expect(state.lastFile).toBe('/a.md')
+    expect(useDocumentStore.getState().document.path).toBe('/a.md')
+    expect(useTabStore.getState().active).toBe('/a.md')
+    expect(Object.values(useDocumentStore.getState().buffers).every((document) => !document.dirty)).toBe(true)
+  })
   it('saves an inactive dirty buffer when closing it', async () => {
     useDocumentStore.getState().loadFromRaw('/a.md', 'A')
     useTabStore.getState().reset('/a.md')

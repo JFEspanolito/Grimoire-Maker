@@ -3,3 +3,10 @@
 .sidebar { display: flex; flex-direction: column; width: 14rem; min-width: 0; flex-shrink: 0; overflow-y: auto; border-right: 1px solid #ffffff18; }
 .main { display: flex; min-width: 0; flex: 1; flex-direction: column; background: #302f2c; }
 .snippets { display: flex; width: 16rem; flex-shrink: 0; flex-direction: column; overflow-y: auto; border-left: 1px solid #ffffff18; }
+.sidebar.rail { width: 2.5rem; }
+.explorer { flex: 1; min-height: 0; overflow-y: auto; }
+.sourceControl { flex-shrink: 0; margin-top: auto; border-top: 1px solid #ffffff18; }
+.gitToggle { width: 100%; padding: .5rem; text-align: left; font-size: .75rem; color: #d1c5ad; }
+.gitToggle:hover, .gitToggle[aria-expanded='true'] { background: #ffffff0c; }
+.gitToggle:focus-visible { outline: 2px solid #cfb37c; outline-offset: -2px; }
+.gitPanel { max-height: 50vh; overflow-y: auto; }

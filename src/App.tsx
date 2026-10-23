@@ -17,11 +17,16 @@ import { useTabStore } from './stores/tabStore'
 import { useUnsavedClose } from './hooks/useUnsavedClose'
 import { MenuBar } from './components/layout/MenuBar'
 import styles from './App.module.css'
+import { VersionControlPanel } from './components/version-control/VersionControlPanel'
+import { useDocumentStore } from './stores/documentStore'
 
 export default function App() {
   useUnsavedClose()
   const [editor, setEditor] = useState<Editor | null>(null)
   const [visiblePanels, setVisiblePanels] = useState({ files: true, templates: true, snippets: true })
+  const [gitOpen, setGitOpen] = useState(false)
+  const workspace = useDocumentStore((s) => s.workspaceRoot)
+  const hasUnsavedChanges = useDocumentStore((s) => s.document.dirty || Object.values(s.buffers).some((document) => document.dirty))
   const theme = useSettingsStore((s) => s.theme)
   const themes = useThemeStore((s) => s.themes)
   const reloadThemes = useThemeStore((s) => s.reload)
@@ -71,12 +76,19 @@ export default function App() {
         <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
         <Toolbar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
         <div className={styles.body}>
-          {(visiblePanels.files || visiblePanels.templates) && (
-            <aside className={styles.sidebar}>
+            <aside className={`${styles.sidebar} ${!visiblePanels.files && !visiblePanels.templates && !gitOpen ? styles.rail : ''}`}>
+              <div className={styles.explorer}>
               {visiblePanels.files && <FileTree />}
               {visiblePanels.templates && <TemplateCatalog />}
+              </div>
+              <div className={styles.sourceControl}>
+                <button type="button" className={styles.gitToggle} aria-expanded={gitOpen} aria-controls="source-control-panel"
+                  onClick={() => setGitOpen((open) => !open)} title="Source control">Git{(visiblePanels.files || visiblePanels.templates || gitOpen) && ' · Source control'}</button>
+                {gitOpen && <div id="source-control-panel" className={styles.gitPanel}>
+                  <VersionControlPanel workspace={workspace} hasUnsavedChanges={hasUnsavedChanges} />
+                </div>}
+              </div>
             </aside>
-          )}
           <main className={styles.main}>
             <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
           </main>
