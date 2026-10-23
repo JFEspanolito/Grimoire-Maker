@@ -118,11 +118,34 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
         // Flow images move as document blocks; dragging must not change text placement.
         const hit = editor.view.posAtCoords({ left: next.clientX, top: next.clientY })
         if (!hit) return
-        const destination = dropPoint(editor.state.doc, hit.pos, new Slice(Fragment.from(current), 0, 0))
+        let destination = dropPoint(editor.state.doc, hit.pos, new Slice(Fragment.from(current), 0, 0))
+        let movedImage = current
+        const resolved = editor.state.doc.resolve(hit.pos)
+        const paragraphPosition = resolved.parent.type.name === 'paragraph' ? resolved.before()
+          : resolved.nodeAfter?.type.name === 'paragraph' ? hit.pos
+            : resolved.nodeBefore?.type.name === 'paragraph' ? hit.pos - resolved.nodeBefore.nodeSize : null
+        const paragraph = paragraphPosition === null ? null : editor.view.nodeDOM(paragraphPosition)
+        if (paragraph instanceof HTMLElement) {
+          // Use the fragment under the pointer, not the union of both page columns.
+          const fragments = Array.from(paragraph.getClientRects()).filter((rect) => rect.width > 0)
+          const column = fragments.find((rect) => next.clientX >= rect.left && next.clientX <= rect.right
+            && next.clientY >= rect.top && next.clientY <= rect.bottom)
+          if (column) {
+            destination = paragraphPosition
+            const align = next.clientX < column.left + column.width / 2 ? 'left' : 'right'
+            const widthMm = Math.round(Math.min(renderedWidthMm, column.width * pageWidthMm / pageRect.width * 0.45) * 100) / 100
+            movedImage = current.type.create({ ...current.attrs, align, widthMm, xMm: null, yMm: null }, null, current.marks)
+          }
+        }
+        // Already beside this paragraph: change sides without deleting/reinserting it.
+        if (destination === from + current.nodeSize && movedImage !== current) {
+          editor.view.dispatch(editor.state.tr.setNodeMarkup(from, undefined, movedImage.attrs))
+          return
+        }
         if (destination === null || (destination >= from && destination <= from + current.nodeSize)) return
         const transaction = editor.state.tr.delete(from, from + current.nodeSize)
         const insertion = transaction.mapping.map(destination)
-        transaction.insert(insertion, current)
+        transaction.insert(insertion, movedImage)
         transaction.setSelection(NodeSelection.create(transaction.doc, insertion))
         editor.view.dispatch(transaction)
       } else if (current?.type.name === 'image') {

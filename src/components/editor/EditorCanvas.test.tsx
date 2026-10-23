@@ -212,3 +212,33 @@ it('keeps Push text after choosing it, typing, and dragging the image to another
   editor.state.doc.descendants((node) => { if (node.type.name === 'image') images.push(node.attrs.anchor) })
   expect(images).toEqual(['flow'])
 })
+
+it.each([['left', 40, 40], ['right', 40, 40], ['left', 140, 54], ['right', 140, 54]] as const)(
+  'wraps a Push text image on the %s and fits width %s beside a paragraph', async (side, width, fittedWidth) => {
+  useDocumentStore.getState().loadFromRaw('/book/chapter.md', `Beside this paragraph\n\n<img src="assets/map.png" data-width-mm="${width}" />`)
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  let editor!: Editor
+  await act(async () => root?.render(<EditorCanvas onReady={(value) => { editor = value }} />))
+  const page = container.querySelector<HTMLElement>('.grimoire-page')!
+  const image = container.querySelector<HTMLImageElement>('.grimoire-image img')!
+  const paragraph = container.querySelector('.ProseMirror p')!
+  vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 420, height: 594 } as DOMRect)
+  vi.spyOn(image, 'getBoundingClientRect').mockReturnValue({ left: 60, top: 160, width: width * 2, height: 100 } as DOMRect)
+  vi.spyOn(paragraph, 'getClientRects').mockReturnValue([{ left: 60, right: 300, top: 80, bottom: 140, width: 240, height: 60 }] as unknown as DOMRectList)
+  vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 2, inside: 0 })
+  const pointer = (type: string, x: number, y: number) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })
+    Object.defineProperty(event, 'pointerId', { value: 1 })
+    return event
+  }
+  const x = side === 'left' ? 80 : 280
+  await act(async () => image.dispatchEvent(pointer('pointerdown', 80, 180)))
+  await act(async () => window.dispatchEvent(pointer('pointermove', x, 100)))
+  await act(async () => window.dispatchEvent(pointer('pointerup', x, 100)))
+  expect(editor.state.doc.firstChild?.type.name).toBe('image')
+  expect(editor.getAttributes('image')).toMatchObject({ align: side, anchor: 'flow', widthMm: fittedWidth })
+  expect(editor.state.doc.child(1).textContent).toBe('Beside this paragraph')
+  expect(useDocumentStore.getState().document.body).toContain(`data-align="${side}"`)
+})

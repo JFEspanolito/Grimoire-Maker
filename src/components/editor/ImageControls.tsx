@@ -161,7 +161,7 @@ export function ImageControls({ editor, attrs: selection }: { editor: Editor | n
         Text placement
         <select
           aria-label="Text placement"
-          title="Over text allows free positioning. Push text reserves space and moves with the document; dragging keeps the selected placement."
+          title="Over text allows free positioning. In Push text, drop beside a paragraph to wrap on its left or right without covering the text."
           className={control}
           value={attrs.anchor}
           onChange={(e) => setPlacement(e.target.value as ImageAnchor)}
