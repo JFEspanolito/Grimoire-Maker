@@ -174,3 +174,20 @@ body,
 .page-preview .pagedjs_page {
   box-shadow: 0 2mm 6mm rgb(0 0 0 / 0.4);
 }
+
+/* Columns: the sheet balances text across columns; these rules keep units of meaning together. */
+.grimoire-page {
+  column-fill: balance;
+}
+
+.grimoire-content p {
+  orphans: 2;
+  widows: 2;
+}
+
+.grimoire-content blockquote,
+.grimoire-content li,
+.grimoire-content pre,
+.grimoire-content .grimoire-image {
+  break-inside: avoid;
+}
