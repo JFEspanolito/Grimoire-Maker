@@ -8,6 +8,7 @@ class FakeFs implements PackageFs {
   files = new Map<string, Uint8Array>()
   dirs = new Set<string>()
   writes: string[] = []
+  symlinks = new Set<string>()
   mkdirs: string[] = []
 
   async readFile(path: string) {
@@ -38,7 +39,11 @@ class FakeFs implements PackageFs {
     for (const dir of this.dirs) {
       if (dir.startsWith(prefix) && !dir.slice(prefix.length).includes('/')) names.set(dir.slice(prefix.length), true)
     }
-    return [...names].map(([name, isDirectory]) => ({ name, isDirectory }))
+    return [...names].map(([name, isDirectory]) => ({
+      name,
+      isDirectory,
+      isSymlink: this.symlinks.has(`${path}/${name}`),
+    }))
   }
 }
 
@@ -99,6 +104,14 @@ describe('collectPackage', () => {
     fs.files.set(`${root}/.DS_Store`, strToU8('x'))
     fs.files.set(`${root}/notes.exe`, strToU8('x'))
     expect(Object.keys(await collectPackage(fs, root)).sort()).toEqual(['chapters/one.md', 'index.md'])
+  })
+
+  it('never follows a symlink, which could export a file from outside the package', async () => {
+    const root = `${DIR}/pack`
+    fs.files.set(`${root}/index.md`, strToU8('# Hi'))
+    fs.files.set(`${root}/secret.md`, strToU8('outside the package'))
+    fs.symlinks.add(`${root}/secret.md`)
+    expect(Object.keys(await collectPackage(fs, root))).toEqual(['index.md'])
   })
 
   it('exports what was imported', async () => {

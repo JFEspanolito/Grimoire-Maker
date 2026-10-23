@@ -13,7 +13,7 @@ export interface PackageFs {
   /** Creates one folder; an existing folder is not an error. */
   mkdir(path: string): Promise<void>
   exists(path: string): Promise<boolean>
-  readDir(path: string): Promise<{ name: string; isDirectory: boolean }[]>
+  readDir(path: string): Promise<{ name: string; isDirectory: boolean; isSymlink?: boolean }[]>
 }
 
 /**
@@ -57,7 +57,8 @@ export async function collectPackage(fs: PackageFs, root: string): Promise<Recor
 
   async function walk(dir: string, prefix: string): Promise<void> {
     for (const entry of await fs.readDir(dir)) {
-      if (entry.name.startsWith('.')) continue
+      // A symlink can point anywhere on disk; following it would export files that are not in the package.
+      if (entry.name.startsWith('.') || entry.isSymlink) continue
       const relative = `${prefix}${entry.name}`
       if (entry.isDirectory) {
         await walk(`${dir}/${entry.name}`, `${relative}/`)

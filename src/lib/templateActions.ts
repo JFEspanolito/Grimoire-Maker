@@ -10,7 +10,8 @@ const tauriFs: PackageFs = {
   writeFile: (path, data) => writeFile(path, data),
   mkdir: (path) => mkdir(path, { recursive: true }),
   exists,
-  readDir: async (path) => (await readDir(path)).map((e) => ({ name: e.name, isDirectory: e.isDirectory })),
+  readDir: async (path) =>
+    (await readDir(path)).map((e) => ({ name: e.name, isDirectory: e.isDirectory, isSymlink: e.isSymlink })),
 }
 
 const ZIP_FILTER = [{ name: 'Template package', extensions: ['zip'] }]

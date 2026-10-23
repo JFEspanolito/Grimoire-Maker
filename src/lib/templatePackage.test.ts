@@ -131,3 +131,33 @@ describe('readTemplateZip: Windows-specific names', () => {
     ).not.toThrow()
   })
 })
+
+describe('readTemplateZip: bounded memory on a size bomb', () => {
+  it('stops inflating shortly after the limit instead of unpacking the whole bomb', () => {
+    const limits = { entries: 500, totalBytes: 1024 * 1024 }
+    const bomb = zip({ 'index.md': INDEX, 'assets/big.png': new Uint8Array(100 * 1024 * 1024) })
+    const stats = { inflated: 0 }
+    expect(() => readTemplateZip(bomb, { limits, stats })).toThrow(/too large/i)
+    // Input is fed in small slices, so overshoot is a few MB at most, not the full 100 MB.
+    expect(stats.inflated).toBeLessThan(limits.totalBytes + 16 * 1024 * 1024)
+  })
+})
+
+describe('readTemplateZip: structural edge cases', () => {
+  it.each([
+    ['a file whose whole name is an allowed extension', 'css'],
+    ['a name with a bidirectional control character', 'chapters/a\u202Eb.md'],
+  ])('rejects %s', (_label, name) => {
+    expect(() => readTemplateZip(zip({ 'index.md': INDEX, [name]: '# x' }))).toThrow(PackageError)
+  })
+
+  it('rejects an entry that is both a file and a folder', () => {
+    expect(() => readTemplateZip(zip({ 'index.md': INDEX, 'chapters/a.md': '# a', 'chapters': '# x' }))).toThrow(PackageError)
+  })
+})
+
+describe('packageIdFromFileName: Windows device names', () => {
+  it.each(['CON.zip', 'nul.zip', 'COM1.zip', 'aux.zip'])('does not use %s as a folder name', (name) => {
+    expect(packageIdFromFileName(name, new Set())).toMatch(/^template-/)
+  })
+})
