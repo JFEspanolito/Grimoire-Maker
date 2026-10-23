@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { Toolbar } from './components/layout/Toolbar'
 import { EditorCanvas } from './components/editor/EditorCanvas'
+import { EditorToolbar } from './components/editor/EditorToolbar'
 import { FileTree } from './components/sidebar/FileTree'
 import { ResearchPanel } from './components/sidebar/ResearchPanel'
 import { SnippetPalette } from './components/snippets/SnippetPalette'
@@ -61,8 +62,11 @@ export default function App() {
             <FileTree />
             <TemplateCatalog />
           </aside>
-          <main className="min-w-0 flex-1 overflow-auto bg-neutral-800">
-            <EditorCanvas onReady={setEditor} />
+          <main className="flex min-w-0 flex-1 flex-col bg-neutral-800">
+            <EditorToolbar editor={editor} />
+            <div className="min-h-0 flex-1 overflow-auto">
+              <EditorCanvas onReady={setEditor} />
+            </div>
           </main>
           <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-white/10">
             <SnippetPalette editor={editor} />
