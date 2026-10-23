@@ -14,15 +14,18 @@ function cell(type: 'tableHeader' | 'tableCell', text?: string): object {
   }
 }
 
-/** A table with a header row and `rows` empty body rows, as editor JSON. */
-export function buildTable(headers: string[], rows: number): object {
+/**
+ * A table with a header row and `rows` body rows, as editor JSON. `firstColumn`
+ * pre-fills the first cell of each row (roll numbers or ranges); the rest stay empty.
+ */
+export function buildTable(headers: string[], rows: number, firstColumn: string[] = []): object {
   return {
     type: 'table',
     content: [
       { type: 'tableRow', content: headers.map((h) => cell('tableHeader', h)) },
-      ...Array.from({ length: rows }, () => ({
+      ...Array.from({ length: rows }, (_, row) => ({
         type: 'tableRow',
-        content: headers.map(() => cell('tableCell')),
+        content: headers.map((_, col) => cell('tableCell', col === 0 ? firstColumn[row] : undefined)),
       })),
     ],
   }

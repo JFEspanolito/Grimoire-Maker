@@ -1,17 +1,9 @@
 import { DndContext, useDraggable, type DragEndEvent } from '@dnd-kit/core'
 import type { Editor } from '@tiptap/react'
-import { READ_ALOUD_TEMPLATE, STATBLOCK_TEMPLATE } from '../editor/extensions/blocks'
+import { useSettingsStore } from '../../stores/settingsStore'
+import { SNIPPETS, type Snippet, type SnippetGroup } from './snippets'
 
-interface Snippet {
-  id: string
-  label: string
-  node: object
-}
-
-const SNIPPETS: Snippet[] = [
-  { id: 'statblock', label: 'Statblock', node: STATBLOCK_TEMPLATE },
-  { id: 'read-aloud', label: 'Read-aloud box', node: READ_ALOUD_TEMPLATE },
-]
+const GROUPS: SnippetGroup[] = ['Blocks', 'Tables']
 
 function DraggableSnippet({ snippet, onInsert }: { snippet: Snippet; onInsert: () => void }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: snippet.id })
@@ -34,7 +26,10 @@ function DraggableSnippet({ snippet, onInsert }: { snippet: Snippet; onInsert: (
  * Drops are detected by the page element carrying `data-page-drop`.
  */
 export function SnippetPalette({ editor }: { editor: Editor | null }) {
-  const insert = (snippet: Snippet) => editor?.chain().focus().insertContent(snippet.node).run()
+  const canInsert = useSettingsStore((s) => s.viewMode === 'edit')
+  const insert = (snippet: Snippet) => {
+    if (canInsert) editor?.chain().focus().insertContent(snippet.node).run()
+  }
 
   const onDragEnd = ({ active, activatorEvent }: DragEndEvent) => {
     const snippet = SNIPPETS.find((s) => s.id === active.id)
@@ -50,8 +45,14 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
     <DndContext onDragEnd={onDragEnd}>
       <div className="flex flex-col gap-2 p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Snippets</h2>
-        {SNIPPETS.map((snippet) => (
-          <DraggableSnippet key={snippet.id} snippet={snippet} onInsert={() => insert(snippet)} />
+        {!canInsert && <p className="text-xs text-amber-400">Switch to Edit view to insert snippets.</p>}
+        {GROUPS.map((group) => (
+          <section key={group} className="flex flex-col gap-2" aria-label={group}>
+            <h3 className="text-xs uppercase tracking-wide text-white/40">{group}</h3>
+            {SNIPPETS.filter((s) => s.group === group).map((snippet) => (
+              <DraggableSnippet key={snippet.id} snippet={snippet} onInsert={() => insert(snippet)} />
+            ))}
+          </section>
         ))}
       </div>
     </DndContext>

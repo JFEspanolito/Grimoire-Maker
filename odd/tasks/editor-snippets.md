@@ -6,11 +6,12 @@ Objective: spec module 4.2 (preconfigured snippets), after 4.1. Branch: main (co
 - S3: "Panel lateral de componentes preconstruidos listos para arrastrar al documento" with the four kinds: character sheets, statblocks, read-aloud boxes, encounter/loot tables (existing: statblock, read-aloud).
 
 ## Tasks
-- T1 | S1 | inline | status: done (not seen in the running app) | commit: see git log (feat(editor): table support) | Table support: extension, styling, row/column controls, Markdown round-trip tests
-- T2 | S1,S3 | inline | status: pending | commit: - | Encounter table and loot table snippets in the palette
+- T1 | S1 | inline | status: done (not seen in the running app) | commit: 40c89e4 | Table support: extension, styling, row/column controls, Markdown round-trip tests
+- T2 | S1,S3 | inline | status: done (not seen in the running app) | commit: see git log (feat(snippets): encounter and loot tables) | Encounter table and loot table snippets in the palette
 - T3 | S2,S3 | inline | status: pending | commit: - | Character sheet block with attribute grid, palette entry
 
 ## Log
 - L1 (2026-10-22): "sí sigue" (continue with the next module after 4.1; module 2 = snippets: only 2 of 4 snippet kinds existed)
 - L2 route declaration: all tasks inline; sequential, same palette/editor files, no Writer trigger.
 - L3: T1 evidence: RED = tables.test.ts could not resolve ./tables; GREEN = 8 vitest tests (GFM table round trip + idempotent re-save, table inside a statblock block, buildTable shape and reload). tiptap-markdown writes a trailing blank line after a table; the test checks re-saving does not grow it.
+- L4: T2 evidence: RED = snippets.test.ts could not resolve ./snippets; GREEN = 15 vitest tests total (every catalog snippet inserts and serializes; encounter table is d6 numbered 1-6; loot table d100 ranges 01-00). Palette now groups snippets (Blocks, Tables) from components/snippets/snippets.ts and refuses inserts outside Edit view.
