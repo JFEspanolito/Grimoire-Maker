@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useContext, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { useDocumentStore } from '../../../stores/documentStore'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { loadImageUrl, revokeImageUrl } from '../../../lib/images'
 import { positionImageOnPage } from '../../../lib/imagePlacement'
 import { PAGE_SIZES } from '../../../types/document'
+import { DocumentPathContext } from '../DocumentPathContext'
 
 const ANCHOR_LABEL: Record<string, string> = {
   header: 'Header image',
@@ -14,7 +15,9 @@ const ANCHOR_LABEL: Record<string, string> = {
 
 /** Canvas rendering of an image node: resolves the stored path and applies the layout attributes. */
 export function ImageView({ node, selected, updateAttributes }: NodeViewProps) {
-  const documentPath = useDocumentStore((s) => s.document.path)
+  const activePath = useDocumentStore((s) => s.document.path)
+  const panePath = useContext(DocumentPathContext)
+  const documentPath = panePath === undefined ? activePath : panePath
   const { src, alt, align, widthMm, frame, opacity, anchor, xMm, yMm } = node.attrs
   const [shown, setShown] = useState<{ src: string; url: string } | null>(null)
   const [failure, setFailure] = useState<{ src: string; message: string } | null>(null)

@@ -1,0 +1,6 @@
+.workspace { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; flex: 1; }
+.workspace[data-split='true'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workspace[hidden], .pane[hidden] { display: none; }
+.pane { grid-row: 1; min-width: 0; overflow: auto; border: 1px solid transparent; }
+.pane[data-active-editor='true'] { border-color: #bda675; }
+.empty { grid-row: 1; min-width: 0; margin: 1rem; padding: 1rem; color: #c9c4ba; border: 1px dashed #777; text-align: left; }

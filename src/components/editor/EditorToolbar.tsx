@@ -149,7 +149,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         return
       }
       const src = await importImage(documentPath)
-      if (src) editor.chain().focus().setImage({ src, alt: '' }).run()
+      if (src && !editor.isDestroyed) editor.chain().focus().setImage({ src, alt: '' }).run()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }

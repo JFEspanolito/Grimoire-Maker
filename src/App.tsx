@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { Toolbar } from './components/layout/Toolbar'
-import { DocumentTabs } from './components/layout/DocumentTabs'
-import { EditorCanvas } from './components/editor/EditorCanvas'
-import { EditorToolbar } from './components/editor/EditorToolbar'
-import { PagePreview } from './components/editor/PagePreview'
+import { DocumentWorkspace } from './components/layout/DocumentWorkspace'
 import { FileTree } from './components/sidebar/FileTree'
 import { SnippetPalette } from './components/snippets/SnippetPalette'
 import { TemplateCatalog } from './components/templates/TemplateCatalog'
@@ -18,17 +15,22 @@ import { isTauri, useFileSystem } from './hooks/useFileSystem'
 import { watchSettings } from './lib/appState'
 import { ProjectArchiveActions } from './components/project/ProjectArchiveActions'
 import { useDocumentStore } from './stores/documentStore'
+import { useTabStore } from './stores/tabStore'
+import { useUnsavedClose } from './hooks/useUnsavedClose'
 
 export default function App() {
+  useUnsavedClose()
   const [editor, setEditor] = useState<Editor | null>(null)
   const [visiblePanels, setVisiblePanels] = useState({ files: true, templates: true, snippets: true })
   const theme = useSettingsStore((s) => s.theme)
-  const viewMode = useSettingsStore((s) => s.viewMode)
   const themes = useThemeStore((s) => s.themes)
   const reloadThemes = useThemeStore((s) => s.reload)
   const reloadTemplates = useTemplateStore((s) => s.reload)
   const { restoreSession, openRestored } = useFileSystem()
   const workspaceRoot = useDocumentStore((s) => s.workspaceRoot)
+  const activeTab = useTabStore((s) => s.active)
+  const hasTabs = useTabStore((s) => s.paths.length > 0)
+  const activeEditor = hasTabs && !activeTab ? null : editor
   const togglePanel = (panel: keyof typeof visiblePanels) =>
     setVisiblePanels((current) => ({ ...current, [panel]: !current[panel] }))
 
@@ -77,17 +79,11 @@ export default function App() {
             </aside>
           )}
           <main className="flex min-w-0 flex-1 flex-col bg-neutral-800">
-            <DocumentTabs />
-            {viewMode === 'edit' && <EditorToolbar editor={editor} />}
-            {/* Stays mounted while previewing: the preview paginates a copy of its content. */}
-            <div className={viewMode === 'edit' ? 'min-h-0 flex-1 overflow-auto' : 'hidden'}>
-              <EditorCanvas onReady={setEditor} />
-            </div>
-            {viewMode !== 'edit' && <PagePreview mode={viewMode} />}
+            <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
           </main>
           {visiblePanels.snippets && (
             <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-white/10">
-              <SnippetPalette editor={editor} />
+              <SnippetPalette editor={activeEditor} />
             </aside>
           )}
         </div>

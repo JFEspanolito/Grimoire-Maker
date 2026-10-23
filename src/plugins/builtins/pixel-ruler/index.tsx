@@ -39,7 +39,7 @@ export const pixelRuler: GrimoirePlugin = {
   activate(api) {
     api.registerCommand({
       id: 'pixel-ruler.toggle',
-      label: 'Toggle print ruler',
+      label: 'Ruler',
       run: () => useRulerState.getState().toggle(),
     })
     api.registerOverlay({ id: 'pixel-ruler.overlay', title: 'Ruler', component: RulerOverlay })

@@ -7,6 +7,7 @@ import { useThemeStore } from '../../stores/themeStore'
 import { resolveTheme } from '../../lib/themes'
 import { PAGE_SIZES, type PageSizeId, type ViewMode } from '../../types/document'
 import { ProjectName } from './ProjectName'
+import { useTabStore } from '../../stores/tabStore'
 
 const btn = 'rounded px-2 py-1 text-sm hover:bg-white/10'
 
@@ -29,6 +30,7 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
   const { themes, dir: themesDir, errors: themeErrors } = useThemeStore()
   const dirty = useDocumentStore((s) => s.document.dirty)
   const commands = usePluginRegistry((s) => s.commands)
+  const split = useTabStore((s) => s.split)
 
   return (
     <header className="flex items-center gap-2 border-b border-white/10 px-3 py-1.5">
@@ -116,6 +118,7 @@ export function Toolbar({ visiblePanels, onTogglePanel }: {
             {c.label}
           </button>
         ))}
+        <button type="button" className={btn} aria-pressed={split} onClick={() => useTabStore.getState().toggleSplit()}>Split View</button>
       </span>
     </header>
   )

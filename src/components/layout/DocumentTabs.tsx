@@ -1,9 +1,11 @@
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { useTabStore } from '../../stores/tabStore'
+import { useDocumentStore } from '../../stores/documentStore'
 
 export function DocumentTabs() {
   const paths = useTabStore((state) => state.paths)
   const active = useTabStore((state) => state.active)
+  const buffers = useDocumentStore((state) => state.buffers)
   const { openFile, closeTab } = useFileSystem()
 
   if (paths.length === 0) return null
@@ -15,6 +17,7 @@ export function DocumentTabs() {
             aria-current={active === path ? 'page' : undefined}
             onClick={() => void openFile(path).catch(() => undefined)}>
             {path.slice(path.lastIndexOf('/') + 1)}
+            {buffers[path]?.dirty && <span aria-label="Unsaved changes"> •</span>}
           </button>
           <button type="button" aria-label={`Close ${path.slice(path.lastIndexOf('/') + 1)}`}
             className="px-2 text-xs text-white/50 hover:text-white"

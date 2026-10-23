@@ -19,7 +19,7 @@ import { serializeDocument } from '../lib/frontmatter'
 import { applyTemplateFiles } from '../lib/templateActions'
 import type { Template } from '../lib/templates'
 import { emitPluginEvent } from '../plugins/plugin-manager'
-import { PAGE_SIZES, type FileNode } from '../types/document'
+import { PAGE_SIZES, type FileNode, type GrimoireDocument } from '../types/document'
 
 export const isTauri = (): boolean => '__TAURI_INTERNALS__' in window
 
@@ -75,7 +75,7 @@ function validateName(name: string): string {
 }
 
 export function useFileSystem() {
-  const { loadFromRaw, toRaw, markSaved, setWorkspace, setPath } = useDocumentStore.getState()
+  const { loadFromRaw, setWorkspace } = useDocumentStore.getState()
 
   /** Persists a change to what survives a restart; a failed write never blocks the user. */
   const remember = useCallback(async (change: (state: AppState) => AppState) => {
@@ -88,21 +88,34 @@ export function useFileSystem() {
     }
   }, [])
 
-  const persistCurrentDocument = useCallback(async (): Promise<boolean> => {
-    let path = useDocumentStore.getState().document.path
+  const persistDocument = useCallback(async (snapshot: GrimoireDocument): Promise<boolean> => {
+    let path = snapshot.path
     path ??= await save({ filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (!path) return false
-    await writeTextFile(path, toRaw())
-    markSaved(path)
-    useTabStore.getState().open(path)
+    await writeTextFile(path, serializeDocument(snapshot.frontmatter, snapshot.body))
+    useDocumentStore.getState().markSnapshotSaved(path, snapshot)
+    if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path)
     emitPluginEvent('document:saved')
     await remember((s) => ({ ...s, lastFile: path }))
     return true
-  }, [toRaw, markSaved, remember])
+  }, [remember])
+
+  const persistCurrentDocument = useCallback(() => persistDocument(useDocumentStore.getState().document), [persistDocument])
+
+  const saveAllDocuments = useCallback(async () => {
+    const state = useDocumentStore.getState()
+    const documents = Object.values({ ...state.buffers, [state.document.path ?? '__untitled__']: state.document })
+    for (const document of documents) {
+      if (document.dirty && !(await persistDocument(document))) return false
+    }
+    if (Object.values(useDocumentStore.getState().buffers).some((document) => document.dirty)) {
+      throw new Error('Documents changed while saving. Save again before switching projects.')
+    }
+    return true
+  }, [persistDocument])
 
   const activateWorkspace = useCallback(async (root: string) => {
-    const current = useDocumentStore.getState().document
-    if (current.dirty && !(await persistCurrentDocument())) return
+    if (!(await saveAllDocuments())) return
     await setupBinder({ exists, mkdir }, root)
     const tree = await readTree(root)
     const previous = await loadAppState()
@@ -114,11 +127,12 @@ export function useFileSystem() {
       : tree)
     const raw = initial ? await readTextFile(initial) : ''
     setWorkspace(root, tree)
+    useDocumentStore.getState().resetDocuments()
     loadFromRaw(initial, raw)
     useTabStore.getState().reset(initial)
     useSessionStore.getState().setWorkspaceError(null)
     await remember((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
-  }, [loadFromRaw, persistCurrentDocument, remember, setWorkspace])
+  }, [loadFromRaw, saveAllDocuments, remember, setWorkspace])
 
   const openWorkspace = useCallback(async () => {
     if (!isTauri()) return
@@ -170,18 +184,16 @@ export function useFileSystem() {
 
   /** Moves or renames `from` to `to`, keeping the open document pointed at its file. */
   const moveEntry = useCallback(
-    async (from: string, to: string) => {
+    (from: string, to: string) => runFileAction(async () => {
       if (from === to) return
       if (to.startsWith(`${from}/`)) throw new Error('Cannot move a folder into itself')
       if (await exists(to)) throw new Error(`"${to}" already exists`)
       await rename(from, to)
-      const current = useDocumentStore.getState().document.path
-      if (current === from) setPath(to)
-      else if (current?.startsWith(`${from}/`)) setPath(to + current.slice(from.length))
+      useDocumentStore.getState().remapDocuments(from, to)
       useTabStore.getState().remap(from, to)
       await refreshTree()
-    },
-    [refreshTree, setPath],
+    }),
+    [refreshTree],
   )
 
   const renameEntry = useCallback(
@@ -203,8 +215,11 @@ export function useFileSystem() {
         useTabStore.getState().open(target, newTab)
         return
       }
-      if (current.dirty && !(await persistCurrentDocument())) return
-      loadFromRaw(target, await readTextFile(target))
+      if (!/\.md$/i.test(target)) throw new Error('Only Markdown files can be edited. Imported assets remain available in the project folder.')
+      if (!current.path && current.dirty && !(await persistCurrentDocument())) return
+      if (current.path && !useTabStore.getState().paths.includes(current.path)) useTabStore.getState().open(current.path, true)
+      if (useDocumentStore.getState().buffers[target]) useDocumentStore.getState().activate(target)
+      else loadFromRaw(target, await readTextFile(target))
       useTabStore.getState().open(target, newTab)
       await remember((s) => ({ ...s, lastFile: target }))
     }).catch((e: unknown) => {
@@ -243,6 +258,8 @@ export function useFileSystem() {
 
   const saveFile = useCallback(() => runFileAction(async () => {
     if (!isTauri()) return
+    const tabs = useTabStore.getState()
+    if (tabs.paths.length && !tabs.active) return
     await persistCurrentDocument()
   }).catch((e: unknown) => {
     useSessionStore.getState().setWorkspaceError(`Could not save file: ${e instanceof Error ? e.message : String(e)}`)
@@ -252,18 +269,20 @@ export function useFileSystem() {
   const closeTab = useCallback((path: string) => runFileAction(async () => {
     const tabs = useTabStore.getState()
     if (!tabs.paths.includes(path)) return
-    if (tabs.active !== path) {
-      tabs.remove(path)
-      return
-    }
-    if (useDocumentStore.getState().document.dirty && !(await persistCurrentDocument())) return
-    const next = tabs.paths.find((candidate) => candidate !== path) ?? null
-    const raw = next ? await readTextFile(next) : ''
+    const state = useDocumentStore.getState()
+    const document = state.document.path === path ? state.document : state.buffers[path]
+    if (document?.dirty && !(await persistDocument(document))) return
+    if (useDocumentStore.getState().buffers[path]?.dirty) throw new Error('Document changed while saving. Save again before closing.')
     useTabStore.getState().remove(path)
-    loadFromRaw(next, raw)
-    if (next) useTabStore.getState().open(next)
+    useDocumentStore.getState().forget(path)
+    const next = useTabStore.getState().active
+    if (next) useDocumentStore.getState().activate(next)
+    else loadFromRaw(null, '')
     await remember((state) => ({ ...state, lastFile: next }))
-  }), [loadFromRaw, persistCurrentDocument, remember])
+  }).catch((error: unknown) => {
+    useSessionStore.getState().setWorkspaceError(`Could not close file: ${error instanceof Error ? error.message : String(error)}`)
+    throw error
+  }), [loadFromRaw, persistDocument, remember])
 
   const applyTemplate = useCallback((template: Template) => runFileAction(async (): Promise<boolean> => {
     const root = useDocumentStore.getState().workspaceRoot
@@ -297,8 +316,7 @@ export function useFileSystem() {
     const next = await withAppStateLock(() => invoke<string>('rename_workspace', { path: root, name }))
     const state = useDocumentStore.getState()
     if (state.workspaceRoot === root) {
-      const path = remapPath(state.document.path, root, next)
-      if (path && path !== state.document.path) setPath(path)
+      useDocumentStore.getState().remapDocuments(root, next)
       useTabStore.getState().remap(root, next)
       setWorkspace(next, remapTree(state.tree, root, next))
       setWorkspace(next, await readTree(next))
@@ -309,7 +327,7 @@ export function useFileSystem() {
   }).catch((e: unknown) => {
     useSessionStore.getState().setWorkspaceError(`Could not rename project: ${e instanceof Error ? e.message : String(e)}`)
     throw e
-  }), [setPath, setWorkspace])
+  }), [setWorkspace])
 
   const importInto = useCallback((section: ImportSection) => runFileAction(async () => {
     const root = useDocumentStore.getState().workspaceRoot
@@ -324,7 +342,10 @@ export function useFileSystem() {
     }
   }), [refreshTree])
 
+  const saveAll = useCallback(() => runFileAction(saveAllDocuments), [saveAllDocuments])
+
   return {
+    saveAll,
     openRestored: (path: string) => runFileAction(() => activateWorkspace(path.replaceAll('\\', '/'))),
     importInto,
     openWorkspace,

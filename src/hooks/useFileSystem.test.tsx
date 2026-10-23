@@ -44,6 +44,7 @@ beforeEach(async () => {
   Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {}, configurable: true })
   state = emptyState()
   directories = new Set(['/workspace'])
+  useDocumentStore.getState().resetDocuments()
   useDocumentStore.getState().loadFromRaw(null, '')
   useTabStore.getState().reset(null)
   useDocumentStore.getState().setWorkspace(null, [])
@@ -69,6 +70,25 @@ beforeEach(async () => {
 })
 
 describe('switching Markdown files', () => {
+  it('saves an inactive dirty buffer when closing it', async () => {
+    useDocumentStore.getState().loadFromRaw('/a.md', 'A')
+    useTabStore.getState().reset('/a.md')
+    useDocumentStore.getState().setBody('dirty A')
+    await actions.openFile('/b.md')
+    await actions.closeTab('/a.md')
+    expect(writeTextFile).toHaveBeenCalledWith('/a.md', 'dirty A')
+    expect(useDocumentStore.getState().document.path).toBe('/b.md')
+    expect(useDocumentStore.getState().buffers['/a.md']).toBeUndefined()
+  })
+  it('retains dirty edits made during a save and refuses to close them', async () => {
+    useDocumentStore.getState().loadFromRaw('/a.md', 'A')
+    useTabStore.getState().reset('/a.md')
+    useDocumentStore.getState().setBody('saving')
+    vi.mocked(writeTextFile).mockImplementationOnce(async () => { useDocumentStore.getState().setBody('newer') })
+    await expect(actions.closeTab('/a.md')).rejects.toThrow('changed while saving')
+    expect(useDocumentStore.getState().document.body).toBe('newer')
+    expect(useTabStore.getState().paths).toContain('/a.md')
+  })
   it('opens a second file in a separate tab and returns to the first', async () => {
     useDocumentStore.getState().loadFromRaw('/workspace/Draft/one.md', '# First')
     useTabStore.getState().reset('/workspace/Draft/one.md')
@@ -93,15 +113,19 @@ describe('switching Markdown files', () => {
     expect(useTabStore.getState().paths).toEqual(['/workspace/Draft/one.md'])
     expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/one.md')
   })
-  it('saves changes to the current file before replacing the editor content', async () => {
+  it('keeps dirty buffers when switching without rereading or overwriting them', async () => {
     useDocumentStore.getState().loadFromRaw('/workspace/Draft/one.md', '# Original')
     useDocumentStore.getState().setBody('# Edited')
 
     await actions.openFile('/workspace/Draft/two.md')
 
-    expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/one.md', '# Edited')
+    expect(writeTextFile).not.toHaveBeenCalled()
+    expect(useDocumentStore.getState().buffers['/workspace/Draft/one.md'].body).toBe('# Edited')
     expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/two.md')
     expect(useDocumentStore.getState().document.body).toBe('# Next chapter')
+    await actions.openFile('/workspace/Draft/one.md')
+    expect(useDocumentStore.getState().document.body).toBe('# Edited')
+    expect(readTextFile).toHaveBeenCalledTimes(1)
   })
 
   it('keeps dirty content visible when saving the old file fails', async () => {
@@ -109,7 +133,7 @@ describe('switching Markdown files', () => {
     useDocumentStore.getState().setBody('# Edited')
     vi.mocked(writeTextFile).mockRejectedValueOnce(new Error('Disk full'))
 
-    await expect(actions.openFile('/workspace/Draft/two.md')).rejects.toThrow('Disk full')
+    await expect(actions.saveFile()).rejects.toThrow('Disk full')
 
     expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/one.md')
     expect(useDocumentStore.getState().document.body).toBe('# Edited')

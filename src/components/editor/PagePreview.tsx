@@ -23,6 +23,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
   const { pageSize, columns, theme, bleedMm, marginMm } = useSettingsStore()
   const themes = useThemeStore((s) => s.themes)
   const body = useDocumentStore((s) => s.document.body)
+  const path = useDocumentStore((s) => s.document.path)
   const host = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<Status>({ kind: 'rendering' })
   const [zoom, setZoom] = useState(mode === 'spreads' ? 0.5 : 0.75)
@@ -56,7 +57,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       previewer.polisher.destroy()
       stage.remove()
     }
-  }, [pageSize, columns, activeTheme, bleedMm, marginMm, body])
+  }, [pageSize, columns, activeTheme, bleedMm, marginMm, body, path])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

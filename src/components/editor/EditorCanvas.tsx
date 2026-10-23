@@ -9,6 +9,7 @@ import { CharacterSheet, ReadAloud, Statblock } from './extensions/blocks'
 import { GrimoireImageNode } from './extensions/imageNode'
 import { TableExtensions } from './extensions/tables'
 import { PageView } from './PageView'
+import { DocumentPathContext } from './DocumentPathContext'
 
 function getMarkdown(editor: Editor): string {
   return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()
@@ -16,11 +17,14 @@ function getMarkdown(editor: Editor): string {
 
 interface Props {
   onReady: (editor: Editor) => void
+  path?: string | null
+  active?: boolean
 }
 
-export function EditorCanvas({ onReady }: Props) {
-  const body = useDocumentStore((s) => s.document.body)
-  const setBody = useDocumentStore((s) => s.setBody)
+export function EditorCanvas({ onReady, path, active = true }: Props) {
+  const body = useDocumentStore((s) => path === undefined ? s.document.body : (s.buffers[path ?? '__untitled__']?.body ?? ''))
+  const activePath = useDocumentStore((s) => s.document.path)
+  const documentPath = path === undefined ? activePath : path
 
   const editor = useEditor({
     extensions: [
@@ -35,19 +39,21 @@ export function EditorCanvas({ onReady }: Props) {
     ],
     content: body,
     onUpdate: ({ editor: e }) => {
-      setBody(getMarkdown(e))
+      const store = useDocumentStore.getState()
+      store.setBodyForPath(path === undefined ? store.document.path : path, getMarkdown(e))
       emitPluginEvent('document:changed')
     },
   })
 
   useEffect(() => {
-    if (!editor) return
+    if (!editor || !active) return
     onReady(editor)
     setPluginHost({
       getActiveBody: () => getMarkdown(editor),
       insertContent: (markdown) => editor.chain().focus().insertContent(markdown).run(),
     })
-  }, [editor, onReady])
+    return () => setPluginHost({ getActiveBody: () => '', insertContent: () => {} })
+  }, [editor, onReady, active])
 
   // External body changes (file open) reload the editor; own edits are no-ops.
   useEffect(() => {
@@ -55,12 +61,12 @@ export function EditorCanvas({ onReady }: Props) {
   }, [editor, body])
 
   return (
-    <PageView onPageClick={(event) => {
+    <DocumentPathContext value={documentPath}><PageView onPageClick={(event) => {
       if (event.target instanceof Element && !event.target.closest('.ProseMirror')) {
         editor?.commands.focus(undefined, { scrollIntoView: false })
       }
     }}>
       <EditorContent editor={editor} className="grimoire-content" />
-    </PageView>
+    </PageView></DocumentPathContext>
   )
 }
