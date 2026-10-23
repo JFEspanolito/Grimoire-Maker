@@ -1,5 +1,15 @@
 use serde::Deserialize;
 
+/// The dialog route does not promise a destination or a successful saved file.
+#[tauri::command]
+pub fn pdf_export_route() -> &'static str {
+    if cfg!(windows) {
+        "file"
+    } else {
+        "dialog"
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportOptions {

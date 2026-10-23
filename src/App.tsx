@@ -16,6 +16,8 @@ import { useTemplateStore } from './stores/templateStore'
 import { resolveTheme } from './lib/themes'
 import { isTauri, useFileSystem } from './hooks/useFileSystem'
 import { watchSettings } from './lib/appState'
+import { ProjectArchiveActions } from './components/project/ProjectArchiveActions'
+import { useDocumentStore } from './stores/documentStore'
 
 export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null)
@@ -25,7 +27,8 @@ export default function App() {
   const themes = useThemeStore((s) => s.themes)
   const reloadThemes = useThemeStore((s) => s.reload)
   const reloadTemplates = useTemplateStore((s) => s.reload)
-  const { restoreSession } = useFileSystem()
+  const { restoreSession, openRestored } = useFileSystem()
+  const workspaceRoot = useDocumentStore((s) => s.workspaceRoot)
   const togglePanel = (panel: keyof typeof visiblePanels) =>
     setVisiblePanels((current) => ({ ...current, [panel]: !current[panel] }))
 
@@ -65,6 +68,7 @@ export default function App() {
     <PluginProvider>
       <div data-theme={resolveTheme(theme, themes)} className="flex h-screen flex-col bg-neutral-900 text-neutral-100">
         <Toolbar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
+        <ProjectArchiveActions workspacePath={workspaceRoot} onRestored={openRestored} />
         <div className="flex min-h-0 flex-1">
           {(visiblePanels.files || visiblePanels.templates) && (
             <aside className="w-56 shrink-0 overflow-y-auto border-r border-white/10">

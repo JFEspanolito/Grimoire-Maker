@@ -325,6 +325,7 @@ export function useFileSystem() {
   }), [refreshTree])
 
   return {
+    openRestored: (path: string) => runFileAction(() => activateWorkspace(path.replaceAll('\\', '/'))),
     importInto,
     openWorkspace,
     openRecent,

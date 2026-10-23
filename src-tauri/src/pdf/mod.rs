@@ -2,7 +2,8 @@
 //!
 //! The webview paginates the document with Paged.js into a print-only layout; the
 //! platform webview then prints it to PDF at the exact trim size plus bleed.
-//! Only WebView2 (Windows) is implemented so far.
+//! Windows writes directly through WebView2. Other platforms use the system print
+//! dialog from JavaScript so its afterprint event owns paginated DOM cleanup.
 use std::path::Path;
 
 use tauri::WebviewWindow;
@@ -20,7 +21,10 @@ fn validate(options: &ExportOptions) -> Result<(), String> {
         return Err("Invalid page size or bleed".into());
     }
     let path = Path::new(&options.output_path);
-    if !path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+    if !path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
+    {
         return Err("Output path must end in .pdf".into());
     }
     match path.parent() {
@@ -38,6 +42,6 @@ pub async fn render(window: &WebviewWindow, options: &ExportOptions) -> Result<(
     #[cfg(not(windows))]
     {
         let _ = window;
-        Err("PDF export is only implemented for Windows (WebView2) so far".into())
+        Err("Use the system print dialog to save a PDF on this platform".into())
     }
 }

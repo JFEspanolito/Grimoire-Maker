@@ -14,7 +14,40 @@ export interface PageRequest {
 
 export interface ExportRequest extends PageRequest {
   /** Absolute destination chosen by the user (`.pdf`). */
-  outputPath: string
+  outputPath?: string
+  route?: PdfRoute
+}
+
+export const PDF_ROUTE = { FILE: 'file', DIALOG: 'dialog' } as const
+export type PdfRoute = (typeof PDF_ROUTE)[keyof typeof PDF_ROUTE]
+let exportPending = false
+
+/** Some webviews return before the dialog closes. Never tear down their print DOM early. */
+function printDialog(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      window.removeEventListener('afterprint', finish)
+      dismiss.remove()
+      resolve()
+    }
+    const dismiss = document.createElement('button')
+    dismiss.type = 'button'
+    dismiss.textContent = 'Finished with print dialog'
+    dismiss.setAttribute('aria-label', 'Print dialog closed: release print preview')
+    // Explicit recovery for webviews that never emit afterprint. Do not infer completion from a timer.
+    dismiss.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;padding:12px;background:#20242e;color:white;border:1px solid currentColor;border-radius:8px'
+    dismiss.className = 'print-dialog-dismiss'
+    dismiss.addEventListener('click', finish, { once: true })
+    window.addEventListener('afterprint', finish, { once: true })
+    document.body.append(dismiss)
+    try {
+      window.print()
+    } catch (error) {
+      window.removeEventListener('afterprint', finish)
+      dismiss.remove()
+      reject(error)
+    }
+  })
 }
 
 /** Page rules for this request; they follow the static ones in print.css and override them. */
@@ -23,12 +56,15 @@ function pageRules({ pageSize, bleedMm, marginMm }: PageRequest): string {
   return `@page { size: ${widthMm}mm ${heightMm}mm; margin: ${marginMm}mm; bleed: ${bleedMm}mm; marks: ${
     bleedMm > 0 ? 'crop cross' : 'none'
   }; }
-.pagedjs_page { background: var(--page-bg); color: var(--page-fg); }`
+.pagedjs_page { background: var(--page-bg); color: var(--page-fg); }
+@media print { .print-dialog-dismiss { display: none !important; } }`
 }
 
 /** A copy of the editor content, ready to be paginated. The editor itself is never touched. */
 function buildContent(request: PageRequest): HTMLElement {
-  const source = document.querySelector('.grimoire-content .ProseMirror')
+  const source = document.querySelector('[data-active-editor]')
+    ? document.querySelector('[data-active-editor="true"] .grimoire-content .ProseMirror')
+    : document.querySelector('.grimoire-content .ProseMirror')
   if (!source) throw new Error('Editor content not found')
 
   const content = document.createElement('div')
@@ -61,6 +97,8 @@ export async function paginate(
  * PDF. The container and Paged.js styles are always removed.
  */
 export async function exportPdf(request: ExportRequest): Promise<void> {
+  if (exportPending) throw new Error('A PDF export is already running')
+  exportPending = true
   const printRoot = document.createElement('div')
   printRoot.className = 'print-root'
   printRoot.dataset.theme = request.theme
@@ -68,11 +106,17 @@ export async function exportPdf(request: ExportRequest): Promise<void> {
   printRoot.append(pages)
   document.body.append(printRoot)
 
-  const previewer = new Previewer()
+  let previewer: Previewer | undefined
   try {
+    previewer = new Previewer()
     await paginate(previewer, request, pages)
     await document.fonts.ready
     document.body.classList.add('exporting')
+    if (request.route === PDF_ROUTE.DIALOG) {
+      await printDialog()
+      return
+    }
+    if (!request.outputPath) throw new Error('PDF output path is required')
     const { widthMm, heightMm } = PAGE_SIZES[request.pageSize]
     await invoke('export_pdf', {
       options: {
@@ -84,7 +128,11 @@ export async function exportPdf(request: ExportRequest): Promise<void> {
     })
   } finally {
     document.body.classList.remove('exporting')
-    previewer.polisher.destroy()
-    printRoot.remove()
+    try {
+      previewer?.polisher.destroy()
+    } finally {
+      printRoot.remove()
+      exportPending = false
+    }
   }
 }

@@ -15,6 +15,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::files::list_markdown_files,
             commands::export::export_pdf,
+            commands::export::pdf_export_route,
+            commands::archive::pack_project,
+            commands::archive::restore_project_archive,
             commands::workspace::restore_workspace,
             commands::workspace::rename_workspace,
             commands::workspace::open_folder,
