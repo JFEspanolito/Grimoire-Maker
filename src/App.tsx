@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/react'
 import { Toolbar } from './components/layout/Toolbar'
 import { EditorCanvas } from './components/editor/EditorCanvas'
 import { EditorToolbar } from './components/editor/EditorToolbar'
+import { PagePreview } from './components/editor/PagePreview'
 import { FileTree } from './components/sidebar/FileTree'
 import { ResearchPanel } from './components/sidebar/ResearchPanel'
 import { SnippetPalette } from './components/snippets/SnippetPalette'
@@ -18,6 +19,7 @@ import { watchSettings } from './lib/appState'
 export default function App() {
   const [editor, setEditor] = useState<Editor | null>(null)
   const theme = useSettingsStore((s) => s.theme)
+  const viewMode = useSettingsStore((s) => s.viewMode)
   const themes = useThemeStore((s) => s.themes)
   const reloadThemes = useThemeStore((s) => s.reload)
   const reloadTemplates = useTemplateStore((s) => s.reload)
@@ -63,10 +65,12 @@ export default function App() {
             <TemplateCatalog />
           </aside>
           <main className="flex min-w-0 flex-1 flex-col bg-neutral-800">
-            <EditorToolbar editor={editor} />
-            <div className="min-h-0 flex-1 overflow-auto">
+            {viewMode === 'edit' && <EditorToolbar editor={editor} />}
+            {/* Stays mounted while previewing: the preview paginates a copy of its content. */}
+            <div className={viewMode === 'edit' ? 'min-h-0 flex-1 overflow-auto' : 'hidden'}>
               <EditorCanvas onReady={setEditor} />
             </div>
+            {viewMode !== 'edit' && <PagePreview mode={viewMode} />}
           </main>
           <aside className="flex w-64 shrink-0 flex-col overflow-y-auto border-l border-white/10">
             <SnippetPalette editor={editor} />

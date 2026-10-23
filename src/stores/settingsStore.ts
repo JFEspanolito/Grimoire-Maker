@@ -19,7 +19,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   pageSize: 'a4',
   columns: 2,
   theme: 'parchment',
-  viewMode: 'single',
+  viewMode: 'edit',
   bleedMm: 3,
   marginMm: 15,
   setPageSize: (pageSize) => set({ pageSize }),

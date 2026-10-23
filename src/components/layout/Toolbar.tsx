@@ -5,14 +5,21 @@ import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
 import { useThemeStore } from '../../stores/themeStore'
 import { resolveTheme } from '../../lib/themes'
-import { PAGE_SIZES, type PageSizeId } from '../../types/document'
+import { PAGE_SIZES, type PageSizeId, type ViewMode } from '../../types/document'
 
 const btn = 'rounded px-2 py-1 text-sm hover:bg-white/10'
+
+const VIEWS: [ViewMode, string][] = [
+  ['edit', 'Edit'],
+  ['pages', 'Pages'],
+  ['spreads', 'Spreads'],
+]
 
 export function Toolbar() {
   const { openFile, saveFile } = useFileSystem()
   const exportPdf = usePrint()
-  const { pageSize, columns, theme, setPageSize, setColumns, setTheme } = useSettingsStore()
+  const { pageSize, columns, theme, viewMode, setPageSize, setColumns, setTheme, setViewMode } =
+    useSettingsStore()
   const { themes, dir: themesDir, errors: themeErrors } = useThemeStore()
   const title = useDocumentStore((s) => s.document.frontmatter.title)
   const dirty = useDocumentStore((s) => s.document.dirty)
@@ -54,6 +61,19 @@ export function Toolbar() {
       >
         <option value={1} className="text-black">1 column</option>
         <option value={2} className="text-black">2 columns</option>
+      </select>
+      <select
+        aria-label="View"
+        title="Edit the sheet, or preview the paginated pages and facing spreads"
+        value={viewMode}
+        onChange={(e) => setViewMode(e.target.value as ViewMode)}
+        className="rounded bg-transparent text-sm"
+      >
+        {VIEWS.map(([value, label]) => (
+          <option key={value} value={value} className="text-black">
+            {label}
+          </option>
+        ))}
       </select>
       <select
         aria-label="Theme"

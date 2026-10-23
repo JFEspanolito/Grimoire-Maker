@@ -15,7 +15,8 @@ export const PAGE_SIZES: Record<PageSizeId, PageSize> = {
   b5: { id: 'b5', label: 'B5 / Digest', widthMm: 176, heightMm: 250 },
 }
 
-export type ViewMode = 'single' | 'spread'
+/** `edit` is the editable sheet; `pages` and `spreads` are the paginated, read-only layouts. */
+export type ViewMode = 'edit' | 'pages' | 'spreads'
 
 /** Theme file name without `.css`; built-ins plus any mod in the user themes folder. */
 export type ThemeId = string
