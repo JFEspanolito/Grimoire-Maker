@@ -1,12 +1,8 @@
 import { useState } from 'react'
-import { useDocumentStore } from '../../stores/documentStore'
-import { useSettingsStore } from '../../stores/settingsStore'
 import { useTemplateStore } from '../../stores/templateStore'
-import { serializeDocument } from '../../lib/frontmatter'
 import { exportTemplateZip, importTemplateZip } from '../../lib/templateActions'
 import type { Template } from '../../lib/templates'
-import { isTauri } from '../../hooks/useFileSystem'
-import { PAGE_SIZES } from '../../types/document'
+import { isTauri, useFileSystem } from '../../hooks/useFileSystem'
 
 function TemplateList({
   items,
@@ -43,7 +39,7 @@ type Notice = { kind: 'ok' | 'error'; text: string }
 
 /** Official presets plus community templates dropped into (or imported as .zip into) the templates folder. */
 export function TemplateCatalog() {
-  const loadFromRaw = useDocumentStore((s) => s.loadFromRaw)
+  const { applyTemplate } = useFileSystem()
   const { templates, dir, errors, reload } = useTemplateStore()
   const [open, setOpen] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -72,15 +68,8 @@ export function TemplateCatalog() {
   const exportZip = (t: Template) =>
     run(async () => ((await exportTemplateZip(t)) ? `Exported "${t.label}"` : null))
 
-  const apply = (t: Template) => {
-    loadFromRaw(null, serializeDocument(t.frontmatter, t.body))
-    // The toolbar reads these settings, so a template's page setup must reach them too.
-    const { pageSize, columns, theme } = t.frontmatter
-    const settings = useSettingsStore.getState()
-    if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
-    if (columns === 1 || columns === 2) settings.setColumns(columns)
-    if (typeof theme === 'string') settings.setTheme(theme)
-  }
+  const apply = (t: Template) => void run(async () =>
+    (await applyTemplate(t)) ? `Applied "${t.label}"` : null)
 
   return (
     <div className="border-t border-white/10 p-3">
@@ -95,7 +84,7 @@ export function TemplateCatalog() {
       </button>
       {open && (
         <div className="mt-2 flex flex-col gap-2">
-          <TemplateList items={official} onApply={apply} />
+          <TemplateList items={official} onApply={apply} onExport={(t) => void exportZip(t)} />
           {community.length > 0 && (
             <>
               <h3 className="text-xs uppercase tracking-wide text-white/40">Community</h3>

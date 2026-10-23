@@ -1,9 +1,10 @@
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readFile, stat, writeFile } from '@tauri-apps/plugin-fs'
-import { collectPackage, installPackage, type PackageFs } from './templateIo'
+import { collectPackage, createTemplateDocuments, installPackage, type PackageFs } from './templateIo'
 import { LIMITS, PackageError, createTemplateZip } from './templatePackage'
 import { OFFICIAL_TEMPLATES, type Template } from './templates'
 import { ensureConfigSubdir } from './themes'
+import { serializeDocument } from './frontmatter'
 
 const tauriFs: PackageFs = {
   readFile,
@@ -38,14 +39,19 @@ export async function importTemplateZip(): Promise<string | null> {
 /** Saves a community template as a `.zip` the user can share. Returns false if cancelled. */
 export async function exportTemplateZip(template: Template): Promise<boolean> {
   const { location } = template
-  if (!location) throw new PackageError('Only community templates can be exported')
-
   const files =
-    location.kind === 'package'
+    location?.kind === 'package'
       ? await collectPackage(tauriFs, location.path)
-      : { 'index.md': await readFile(location.path) }
+      : { 'index.md': location?.kind === 'file'
+        ? await readFile(location.path)
+        : new TextEncoder().encode(serializeDocument(template.frontmatter, template.body)) }
   const target = await save({ defaultPath: `${template.id}.zip`, filters: ZIP_FILTER })
   if (!target) return false
   await writeFile(target, createTemplateZip(files))
   return true
+}
+
+/** Writes the template's starting document, chapters and assets into the active project's Draft. */
+export async function applyTemplateFiles(template: Template, workspaceRoot: string): Promise<string> {
+  return createTemplateDocuments(tauriFs, `${workspaceRoot}/Draft`, template)
 }

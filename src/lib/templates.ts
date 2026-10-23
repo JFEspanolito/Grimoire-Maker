@@ -9,6 +9,7 @@ import {
   type ThemeInfo,
 } from './themes'
 import type { Frontmatter } from '../types/document'
+import { readTemplateSnippets, type TemplateSnippet } from './templateSnippets'
 
 export interface Template {
   id: string
@@ -16,6 +17,7 @@ export interface Template {
   frontmatter: Frontmatter
   body: string
   builtin: boolean
+  snippets?: TemplateSnippet[]
   /** Where a community template lives on disk, so it can be exported. */
   location?: { kind: 'package' | 'file'; path: string }
 }
@@ -110,12 +112,18 @@ export async function loadUserTemplates(takenThemeIds: Set<string>): Promise<Use
       }
 
       seen.add(id)
+      const packageRoot = `${dir}/${id}`
+      const packageSnippets = isPackage
+        ? await readTemplateSnippets({ exists, readDir, readTextFile }, packageRoot, id, label)
+        : { snippets: [], errors: [] }
+      errors.push(...packageSnippets.errors)
       templates.push({
         id,
         label,
         frontmatter,
         body,
         builtin: false,
+        snippets: packageSnippets.snippets,
         location: isPackage
           ? { kind: 'package', path: `${dir}/${id}` }
           : { kind: 'file', path: `${dir}/${entry.name}` },

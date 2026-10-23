@@ -1,17 +1,18 @@
-Objective: spec module 4.3 remainder: community template packages as .zip, auxiliary chapters and custom snippets. Branch: main (commit per task). Delivery: ask-on-risk, no PR. Test runner: vitest (`pnpm test`); also `tsc -p tsconfig.app.json --noEmit`, `oxlint src`, `vite build`.
+Objective: spec module 4.3 remainder: community template packages as .zip, auxiliary chapters and custom snippets. Branch: feat/template-packages (commit per task). Delivery: ask-on-risk, no PR. Test runner: vitest (`pnpm test`); also `tsc -p tsconfig.app.json --noEmit`, `oxlint src`, `vite build`.
 
 ## Specs
 - S1: "Soporte para importar/exportar paquetes `.zip` o carpetas locales con la siguiente estructura:" (folders already work; this adds .zip import and export).
 - S2: "Archivo de estilos base (`theme.css`)." (already supported for folders; must work from a .zip)
 - S3: "Estructura inicial de documentos (`index.md`, capítulos auxiliares)."
 - S4: "Colección de snippets propios."
-- Assumptions (mine, not from the user): a package is `index.md` + optional `theme.css`, `chapters/*.md`, `snippets/*.md`, `assets/*`; applying a package that has chapters creates a project folder in the open workspace; imported zips are untrusted, so path traversal, size bombs, unknown file types and remote CSS references are rejected.
+- Assumptions (mine, not from the user): a package is `index.md` + optional `theme.css`, `chapters/*.md`, `snippets/*.md`, `assets/*`; applying a package creates a uniquely named folder under the open project's `Draft` so existing chapters are not overwritten; imported zips are untrusted, so path traversal, size bombs, unknown file types and remote CSS references are rejected.
 
 ## Tasks
 - T1 | S1 | inline | status: done | commit: a379397 | Zip reading/writing and package validation (pure, tested)
 - T2 | S1,S2 | inline | status: done (import/export dialogs not exercised in a running app) | commit: 1c4dce9 | Import .zip and export a package from the catalog (fs wiring, UI)
-- T3 | S3 | inline | status: pending | commit: - | Auxiliary chapters: loader and "create project" on apply
-- T4 | S4 | inline | status: pending | commit: - | Package snippets in the palette (markdown insertion)
+- T3 | S3 | inline | status: done | commit: pending | Auxiliary chapters materialized under unique Draft folder on apply
+- T4 | S4 | inline | status: done | commit: pending | Package Markdown snippets loaded into collapsible palette groups
+- T5 | S3,S4 | inline | status: pending | commit: - | Run integration checks and fix observed bugs after implementation
 
 ## Log
 - L1 (2026-10-22): "sí," (continue with the next module; the previous message listed template .zip packages first)
@@ -25,3 +26,7 @@ Objective: spec module 4.3 remainder: community template packages as .zip, auxil
 - L9: not changed on purpose: SVG stays an allowed type (only safe because it is rendered through <img>/blob URLs; scripts do not run there); index.md Markdown/HTML is not scanned for remote images; hand-made folders in themes/ and templates/ are not CSS-guarded (only zip imports are). Recheck limited to the two blockers: see L10.
 - L10: recheck by the same independent verifier against 05b0bc2, limited to the two blockers: Blocker 1 PASS (1.5 MB zip of 1.5 GB zeros: refused in 140 ms, peak RSS +90 MB, was 2.6 s and +3963 MB). Blocker 2 PASS (all 22 previously accepted CSS forms now rejected; commented-out @import correctly accepted; url(https) in a custom property still rejected on purpose). Lying-size variant (all local-header sizes zeroed) did not throw: I reproduced it myself, fflate then yields empty files (index.md:0, assets/a.txt:0, 0 bytes inflated), so there is no memory risk but a hostile or corrupt zip can produce a silently empty package. Left as an advisory. Verifier scratch directory removed (junction first, workspace node_modules intact).
 - L11: T3 (auxiliary chapters) and T4 (package snippets) are NOT started; the user asked for the explorer binder next (see odd/tasks/explorer-binder.md).
+- L12 (2026-10-23): "haz commit, luego ejecuta esto   3. Plantillas (4.3): faltan importar/exportar .zip, capítulos auxiliares y snippets propios."
+- L13 (2026-10-23): "luego bugs, al final". The already-implemented zip import/export was verified in code before work on T3/T4; bug fixes follow feature work. Engram mirror pending because the runtime session identity is unavailable.
+- L14: The binder introduced after the original T3 assumption made a nested project folder inappropriate. T3 will materialize `index.md`, `chapters/`, and `assets/` inside a unique `Draft/<template-id>/` folder; package snippets and theme remain installed with the template.
+- L15: T3/T4 RED: createTemplateDocuments and readTemplateSnippets did not exist. GREEN: `pnpm test` 144/144, `pnpm build` passed, `pnpm lint` only 3 existing warnings, `git diff --check` passed. Official presets now export an `index.md` zip; package snippets round-trip with zip import/export. Desktop dialogs were not exercised in a running Tauri window. T5 bug pass remains.

@@ -36,10 +36,36 @@ templates/
   my-adventure/
     index.md      # frontmatter + starting document (required)
     theme.css     # optional; registered as theme "my-adventure"
+    chapters/
+      chapter-1.md
+    snippets/
+      encounter.md
+    assets/
+      map.png
 ```
 
 `index.md` frontmatter may set `pageSize` (`a4`, `letter`, `b5`), `columns` (1 or 2)
 and `theme`, plus `templateName` for the label shown in the catalog.
 If the package has a `theme.css` and no `theme:` key, the package theme is used.
 
-Not supported yet: `.zip` import/export, auxiliary chapter files and custom snippets.
+Drop a package folder into `templates/`, or use **Templates → Import .zip…**.
+The export button beside any template writes a `.zip` containing its package files;
+official presets export as a package with `index.md`.
+
+Applying a template with an open project creates a unique `Draft/<template-id>/`
+folder containing `index.md`, auxiliary `chapters/*.md`, and `assets/*`. Existing
+project files are never overwritten. Without an open project, single-document
+presets can still be applied to the unsaved editor, but a package needs a project.
+
+Each `snippets/*.md` file appears in the Snippets palette under the template's
+name as soon as the template loads; applying the template is not required. The
+file name is the default snippet label. Optional frontmatter can supply a label:
+
+```md
+---
+snippetName: Random encounter
+---
+## Encounter
+
+Roll 1d6.
+```

@@ -14,6 +14,9 @@ import {
   type AppState,
 } from '../lib/appState'
 import { remapPath, setupBinder, splitBinder } from '../lib/binder'
+import { serializeDocument } from '../lib/frontmatter'
+import { applyTemplateFiles } from '../lib/templateActions'
+import type { Template } from '../lib/templates'
 import { emitPluginEvent } from '../plugins/plugin-manager'
 import { PAGE_SIZES, type FileNode } from '../types/document'
 
@@ -257,6 +260,30 @@ export function useFileSystem() {
     await remember((state) => ({ ...state, lastFile: next }))
   }), [loadFromRaw, persistCurrentDocument, remember])
 
+  const applyTemplate = useCallback((template: Template) => runFileAction(async (): Promise<boolean> => {
+    const root = useDocumentStore.getState().workspaceRoot
+    if (!root && template.location?.kind === 'package') {
+      throw new Error('Open a project folder to apply a package template')
+    }
+    if (useDocumentStore.getState().document.dirty && !(await persistCurrentDocument())) return false
+
+    const path = root ? await applyTemplateFiles(template, root) : null
+    const raw = serializeDocument(template.frontmatter, template.body)
+    loadFromRaw(path, raw)
+    if (path) {
+      useTabStore.getState().open(path, true)
+      await refreshTree()
+      await remember((state) => ({ ...state, lastFile: path }))
+    } else useTabStore.getState().reset(null)
+
+    const { pageSize, columns, theme } = template.frontmatter
+    const settings = useSettingsStore.getState()
+    if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
+    if (columns === 1 || columns === 2) settings.setColumns(columns)
+    if (typeof theme === 'string') settings.setTheme(theme)
+    return true
+  }), [loadFromRaw, persistCurrentDocument, refreshTree, remember])
+
   const renameWorkspace = useCallback((name: string) => runFileAction(async () => {
     if (!isTauri()) throw new Error('Project renaming is available in the desktop app')
     const current = useDocumentStore.getState()
@@ -286,6 +313,7 @@ export function useFileSystem() {
     openFile,
     saveFile,
     closeTab,
+    applyTemplate,
     createFile,
     createFolder,
     renameEntry,

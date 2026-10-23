@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { strFromU8, strToU8, zipSync } from 'fflate'
 import { PackageError, createTemplateZip } from './templatePackage'
-import { collectPackage, installPackage, type PackageFs } from './templateIo'
+import { collectPackage, createTemplateDocuments, installPackage, type PackageFs } from './templateIo'
 
 /** In-memory filesystem that records the order of writes. */
 class FakeFs implements PackageFs {
@@ -53,6 +53,7 @@ const sample = (): Uint8Array =>
     'index.md': strToU8('---\ntitle: T\n---\n# Hi\n'),
     'theme.css': strToU8("[data-theme='x'] {}"),
     'chapters/one.md': strToU8('# One'),
+    'snippets/encounter.md': strToU8('## Encounter'),
     'assets/art/map.png': new Uint8Array([9, 8, 7]),
   })
 
@@ -69,6 +70,7 @@ describe('installPackage', () => {
       `${DIR}/My-Adventure/assets/art/map.png`,
       `${DIR}/My-Adventure/chapters/one.md`,
       `${DIR}/My-Adventure/index.md`,
+      `${DIR}/My-Adventure/snippets/encounter.md`,
       `${DIR}/My-Adventure/theme.css`,
     ])
     expect(strFromU8(fs.files.get(`${DIR}/My-Adventure/chapters/one.md`)!)).toBe('# One')
@@ -121,5 +123,30 @@ describe('collectPackage', () => {
     await installPackage(again, DIR, 'copy.zip', createTemplateZip(collected))
     expect(Array.from(again.files.get(`${DIR}/copy/assets/art/map.png`)!)).toEqual([9, 8, 7])
     expect(again.files.size).toBe(fs.files.size)
+  })
+})
+
+describe('createTemplateDocuments', () => {
+  it('copies index, auxiliary chapters and assets into a unique Draft folder without copying package snippets', async () => {
+    const packageRoot = `${DIR}/pack`
+    fs.files.set(`${packageRoot}/index.md`, strToU8('# Start'))
+    fs.files.set(`${packageRoot}/chapters/one.md`, strToU8('# One'))
+    fs.files.set(`${packageRoot}/assets/map.png`, new Uint8Array([1, 2]))
+    fs.files.set(`${packageRoot}/snippets/encounter.md`, strToU8('# Encounter'))
+    fs.files.set(`${packageRoot}/theme.css`, strToU8('body {}'))
+    fs.dirs.add('/project/Draft/pack')
+
+    const index = await createTemplateDocuments(fs, '/project/Draft', {
+      id: 'pack', label: 'Pack', frontmatter: { title: 'Adventure' }, body: '# Start', builtin: false,
+      location: { kind: 'package', path: packageRoot },
+    })
+
+    expect(index).toBe('/project/Draft/pack-1/index.md')
+    expect(fs.writes.at(-1)).toBe(index)
+    expect(strFromU8(fs.files.get('/project/Draft/pack-1/chapters/one.md')!)).toBe('# One')
+    expect(Array.from(fs.files.get('/project/Draft/pack-1/assets/map.png')!)).toEqual([1, 2])
+    expect(fs.files.has('/project/Draft/pack-1/snippets/encounter.md')).toBe(false)
+    expect(fs.files.has('/project/Draft/pack-1/theme.css')).toBe(false)
+    expect(fs.files.has('/project/Draft/pack/index.md')).toBe(false)
   })
 })

@@ -5,6 +5,8 @@ import {
   packageIdFromFileName,
   readTemplateZip,
 } from './templatePackage'
+import { serializeDocument } from './frontmatter'
+import type { Template } from './templates'
 
 /** The filesystem operations package import and export need; injectable so they can be tested. */
 export interface PackageFs {
@@ -76,4 +78,32 @@ export async function collectPackage(fs: PackageFs, root: string): Promise<Recor
 
   await walk(root, '')
   return out
+}
+
+/** Materializes a template in Draft without replacing any existing project document. */
+export async function createTemplateDocuments(fs: PackageFs, draft: string, template: Template): Promise<string> {
+  if (!/^[A-Za-z0-9_-]+$/.test(template.id)) throw new PackageError('Invalid template id')
+  let folder = `${draft}/${template.id}`
+  for (let suffix = 1; await fs.exists(folder); suffix++) folder = `${draft}/${template.id}-${suffix}`
+
+  const packageFiles = template.location?.kind === 'package'
+    ? await collectPackage(fs, template.location.path)
+    : {}
+  const documents = Object.fromEntries(Object.entries(packageFiles).filter(([name]) =>
+    name.startsWith('chapters/') || name.startsWith('assets/')))
+  documents['index.md'] = new TextEncoder().encode(serializeDocument(template.frontmatter, template.body))
+
+  const folders = new Set<string>([folder])
+  for (const name of Object.keys(documents)) {
+    for (let at = name.indexOf('/'); at !== -1; at = name.indexOf('/', at + 1)) {
+      folders.add(`${folder}/${name.slice(0, at)}`)
+    }
+  }
+  for (const path of [...folders].sort((a, b) => a.length - b.length)) await fs.mkdir(path)
+  for (const [name, bytes] of Object.entries(documents).sort(([a], [b]) => a.localeCompare(b))) {
+    if (name !== 'index.md') await fs.writeFile(`${folder}/${name}`, bytes)
+  }
+  const index = `${folder}/index.md`
+  await fs.writeFile(index, documents['index.md'])
+  return index
 }

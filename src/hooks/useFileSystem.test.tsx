@@ -5,6 +5,7 @@ import { open, save } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { invoke } from '@tauri-apps/api/core'
 import { loadAppState, updateAppState, type AppState } from '../lib/appState'
+import { applyTemplateFiles } from '../lib/templateActions'
 import { useDocumentStore } from '../stores/documentStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useTabStore } from '../stores/tabStore'
@@ -25,6 +26,7 @@ vi.mock('../lib/appState', async (importOriginal) => ({
   loadAppState: vi.fn(),
   updateAppState: vi.fn(),
 }))
+vi.mock('../lib/templateActions', () => ({ applyTemplateFiles: vi.fn() }))
 
 const emptyState = (): AppState => ({ lastWorkspace: null, recentWorkspaces: [], lastFile: null, settings: {} })
 let state: AppState
@@ -52,6 +54,7 @@ beforeEach(async () => {
   vi.mocked(readTextFile).mockResolvedValue('# Next chapter')
   vi.mocked(writeTextFile).mockResolvedValue(undefined)
   vi.mocked(loadAppState).mockImplementation(async () => state)
+  vi.mocked(applyTemplateFiles).mockResolvedValue('/workspace/Draft/pack/index.md')
   vi.mocked(updateAppState).mockImplementation(async (change) => (state = change(state)))
   vi.mocked(exists).mockImplementation(async (path) => directories.has(String(path)))
   vi.mocked(mkdir).mockImplementation(async (path) => { directories.add(String(path)) })
@@ -264,5 +267,34 @@ describe('project rename', () => {
     await expect(actions.renameWorkspace('Existing')).rejects.toThrow('Destination already exists')
     expect(useDocumentStore.getState().workspaceRoot).toBe('/workspace')
     expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/chapter.md')
+  })
+})
+
+describe('applying templates', () => {
+  const template = {
+    id: 'pack', label: 'Pack', frontmatter: { title: 'Pack' }, body: '# Starting chapter', builtin: false,
+    location: { kind: 'package' as const, path: '/config/templates/pack' },
+  }
+
+  it('creates project documents and opens the index without Save As for a clean editor', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+
+    expect(await actions.applyTemplate(template)).toBe(true)
+
+    expect(applyTemplateFiles).toHaveBeenCalledWith(template, '/workspace')
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/pack/index.md')
+    expect(useDocumentStore.getState().document.body).toBe('# Starting chapter')
+    expect(save).not.toHaveBeenCalled()
+  })
+
+  it('does not create files when saving an edited unsaved document is cancelled', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().setBody('# Personal notes')
+    vi.mocked(save).mockResolvedValueOnce(null)
+
+    expect(await actions.applyTemplate(template)).toBe(false)
+
+    expect(applyTemplateFiles).not.toHaveBeenCalled()
+    expect(useDocumentStore.getState().document.body).toBe('# Personal notes')
   })
 })

@@ -33,6 +33,11 @@ afterEach(() => {
 })
 
 describe('snippet catalog', () => {
+  it('parses an imported Markdown snippet when inserting it', () => {
+    const e = createEditor()
+    expect(e.commands.insertContent('## Custom encounter\n\nRoll 1d6.')).toBe(true)
+    expect(markdownOf(e)).toContain('## Custom encounter')
+  })
   it('groups the built-in snippets under Dungeons and Dragons', () => {
     expect(SNIPPET_GROUPS).toContain('Dungeons and Dragons')
     expect(SNIPPETS.every((snippet) => SNIPPET_GROUPS.includes(snippet.group))).toBe(true)
