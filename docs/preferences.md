@@ -4,6 +4,8 @@ Settings → Preferences selects directories for Plugins, Snippets, Templates, a
 
 No restart is required. After a successful path change, the application reloads themes, templates, and snippets in place. Reload failures are shown separately from successful path persistence. Plugin Path remains storage-only until executable plugin support is introduced.
 
+Visual ruler guides also persist in `settings.rulerGuides`. See [Ruler guides](ruler.md) for adding, moving, and removing them. Older settings without that optional field remain supported.
+
 On first use, existing `library-paths.json` and `state.json.settings` are copied into `setting.json`. Legacy files remain intact. Once created, `setting.json` is authoritative: stale legacy values are never merged back, and malformed settings are reported rather than silently replaced. `state.json` remains responsible for workspace/session history; its legacy settings copy is retained but no longer updated. Existing Mod Manager activation data in `mods.json` is unchanged.
 
 Defaults are `Mods/Plugins`, `Mods/Snippets`, `Mods/Templates`, and `themes` under application configuration. Shipped Markdown examples initialize only the default Mods library; selecting a custom directory does not seed extra examples there. Mod activation IDs retain their category/package identity when paths change. ZIP template imports use the configured Templates directory.

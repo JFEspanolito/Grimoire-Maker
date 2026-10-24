@@ -35,10 +35,21 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
     // Each run paginates into its own stage: a superseded run keeps writing to a
     // detached element instead of mixing its pages into the current ones.
     const stage = document.createElement('div')
-    const previewer = new Previewer()
+    let previewer: Previewer | undefined
     let cancelled = false
+    let running = false
+
+    const release = () => {
+      // Page resize observers must stop before styles or page DOM disappear.
+      previewer?.chunker.removePages()
+      // Paged.js creates styleEl during preview(), not in its constructor.
+      if (previewer?.polisher.styleEl) previewer.polisher.destroy()
+      stage.remove()
+    }
 
     const timer = window.setTimeout(() => {
+      previewer = new Previewer()
+      running = true
       setStatus({ kind: 'rendering' })
       container.append(stage)
       paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm }, stage).then(
@@ -48,14 +59,18 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
         (e: unknown) => {
           if (!cancelled) setStatus({ kind: 'error', message: e instanceof Error ? e.message : String(e) })
         },
-      )
+      ).finally(() => {
+        running = false
+        if (cancelled) release()
+      })
     }, DEBOUNCE_MS)
 
     return () => {
       cancelled = true
       window.clearTimeout(timer)
-      previewer.polisher.destroy()
       stage.remove()
+      // An in-flight run still owns its styles; release them once it settles.
+      if (!running) release()
     }
   }, [pageSize, columns, activeTheme, bleedMm, marginMm, body, path])
 

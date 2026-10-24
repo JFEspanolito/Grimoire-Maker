@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { PageSizeId, ThemeId, ViewMode } from '../types/document'
+import type { RulerGuide } from '../types/ruler'
 
 interface SettingsState {
   pageSize: PageSizeId
@@ -9,6 +10,8 @@ interface SettingsState {
   /** Print bleed in millimetres. */
   bleedMm: number
   marginMm: number
+  rulerGuides: RulerGuide[]
+  setRulerGuides: (rulerGuides: RulerGuide[]) => void
   setPageSize: (pageSize: PageSizeId) => void
   setColumns: (columns: 1 | 2) => void
   setTheme: (theme: ThemeId) => void
@@ -22,6 +25,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   viewMode: 'edit',
   bleedMm: 3,
   marginMm: 15,
+  rulerGuides: [],
+  setRulerGuides: (rulerGuides) => set({ rulerGuides }),
   setPageSize: (pageSize) => set({ pageSize }),
   setColumns: (columns) => set({ columns }),
   setTheme: (theme) => set({ theme }),

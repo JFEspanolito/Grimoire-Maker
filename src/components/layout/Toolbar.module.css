@@ -3,9 +3,5 @@
 .tools { display: flex; gap: .35rem; margin-left: auto; }
 .button { border-radius: .25rem; padding: .25rem .5rem; font-size: .8rem; white-space: nowrap; }
 .button:hover:not(:disabled), .button[aria-pressed='true'] { background: #ffffff12; }
-.field { display: flex; align-items: center; gap: .4rem; color: #bcb7ac; font-size: .75rem; }
-.field select { border-radius: .25rem; padding: .25rem .4rem; background: #ffffff0c; color: #f0eee9; }
-.field select:hover { background: #ffffff18; }
-.field option { background: #272623; color: #f0eee9; }
 .dirty { color: #e1bd78; }
 .toolbar :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }

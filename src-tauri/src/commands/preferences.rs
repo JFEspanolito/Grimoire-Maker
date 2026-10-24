@@ -12,6 +12,8 @@ use tauri_plugin_fs::FsExt;
 
 static CHANGES: Mutex<()> = Mutex::new(());
 const PREFERENCES_FILE: &str = "setting.json";
+// Bound file size, not the number of visual guides. Reject oversized writes before replacement.
+const MAX_PREFERENCES_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -111,12 +113,39 @@ pub struct UserSettings {
     columns: Option<u8>,
     #[serde(skip_serializing_if = "Option::is_none")]
     theme: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ruler_guides: Option<Vec<RulerGuide>>,
+}
+
+#[derive(Clone, Deserialize, Serialize, PartialEq, Debug)]
+#[serde(rename_all = "lowercase")]
+enum GuideAxis {
+    Row,
+    Column,
+}
+
+#[derive(Clone, Deserialize, Serialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RulerGuide {
+    id: String,
+    axis: GuideAxis,
+    position_mm: f64,
 }
 
 impl UserSettings {
     fn validate(&self) -> Result<(), String> {
         if self.columns.is_some_and(|value| value != 1 && value != 2) {
             return Err("Columns must be 1 or 2".into());
+        }
+        let mut ids = std::collections::HashSet::new();
+        for guide in self.ruler_guides.iter().flatten() {
+            if guide.id.is_empty()
+                || !ids.insert(&guide.id)
+                || !guide.position_mm.is_finite()
+                || guide.position_mm < 0.0
+            {
+                return Err("Guides require unique IDs and finite non-negative positions".into());
+            }
         }
         Ok(())
     }
@@ -137,8 +166,16 @@ fn read_json(path: &Path) -> Result<Option<serde_json::Value>, String> {
         Err(e) => Err(e.to_string()),
         Ok(_) => {
             let mut handle = open_checked(path, false)?;
-            if handle.metadata().map_err(|e| e.to_string())?.len() > 64 * 1024 {
-                return Err("Preferences exceed 64 KiB".into());
+            let maximum = if path
+                .file_name()
+                .is_some_and(|name| name == PREFERENCES_FILE)
+            {
+                MAX_PREFERENCES_BYTES
+            } else {
+                64 * 1024
+            };
+            if handle.metadata().map_err(|e| e.to_string())?.len() > maximum as u64 {
+                return Err("Preferences file exceeds the supported size".into());
             }
             let mut raw = String::new();
             handle.read_to_string(&mut raw).map_err(|e| e.to_string())?;
@@ -217,9 +254,12 @@ fn read_paths(config: &Path) -> Result<LibraryPaths, String> {
     Ok(paths)
 }
 
-fn save_settings_in(config: &Path, settings: UserSettings) -> Result<(), String> {
+fn save_settings_in(config: &Path, mut settings: UserSettings) -> Result<(), String> {
     settings.validate()?;
     let mut preferences = read_preferences(config)?;
+    if settings.ruler_guides.is_none() {
+        settings.ruler_guides = preferences.settings.ruler_guides.clone();
+    }
     preferences.settings = settings;
     publish_preferences(config, &preferences)
 }
@@ -264,6 +304,10 @@ fn publish(config: &Path, paths: &LibraryPaths) -> Result<(), String> {
 fn publish_preferences(config: &Path, preferences: &Preferences) -> Result<(), String> {
     let mut locks = Vec::new();
     lock_ancestors(config, &mut locks)?;
+    let raw = serde_json::to_vec_pretty(preferences).map_err(|e| e.to_string())?;
+    if raw.len() > MAX_PREFERENCES_BYTES {
+        return Err("Preferences file exceeds the supported size".into());
+    }
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| e.to_string())?
@@ -274,7 +318,6 @@ fn publish_preferences(config: &Path, preferences: &Preferences) -> Result<(), S
         .create_new(true)
         .open(&temporary)
         .map_err(|e| e.to_string())?;
-    let raw = serde_json::to_vec_pretty(preferences).map_err(|e| e.to_string())?;
     output
         .write_all(&raw)
         .and_then(|_| output.sync_all())
@@ -417,6 +460,75 @@ pub async fn change_library_path(
 #[cfg(test)]
 mod preferences_tests {
     use super::*;
+    #[test]
+    fn preferences_visual_guides_roundtrip_and_appearance_updates_preserve_them() {
+        let config = scratch("guides");
+        let settings: UserSettings = serde_json::from_value(serde_json::json!({
+            "theme": "modern", "rulerGuides": [
+                { "id": "row-1", "axis": "row", "positionMm": 42.5 },
+                { "id": "column-1", "axis": "column", "positionMm": 80 }
+            ]
+        }))
+        .unwrap();
+        save_settings_in(&config, settings.clone()).unwrap();
+        assert_eq!(read_preferences(&config).unwrap().settings, settings);
+        save_settings_in(
+            &config,
+            UserSettings {
+                theme: Some("sci-fi".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let saved = serde_json::to_value(read_preferences(&config).unwrap().settings).unwrap();
+        assert_eq!(saved["rulerGuides"].as_array().unwrap().len(), 2);
+        assert_eq!(saved["theme"], "sci-fi");
+    }
+    #[test]
+    fn preferences_many_guides_and_rejected_changes_preserve_saved_settings() {
+        let config = scratch("many-guides");
+        let guides = (0..1000)
+            .map(|index| RulerGuide {
+                id: format!("guide-{index}"),
+                axis: GuideAxis::Row,
+                position_mm: index as f64 / 10.0,
+            })
+            .collect();
+        let settings = UserSettings {
+            ruler_guides: Some(guides),
+            ..Default::default()
+        };
+        save_settings_in(&config, settings.clone()).unwrap();
+        assert_eq!(read_preferences(&config).unwrap().settings, settings);
+        let original = fs::read(config.join(PREFERENCES_FILE)).unwrap();
+        let invalid = UserSettings {
+            ruler_guides: Some(vec![RulerGuide {
+                id: "bad".into(),
+                axis: GuideAxis::Column,
+                position_mm: -1.0,
+            }]),
+            ..Default::default()
+        };
+        assert!(save_settings_in(&config, invalid).is_err());
+        let oversized = UserSettings {
+            theme: Some("a".repeat(MAX_PREFERENCES_BYTES)),
+            ..Default::default()
+        };
+        assert!(save_settings_in(&config, oversized).is_err());
+        assert_eq!(fs::read(config.join(PREFERENCES_FILE)).unwrap(), original);
+        save_settings_in(
+            &config,
+            UserSettings {
+                ruler_guides: Some(vec![]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            read_preferences(&config).unwrap().settings.ruler_guides,
+            Some(vec![])
+        );
+    }
     fn scratch(name: &str) -> PathBuf {
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -460,6 +572,7 @@ mod preferences_tests {
             theme: Some("modern".into()),
             page_size: Some("a4".into()),
             columns: Some(2),
+            ..Default::default()
         };
         save_settings_in(&config, settings.clone()).unwrap();
         assert_eq!(read_paths(&config).unwrap(), initial);
@@ -745,6 +858,7 @@ mod preferences_tests {
                         theme: Some("sci-fi".into()),
                         columns: Some(2),
                         page_size: Some("letter".into()),
+                        ..Default::default()
                     },
                 )
                 .unwrap();

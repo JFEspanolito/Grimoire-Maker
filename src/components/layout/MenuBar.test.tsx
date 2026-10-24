@@ -81,6 +81,30 @@ it('makes file creation and opening folders discoverable in File', async () => {
   await act(async () => root.unmount())
 })
 
+it('keeps page setup only in View and omits repeated application branding', async () => {
+  const initial = useSettingsStore.getState()
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><Toolbar /></>))
+    const nav = container.querySelector('nav')!
+    const view = Array.from(nav.querySelectorAll('details')).find((menu) => menu.querySelector('summary')?.textContent === 'View')!
+    const size = view.querySelector<HTMLSelectElement>('[aria-label="Page size"]')
+    const columns = view.querySelector<HTMLSelectElement>('[aria-label="Columns"]')
+    expect(size).not.toBeNull()
+    expect(columns).not.toBeNull()
+    expect(container.querySelector('header select')).toBeNull()
+    expect(nav.querySelector('img')).toBeNull()
+    expect(nav.textContent).not.toContain('GRIMOIRE MAKER')
+    await act(async () => { size!.value = 'letter'; size!.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => { columns!.value = '1'; columns!.dispatchEvent(new Event('change', { bubbles: true })) })
+    expect(useSettingsStore.getState()).toMatchObject({ pageSize: 'letter', columns: 1 })
+  } finally {
+    await act(async () => root.unmount())
+    useSettingsStore.setState({ pageSize: initial.pageSize, columns: initial.columns })
+  }
+})
+
 it('keeps the new project dialog open on picker cancellation or error and closes after creation', async () => {
   const showModal = vi.fn()
   const originalShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')

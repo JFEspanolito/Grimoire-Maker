@@ -2,6 +2,7 @@ import { appConfigDir, join } from '@tauri-apps/api/path'
 import { exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { PageSizeId, ThemeId } from '../types/document'
+import type { RulerGuide } from '../types/ruler'
 import { saveSettings } from './preferences'
 import { useSessionStore } from '../stores/sessionStore'
 
@@ -9,6 +10,7 @@ export interface PersistedSettings {
   pageSize?: PageSizeId
   columns?: 1 | 2
   theme?: ThemeId
+  rulerGuides?: RulerGuide[]
 }
 
 /** What survives a restart. Stored as `state.json` in the app config folder. */
@@ -96,8 +98,8 @@ export const forgetWorkspace =
 /** Saves page setup whenever it changes; returns the unsubscribe function. */
 export function watchSettings(): () => void {
   return useSettingsStore.subscribe((s, prev) => {
-    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme) return
-    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme }).catch((error: unknown) => {
+    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides) return
+    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides }).catch((error: unknown) => {
       useSessionStore.getState().setWorkspaceError(`Could not save preferences: ${error instanceof Error ? error.message : String(error)}`)
     })
   })

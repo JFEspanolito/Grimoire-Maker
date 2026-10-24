@@ -17,10 +17,11 @@ import { useFileSystem } from '../../hooks/useFileSystem'
 import { splitBinder } from '../../lib/binder'
 import type { FileNode } from '../../types/document'
 import { useExplorerStore } from '../../stores/explorerStore'
+import { documentLabel } from '../../lib/documentLabel'
 
 type Editing =
   | { kind: 'new-file' | 'new-folder'; dir: string }
-  | { kind: 'rename'; path: string }
+  | { kind: 'rename'; path: string; extension: string }
 
 interface TreeContext {
   root: string | null
@@ -32,7 +33,7 @@ interface TreeContext {
   onOpen: (path: string) => void
   onSubmit: (name: string) => void
   onCancel: () => void
-  onStartRename: (path: string) => void
+  onStartRename: (node: FileNode) => void
   onContextMenu: (node: FileNode, x: number, y: number) => void
 }
 
@@ -67,8 +68,9 @@ function InlineInput({
 }
 
 function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
+  const label = documentLabel(node.name, node.isDirectory)
   const sectionRoot = ['Draft', 'Research', 'Trash'].some((section) => node.path.toLowerCase() === `${ctx.root}/${section}`.toLowerCase())
-  const drag = useDraggable({ id: node.path, disabled: sectionRoot })
+  const drag = useDraggable({ id: node.path, disabled: sectionRoot, data: { label } })
   const drop = useDroppable({ id: node.path, data: { directory: node.isDirectory ? node.path : parentOf(node.path) } })
   const expanded = !ctx.collapsed.has(node.path)
   const renaming = ctx.editing?.kind === 'rename' && ctx.editing.path === node.path
@@ -79,7 +81,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
     ctx.editing.dir === node.path
 
   const row = renaming ? (
-    <InlineInput initial={node.name} onSubmit={ctx.onSubmit} onCancel={ctx.onCancel} />
+    <InlineInput initial={label} onSubmit={ctx.onSubmit} onCancel={ctx.onCancel} />
   ) : (
     <div
       ref={(element) => { drag.setNodeRef(element); drop.setNodeRef(element) }}
@@ -120,7 +122,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
         </button>
       )}
       <span className={node.isDirectory ? 'text-white/60' : ''}>
-        {node.name}
+        {label}
       </span>
       <button
         className="invisible ml-auto text-xs text-white/50 hover:text-white group-hover:visible"
@@ -128,7 +130,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation()
-          ctx.onStartRename(node.path)
+          ctx.onStartRename(node)
         }}
       >
         ✎
@@ -176,7 +178,7 @@ export function FileTree() {
   const [editing, setEditing] = useState<Editing | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ node: FileNode; x: number; y: number } | null>(null)
-  const [draggedPath, setDraggedPath] = useState<string | null>(null)
+  const [draggedLabel, setDraggedLabel] = useState<string | null>(null)
 
   useEffect(() => {
     if (!menu) return
@@ -227,13 +229,17 @@ export function FileTree() {
 
   const onSubmit = (name: string) => {
     if (!editing) return
-    if (editing.kind === 'rename') return run(() => renameEntry(editing.path, name))
+    if (editing.kind === 'rename') {
+      const next = name.trim()
+      const filename = editing.extension && !/\.md$/i.test(next) ? `${next}${editing.extension}` : next
+      return run(() => renameEntry(editing.path, filename))
+    }
     if (editing.kind === 'new-folder') return run(() => createFolder(editing.dir, name))
     return run(async () => openFile(await createFile(editing.dir, name)))
   }
 
   const onDragEnd = (event: DragEndEvent) => {
-    setDraggedPath(null)
+    setDraggedLabel(null)
     const from = String(event.active.id)
     const dir = event.over?.data.current?.directory
     if (typeof dir !== 'string' || from === dir || dir.startsWith(`${from}/`) || parentOf(from) === dir) return
@@ -273,7 +279,7 @@ export function FileTree() {
     onOpen: (path) => void run(() => openFile(path)),
     onSubmit: (name) => void onSubmit(name),
     onCancel: () => setEditing(null),
-    onStartRename: (path) => setEditing({ kind: 'rename', path }),
+    onStartRename: (node) => setEditing({ kind: 'rename', path: node.path, extension: !node.isDirectory ? node.name.match(/\.md$/i)?.[0] ?? '' : '' }),
     onContextMenu: (node, x, y) => { setSelected(node); useExplorerStore.getState().selectPath(node.path); setMenu({ node, x, y }) },
   }
 
@@ -322,7 +328,7 @@ export function FileTree() {
       {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
       {workspaceError && <p className="mb-2 text-xs text-amber-400" role="alert">{workspaceError}</p>}
       <DndContext sensors={sensors} onDragEnd={onDragEnd}
-        onDragStart={({ active }) => setDraggedPath(String(active.id))} onDragCancel={() => setDraggedPath(null)}
+        onDragStart={({ active }) => setDraggedLabel(active.data.current?.label ?? documentLabel(String(active.id).split('/').pop() ?? ''))} onDragCancel={() => setDraggedLabel(null)}
         collisionDetection={(args) => {
           const collisions = pointerWithin(args)
           const rows = collisions.filter((hit) => hit.id !== root)
@@ -342,12 +348,12 @@ export function FileTree() {
             <Node key={n.path} node={n} ctx={ctx} />
           ))}
         </RootDrop>
-        {draggedPath && createPortal(<DragOverlay dropAnimation={null} style={{ pointerEvents: 'none' }}>
-          <div className="rounded border border-amber-400 bg-neutral-900 px-3 py-1 text-sm text-white shadow-lg">{draggedPath.split('/').pop()}</div>
+        {draggedLabel && createPortal(<DragOverlay dropAnimation={null} style={{ pointerEvents: 'none' }}>
+          <div className="rounded border border-amber-400 bg-neutral-900 px-3 py-1 text-sm text-white shadow-lg">{draggedLabel}</div>
         </DragOverlay>, document.body)}
       </DndContext>
       {menu && (
-        <div role="menu" aria-label={`${menu.node.name} actions`}
+        <div role="menu" aria-label={`${documentLabel(menu.node.name, menu.node.isDirectory)} actions`}
           className="fixed z-50 min-w-36 rounded border border-white/20 bg-neutral-800 p-1 shadow-xl"
           style={{ left: menu.x, top: menu.y }}
           onPointerDown={(event) => event.stopPropagation()}>

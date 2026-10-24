@@ -5,7 +5,7 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
 import { ProjectArchiveActions } from '../project/ProjectArchiveActions'
-import mark from '../../assets/grimoire-mark.svg'
+import { PAGE_SIZES, type PageSizeId } from '../../types/document'
 import styles from './MenuBar.module.css'
 import { ModManager } from '../mods/ModManager'
 import { useImportSection } from '../../stores/explorerStore'
@@ -27,6 +27,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const split = useTabStore((s) => s.split)
   const viewMode = useSettingsStore((s) => s.viewMode)
+  const { pageSize, columns, setPageSize, setColumns } = useSettingsStore()
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
@@ -51,7 +52,6 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         summary?.focus()
       }
     }}>
-    <img src={mark} alt="" width="22" height="22" />
     <details name="application-menu">
       <summary>File</summary>
       <div className={styles.menu}>
@@ -93,6 +93,18 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
             <option value="pages">Single pages</option><option value="spreads">Facing pages</option>
           </select>
         </label>}
+        <hr />
+        <label className={styles.layout}>Page size
+          <select aria-label="Page size" value={pageSize} onChange={(event) => setPageSize(event.target.value as PageSizeId)}>
+            {Object.values(PAGE_SIZES).map((size) => <option key={size.id} value={size.id}>{size.label}</option>)}
+          </select>
+        </label>
+        <label className={styles.layout}>Columns
+          <select aria-label="Columns" value={columns} onChange={(event) => setColumns(Number(event.target.value) as 1 | 2)}>
+            <option value={1}>1</option>
+            <option value={2}>2</option>
+          </select>
+        </label>
       </div>
     </details>
     <details name="application-menu">
@@ -102,7 +114,6 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <button type="button" onClick={() => { closeMenus(); setPreferencesOpen(true) }}>Preferences…</button>
       </div>
     </details>
-    <span className={styles.name}>GRIMOIRE MAKER</span>
     {error && <span role="alert" className={styles.error}>{error}</span>}
   </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}

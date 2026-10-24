@@ -82,7 +82,7 @@ describe('block formatting and underline', () => {
     ['Bulleted list', 'ul', 'listStyle', 'disc outside', '- Sample text'],
     ['Numbered list', 'ol', 'listStyle', 'decimal outside', '1. Sample text'],
     ['Quote', 'blockquote', 'borderLeftWidth', '3px', '> Sample text'],
-    ['Horizontal rule', 'hr', 'borderTopWidth', '2px', '---'],
+    ['Divider', 'hr', 'borderTopWidth', '2px', '---'],
   ])('%s applies a visible block and persists Markdown', async (label, selector, property, expectedStyle, markdown) => {
     const toolbar = await mountToolbar()
     if (selector === 'hr') editor!.commands.setTextSelection(12)

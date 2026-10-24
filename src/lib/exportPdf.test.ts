@@ -44,6 +44,18 @@ describe('PDF lifecycle', () => {
     expect(document.querySelector('.print-root')).toBeNull()
     expect(document.body.classList.contains('exporting')).toBe(false)
   })
+  it('excludes visual ruler guides from the paginated document', async () => {
+    const guide = document.createElement('div')
+    guide.dataset.rulerOverlay = 'true'
+    guide.textContent = 'Editor-only row guide'
+    document.body.append(guide)
+    vi.mocked(invoke).mockResolvedValueOnce(undefined)
+    await exportPdf({ ...request, outputPath: '/book.pdf' })
+    const content = mocks.preview.mock.calls[0]![0] as HTMLElement
+    expect(content.textContent).toBe('Text')
+    expect(content.querySelector('[data-ruler-overlay]')).toBeNull()
+    expect(guide.isConnected).toBe(true)
+  })
   it('exports the active split pane and excludes simultaneous print sessions', async () => {
     document.body.innerHTML += '<section data-active-editor="true"><div class="grimoire-content"><div class="ProseMirror"><p>Active pane</p></div></div></section>'
     vi.spyOn(window, 'print').mockImplementation(() => {})

@@ -116,7 +116,7 @@ const ACTIONS: Action[][] = [
     {
       id: 'rule',
       label: '―',
-      title: 'Horizontal rule',
+      title: 'Divider',
       run: (e) => e.chain().focus().setHorizontalRule().run(),
     },
   ],
