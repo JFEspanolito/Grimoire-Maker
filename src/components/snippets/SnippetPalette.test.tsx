@@ -10,6 +10,7 @@ import { SnippetPalette } from './SnippetPalette'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
+import { ContentBox } from '../editor/extensions/ContentBox'
 
 let root: Root | null = null
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
@@ -23,7 +24,7 @@ afterEach(async () => {
 describe('snippet palette', () => {
   it('still inserts a Markdown snippet at the cursor on double-click', async () => {
     useModStore.setState({ ready: true, snippets: [{ id: 'note', label: 'Note', group: 'Notes', markdown: '## Inserted note' }] })
-    const editor = new Editor({ extensions: [StarterKit, Markdown], content: '<p>First</p><p>Last</p>',
+    const editor = new Editor({ extensions: [StarterKit, ContentBox, Markdown], content: '<p>First</p><p>Last</p>',
       editorProps: { handleScrollToSelection: () => true } })
     editor.commands.setTextSelection(8)
     const container = document.createElement('div')
@@ -31,7 +32,9 @@ describe('snippet palette', () => {
     try {
       await act(async () => root?.render(<SnippetPalette editor={editor} />))
       await act(async () => container.querySelector('button')?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
-      expect(editor.getHTML()).toBe('<p>First</p><h2>Inserted note</h2><p>Last</p>')
+      expect(editor.state.doc.child(1).type.name).toBe('standardContentBox')
+      expect(editor.state.doc.child(1).firstChild?.type.name).toBe('heading')
+      expect(editor.state.doc.textContent).toBe('FirstInserted noteLast')
     } finally { await act(async () => root?.unmount()); root = null; editor.destroy() }
   })
   it('uses the enabled folder catalog without restoring disabled built-in examples', async () => {

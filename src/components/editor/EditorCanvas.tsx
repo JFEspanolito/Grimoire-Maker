@@ -12,6 +12,8 @@ import { TableExtensions } from './extensions/tables'
 import { PageView } from './PageView'
 import { DocumentPathContext } from './DocumentPathContext'
 import { registerSnippetDropTarget } from '../../lib/snippetDrop'
+import { ContentBox } from './extensions/ContentBox'
+import { insertContentBox } from '../../lib/contentBoxes'
 
 function getMarkdown(editor: Editor): string {
   return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()
@@ -32,6 +34,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     extensions: [
       StarterKit,
       GrimoireImageNode,
+      ContentBox,
       ...TableExtensions,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Statblock,
@@ -54,7 +57,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     onReady(editor)
     setPluginHost({
       getActiveBody: () => getMarkdown(editor),
-      insertContent: (markdown) => editor.chain().focus().insertContent(markdown).run(),
+      insertContent: (markdown) => insertContentBox(editor, markdown),
     })
     return () => setPluginHost({ getActiveBody: () => '', insertContent: () => {} })
   }, [editor, onReady, active])

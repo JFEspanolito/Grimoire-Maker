@@ -9,6 +9,7 @@ import { loadImageUrl, revokeImageUrl } from '../../../lib/images'
 import { positionImageOnPage } from '../../../lib/imagePlacement'
 import { PAGE_SIZES } from '../../../types/document'
 import { DocumentPathContext } from '../DocumentPathContext'
+import { reportError } from '../../../lib/errorLogging'
 
 const ANCHOR_LABEL: Record<string, string> = {
   header: 'Header image',
@@ -36,7 +37,8 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const rect = image.getBoundingClientRect()
     if (!bounds.width || !rect.width) return
     const scale = PAGE_SIZES[useSettingsStore.getState().pageSize].widthMm / bounds.width
-    const next = { left: (rect.left + rect.width - bounds.left) * scale, top: (rect.top + rect.height - bounds.top) * scale }
+    const origin = image.closest('.grimoire-content-box[data-placement="free"]')?.getBoundingClientRect() ?? bounds
+    const next = { left: (rect.left + rect.width - origin.left) * scale, top: (rect.top + rect.height - origin.top) * scale }
     setCorner((old) => old?.left === next.left && old.top === next.top ? old : next)
   }
 
@@ -61,6 +63,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     if (!page) return
     const pageRect = page.getBoundingClientRect()
     const imageRect = image.getBoundingClientRect()
+    const origin = image.closest('.grimoire-content-box[data-placement="free"]')?.getBoundingClientRect() ?? pageRect
     if (!pageRect.width || !imageRect.width) return
     // Own this gesture before the browser generates a text-selection/native drag.
     event.preventDefault()
@@ -99,6 +102,12 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       if (!moved && Math.hypot(deltaX, deltaY) < 3) return
       position = positionImageOnPage(pageRect, imageRect, pageWidthMm, pageHeightMm, deltaX, deltaY)
       if (!position) return
+      // An absolute group is the containing block, while page bounds still define scale and limits.
+      const scale = pageWidthMm / pageRect.width
+      position = {
+        xMm: Math.round(Math.max(0, position.xMm - (origin.left - pageRect.left) * scale) * 100) / 100,
+        yMm: Math.round(Math.max(0, position.yMm - (origin.top - pageRect.top) * scale) * 100) / 100,
+      }
       moved = true
       image.style.position = 'absolute'
       image.style.left = `${position.xMm}mm`
@@ -238,7 +247,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
         setFailure(null)
       },
       (e: unknown) => {
-        if (!cancelled) setFailure({ src, message: e instanceof Error ? e.message : String(e) })
+        if (!cancelled) { reportError('editor.image.load', e); setFailure({ src, message: e instanceof Error ? e.message : String(e) }) }
       },
     )
     return () => {

@@ -19,6 +19,7 @@ export interface PluginApi {
   /** Floating overlay rendered above the page canvas. */
   registerOverlay(overlay: PluginPanel): void
   getActiveBody(): string
+  /** Inserts one editable, borderless movable group; placement defaults to Push text. */
   insertContent(markdown: string): void
   on(event: PluginEvent, handler: () => void): () => void
 }
