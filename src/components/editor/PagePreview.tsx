@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Previewer } from 'pagedjs'
 import { paginate } from '../../lib/exportPdf'
+import { reportError } from '../../lib/errorLogging'
 import { resolveTheme } from '../../lib/themes'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -57,7 +58,10 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
           if (!cancelled) setStatus({ kind: 'ready', pages: stage.querySelectorAll('.pagedjs_page').length })
         },
         (e: unknown) => {
-          if (!cancelled) setStatus({ kind: 'error', message: e instanceof Error ? e.message : String(e) })
+          if (!cancelled) {
+            reportError('preview.pages', e)
+            setStatus({ kind: 'error', message: e instanceof Error ? e.message : String(e) })
+          }
         },
       ).finally(() => {
         running = false

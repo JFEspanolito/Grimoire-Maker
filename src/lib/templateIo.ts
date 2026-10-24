@@ -114,7 +114,7 @@ export async function createTemplateDocuments(fs: ProjectPackageFs, draft: strin
     if (await fs.exists(folder)) throw new PackageError(`"${folder}" already exists`)
     await fs.rename(staging, folder)
   } catch (error) {
-    try { await fs.removeDir(staging) } catch { /* Preserve the original write error. */ }
+    try { await fs.removeDir(staging) } catch (cleanupError) { console.error('Could not clean up template staging', cleanupError) }
     throw error
   }
   const index = `${folder}/index.md`

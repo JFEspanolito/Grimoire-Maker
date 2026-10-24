@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -203,6 +204,7 @@ export function FileTree() {
       setError(null)
       await action()
     } catch (e) {
+      reportError('files.action', e)
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setEditing(null)

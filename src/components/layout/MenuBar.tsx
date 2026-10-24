@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
@@ -42,7 +43,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const run = async (action: () => unknown | Promise<unknown>) => {
     closeMenus()
     setError('')
-    try { await action() } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
+    try { await action() } catch (cause) { reportError('menu.action', cause); setError(cause instanceof Error ? cause.message : String(cause)) }
   }
   return <><nav ref={bar} className={styles.bar} aria-label="Application menu"
     onKeyDown={(event) => {

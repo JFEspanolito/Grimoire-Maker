@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { useEffect, useRef, useState } from 'react'
 import { commitChanges, diffChange, getRepositoryStatus, initializeRepository, stageChange, unstageChange } from '../../lib/versionControl'
 import type { GitDiff, GitEntry, RepositoryStatus } from '../../lib/versionControl'
@@ -38,7 +39,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
     getRepositoryStatus(workspace).then((value) => {
       if (current === epoch.current) setStatus(value)
     }).catch((reason: unknown) => {
-      if (current === epoch.current) setError(errorText(reason))
+      if (current === epoch.current) { reportError('git.operation', reason); setError(errorText(reason)) }
     }).finally(() => {
       if (current === epoch.current) { pending.current = false; setBusy(false) }
     })
@@ -62,7 +63,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
       setNotice(successMessage)
       if (successMessage) setMessage('')
     } catch (reason) {
-      if (current === epoch.current) setError(errorText(reason))
+      if (current === epoch.current) { reportError('git.operation', reason); setError(errorText(reason)) }
     } finally {
       if (current === epoch.current) { pending.current = false; setBusy(false) }
     }
@@ -80,7 +81,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
       const next = await diffChange(workspace, path, staged)
       if (current === epoch.current) setDiff(next)
     } catch (reason) {
-      if (current === epoch.current) setError(errorText(reason))
+      if (current === epoch.current) { reportError('git.operation', reason); setError(errorText(reason)) }
     } finally {
       if (current === epoch.current) { pending.current = false; setBusy(false) }
     }

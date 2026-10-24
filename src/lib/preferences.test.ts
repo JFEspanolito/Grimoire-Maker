@@ -7,7 +7,7 @@ vi.mock('@tauri-apps/api/path', () => ({ appConfigDir: async () => 'C:\\Config\\
 beforeEach(() => vi.resetAllMocks())
 
 it('resolves browser defaults without restoreSession or invoking native commands', async () => {
-  expect(await loadLibraryPaths()).toEqual({ plugins: 'C:/Config/Mods/Plugins', snippets: 'C:/Config/Mods/Snippets', templates: 'C:/Config/Mods/Templates', themes: 'C:/Config/themes' })
+  expect(await loadLibraryPaths()).toEqual({ plugins: 'C:/Config/Mods/Plugins', snippets: 'C:/Config/Mods/Snippets', templates: 'C:/Config/Mods/Templates', themes: 'C:/Config/themes', logs: 'C:/Config/logs' })
   expect(invoke).not.toHaveBeenCalled()
 })
 it('reloads native persisted preferences on every load, including startup', async () => {
@@ -21,6 +21,12 @@ it('passes only a category to the native-owned picker and preserves cancellation
   vi.mocked(invoke).mockResolvedValue(null)
   expect(await changeLibraryPath('templates')).toBeNull()
   expect(invoke).toHaveBeenCalledWith('change_library_path', { kind: 'templates' })
+})
+it('passes only the logs category, never a renderer-selected destination', async () => {
+  vi.mocked(isTauri).mockReturnValue(true)
+  vi.mocked(invoke).mockResolvedValue(null)
+  expect(await changeLibraryPath('logs')).toBeNull()
+  expect(invoke).toHaveBeenCalledWith('change_library_path', { kind: 'logs' })
 })
 it('propagates native copy failures and refuses changes without native selection', async () => {
   await expect(changeLibraryPath('plugins')).rejects.toThrow('desktop')

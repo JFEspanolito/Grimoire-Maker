@@ -71,7 +71,7 @@ it('configured paths survive reload, keep disabled IDs and legacy templates, and
   await useModStore.getState().setEnabled('Snippets/community', false)
   await put('templates/legacy/index.md', '# Legacy')
   const root = scope.root
-  scope.paths = { plugins: `${root}/custom/plugins`, snippets: `${root}/custom/snippets`, templates: `${root}/custom/templates`, themes: `${root}/custom/themes` }
+  scope.paths = { plugins: `${root}/custom/plugins`, snippets: `${root}/custom/snippets`, templates: `${root}/custom/templates`, themes: `${root}/custom/themes`, logs: `${root}/logs` }
   await fs.cp(`${root}/Mods/Snippets`, scope.paths.snippets, { recursive: true })
   await fs.cp(`${root}/Mods/Templates`, scope.paths.templates, { recursive: true })
   await fs.mkdir(scope.paths.plugins, { recursive: true })

@@ -10,7 +10,7 @@ use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_fs::FsExt;
 
-static CHANGES: Mutex<()> = Mutex::new(());
+pub(super) static CHANGES: Mutex<()> = Mutex::new(());
 const PREFERENCES_FILE: &str = "setting.json";
 // Bound file size, not the number of visual guides. Reject oversized writes before replacement.
 const MAX_PREFERENCES_BYTES: usize = 16 * 1024 * 1024;
@@ -22,6 +22,7 @@ pub enum LibraryKind {
     Snippets,
     Templates,
     Themes,
+    Logs,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -31,6 +32,7 @@ pub struct LibraryPaths {
     snippets: String,
     templates: String,
     themes: String,
+    logs: String,
 }
 
 impl LibraryPaths {
@@ -40,10 +42,17 @@ impl LibraryPaths {
             LibraryKind::Snippets => &mut self.snippets,
             LibraryKind::Templates => &mut self.templates,
             LibraryKind::Themes => &mut self.themes,
+            LibraryKind::Logs => &mut self.logs,
         }
     }
-    fn all(&self) -> [&str; 4] {
-        [&self.plugins, &self.snippets, &self.templates, &self.themes]
+    fn all(&self) -> [&str; 5] {
+        [
+            &self.plugins,
+            &self.snippets,
+            &self.templates,
+            &self.themes,
+            &self.logs,
+        ]
     }
 }
 
@@ -57,7 +66,7 @@ fn metadata(path: &Path) -> Result<fs::Metadata, String> {
     reject_special(&info)?;
     Ok(info)
 }
-fn reject_special(info: &fs::Metadata) -> Result<(), String> {
+pub(super) fn reject_special(info: &fs::Metadata) -> Result<(), String> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;
@@ -72,7 +81,7 @@ fn reject_special(info: &fs::Metadata) -> Result<(), String> {
 }
 
 /// Windows handles deny rename/delete while paths are in use and open reparse points themselves.
-fn open_checked(path: &Path, directory: bool) -> Result<File, String> {
+pub(super) fn open_checked(path: &Path, directory: bool) -> Result<File, String> {
     let before = metadata(path)?;
     if before.is_dir() != directory {
         return Err("Expected a regular directory or file".into());
@@ -94,7 +103,7 @@ fn open_checked(path: &Path, directory: bool) -> Result<File, String> {
     Ok(file)
 }
 
-fn lock_ancestors(path: &Path, locks: &mut Vec<File>) -> Result<(), String> {
+pub(super) fn lock_ancestors(path: &Path, locks: &mut Vec<File>) -> Result<(), String> {
     if !path.is_absolute() {
         return Err("Library paths must be absolute".into());
     }
@@ -115,6 +124,8 @@ pub struct UserSettings {
     theme: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     ruler_guides: Option<Vec<RulerGuide>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    zoom: Option<f64>,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Debug)]
@@ -134,6 +145,12 @@ struct RulerGuide {
 
 impl UserSettings {
     fn validate(&self) -> Result<(), String> {
+        if self
+            .zoom
+            .is_some_and(|value| !value.is_finite() || !(0.25..=3.0).contains(&value))
+        {
+            return Err("Zoom must be between 0.25 and 3".into());
+        }
         if self.columns.is_some_and(|value| value != 1 && value != 2) {
             return Err("Columns must be 1 or 2".into());
         }
@@ -194,6 +211,7 @@ fn default_paths(config: &Path) -> Result<LibraryPaths, String> {
         "Mods/Snippets",
         "Mods/Templates",
         "themes",
+        "logs",
     ] {
         let path = config.join(relative);
         if let Err(e) = fs::create_dir(&path) {
@@ -208,21 +226,61 @@ fn default_paths(config: &Path) -> Result<LibraryPaths, String> {
         snippets: text(&config.join("Mods/Snippets"))?,
         templates: text(&config.join("Mods/Templates"))?,
         themes: text(&config.join("themes"))?,
+        logs: text(&config.join("logs"))?,
     })
+}
+
+pub(super) fn default_logs(config: &Path) -> Result<PathBuf, String> {
+    let mut locks = Vec::new();
+    lock_ancestors(config, &mut locks)?;
+    let path = config.join("logs");
+    if let Err(error) = fs::create_dir(&path) {
+        if error.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(error.to_string());
+        }
+    }
+    open_checked(&path, true)?;
+    Ok(path)
+}
+
+fn backfill_logs(raw_paths: &mut serde_json::Value, config: &Path) -> Result<bool, String> {
+    if let Some(paths) = raw_paths.as_object_mut() {
+        if !paths.contains_key("logs") {
+            paths.insert(
+                "logs".into(),
+                serde_json::Value::String(text(&default_logs(config)?)?),
+            );
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+// Caller holds CHANGES, including for appends and path migrations.
+pub(super) fn logs_directory_locked(config: &Path) -> Result<PathBuf, String> {
+    Ok(PathBuf::from(read_preferences(config)?.paths.logs))
 }
 
 // Callers hold CHANGES; internal helpers never acquire it recursively.
 fn read_preferences(config: &Path) -> Result<Preferences, String> {
     let mut locks = Vec::new();
     lock_ancestors(config, &mut locks)?;
-    if let Some(raw) = read_json(&config.join(PREFERENCES_FILE))? {
+    if let Some(mut raw) = read_json(&config.join(PREFERENCES_FILE))? {
+        let migrated = match raw.get_mut("paths") {
+            Some(paths) => backfill_logs(paths, config)?,
+            None => false,
+        };
         let preferences: Preferences =
             serde_json::from_value(raw).map_err(|e| format!("Invalid preferences: {e}"))?;
         preferences.settings.validate()?;
+        if migrated {
+            publish_preferences(config, &preferences)?;
+        }
         return Ok(preferences);
     }
     let paths = match read_json(&config.join("library-paths.json"))? {
-        Some(raw) => {
+        Some(mut raw) => {
+            backfill_logs(&mut raw, config)?;
             serde_json::from_value(raw).map_err(|e| format!("Invalid legacy paths: {e}"))?
         }
         None => default_paths(config)?,
@@ -259,6 +317,9 @@ fn save_settings_in(config: &Path, mut settings: UserSettings) -> Result<(), Str
     let mut preferences = read_preferences(config)?;
     if settings.ruler_guides.is_none() {
         settings.ruler_guides = preferences.settings.ruler_guides.clone();
+    }
+    if settings.zoom.is_none() {
+        settings.zoom = preferences.settings.zoom;
     }
     preferences.settings = settings;
     publish_preferences(config, &preferences)
@@ -460,6 +521,162 @@ pub async fn change_library_path(
 #[cfg(test)]
 mod preferences_tests {
     use super::*;
+    #[test]
+    fn preferences_error_logs_switch_copies_and_routes_appends_without_restart() {
+        let config = scratch("logs-switch");
+        super::super::error_logs::append_in(&config, "test", "before-switch").unwrap();
+        let old_path = config.join("logs/errors-0001.txt");
+        let original = fs::read(&old_path).unwrap();
+        let destination = config.join("new-logs");
+        fs::create_dir(&destination).unwrap();
+        {
+            let _guard = CHANGES.lock().unwrap();
+            change_in(&config, LibraryKind::Logs, &destination, |_| Ok(())).unwrap();
+        }
+        super::super::error_logs::append_in(&config, "test", "after-switch").unwrap();
+        assert_eq!(fs::read(old_path).unwrap(), original);
+        let copied = fs::read_to_string(destination.join("errors-0001.txt")).unwrap();
+        assert!(copied.contains("before-switch"));
+        assert!(copied.contains("after-switch"));
+        let collision = config.join("collision");
+        fs::create_dir(&collision).unwrap();
+        fs::write(collision.join("errors-0001.txt"), "user log").unwrap();
+        let before = fs::read(config.join(PREFERENCES_FILE)).unwrap();
+        {
+            let _guard = CHANGES.lock().unwrap();
+            assert!(change_in(&config, LibraryKind::Logs, &collision, |_| Ok(())).is_err());
+        }
+        assert_eq!(fs::read(config.join(PREFERENCES_FILE)).unwrap(), before);
+        assert_eq!(
+            fs::read_to_string(collision.join("errors-0001.txt")).unwrap(),
+            "user log"
+        );
+        super::super::error_logs::append_in(&config, "test", "after-rejection").unwrap();
+        assert!(fs::read_to_string(destination.join("errors-0001.txt"))
+            .unwrap()
+            .contains("after-rejection"));
+    }
+    #[test]
+    fn preferences_error_logs_concurrent_migration_retains_every_append() {
+        let config = scratch("logs-concurrent");
+        super::super::error_logs::append_in(&config, "test", "initial").unwrap();
+        let destination = config.join("new-logs");
+        fs::create_dir(&destination).unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+        let append = {
+            let barrier = barrier.clone();
+            let config = config.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                for index in 0..20 {
+                    super::super::error_logs::append_in(
+                        &config,
+                        "test",
+                        &format!("entry-{index:02}"),
+                    )
+                    .unwrap();
+                }
+            })
+        };
+        let migrate = {
+            let barrier = barrier.clone();
+            let config = config.clone();
+            let destination = destination.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                let _guard = CHANGES.lock().unwrap();
+                change_in(&config, LibraryKind::Logs, &destination, |_| Ok(())).unwrap();
+            })
+        };
+        barrier.wait();
+        append.join().unwrap();
+        migrate.join().unwrap();
+        let contents = fs::read_to_string(destination.join("errors-0001.txt")).unwrap();
+        for index in 0..20 {
+            assert_eq!(contents.matches(&format!("entry-{index:02}")).count(), 1);
+        }
+    }
+    #[test]
+    fn preferences_backfill_logs_preserves_existing_paths_settings_and_extra() {
+        let config = scratch("backfill-logs");
+        let paths = default_paths(&config).unwrap();
+        let mut old = serde_json::json!({ "paths": paths, "settings": { "theme": "modern", "rulerGuides": [] }, "custom": "keep" });
+        old["paths"].as_object_mut().unwrap().remove("logs");
+        fs::write(
+            config.join(PREFERENCES_FILE),
+            serde_json::to_vec(&old).unwrap(),
+        )
+        .unwrap();
+        let current = serde_json::to_value(read_preferences(&config).unwrap()).unwrap();
+        assert_eq!(
+            current["paths"]["logs"],
+            text(&config.join("logs")).unwrap()
+        );
+        for name in ["plugins", "snippets", "templates", "themes"] {
+            assert_eq!(current["paths"][name], old["paths"][name]);
+        }
+        assert_eq!(current["settings"], old["settings"]);
+        assert_eq!(current["custom"], "keep");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(
+                &fs::read(config.join(PREFERENCES_FILE)).unwrap()
+            )
+            .unwrap(),
+            current
+        );
+    }
+    #[test]
+    fn preferences_legacy_without_logs_preserves_zoom_and_guides() {
+        let config = scratch("legacy-logs");
+        let mut old = serde_json::to_value(default_paths(&config).unwrap()).unwrap();
+        old.as_object_mut().unwrap().remove("logs");
+        let legacy_bytes = serde_json::to_vec(&old).unwrap();
+        fs::write(config.join("library-paths.json"), &legacy_bytes).unwrap();
+        let legacy_settings = serde_json::json!({ "zoom": 1.5, "theme": "modern", "rulerGuides": [{ "id": "g", "axis": "row", "positionMm": 23.5 }] });
+        fs::write(
+            config.join("state.json"),
+            serde_json::to_vec(&serde_json::json!({ "settings": legacy_settings })).unwrap(),
+        )
+        .unwrap();
+        let saved = serde_json::to_value(read_preferences(&config).unwrap()).unwrap();
+        assert_eq!(saved["settings"], legacy_settings);
+        assert_eq!(saved["paths"]["logs"], text(&config.join("logs")).unwrap());
+        assert_eq!(
+            fs::read(config.join("library-paths.json")).unwrap(),
+            legacy_bytes
+        );
+    }
+    #[test]
+    fn preferences_zoom_roundtrip_preservation_and_bounds() {
+        let config = scratch("zoom");
+        let settings: UserSettings =
+            serde_json::from_value(serde_json::json!({ "zoom": 1.75, "rulerGuides": [] })).unwrap();
+        save_settings_in(&config, settings).unwrap();
+        save_settings_in(
+            &config,
+            UserSettings {
+                theme: Some("modern".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let saved = serde_json::to_value(read_preferences(&config).unwrap()).unwrap();
+        assert_eq!(saved["settings"]["zoom"], 1.75);
+        assert_eq!(saved["settings"]["rulerGuides"], serde_json::json!([]));
+        let before = fs::read(config.join(PREFERENCES_FILE)).unwrap();
+        for value in [0.0, 0.24, 3.01, -1.0] {
+            let invalid = serde_json::from_value(serde_json::json!({ "zoom": value })).unwrap();
+            assert!(save_settings_in(&config, invalid).is_err());
+            assert_eq!(fs::read(config.join(PREFERENCES_FILE)).unwrap(), before);
+        }
+        for value in [0.25, 3.0] {
+            save_settings_in(
+                &config,
+                serde_json::from_value(serde_json::json!({ "zoom": value })).unwrap(),
+            )
+            .unwrap();
+        }
+    }
     #[test]
     fn preferences_visual_guides_roundtrip_and_appearance_updates_preserve_them() {
         let config = scratch("guides");
@@ -747,6 +964,7 @@ mod preferences_tests {
             LibraryKind::Snippets,
             LibraryKind::Templates,
             LibraryKind::Themes,
+            LibraryKind::Logs,
         ]
         .into_iter()
         .enumerate()

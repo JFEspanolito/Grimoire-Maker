@@ -7,7 +7,7 @@ vi.mock('./preferences', () => ({ loadLibraryPaths: vi.fn() }))
 vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn(), mkdir: vi.fn(), readDir: vi.fn(), readTextFile: vi.fn() }))
 beforeEach(() => vi.resetAllMocks())
 it('loads the configured CSS directory and rejects linked files', async () => {
-  vi.mocked(loadLibraryPaths).mockResolvedValue({ plugins: '/plugins', snippets: '/snippets', templates: '/templates', themes: '/custom/themes' })
+  vi.mocked(loadLibraryPaths).mockResolvedValue({ plugins: '/plugins', snippets: '/snippets', templates: '/templates', themes: '/custom/themes', logs: '/logs' })
   vi.mocked(exists).mockResolvedValue(true)
   vi.mocked(readDir).mockResolvedValue([
     { name: 'custom.css', isDirectory: false, isFile: true, isSymlink: false },

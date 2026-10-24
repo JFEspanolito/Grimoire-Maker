@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { readFile, stat } from '@tauri-apps/plugin-fs'
 import { classifyFile, fileExtension, IMAGE_MIME } from '../../lib/filePreview'
@@ -52,7 +53,7 @@ function LoadedPreview({ path }: { path: string }) {
       } else if (kind === 'word') setWord(readDocx(data))
       else setBytes(data)
     })().catch((failure: unknown) => {
-      if (!cancelled) setError(failure instanceof Error ? failure.message : String(failure))
+      if (!cancelled) { reportError('preview.file', failure); setError(failure instanceof Error ? failure.message : String(failure)) }
     })
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url) }
   }, [path, kind, extension])
@@ -65,7 +66,7 @@ function LoadedPreview({ path }: { path: string }) {
           : imageUrl ? <>
             <div className={styles.controls}><button type="button" onClick={() => setActualSize(!actualSize)}>{actualSize ? 'Fit image' : 'Actual size'}</button></div>
             <div className={styles.imageArea}><img className={actualSize ? styles.actualImage : styles.fitImage} src={imageUrl}
-              alt={path.replaceAll('\\', '/').split('/').at(-1)} onError={() => setError('The image is damaged or its format is not supported by this system.')} /></div>
+              alt={path.replaceAll('\\', '/').split('/').at(-1)} onError={() => { const message = 'The image is damaged or its format is not supported by this system.'; reportError('preview.image', message); setError(message) }} /></div>
           </>
             : word ? <WordPreview blocks={word} />
               : bytes ? <Suspense fallback={<p role="status">Loading PDF viewer…</p>}><PdfPreview bytes={bytes} /></Suspense>

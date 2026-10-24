@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { useEffect, useRef, useState } from 'react'
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTask } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
@@ -18,7 +19,7 @@ export function PdfPreview({ bytes }: { bytes: Uint8Array }) {
     const task = getDocument({ data: new Uint8Array(bytes), useWorkerFetch: false, useWasm: false,
       useSystemFonts: true, enableXfa: false, maxImageSize: 16_000_000, canvasMaxAreaInBytes: 64_000_000 })
     void task.promise.then((document) => { if (!cancelled) setPdf(document) }).catch((failure: unknown) => {
-      if (!cancelled) setError(failure instanceof Error ? failure.message : String(failure))
+      if (!cancelled) { reportError('preview.pdf.load', failure); setError(failure instanceof Error ? failure.message : String(failure)) }
     })
     return () => { cancelled = true; void task.destroy().catch(() => undefined) }
   }, [bytes])
@@ -48,7 +49,7 @@ export function PdfPreview({ bytes }: { bytes: Uint8Array }) {
       await task.promise
       if (!cancelled) setRendering(false)
     })().catch((failure: unknown) => {
-      if (!cancelled) { setError(failure instanceof Error ? failure.message : String(failure)); setRendering(false) }
+      if (!cancelled) { reportError('preview.pdf.render', failure); setError(failure instanceof Error ? failure.message : String(failure)); setRendering(false) }
     })
     return () => { cancelled = true; task?.cancel(); canvas.remove() }
   }, [pdf, page, zoom])

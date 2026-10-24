@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useModStore } from '../../stores/modStore'
@@ -17,7 +18,7 @@ export function ModManager({ onClose }: { onClose: () => void }) {
   }, [reload])
   const run = async (operation: () => Promise<unknown>) => {
     setActionError('')
-    try { await operation() } catch (error) { setActionError(error instanceof Error ? error.message : String(error)) }
+    try { await operation() } catch (error) { reportError('mods.action', error); setActionError(error instanceof Error ? error.message : String(error)) }
   }
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="mod-manager-title" onCancel={onClose}>
     <header className={styles.header}>

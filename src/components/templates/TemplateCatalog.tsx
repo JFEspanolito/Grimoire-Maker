@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { useState } from 'react'
 import { useTemplateStore } from '../../stores/templateStore'
 import { exportTemplateZip, importTemplateZip } from '../../lib/templateActions'
@@ -54,6 +55,7 @@ export function TemplateCatalog() {
       const text = await action()
       setNotice(text ? { kind: 'ok', text } : null)
     } catch (e) {
+      reportError('templates.action', e)
       setNotice({ kind: 'error', text: e instanceof Error ? e.message : String(e) })
     }
   }
