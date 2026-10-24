@@ -12,6 +12,7 @@
   z-index: 5;
   transform: translateY(-100%);
   gap: 6px;
+  flex-wrap: wrap;
   align-items: center;
   width: max-content;
   max-width: 100%;

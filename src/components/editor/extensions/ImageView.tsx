@@ -174,7 +174,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0) return
     const image = imageRef.current
-    const page = image?.closest('.grimoire-page')
+    const page = image?.closest<HTMLElement>('.grimoire-page')
     if (!image || !page) return
     const pageRect = page.getBoundingClientRect()
     const rect = image.getBoundingClientRect()
@@ -192,10 +192,31 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const mmPerPx = pageSize.widthMm / pageRect.width
     const ratio = rect.height / rect.width
     const startWidth = rect.width * mmPerPx
+    const wrapper = image.parentElement
+    let flowWidth = wrapper?.getBoundingClientRect().width || pageRect.width
+    if (anchor === 'flow' && (align === 'left' || align === 'right') && wrapper?.parentElement) {
+      // Floats shrink around their image. Measure the containing column fragment,
+      // not that shrink-to-fit wrapper or the union of both columns.
+      const container = wrapper.parentElement
+      const fragments = Array.from(container.getClientRects()).filter(fragment => fragment.width > 0)
+      const center = rect.left + rect.width / 2
+      const column = fragments.find(fragment => center >= fragment.left && center <= fragment.right
+        && rect.top < fragment.bottom && rect.bottom > fragment.top)
+        ?? fragments.find(fragment => center >= fragment.left && center <= fragment.right)
+      if (column) {
+        const blockStyle = getComputedStyle(container)
+        const floatStyle = getComputedStyle(wrapper)
+        const spacing = [blockStyle.paddingLeft, blockStyle.paddingRight, blockStyle.borderLeftWidth,
+          blockStyle.borderRightWidth, floatStyle.marginLeft, floatStyle.marginRight]
+          .reduce((sum, value) => sum + (parseFloat(value) || 0), 0)
+        const scale = pageRect.width / (page.offsetWidth || pageRect.width)
+        flowWidth = Math.max(0, column.width - spacing * scale)
+      }
+    }
     const available = anchor === 'free'
       ? Math.min(pageSize.widthMm - (rect.left - pageRect.left) * mmPerPx,
         (pageSize.heightMm - (rect.top - pageRect.top) * mmPerPx) / ratio)
-      : (image.parentElement?.getBoundingClientRect().width || pageRect.width) * mmPerPx
+      : flowWidth * mmPerPx
     const maximum = Math.max(5, Math.min(500, available))
     let nextWidth = startWidth
     let moved = false

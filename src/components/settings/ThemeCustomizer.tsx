@@ -1,3 +1,7 @@
+import { ThemeBackgroundEditor } from './ThemeBackgroundEditor'
+import { readThemeDecorations, validateDecorations, type ThemeDecoration } from '../../lib/themeDecorations'
+import { importThemeDecoration } from '../../lib/importThemeDecoration'
+import { PAGE_SIZES } from '../../types/document'
 import { reportError } from '../../lib/errorLogging'
 import { useEffect, useRef, useState } from 'react'
 import { isTauri } from '../../hooks/useFileSystem'
@@ -25,7 +29,10 @@ export function ThemeCustomizer({ onClose, onBusyChange }: ThemeCustomizerProps)
   const [draft, setDraft] = useState<ThemeDraft | null>(null)
   const [colors, setColors] = useState(() => themeColors(''))
   const [name, setName] = useState('')
+  const [decorations, setDecorations] = useState<ThemeDecoration[]>([])
+  const pageSize = useSettingsStore(state => state.pageSize)
   const [busy, setBusy] = useState(false)
+  const [operation, setOperation] = useState('Saving theme…')
   const [error, setError] = useState('')
   const locked = useRef(false)
   const busyCallback = useRef(onBusyChange)
@@ -37,6 +44,7 @@ export function ThemeCustomizer({ onClose, onBusyChange }: ThemeCustomizerProps)
     if (!selected) { setError('The selected theme is no longer available.'); return }
     void loadThemeDraft(selected, userThemes.some((theme) => theme.id === selected.id)).then((value) => {
       if (cancelled) return
+      setDecorations(readThemeDecorations(value.css))
       setDraft(value)
       setColors(themeColors(value.css))
       setName(value.path ? selected.name : `${selected.name} Copy`)
@@ -49,11 +57,12 @@ export function ThemeCustomizer({ onClose, onBusyChange }: ThemeCustomizerProps)
   const save = async (copy: boolean) => {
     if (!draft || locked.current) return
     locked.current = true
+    setOperation('Saving theme…')
     setBusy(true)
     busyCallback.current?.(true)
     setError('')
     try {
-      const saved = await saveThemeDraft(draft, name, colors, copy, themes.map((theme) => theme.id))
+      const saved = await saveThemeDraft(draft, name, colors, copy, themes.map((theme) => theme.id), decorations)
       await useThemeStore.getState().reload()
       const refreshed = useThemeStore.getState()
       if (!refreshed.userThemes.some((theme) => theme.id === saved.id) || refreshed.errors.length) {
@@ -71,6 +80,26 @@ export function ThemeCustomizer({ onClose, onBusyChange }: ThemeCustomizerProps)
     }
   }
 
+  const importBackground = async () => {
+    if (locked.current) return
+    locked.current = true
+    setOperation('Importing background image…')
+    setBusy(true)
+    busyCallback.current?.(true)
+    setError('')
+    try {
+      const image = await importThemeDecoration()
+      if (image) setDecorations(validateDecorations([...decorations, image]))
+    } catch (cause) {
+      reportError('theme.background.import', cause)
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      locked.current = false
+      setBusy(false)
+      busyCallback.current?.(false)
+    }
+  }
+
   return <section className={styles.customizer} aria-labelledby="customize-theme-title" aria-busy={busy}>
     <header className={styles.header}><h2 id="customize-theme-title">Customize Theme</h2><button type="button" disabled={busy} onClick={onClose}>Back</button></header>
     <p className={styles.description}>{draft?.path ? 'Save updates this user theme. Save As creates a separate copy.' : 'Built-in and template themes are kept intact. Save creates a named copy.'} Divider color applies throughout the theme.</p>
@@ -80,11 +109,13 @@ export function ThemeCustomizer({ onClose, onBusyChange }: ThemeCustomizerProps)
         <div className={styles.colors}>{(Object.entries(COLOR_FIELDS) as [keyof ThemeColors, string][]).map(([key, label]) => <label key={key}>{label}<input aria-label={label} type="color" value={colors[key]} disabled={busy} onChange={(event) => setColors((current) => ({ ...current, [key]: event.target.value }))} /></label>)}</div>
         <iframe title="Theme preview" sandbox="" className={styles.preview} srcDoc={preview(draft, colors)} />
       </div>
+      <ThemeBackgroundEditor images={decorations} onChange={setDecorations} onImport={() => void importBackground()} disabled={busy}
+        pageWidthMm={PAGE_SIZES[pageSize].widthMm} pageHeightMm={PAGE_SIZES[pageSize].heightMm} background={colors.background} foreground={colors.text} />
       <p className={styles.description}>Preview only: your document changes after Save. Custom CSS colors outside six-digit hex values use picker defaults; original fonts and layout rules are retained.</p>
     </>}
     {!draft && !error && <p role="status">Loading theme…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    {busy && <p role="status">Saving theme…</p>}
+    {busy && <p role="status">{operation}</p>}
     <footer className={styles.footer}>
       <button type="button" disabled={busy} onClick={onClose}>Cancel</button>
       {draft?.path && <button type="button" disabled={busy} onClick={() => void save(true)}>Save As</button>}

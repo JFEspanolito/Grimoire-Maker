@@ -1,3 +1,4 @@
+import { prepareThemeBackgrounds } from './themeDecorations'
 import { Previewer } from 'pagedjs'
 import { invoke } from '@tauri-apps/api/core'
 import printCss from '../styles/print.css?raw'
@@ -92,6 +93,7 @@ export async function paginate(
   request: PageRequest,
   target: HTMLElement,
 ): Promise<void> {
+  await prepareThemeBackgrounds(request.theme)
   await previewer.preview(
     buildContent(request),
     [{ 'print.css': printCss }, { 'export.css': pageRules(request) }],

@@ -4,11 +4,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ThemeCustomizer } from './ThemeCustomizer'
 import { useSettingsStore } from '../../stores/settingsStore'
 
-const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), reload: vi.fn(), users: [] as { id: string; name: string; builtin: boolean }[] }))
+const mocks = vi.hoisted(() => ({ importImage: vi.fn(), load: vi.fn(), save: vi.fn(), reload: vi.fn(), users: [] as { id: string; name: string; builtin: boolean }[] }))
 vi.mock('../../lib/themeEditor', async (original) => ({ ...await original<typeof import('../../lib/themeEditor')>(), loadThemeDraft: mocks.load, saveThemeDraft: mocks.save }))
 vi.mock('../../stores/themeStore', () => ({ useThemeStore: Object.assign(() => ({
   themes: [{ id: 'parchment', name: 'Parchment', builtin: true }], userThemes: [],
 }), { getState: () => ({ reload: mocks.reload, userThemes: mocks.users, errors: [] }) }) }))
+vi.mock('../../lib/importThemeDecoration', () => ({ importThemeDecoration: mocks.importImage }))
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true }))
 let root: Root
 let container: HTMLDivElement
@@ -66,15 +67,15 @@ it('offers separate Save and Save As operations for user-owned themes', async ()
   root = createRoot(container)
   await act(async () => root.render(<ThemeCustomizer onClose={close} />))
   await act(async () => container.querySelector<HTMLButtonElement>('[data-action="save"]')!.click())
-  expect(mocks.save).toHaveBeenLastCalledWith(expect.anything(), 'Parchment', expect.anything(), false, ['parchment'])
+  expect(mocks.save).toHaveBeenLastCalledWith(expect.anything(), 'Parchment', expect.anything(), false, ['parchment'], [])
   await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save As')!.click())
-  expect(mocks.save).toHaveBeenLastCalledWith(expect.anything(), 'Parchment', expect.anything(), true, ['parchment'])
+  expect(mocks.save).toHaveBeenLastCalledWith(expect.anything(), 'Parchment', expect.anything(), true, ['parchment'], [])
 })
 
 it('saves a built-in copy, verifies discovery, and selects through settings', async () => {
   mocks.users = [{ id: 'parchment-copy', name: 'Parchment Copy', builtin: false }]
   await act(async () => container.querySelector<HTMLButtonElement>('[data-action="save"]')!.click())
-  expect(mocks.save).toHaveBeenCalledWith(expect.anything(), 'Parchment Copy', expect.anything(), true, ['parchment'])
+  expect(mocks.save).toHaveBeenCalledWith(expect.anything(), 'Parchment Copy', expect.anything(), true, ['parchment'], [])
   expect(mocks.reload).toHaveBeenCalledOnce()
   expect(useSettingsStore.getState().theme).toBe('parchment-copy')
   expect(close).toHaveBeenCalledOnce()
@@ -88,4 +89,16 @@ it('does not select an undiscovered saved theme or close on save failure', async
   mocks.save.mockRejectedValueOnce(new Error('Access denied'))
   await act(async () => container.querySelector<HTMLButtonElement>('[data-action="save"]')!.click())
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('Access denied')
+})
+
+it('imports background artwork, exposes placement controls and saves portable image metadata', async () => {
+  const image = { id: 'flowers', name: 'Flowers', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM/8AAAAASUVORK5CYII=', widthMm: 40, heightMm: 40, xMm: 5, yMm: 5, anchor: 'header' }
+  mocks.importImage.mockResolvedValueOnce(image)
+  await act(async () => Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Import image…')!.click())
+  expect(container.querySelector('[aria-label="Move background Flowers"]')).not.toBeNull()
+  const anchor = container.querySelector<HTMLSelectElement>('[aria-label="Background anchor"]')!
+  await act(async () => { anchor.value = 'footer'; anchor.dispatchEvent(new Event('change', { bubbles: true })) })
+  mocks.users = [{ id: 'parchment-copy', name: 'Parchment Copy', builtin: false }]
+  await act(async () => container.querySelector<HTMLButtonElement>('[data-action="save"]')!.click())
+  expect(mocks.save.mock.calls.at(-1)?.[5]).toEqual([{ ...image, anchor: 'footer' }])
 })

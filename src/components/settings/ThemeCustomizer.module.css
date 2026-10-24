@@ -14,3 +14,16 @@
 .customizer button { border: 1px solid var(--border, #49424e); border-radius: 6px; padding: 7px 12px; color: inherit; background: var(--bg-secondary, #302a36); cursor: pointer; }
 .customizer button:disabled { opacity: .5; cursor: default; }
 @media (max-width: 560px) { .workspace { grid-template-columns: 1fr; } .colors { grid-template-columns: 1fr 1fr; } }
+
+.backgrounds { border-top: 1px solid #ffffff20; padding-top: 1rem; display: grid; gap: .75rem; }
+.backgroundWorkspace { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(180px, 2fr); gap: 1rem; align-items: start; }
+.backgroundControls { display: grid; gap: .75rem; min-width: 0; }
+.backgroundControls label { display: grid; gap: .25rem; font-size: .8rem; }
+.backgroundControls input, .backgroundControls select { min-width: 0; width: 100%; border: 1px solid #ffffff25; border-radius: .25rem; padding: .35rem; background: #201f1d; color: #f0eee9; }
+.backgroundPage { position: relative; width: 100%; overflow: hidden; box-shadow: 0 0 0 1px #ffffff30; }
+.backgroundSample { position: relative; z-index: 40; padding: 15% 9%; font: 14px/1.5 Georgia, serif; pointer-events: none; }
+.customizer .backgroundImage { position: absolute; display: block; border: 0; padding: 0; border-radius: 0; background: transparent; cursor: grab; touch-action: none; }
+.backgroundImage img { display: block; width: 100%; height: 100%; pointer-events: none; }
+.customizer .backgroundImage[aria-pressed="true"] { outline: 1px dashed #b8832c; outline-offset: 2px; }
+.customizer button:hover:not(:disabled) { filter: brightness(1.15); }
+@media (max-width: 560px) { .backgroundWorkspace { grid-template-columns: 1fr; } .backgroundControls { grid-template-columns: 1fr 1fr; } }

@@ -14,3 +14,11 @@ Files are written under the configured Themes Path. Successful catalog discovery
 - A failed new-file write can leave a partial new file. Its exclusive name is never reused or overwritten automatically. Review such files manually.
 - The sample runs in a sandboxed iframe with network access blocked; externally loaded fonts or images may not appear there. Export and document rendering continue to use the existing theme selector contract.
 - Desktop filesystem permissions and platform rename support still apply; browser-only mode cannot save themes.
+
+## Repeating page backgrounds
+
+In Customize Theme, open **Page backgrounds → Import image…**. Import PNG, JPEG or WebP artwork, then drag it on the placement sheet. Artwork in the lower half anchors to the footer; upper artwork anchors to the header. The image selector allows overlapping images to be selected independently. Use Anchor, Left, Edge offset and Width for precise placement, or arrow keys (Shift for larger steps) while an image is focused. Remove image removes only that decoration.
+
+Save embeds the artwork into the theme CSS; no document asset path or temporary blob URL is required. Save As retains the images in the independent copy. The same backgrounds appear behind text on the editing sheet and on every physical page in Page View/PDF, including new documents using that theme. These are decorations, not document image nodes, and do not push text.
+
+Import accepts raster files up to 10 MB and 16 megapixels, normalizes them to PNG at a maximum 1600-pixel edge, and preserves transparency. Each processed image is limited to 2 MB, the combined embedded URLs to 8 MB, and a theme to 24 MB. SVG is intentionally excluded. Theme files remain self-contained for sharing or moving the Themes Path. Before pagination/printing, embedded backgrounds must finish loading; a decoding error stops export rather than silently omitting artwork.
