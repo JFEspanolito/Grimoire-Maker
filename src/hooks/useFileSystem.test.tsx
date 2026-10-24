@@ -11,6 +11,8 @@ import { useSessionStore } from '../stores/sessionStore'
 import { useTabStore } from '../stores/tabStore'
 import { useExplorerStore } from '../stores/explorerStore'
 import { useFileSystem } from './useFileSystem'
+import { loadSettings } from '../lib/preferences'
+import { useSettingsStore } from '../stores/settingsStore'
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
@@ -31,6 +33,7 @@ vi.mock('../lib/appState', async (importOriginal) => ({
   updateAppState: vi.fn(),
 }))
 vi.mock('../lib/templateActions', () => ({ applyTemplateFiles: vi.fn() }))
+vi.mock('../lib/preferences', () => ({ loadSettings: vi.fn(), saveSettings: vi.fn().mockResolvedValue(undefined) }))
 
 const emptyState = (): AppState => ({ lastWorkspace: null, recentWorkspaces: [], lastFile: null, settings: {} })
 let state: AppState
@@ -47,6 +50,7 @@ function Harness({ onReady }: { onReady: (value: ReturnType<typeof useFileSystem
 beforeEach(async () => {
   Object.defineProperty(window, '__TAURI_INTERNALS__', { value: {}, configurable: true })
   state = emptyState()
+  vi.mocked(loadSettings).mockResolvedValue({})
   directories = new Set(['/workspace'])
   useDocumentStore.getState().resetDocuments()
   useDocumentStore.getState().loadFromRaw(null, '')
@@ -511,4 +515,13 @@ describe('applying templates', () => {
     expect(applyTemplateFiles).not.toHaveBeenCalled()
     expect(useDocumentStore.getState().document.body).toBe('# Personal notes')
   })
+})
+
+
+it('restores appearance from setting.json rather than stale session settings', async () => {
+  state.settings = { theme: 'parchment', columns: 2, pageSize: 'a4' }
+  vi.mocked(loadSettings).mockResolvedValue({ theme: 'sci-fi', columns: 1, pageSize: 'letter' })
+  await act(async () => actions.restoreSession())
+  expect(useSettingsStore.getState()).toMatchObject({ theme: 'sci-fi', columns: 1, pageSize: 'letter' })
+  expect(state.settings.theme).toBe('parchment')
 })

@@ -2,6 +2,8 @@ import { appConfigDir, join } from '@tauri-apps/api/path'
 import { exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { PageSizeId, ThemeId } from '../types/document'
+import { saveSettings } from './preferences'
+import { useSessionStore } from '../stores/sessionStore'
 
 export interface PersistedSettings {
   pageSize?: PageSizeId
@@ -15,6 +17,7 @@ export interface AppState {
   /** Most recent first. The Rust side only re-grants fs access to folders listed here. */
   recentWorkspaces: string[]
   lastFile: string | null
+  /** Legacy copy retained for safe migration; new preferences live in setting.json. */
   settings: PersistedSettings
 }
 
@@ -94,9 +97,8 @@ export const forgetWorkspace =
 export function watchSettings(): () => void {
   return useSettingsStore.subscribe((s, prev) => {
     if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme) return
-    void updateAppState((state) => ({
-      ...state,
-      settings: { pageSize: s.pageSize, columns: s.columns, theme: s.theme },
-    }))
+    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme }).catch((error: unknown) => {
+      useSessionStore.getState().setWorkspaceError(`Could not save preferences: ${error instanceof Error ? error.message : String(error)}`)
+    })
   })
 }

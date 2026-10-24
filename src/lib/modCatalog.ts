@@ -47,7 +47,7 @@ export async function seedExamples(io: ModFs, root: string, examples: Record<str
   await io.writeTextFile(`${root}/.examples-seeded`, '1\n')
 }
 
-export async function discoverMods(io: ModFs, root: string, disabled: string[]): Promise<ModCatalog> {
+export async function discoverMods(io: ModFs, root: string, disabled: string[], paths?: Partial<Record<ModKind, string>>): Promise<ModCatalog> {
   const mods: ModEntry[] = []
   const snippets: TemplateSnippet[] = []
   const errors: string[] = []
@@ -62,7 +62,7 @@ export async function discoverMods(io: ModFs, root: string, disabled: string[]):
     return raw
   }
   for (const kind of Object.values(MOD_KIND)) {
-    const category = await ensureModDirectory(io, root, kind)
+    const category = paths?.[kind] ?? await ensureModDirectory(io, root, kind)
     const entries = (await io.readDir(category)).filter((entry) => !entry.name.startsWith('.') && entry.isDirectory && !entry.isSymlink)
       .sort((a, b) => a.name.localeCompare(b.name))
     if (entries.length > 256) throw new Error(`${kind}: limit of 256 mod folders exceeded`)

@@ -3,7 +3,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-const scope = vi.hoisted(() => ({ root: '', rejectRename: false, picked: '', saved: '', reads: [] as string[] }))
+import type { LibraryPaths } from './preferences'
+const scope = vi.hoisted(() => ({ root: '', rejectRename: false, picked: '', saved: '', reads: [] as string[], paths: null as LibraryPaths | null }))
+vi.mock('./preferences', async (original) => {
+  const actual = await original<typeof import('./preferences')>()
+  return { ...actual, loadLibraryPaths: () => scope.paths ? Promise.resolve(scope.paths) : actual.loadLibraryPaths() }
+})
 vi.mock('@tauri-apps/api/path', () => ({ appConfigDir: async () => scope.root, join: async (...parts: string[]) => parts.join('/') }))
 vi.mock('@tauri-apps/plugin-fs', async () => {
   const f = await import('node:fs/promises')
@@ -34,6 +39,7 @@ beforeEach(async () => {
   scope.picked = ''
   scope.saved = ''
   scope.reads = []
+  scope.paths = null
   await prepareModLibrary()
   await put('Mods/Snippets/Community/nested/01-note.md', '---\nsnippetName: Custom note\n---\n## Custom')
   await useModStore.getState().reload()
@@ -60,6 +66,34 @@ it('real temporary filesystem seeds examples, discovers custom nested Markdown a
  expect(useTemplateStore.getState().templates.some(t => t.id === 'linked')).toBe(false)
  expect(scope.reads.some(p => p.endsWith('.js') || p.includes('/Plugins/'))).toBe(false)
  expect(useTemplateStore.getState().templates).toHaveLength(3)
+})
+it('configured paths survive reload, keep disabled IDs and legacy templates, and receive ZIP imports without reseeding', async () => {
+  await useModStore.getState().setEnabled('Snippets/community', false)
+  await put('templates/legacy/index.md', '# Legacy')
+  const root = scope.root
+  scope.paths = { plugins: `${root}/custom/plugins`, snippets: `${root}/custom/snippets`, templates: `${root}/custom/templates`, themes: `${root}/custom/themes` }
+  await fs.cp(`${root}/Mods/Snippets`, scope.paths.snippets, { recursive: true })
+  await fs.cp(`${root}/Mods/Templates`, scope.paths.templates, { recursive: true })
+  await fs.mkdir(scope.paths.plugins, { recursive: true })
+  await fs.mkdir(scope.paths.themes, { recursive: true })
+  await fs.writeFile(`${scope.paths.plugins}/evil.js`, 'throw Error("never execute")')
+  // Remove a copied shipped example: custom paths must not resurrect it.
+  const example = Object.keys(MOD_EXAMPLES).find(path => path.startsWith('Templates/'))!
+  await fs.unlink(`${scope.paths.templates}/${example.slice('Templates/'.length)}`)
+  vi.resetModules()
+  const restarted = (await import('../stores/modStore')).useModStore
+  const templates = (await import('../stores/templateStore')).useTemplateStore
+  await restarted.getState().reload()
+  expect(restarted.getState().mods.find(mod => mod.id === 'Snippets/community')?.enabled).toBe(false)
+  expect(restarted.getState().snippets.some(snippet => snippet.label === 'Custom note')).toBe(false)
+  expect(templates.getState().templates.some(template => template.id === 'legacy')).toBe(true)
+  expect(templates.getState().dir).toBe(scope.paths.templates)
+  await expect(fs.access(`${scope.paths.templates}/${example.slice('Templates/'.length)}`)).rejects.toThrow()
+  scope.picked = `${root}/configured.zip`
+  await fs.writeFile(scope.picked, createTemplateZip({ 'index.md': new TextEncoder().encode('# Configured') }))
+  await (await import('./templateActions')).importTemplateZip()
+  expect(await fs.readFile(`${scope.paths.templates}/configured/index.md`, 'utf8')).toBe('# Configured')
+  expect(scope.reads.some(path => path.endsWith('.js'))).toBe(false)
 })
 it('toggle serializes with refresh and survives a module-level app restart without builtins fallback', async () => {
  await Promise.all([useModStore.getState().setEnabled('Snippets/community', false), useModStore.getState().reload(), useModStore.getState().setEnabled('Snippets/community', true)])

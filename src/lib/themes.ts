@@ -1,5 +1,6 @@
 import { appConfigDir, join } from '@tauri-apps/api/path'
 import { exists, mkdir, readDir, readTextFile } from '@tauri-apps/plugin-fs'
+import { loadLibraryPaths } from './preferences'
 
 export interface ThemeInfo {
   id: string
@@ -74,7 +75,8 @@ export interface UserThemes {
  * installs every valid file. A bad file is reported in `errors`, never fatal.
  */
 export async function loadUserThemes(): Promise<UserThemes> {
-  const dir = await ensureConfigSubdir('themes')
+  const dir = (await loadLibraryPaths()).themes
+  if (!(await exists(dir))) await mkdir(dir, { recursive: true })
 
   const themes: ThemeInfo[] = []
   const errors: string[] = []
@@ -82,7 +84,7 @@ export async function loadUserThemes(): Promise<UserThemes> {
   const taken = new Set(BUILTIN_THEMES.map((t) => t.id))
 
   const entries = (await readDir(dir))
-    .filter((e) => e.isFile && e.name.toLowerCase().endsWith('.css'))
+    .filter((e) => e.isFile && !e.isSymlink && e.name.toLowerCase().endsWith('.css'))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   for (const entry of entries) {
