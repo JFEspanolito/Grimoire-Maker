@@ -1,5 +1,5 @@
 import { reportError } from '../../lib/errorLogging'
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
 import { useDocumentStore } from '../../stores/documentStore'
@@ -11,6 +11,8 @@ import styles from './MenuBar.module.css'
 import { ModManager } from '../mods/ModManager'
 import { useImportSection } from '../../stores/explorerStore'
 import { NewProjectDialog } from '../project/NewProjectDialog'
+import { fileShortcut } from '../../lib/shortcuts'
+import { useSessionStore } from '../../stores/sessionStore'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
@@ -24,6 +26,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const actions = useFileSystem()
   const print = usePrint()
   const workspace = useDocumentStore((s) => s.workspaceRoot)
+  const recent = useSessionStore((s) => s.recentWorkspaces)
   const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const split = useTabStore((s) => s.split)
@@ -45,6 +48,18 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
     setError('')
     try { await action() } catch (cause) { reportError('menu.action', cause); setError(cause instanceof Error ? cause.message : String(cause)) }
   }
+  const onFileShortcut = useEffectEvent((event: KeyboardEvent) => {
+    const shortcut = fileShortcut(event)
+    if (!shortcut) return
+    event.preventDefault()
+    if (event.repeat || document.querySelector('dialog[open]')) return
+    void run(() => actions[shortcut]())
+  })
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => onFileShortcut(event)
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
   return <><nav ref={bar} className={styles.bar} aria-label="Application menu"
     onKeyDown={(event) => {
       if (event.key === 'Escape') {
@@ -60,6 +75,13 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <button onClick={() => { closeMenus(); setNewProjectOpen(true) }}>New Project…</button>
         <button onClick={() => void run(() => actions.openFile())}>Open File…</button>
         <button onClick={() => void run(actions.openWorkspace)}>Open Folder…</button>
+        <details className={styles.recent}>
+          <summary>Recent Folders</summary>
+          <div role="group" aria-label="Recent folders">
+            {recent.length ? recent.map(path => <button key={path} title={path} className={styles.recentPath}
+              onClick={() => void run(() => actions.openRecent(path))}>{path}</button>) : <button disabled>No recent folders</button>}
+          </div>
+        </details>
         <hr />
         <button disabled={readOnly} onClick={() => void run(actions.saveFile)}>Save</button>
         <button onClick={() => void run(actions.saveAll)}>Save All</button>

@@ -2,6 +2,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { useDocumentStore } from '../../stores/documentStore'
+import { useSessionStore } from '../../stores/sessionStore'
 import { FileTree } from './FileTree'
 import { useExplorerStore } from '../../stores/explorerStore'
 import { useTabStore } from '../../stores/tabStore'
@@ -203,4 +204,15 @@ describe('project explorer', () => {
     await act(async () => action?.click())
     expect(openFolderMock).toHaveBeenCalledWith('/book/Research')
   })
+})
+
+it('does not duplicate recent folders in the explorer', async () => {
+  const previous = useSessionStore.getState().recentWorkspaces
+  useSessionStore.getState().setRecentWorkspaces(['/books/Adventure'])
+  const container = document.createElement('div')
+  root = createRoot(container)
+  try {
+    await act(async () => root?.render(<FileTree />))
+    expect(container.querySelector('[aria-label="Recent folders"]')).toBeNull()
+  } finally { useSessionStore.getState().setRecentWorkspaces(previous) }
 })

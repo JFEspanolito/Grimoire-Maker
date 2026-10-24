@@ -131,3 +131,24 @@ it('keeps nested image dragging relative to its free group', async () => {
   editor.state.doc.descendants(node=>{if(node.type.name==='image')attrs=node.attrs})
   expect(attrs).toMatchObject({anchor:'free',xMm:20,yMm:25,widthMm:20})
 })
+
+it('sizes a content box vertically and deletes its whole group in one undoable action', async () => {
+  const { container, editor } = await mount(`${boxHtml('flow')}\n\nKeep this paragraph`)
+  const box = container.querySelector<HTMLElement>('.grimoire-content-box')!
+  const controls = box.querySelector('.grimoire-box-controls')!
+  expect(controls.textContent).not.toContain('(mm)')
+  const height = controls.querySelector<HTMLInputElement>('[aria-label="Content box height"]')!
+  expect(height).not.toBeNull()
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(height, '80')
+    height.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(editor.state.doc.firstChild?.attrs.heightMm).toBe(80)
+  expect(box.style.minHeight).toBe('80mm')
+  const before = editor.getJSON()
+  await act(async () => controls.querySelector<HTMLButtonElement>('[aria-label="Delete content box"]')!.click())
+  expect(editor.state.doc.textContent).toBe('Keep this paragraph')
+  expect(container.querySelector('.grimoire-content-box')).toBeNull()
+  await act(async () => editor.commands.undo())
+  expect(editor.getJSON()).toEqual(before)
+})

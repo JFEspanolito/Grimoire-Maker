@@ -23,7 +23,9 @@
 }
 .grimoire-content-box[data-selected='true'] > .grimoire-box-controls,
 .grimoire-content-box:focus-within > .grimoire-box-controls { display: flex; }
-.grimoire-box-controls button { cursor: grab; touch-action: none; }
+.grimoire-box-controls button { cursor: pointer; }
+.grimoire-box-controls button:hover { background: #ffffff20; }
+.grimoire-box-controls button[aria-label='Move content box'] { cursor: grab; touch-action: none; }
 .grimoire-box-controls select, .grimoire-box-controls input { background: #20242e; color: #fff; }
 .grimoire-box-controls input { width: 52px; }
 .page-preview .grimoire-box-controls { display: none !important; }

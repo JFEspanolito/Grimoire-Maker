@@ -3,14 +3,18 @@ import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import { MenuBar } from './MenuBar'
 import { Toolbar } from './Toolbar'
+import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 
 const openWorkspace = vi.hoisted(() => vi.fn())
+const openRecent = vi.hoisted(() => vi.fn())
 const saveFile = vi.hoisted(() => vi.fn())
+const saveAll = vi.hoisted(() => vi.fn())
+const openFile = vi.hoisted(() => vi.fn())
 const createNewFile = vi.hoisted(() => vi.fn())
 const createProject = vi.hoisted(() => vi.fn())
-vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openWorkspace, saveFile, createNewFile, createProject }), isTauri: () => false }))
+vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openWorkspace, openRecent, saveFile, saveAll, openFile, createNewFile, createProject }), isTauri: () => false }))
 vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
 vi.mock('../project/ProjectArchiveActions', () => ({ ProjectArchiveActions: () => <div>Archives</div> }))
 
@@ -20,7 +24,7 @@ it('groups application actions in keyboard-accessible menus', async () => {
   const root = createRoot(container)
   const toggle = vi.fn()
   await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={toggle} />))
-  expect(Array.from(container.querySelectorAll('summary')).map((item) => item.textContent)).toEqual(['File', 'View', 'Settings'])
+  expect(Array.from(container.querySelectorAll('nav > details > summary')).map((item) => item.textContent)).toEqual(['File', 'View', 'Settings'])
   await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Open Folder…')?.click())
   expect(openWorkspace).toHaveBeenCalledOnce()
   await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Save')?.click())
@@ -136,5 +140,65 @@ it('keeps the new project dialog open on picker cancellation or error and closes
     else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
     if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose)
     else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
+  }
+})
+
+it('runs basic file shortcuts through the existing actions without stealing modal or editor keys', async () => {
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  const modal = document.createElement('dialog')
+  const press = async (key: string, modifiers: KeyboardEventInit = { ctrlKey: true }) => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...modifiers })
+    await act(async () => window.dispatchEvent(event))
+    return event
+  }
+  try {
+    saveAll.mockClear(); openFile.mockClear(); createNewFile.mockClear()
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
+    expect((await press('s')).defaultPrevented).toBe(true)
+    expect(saveAll).toHaveBeenCalledOnce()
+    await press('s', { ctrlKey: true, repeat: true })
+    expect(saveAll).toHaveBeenCalledOnce()
+    await press('o')
+    await press('n')
+    expect(openFile).toHaveBeenCalledOnce()
+    expect(createNewFile).toHaveBeenCalledOnce()
+    await press('S', { metaKey: true })
+    expect(saveAll).toHaveBeenCalledTimes(2)
+    expect((await press('s', {})).defaultPrevented).toBe(false)
+    expect((await press('b')).defaultPrevented).toBe(false)
+    expect((await press('s', { ctrlKey: true, altKey: true })).defaultPrevented).toBe(false)
+    modal.open = true; document.body.append(modal)
+    await press('s'); await press('o'); await press('n')
+    expect(saveAll).toHaveBeenCalledTimes(2)
+    expect(openFile).toHaveBeenCalledOnce()
+    expect(createNewFile).toHaveBeenCalledOnce()
+    await act(async () => root.unmount())
+    modal.remove()
+    await press('s')
+    expect(saveAll).toHaveBeenCalledTimes(2)
+  } finally { modal.remove(); await act(async () => root.unmount()) }
+})
+
+it('keeps recent folders inside File and reopens the selected path', async () => {
+  const previous = useSessionStore.getState().recentWorkspaces
+  useSessionStore.getState().setRecentWorkspaces(['/books/Adventure', '/notes/Research'])
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
+    const file = container.querySelector('details')!
+    const recent = file.querySelector<HTMLElement>('[aria-label="Recent folders"]')!
+    expect(recent).not.toBeNull()
+    expect(Array.from(recent.querySelectorAll('button')).map(button => button.title)).toEqual(['/books/Adventure', '/notes/Research'])
+    file.open = true
+    await act(async () => recent.querySelector<HTMLButtonElement>('[title="/notes/Research"]')!.click())
+    expect(openRecent).toHaveBeenCalledWith('/notes/Research')
+    expect(file.open).toBe(false)
+    await act(async () => useSessionStore.getState().setRecentWorkspaces([]))
+    expect(file.textContent).toContain('No recent folders')
+  } finally {
+    await act(async () => root.unmount())
+    useSessionStore.getState().setRecentWorkspaces(previous)
   }
 })

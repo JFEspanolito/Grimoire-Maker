@@ -17,7 +17,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
       && current.state.selection.to < position + node.nodeSize
   } })
   useEffect(() => () => stopDrag.current?.(), [])
-  const { placement, widthMm, xMm, yMm } = node.attrs
+  const { placement, widthMm, heightMm, xMm, yMm } = node.attrs
   const attributes = boxAttributes(node.attrs)
   const change = (attrs: Record<string, unknown>) => {
     const position = getPos()
@@ -103,6 +103,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
   return (
     <NodeViewWrapper {...attributes} ref={boxRef} data-selected={selected || editing}
       style={{ width: widthMm === null ? undefined : `${boxNumber(widthMm, 5)}mm`,
+        minHeight: heightMm === null ? undefined : `${boxNumber(heightMm, 5)}mm`,
         position: placement === 'free' ? 'absolute' : undefined,
         left: placement === 'free' ? `${boxNumber(xMm) ?? 0}mm` : undefined,
         top: placement === 'free' ? `${boxNumber(yMm) ?? 0}mm` : undefined }}>
@@ -112,8 +113,17 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
         <label>Placement <select aria-label="Content box placement" value={placement} onChange={(event) => setPlacement(event.target.value)}>
           <option value="flow">Push text</option><option value="free">Over text</option>
         </select></label>
-        <label>Width (mm) <input aria-label="Content box width (mm)" type="number" min="5" max="500" placeholder="Auto"
+        <label>Width <input aria-label="Content box width" title="Width in millimetres" type="number" min="5" max="500" placeholder="Auto"
           value={widthMm ?? ''} onChange={(event) => change({ widthMm: boxNumber(event.target.value, 5) })} /></label>
+        <label>Height <input aria-label="Content box height" title="Minimum height in millimetres; expands to fit content" type="number" min="5" max="500" placeholder="Auto"
+          value={heightMm ?? ''} onChange={(event) => change({ heightMm: boxNumber(event.target.value, 5) })} /></label>
+        <button type="button" aria-label="Delete content box" title="Delete the entire content box" onClick={() => {
+          const position = getPos()
+          if (typeof position !== 'number') return
+          const current = editor.state.doc.nodeAt(position)
+          if (current?.type.name !== 'standardContentBox') return
+          editor.view.dispatch(closeHistory(editor.state.tr).delete(position, position + current.nodeSize))
+        }}>Delete</button>
       </div>
       <NodeViewContent />
     </NodeViewWrapper>

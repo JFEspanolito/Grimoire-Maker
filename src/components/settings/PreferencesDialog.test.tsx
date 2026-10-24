@@ -125,3 +125,26 @@ it('prevents closing or starting another copy while one is pending', async () =>
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close preferences"]')?.click())
   expect(onClose).toHaveBeenCalledOnce()
 })
+
+it('organizes preferences with a section index and a basic shortcut reference', async () => {
+  document.body.append(container)
+  container.querySelector('dialog')!.open = true
+  try {
+    const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+    expect(tabs.map(tab => tab.textContent)).toEqual(['Appearance', 'Content folders', 'Shortcuts'])
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+    await act(async () => tabs[2].click())
+    const panel = container.querySelector<HTMLElement>('#preferences-shortcuts')!
+    expect(panel.hidden).toBe(false)
+    expect(container.querySelector<HTMLElement>('#preferences-appearance')!.hidden).toBe(true)
+    const save = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Save All'))!
+    expect(Array.from(save.querySelectorAll('kbd')).map(key => key.textContent)).toEqual(['Ctrl', 'S'])
+    expect(panel.textContent).toContain('Bold')
+    await act(async () => tabs[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })))
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true')
+    expect(document.activeElement).toBe(tabs[0])
+    await act(async () => tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
+    expect(container.querySelector<HTMLElement>('#preferences-folders')!.hidden).toBe(false)
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true')
+  } finally { container.remove() }
+})

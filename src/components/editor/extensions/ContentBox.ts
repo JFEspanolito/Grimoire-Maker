@@ -14,6 +14,7 @@ export function boxNumber(value: unknown, minimum = 0): number | null {
 export function boxAttributes(attrs: PMNode['attrs']): Record<string, string> {
   const placement = attrs.placement === 'free' ? 'free' : 'flow'
   const width = boxNumber(attrs.widthMm, 5)
+  const height = boxNumber(attrs.heightMm, 5)
   const x = boxNumber(attrs.xMm)
   const y = boxNumber(attrs.yMm)
   return {
@@ -21,9 +22,10 @@ export function boxAttributes(attrs: PMNode['attrs']): Record<string, string> {
     'data-placement': placement,
     class: 'grimoire-content-box',
     ...(width === null ? {} : { 'data-width-mm': String(width) }),
+    ...(height === null ? {} : { 'data-height-mm': String(height) }),
     ...(x === null ? {} : { 'data-x-mm': String(x) }),
     ...(y === null ? {} : { 'data-y-mm': String(y) }),
-    style: `${width === null ? '' : `width:${width}mm;`}${placement === 'free' ? `position:absolute;left:${x ?? 0}mm;top:${y ?? 0}mm;` : ''}`,
+    style: `${width === null ? '' : `width:${width}mm;`}${height === null ? '' : `min-height:${height}mm;`}${placement === 'free' ? `position:absolute;left:${x ?? 0}mm;top:${y ?? 0}mm;` : ''}`,
   }
 }
 
@@ -40,6 +42,7 @@ export const ContentBox = Node.create({
     return {
       placement: { default: 'flow', rendered: false, parseHTML: (element) => element.dataset.placement === 'free' ? 'free' : 'flow' },
       widthMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.widthMm, 5) },
+      heightMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.heightMm, 5) },
       xMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.xMm) },
       yMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.yMm) },
     }

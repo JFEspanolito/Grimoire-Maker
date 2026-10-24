@@ -170,9 +170,8 @@ function RootDrop({ path, children }: { path: string | null; children: ReactNode
 export function FileTree() {
   const tree = useDocumentStore((s) => s.tree)
   const root = useDocumentStore((s) => s.workspaceRoot)
-  const recent = useSessionStore((s) => s.recentWorkspaces)
   const workspaceError = useSessionStore((s) => s.workspaceError)
-  const { openRecent, openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
+  const { openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
     useFileSystem()
   const [selected, setSelected] = useState<FileNode | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
@@ -310,23 +309,6 @@ export function FileTree() {
           </button>
         </div>
       </div>
-      {recent.length > 0 && (
-        <select
-          aria-label="Recent folders"
-          className="mb-2 w-full rounded bg-transparent text-xs text-white/70"
-          value=""
-          onChange={(e) => e.target.value && void run(() => openRecent(e.target.value))}
-        >
-          <option value="" className="text-black">
-            Recent folders…
-          </option>
-          {recent.map((path) => (
-            <option key={path} value={path} title={path} className="text-black">
-              {path.slice(path.lastIndexOf('/') + 1) || path}
-            </option>
-          ))}
-        </select>
-      )}
       {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
       {workspaceError && <p className="mb-2 text-xs text-amber-400" role="alert">{workspaceError}</p>}
       <DndContext sensors={sensors} onDragEnd={onDragEnd}

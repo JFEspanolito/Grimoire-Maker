@@ -17,3 +17,11 @@ Copying retains originals, nested assets, binary data, dotfiles, and empty direc
 Configured directories must remain present and accessible; missing directories or invalid preferences produce an error instead of silently resetting the library. The native backend restores only the configured directory scopes; it does not change capability files or use workspace restoration to authorize library paths. Theme files are CSS only; Plugins are configurable storage only and no external executable plugin code is loaded.
 
 The legacy `templates` directory under application configuration remains a separate compatibility source. Changing the modern Templates path does not relocate that legacy folder. Modern package IDs continue to take precedence over matching legacy IDs, including disabled modern packages. Theme selection uses the existing theme catalog and document/settings persistence.
+
+## Sections and shortcuts
+
+Preferences has a left-hand section index and right-hand content: Appearance, Content folders, and Shortcuts. Select a section or use Up/Down, Home, and End while focusing its tab. On narrow windows the index wraps above the content. Theme customization stays within Appearance; return with Back before switching sections.
+
+Shortcuts lists the application bindings and the editor's existing formatting shortcuts. Ctrl+S saves all changed documents, Ctrl+O opens a file, and Ctrl+N creates a file through the same actions as File. Use Cmd instead of Ctrl on macOS. These file shortcuts do not run during dialogs, composition, or key repetition. Document editing supports Ctrl+Z, Ctrl+Shift+Z, Ctrl+B, Ctrl+I, and Ctrl+U. These are fixed defaults, not editable bindings.
+
+Recent Folders is available under File rather than duplicated in the file explorer. It uses the existing recent-workspace history and opening behavior.
