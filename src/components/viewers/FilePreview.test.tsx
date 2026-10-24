@@ -5,11 +5,14 @@ import { strToU8, zipSync } from 'fflate'
 import { FilePreview } from './FilePreview'
 
 const fs = vi.hoisted(() => ({ readFile: vi.fn(), stat: vi.fn() }))
+const reportError = vi.hoisted(() => vi.fn())
+vi.mock('../../lib/errorLogging', () => ({ reportError }))
 vi.mock('@tauri-apps/plugin-fs', () => fs)
 vi.mock('./PdfPreview', () => ({ PdfPreview: () => <div>PDF page viewer</div> }))
 let host: HTMLDivElement
 let root: Root
 beforeEach(() => {
+  reportError.mockReset()
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   fs.stat.mockReset().mockResolvedValue({ size: 10 })
   fs.readFile.mockReset().mockResolvedValue(new Uint8Array([1, 2]))
@@ -48,6 +51,7 @@ it('rejects oversized files before reading and reports unreadable images', async
   await show('H:/Research/broken.png')
   await act(async () => host.querySelector('img')?.dispatchEvent(new Event('error')))
   expect(host.querySelector('[role="alert"]')?.textContent).toContain('image')
+  expect(reportError).toHaveBeenCalledWith('preview.image', expect.stringContaining('image'))
 })
 
 it('does not publish a stale file after changing tabs', async () => {

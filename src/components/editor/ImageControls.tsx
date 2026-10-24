@@ -116,7 +116,7 @@ export function ImageControls({ editor, attrs: selection }: { editor: Editor | n
         </select>
       </label>
       <label className={field}>
-        Width (mm)
+        Width
         <input
           type="number"
           min={5}

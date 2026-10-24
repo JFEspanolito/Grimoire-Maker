@@ -54,6 +54,7 @@ pub fn ensure(app: &AppHandle) {
         .and_then(|dir| ensure_in(&dir));
     if let Err(e) = result {
         eprintln!("could not prepare the config folder: {e}");
+        crate::commands::error_logs::best_effort("native.config", &e.to_string());
     }
 }
 

@@ -2,10 +2,11 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { useDocumentStore } from '../../stores/documentStore'
+import { useSessionStore } from '../../stores/sessionStore'
 import { FileTree } from './FileTree'
 import { useExplorerStore } from '../../stores/explorerStore'
 import { useTabStore } from '../../stores/tabStore'
-import { Toolbar } from '../layout/Toolbar'
+import { MenuBar } from '../layout/MenuBar'
 
 vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
 
@@ -13,10 +14,11 @@ const openFileMock = vi.hoisted(() => vi.fn())
 const moveEntryMock = vi.hoisted(() => vi.fn())
 const openFolderMock = vi.hoisted(() => vi.fn())
 const importIntoMock = vi.hoisted(() => vi.fn())
+const renameEntryMock = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/useFileSystem', () => ({
   useFileSystem: () => ({
     openWorkspace: vi.fn(), openRecent: vi.fn(), openFile: openFileMock,
-    createFile: vi.fn(), createFolder: vi.fn(), renameEntry: vi.fn(), renameWorkspace: vi.fn(), moveEntry: moveEntryMock,
+    createFile: vi.fn(), createFolder: vi.fn(), renameEntry: renameEntryMock, renameWorkspace: vi.fn(), moveEntry: moveEntryMock,
     openFolder: openFolderMock,
     importInto: importIntoMock,
   }),
@@ -33,17 +35,39 @@ afterEach(async () => {
 })
 
 describe('project explorer', () => {
-  it('imports from the toolbar immediately before Export PDF into the selected binder section', async () => {
+  it('hides Markdown extensions but retains disk paths and the extension when renaming', async () => {
+    useDocumentStore.getState().setWorkspace('/book', [
+      { name: 'Chapter.md', path: '/book/Chapter.md', isDirectory: false },
+      { name: 'reference.pdf', path: '/book/reference.pdf', isDirectory: false },
+      { name: 'folder.md', path: '/book/folder.md', isDirectory: true, children: [] },
+    ])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    expect(container.textContent).toContain('Chapter')
+    expect(container.textContent).not.toContain('Chapter.md')
+    expect(container.textContent).toContain('reference.pdf')
+    expect(container.textContent).toContain('folder.md')
+    const row = container.querySelector<HTMLElement>('[data-tree-path="/book/Chapter.md"]')!
+    await act(async () => row.click())
+    expect(openFileMock).toHaveBeenCalledWith('/book/Chapter.md')
+    await act(async () => row.querySelector<HTMLButtonElement>('[title="Rename"]')?.click())
+    const input = container.querySelector('input')!
+    expect(input.value).toBe('Chapter')
+    input.value = 'Renamed'
+    await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+    expect(renameEntryMock).toHaveBeenCalledWith('/book/Chapter.md', 'Renamed.md')
+  })
+  it('imports from the File menu into the selected binder section', async () => {
     useDocumentStore.getState().setWorkspace('/book', ['Draft', 'Research', 'Trash'].map((name) => ({ name, path: `/book/${name}`, isDirectory: true, children: [] })))
     const container = document.createElement('div')
     root = createRoot(container)
-    await act(async () => root?.render(<><Toolbar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><FileTree /></>))
+    await act(async () => root?.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><FileTree /></>))
     for (const section of ['Draft', 'Research']) {
       await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Collapse ${section}"]`)?.click())
-      const buttons = Array.from(container.querySelectorAll('button')).filter((item) => item.textContent === 'Import')
+      const buttons = Array.from(container.querySelectorAll('button')).filter((item) => item.textContent === 'Import…')
       expect(buttons).toHaveLength(1)
-      expect(buttons[0].closest('header')).not.toBeNull()
-      expect(buttons[0].nextElementSibling?.textContent).toBe('Export PDF')
+      expect(buttons[0].closest('details')?.querySelector('summary')?.textContent).toBe('File')
       expect(buttons[0].title).toBe(`Import into ${section}`)
       await act(async () => buttons[0].click())
       expect(importIntoMock).toHaveBeenCalledWith()
@@ -94,9 +118,9 @@ describe('project explorer', () => {
       expect(collapse).not.toBeNull()
       await act(async () => collapse?.click())
       expect(container.querySelector(`button[aria-label="Expand ${name}"]`)).not.toBeNull()
-      if (name === 'Draft') expect(container.textContent).not.toContain('Chapter 1.md')
+      if (name === 'Draft') expect(container.textContent).not.toContain('Chapter 1')
       await act(async () => container.querySelector<HTMLButtonElement>(`button[aria-label="Expand ${name}"]`)?.click())
-      if (name === 'Draft') expect(container.textContent).toContain('Chapter 1.md')
+      if (name === 'Draft') expect(container.textContent).toContain('Chapter 1')
     }
   })
 
@@ -126,7 +150,7 @@ describe('project explorer', () => {
     const container = document.createElement('div')
     root = createRoot(container)
     await act(async () => root?.render(<FileTree />))
-    const file = Array.from(container.querySelectorAll('li > div')).find((row) => row.textContent?.includes('Chapter.md'))
+    const file = container.querySelector('[data-tree-path="/projects/My Grimoire/Draft/Chapter.md"]')
     await act(async () => file?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 20, clientY: 20 })))
 
     expect(container.querySelector('[role="menuitem"]')?.textContent).toBe('Open')
@@ -180,4 +204,15 @@ describe('project explorer', () => {
     await act(async () => action?.click())
     expect(openFolderMock).toHaveBeenCalledWith('/book/Research')
   })
+})
+
+it('does not duplicate recent folders in the explorer', async () => {
+  const previous = useSessionStore.getState().recentWorkspaces
+  useSessionStore.getState().setRecentWorkspaces(['/books/Adventure'])
+  const container = document.createElement('div')
+  root = createRoot(container)
+  try {
+    await act(async () => root?.render(<FileTree />))
+    expect(container.querySelector('[aria-label="Recent folders"]')).toBeNull()
+  } finally { useSessionStore.getState().setRecentWorkspaces(previous) }
 })

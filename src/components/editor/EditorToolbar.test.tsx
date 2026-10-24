@@ -22,6 +22,14 @@ let host: HTMLDivElement | null = null
 const markdownOf = (value: Editor) => (value.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown()
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
 
+it('places the independent Guides menu immediately after Image', async () => {
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root?.render(<EditorToolbar editor={null} />))
+  const image = container.querySelector('[title^="Insert image"]')!
+  expect(image.nextElementSibling?.getAttribute('aria-label')).toBe('Guides')
+})
+
 it('keeps the image layout row mounted and empty when the selection leaves the image', async () => {
   editor = new Editor({ extensions: [StarterKit, GrimoireImage], content: '<p>Text</p><img src="map.png" />' })
   const container = document.createElement('div')
@@ -82,7 +90,7 @@ describe('block formatting and underline', () => {
     ['Bulleted list', 'ul', 'listStyle', 'disc outside', '- Sample text'],
     ['Numbered list', 'ol', 'listStyle', 'decimal outside', '1. Sample text'],
     ['Quote', 'blockquote', 'borderLeftWidth', '3px', '> Sample text'],
-    ['Horizontal rule', 'hr', 'borderTopWidth', '2px', '---'],
+    ['Divider', 'hr', 'borderTopWidth', '2px', '---'],
   ])('%s applies a visible block and persists Markdown', async (label, selector, property, expectedStyle, markdown) => {
     const toolbar = await mountToolbar()
     if (selector === 'hr') editor!.commands.setTextSelection(12)

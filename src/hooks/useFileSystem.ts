@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readTextFile, rename, writeTextFile, readFile, writeFile, stat } from '@tauri-apps/plugin-fs'
 import { importFiles, type ImportSection } from '../lib/fileImport'
+import { loadSettings } from '../lib/preferences'
 import { useDocumentStore } from '../stores/documentStore'
 import { useSessionStore } from '../stores/sessionStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -268,11 +269,13 @@ export function useFileSystem() {
       const state = await loadAppState()
       useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
 
-      const { pageSize, columns, theme } = state.settings
+      const { pageSize, columns, theme, rulerGuides, zoom } = await loadSettings()
       const settings = useSettingsStore.getState()
       if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
       if (columns === 1 || columns === 2) settings.setColumns(columns)
       if (typeof theme === 'string') settings.setTheme(theme)
+      settings.setRulerGuides(rulerGuides ?? [])
+      settings.setZoom(typeof zoom === 'number' ? zoom : 1)
 
       const { lastWorkspace } = state
       if (!lastWorkspace) return

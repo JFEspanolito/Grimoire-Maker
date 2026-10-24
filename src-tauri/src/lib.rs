@@ -7,7 +7,12 @@ mod pdf;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            commands::error_logs::initialize(app.handle());
             config::ensure(app.handle());
+            if let Err(error) = commands::preferences::restore_scopes(app.handle()) {
+                eprintln!("could not restore library directories: {error}");
+                commands::error_logs::best_effort("native.startup", &error);
+            }
             Ok(())
         })
         .plugin(tauri_plugin_fs::init())
@@ -28,6 +33,11 @@ pub fn run() {
             commands::workspace::rename_workspace,
             commands::workspace::open_folder,
             commands::mods::open_mods_folder,
+            commands::preferences::load_library_paths,
+            commands::preferences::change_library_path,
+            commands::preferences::load_settings,
+            commands::preferences::save_settings,
+            commands::error_logs::append_error_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Grimoire Maker");

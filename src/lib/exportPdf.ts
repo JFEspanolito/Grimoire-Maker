@@ -1,3 +1,4 @@
+import { prepareThemeBackgrounds } from './themeDecorations'
 import { Previewer } from 'pagedjs'
 import { invoke } from '@tauri-apps/api/core'
 import printCss from '../styles/print.css?raw'
@@ -73,6 +74,13 @@ function buildContent(request: PageRequest): HTMLElement {
   content.innerHTML = `<div class="grimoire-content"><div class="ProseMirror">${source.innerHTML}</div></div>`
   // Editor-only labels would add lines Paged.js measures but the printer never draws.
   content.querySelectorAll('.grimoire-image-chip').forEach((chip) => chip.remove())
+  content.querySelectorAll('[data-editor-only], .grimoire-image-resize').forEach((control) => control.remove())
+  content.querySelectorAll('.grimoire-content-box').forEach((box) => {
+    box.removeAttribute('data-selected')
+    box.classList.remove('ProseMirror-selectednode')
+    // React node-view wrappers are editing machinery, not extra layout boxes.
+    box.querySelectorAll('[data-node-view-content], [data-node-view-content-react]').forEach((wrapper) => wrapper.replaceWith(...wrapper.childNodes))
+  })
   return content
 }
 
@@ -85,6 +93,7 @@ export async function paginate(
   request: PageRequest,
   target: HTMLElement,
 ): Promise<void> {
+  await prepareThemeBackgrounds(request.theme)
   await previewer.preview(
     buildContent(request),
     [{ 'print.css': printCss }, { 'export.css': pageRules(request) }],

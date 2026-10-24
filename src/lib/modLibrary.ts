@@ -1,6 +1,7 @@
 import { appConfigDir } from '@tauri-apps/api/path'
 import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
 import { ensureModDirectory, seedExamples, type ModFs } from './modCatalog'
+import { loadLibraryPaths, type LibraryPaths } from './preferences'
 
 const exampleFiles = import.meta.glob('../assets/mods/**/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 export const MOD_EXAMPLES = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
@@ -10,7 +11,7 @@ export const modFs: ModFs = {
   writeTextFile: (path, text) => writeTextFile(path, text, { createNew: true }),
 }
 
-export interface ModLibraryPaths { root: string; templates: string; preferences: string }
+export interface ModLibraryPaths extends LibraryPaths { root: string; preferences: string }
 let preparation: Promise<ModLibraryPaths> | null = null
 export function prepareModLibrary(): Promise<ModLibraryPaths> {
   preparation ??= initializeLibrary().finally(() => { preparation = null })
@@ -19,13 +20,17 @@ export function prepareModLibrary(): Promise<ModLibraryPaths> {
 
 async function initializeLibrary(): Promise<ModLibraryPaths> {
   const config = (await appConfigDir()).replaceAll('\\', '/').replace(/\/$/, '')
+  const paths = await loadLibraryPaths()
   if (!(await exists(config))) await mkdir(config, { recursive: true })
   const root = await ensureModDirectory(modFs, config, 'Mods')
   await ensureModDirectory(modFs, root, 'Snippets')
   await ensureModDirectory(modFs, root, 'Plugins')
-  const templates = await ensureModDirectory(modFs, root, 'Templates')
-  await seedExamples(modFs, root, MOD_EXAMPLES)
-  return { root, templates, preferences: `${config}/mods.json` }
+  await ensureModDirectory(modFs, root, 'Templates')
+  // Seed only the original default library. Never populate a user's custom directory implicitly.
+  const examples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) =>
+    path.startsWith('Templates/') ? paths.templates === `${root}/Templates` : paths.snippets === `${root}/Snippets`))
+  await seedExamples(modFs, root, examples)
+  return { root, ...paths, preferences: `${config}/mods.json` }
 }
 
 export async function readDisabledMods(path: string): Promise<string[]> {

@@ -8,6 +8,7 @@ import { useModStore } from '../../stores/modStore'
 import type { TemplateSnippet } from '../../lib/templateSnippets'
 import { SNIPPETS, type Snippet } from './snippets'
 import { findSnippetDropTarget } from '../../lib/snippetDrop'
+import { insertContentBox } from '../../lib/contentBoxes'
 
 type PaletteSnippet = Snippet | TemplateSnippet
 
@@ -47,7 +48,7 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
   const snippets: PaletteSnippet[] = [...(ready ? folderSnippets : SNIPPETS), ...custom]
   const groups = [...new Set(snippets.map((snippet) => snippet.group))]
   const insert = (snippet: PaletteSnippet) => {
-    if (canInsert) editor?.chain().focus().insertContent('markdown' in snippet ? snippet.markdown : snippet.node).run()
+    if (canInsert && editor) insertContentBox(editor, 'markdown' in snippet ? snippet.markdown : snippet.node)
   }
 
   const resolveDrop = ({ activatorEvent, delta }: DragMoveEvent | DragEndEvent) => {
@@ -60,7 +61,7 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
     const target = resolveDrop(event)
     setDraggedId(null)
     setCaret(null)
-    if (snippet && target) target.editor.chain().focus().insertContentAt(target.position, 'markdown' in snippet ? snippet.markdown : snippet.node).run()
+    if (snippet && target) insertContentBox(target.editor, 'markdown' in snippet ? snippet.markdown : snippet.node, target.position)
   }
   const dragged = snippets.find((snippet) => snippet.id === draggedId)
 

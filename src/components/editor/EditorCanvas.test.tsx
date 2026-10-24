@@ -242,3 +242,41 @@ it.each([['left', 40, 40], ['right', 40, 40], ['left', 140, 54], ['right', 140, 
   expect(editor.state.doc.child(1).textContent).toBe('Beside this paragraph')
   expect(useDocumentStore.getState().document.body).toContain(`data-align="${side}"`)
 })
+
+it.each(['left', 'right'])('grows a %s wrapped image within its second column without changing placement', async (align) => {
+  useDocumentStore.getState().loadFromRaw('/book/chapter.md', `<img src="assets/map.png" data-align="${align}" data-width-mm="40" />`)
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  let editor!: Editor
+  await act(async () => root?.render(<EditorCanvas onReady={value => { editor = value }} />))
+  const page = container.querySelector<HTMLElement>('.grimoire-page')!
+  const image = container.querySelector<HTMLImageElement>('.grimoire-image img')!
+  const wrapper = image.parentElement!
+  vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 420, height: 594 } as DOMRect)
+  vi.spyOn(image, 'getBoundingClientRect').mockReturnValue({ left: 250, top: 40, width: 80, height: 100 } as DOMRect)
+  vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({ left: 250, top: 40, width: 80, height: 100 } as DOMRect)
+  vi.spyOn(wrapper.parentElement!, 'getClientRects').mockReturnValue([
+    { left: 20, right: 190, top: 20, bottom: 300, width: 170 },
+    { left: 230, right: 400, top: 20, bottom: 300, width: 170 },
+  ] as unknown as DOMRectList)
+  await act(async () => { editor.commands.setNodeSelection(0); image.dispatchEvent(new Event('load')) })
+  const handle = container.querySelector<HTMLButtonElement>('[aria-label="Resize image"]')!
+  const pointer = (type: string, x: number, y: number) => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })
+    Object.defineProperty(event, 'pointerId', { value: 3 })
+    return event
+  }
+  await act(async () => handle.dispatchEvent(pointer('pointerdown', 330, 140)))
+  await act(async () => window.dispatchEvent(pointer('pointermove', 370, 190)))
+  expect(image.style.width).toBe('60mm')
+  await act(async () => window.dispatchEvent(pointer('pointerup', 370, 190)))
+  expect(editor.getAttributes('image')).toMatchObject({ widthMm: 60, align, anchor: 'flow' })
+  await act(async () => editor.commands.undo())
+  expect(editor.getAttributes('image')).toMatchObject({ widthMm: 40, align, anchor: 'flow' })
+  await act(async () => handle.dispatchEvent(pointer('pointerdown', 330, 140)))
+  await act(async () => window.dispatchEvent(pointer('pointermove', 1000, 1000)))
+  expect(image.style.width).toBe('85mm')
+  await act(async () => window.dispatchEvent(pointer('pointercancel', 1000, 1000)))
+  expect(image.style.width).toBe('40mm')
+})

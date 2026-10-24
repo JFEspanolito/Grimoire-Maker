@@ -1,0 +1,38 @@
+.pages {
+  /* Saved theme backgrounds are painted once per physical paper, not stretched. */
+  background: none !important;
+}
+
+.flow[data-paginated='true'] {
+  column-count: var(--page-columns);
+  column-gap: 8mm;
+  column-height: var(--content-height);
+  column-fill: auto;
+  column-wrap: wrap;
+  row-gap: var(--row-gap);
+}
+
+/* Keep the flow static: free-positioned images still belong to the outer page. */
+.paper {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  z-index: -2;
+  pointer-events: none;
+  box-shadow: 0 2mm 6mm rgb(0 0 0 / 0.4);
+}
+
+.overlays {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.notice {
+  max-width: 210mm;
+  padding: .5rem;
+  color: #e1bd78;
+  font-size: .8rem;
+}

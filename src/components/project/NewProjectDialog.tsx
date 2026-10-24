@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { useEffect, useRef, useState } from 'react'
 
 interface Props {
@@ -24,6 +25,7 @@ export function NewProjectDialog({ onCreate, onClose }: Props) {
     try {
       if (await onCreate(name.trim())) onClose()
     } catch (cause) {
+      reportError('project.create', cause)
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       locked.current = false

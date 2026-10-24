@@ -2,11 +2,16 @@ import { appConfigDir, join } from '@tauri-apps/api/path'
 import { exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { PageSizeId, ThemeId } from '../types/document'
+import type { RulerGuide } from '../types/ruler'
+import { saveSettings } from './preferences'
+import { useSessionStore } from '../stores/sessionStore'
 
 export interface PersistedSettings {
   pageSize?: PageSizeId
   columns?: 1 | 2
   theme?: ThemeId
+  rulerGuides?: RulerGuide[]
+  zoom?: number
 }
 
 /** What survives a restart. Stored as `state.json` in the app config folder. */
@@ -15,6 +20,7 @@ export interface AppState {
   /** Most recent first. The Rust side only re-grants fs access to folders listed here. */
   recentWorkspaces: string[]
   lastFile: string | null
+  /** Legacy copy retained for safe migration; new preferences live in setting.json. */
   settings: PersistedSettings
 }
 
@@ -49,7 +55,8 @@ export async function loadAppState(): Promise<AppState> {
       lastFile: asPath(raw.lastFile),
       settings: typeof raw.settings === 'object' && raw.settings ? raw.settings : {},
     }
-  } catch {
+  } catch (error) {
+    console.error('Could not load session state', error)
     return emptyState()
   }
 }
@@ -93,10 +100,9 @@ export const forgetWorkspace =
 /** Saves page setup whenever it changes; returns the unsubscribe function. */
 export function watchSettings(): () => void {
   return useSettingsStore.subscribe((s, prev) => {
-    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme) return
-    void updateAppState((state) => ({
-      ...state,
-      settings: { pageSize: s.pageSize, columns: s.columns, theme: s.theme },
-    }))
+    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.zoom === prev.zoom) return
+    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, zoom: s.zoom }).catch((error: unknown) => {
+      useSessionStore.getState().setWorkspaceError(`Could not save preferences: ${error instanceof Error ? error.message : String(error)}`)
+    })
   })
 }

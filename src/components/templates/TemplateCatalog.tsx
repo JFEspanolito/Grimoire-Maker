@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { useState } from 'react'
 import { useTemplateStore } from '../../stores/templateStore'
 import { exportTemplateZip, importTemplateZip } from '../../lib/templateActions'
@@ -23,10 +24,11 @@ function TemplateList({
           {onExport && (
             <button
               className="shrink-0 text-xs text-white/50 hover:text-white"
-              title="Export as .zip"
+              title="Export template"
+              aria-label={`Export ${t.label}`}
               onClick={() => onExport(t)}
             >
-              ⤓ zip
+              ⤓
             </button>
           )}
         </li>
@@ -53,6 +55,7 @@ export function TemplateCatalog() {
       const text = await action()
       setNotice(text ? { kind: 'ok', text } : null)
     } catch (e) {
+      reportError('templates.action', e)
       setNotice({ kind: 'error', text: e instanceof Error ? e.message : String(e) })
     }
   }
@@ -93,7 +96,7 @@ export function TemplateCatalog() {
           )}
           {isTauri() && (
             <button className="self-start text-xs underline" onClick={() => void importZip()}>
-              Import .zip…
+              Import…
             </button>
           )}
           {notice && (

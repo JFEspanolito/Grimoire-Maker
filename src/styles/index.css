@@ -1,6 +1,41 @@
 @import 'tailwindcss';
 @import './print.css';
 
+/* Group boxes have no decorative frame. Their direct content stays editable. */
+.grimoire-content-box { position: static; max-width: 100%; break-inside: avoid; }
+.grimoire-content-box[data-placement='free'] { position: absolute; margin: 0; z-index: 2; max-width: none; }
+.grimoire-content-box[data-selected='true'],
+.grimoire-content-box:focus-within { outline: 1px dashed #f59e0b; }
+.grimoire-box-controls {
+  display: none;
+  position: absolute;
+  z-index: 5;
+  transform: translateY(-100%);
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #20242e;
+  color: #fff;
+  font: 11px system-ui, sans-serif;
+}
+.grimoire-content-box[data-selected='true'] > .grimoire-box-controls,
+.grimoire-content-box:focus-within > .grimoire-box-controls { display: flex; }
+.grimoire-box-controls button { cursor: pointer; }
+.grimoire-box-controls button:hover { background: #ffffff20; }
+.grimoire-box-controls button[aria-label='Move content box'] { cursor: grab; touch-action: none; }
+.grimoire-box-controls select, .grimoire-box-controls input { background: #20242e; color: #fff; }
+.grimoire-box-controls input { width: 52px; }
+.page-preview .grimoire-box-controls { display: none !important; }
+.page-preview .grimoire-content-box { outline: none !important; }
+@media print {
+  .grimoire-box-controls { display: none !important; }
+  .grimoire-content-box { outline: none !important; }
+}
+
 html,
 body,
 #root {

@@ -44,6 +44,34 @@ describe('PDF lifecycle', () => {
     expect(document.querySelector('.print-root')).toBeNull()
     expect(document.body.classList.contains('exporting')).toBe(false)
   })
+  it('excludes visual ruler guides from the paginated document', async () => {
+    const guide = document.createElement('div')
+    guide.dataset.rulerOverlay = 'true'
+    guide.textContent = 'Editor-only row guide'
+    document.body.append(guide)
+    vi.mocked(invoke).mockResolvedValueOnce(undefined)
+    await exportPdf({ ...request, outputPath: '/book.pdf' })
+    const content = mocks.preview.mock.calls[0]![0] as HTMLElement
+    expect(content.textContent).toBe('Text')
+    expect(content.querySelector('[data-ruler-overlay]')).toBeNull()
+    expect(guide.isConnected).toBe(true)
+  })
+  it('preserves box layout and children without editing controls, selection, or node-view wrappers', async () => {
+    document.querySelector('.ProseMirror')!.innerHTML = '<div class="grimoire-content-box ProseMirror-selectednode" data-placement="free" data-selected="true" style="position:absolute;left:12mm;top:18mm;width:80mm"><div data-editor-only="true">Move content box</div><div data-node-view-content-react><div data-node-view-content><h2>Grouped</h2><table><tbody><tr><td>Kept</td></tr></tbody></table></div></div></div>'
+    vi.mocked(invoke).mockResolvedValueOnce(undefined)
+    await exportPdf({ ...request, outputPath: '/book.pdf' })
+    const content = mocks.preview.mock.calls[0]![0] as HTMLElement
+    const box = content.querySelector<HTMLElement>('.grimoire-content-box')!
+    expect(box.textContent).toBe('GroupedKept')
+    expect(box.style.left).toBe('12mm')
+    expect(box.style.width).toBe('80mm')
+    expect(box.querySelector('table')).not.toBeNull()
+    expect(box.querySelector('[data-node-view-content]')).toBeNull()
+    expect(box.querySelector('[data-editor-only]')).toBeNull()
+    expect(box.hasAttribute('data-selected')).toBe(false)
+    expect(box.classList.contains('ProseMirror-selectednode')).toBe(false)
+    expect(document.querySelector('[data-editor-only]')).not.toBeNull()
+  })
   it('exports the active split pane and excludes simultaneous print sessions', async () => {
     document.body.innerHTML += '<section data-active-editor="true"><div class="grimoire-content"><div class="ProseMirror"><p>Active pane</p></div></div></section>'
     vi.spyOn(window, 'print').mockImplementation(() => {})

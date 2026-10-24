@@ -74,7 +74,7 @@ export default function App() {
     <PluginProvider>
       <div data-theme={resolveTheme(theme, themes)} className={styles.shell}>
         <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
-        <Toolbar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
+        <Toolbar />
         <div className={styles.body}>
             <aside className={`${styles.sidebar} ${!visiblePanels.files && !visiblePanels.templates && !gitOpen ? styles.rail : ''}`}>
               <div className={styles.explorer}>

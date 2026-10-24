@@ -1,3 +1,4 @@
+import { reportError } from '../../lib/errorLogging'
 import { useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { useModStore } from '../../stores/modStore'
@@ -17,20 +18,20 @@ export function ModManager({ onClose }: { onClose: () => void }) {
   }, [reload])
   const run = async (operation: () => Promise<unknown>) => {
     setActionError('')
-    try { await operation() } catch (error) { setActionError(error instanceof Error ? error.message : String(error)) }
+    try { await operation() } catch (error) { reportError('mods.action', error); setActionError(error instanceof Error ? error.message : String(error)) }
   }
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="mod-manager-title" onCancel={onClose}>
     <header className={styles.header}>
       <h2 id="mod-manager-title">Mod Manager</h2>
       <button type="button" onClick={onClose} aria-label="Close Mod Manager">×</button>
     </header>
-    <p className={styles.description}>Copy a template or snippet folder into Mods, then restart or refresh. Only declarative Markdown is loaded.</p>
+    <p className={styles.description}>Add template or snippet folders to their configured locations, then restart or refresh. Change those locations in Settings → Preferences. Only declarative Markdown is loaded.</p>
     <div className={styles.actions}>
-      <button type="button" disabled={!root || busy} onClick={() => void run(() => invoke('open_mods_folder'))}>Open Mods Folder</button>
+      <button type="button" disabled={!root || busy} onClick={() => void run(() => invoke('open_mods_folder'))}>Open Default Mods Folder</button>
       <button type="button" disabled={busy || !isTauri()} onClick={() => void run(reload)}>Refresh</button>
       {busy && <span role="status">Loading mods…</span>}
     </div>
-    {root && <input className={styles.path} aria-label="Mods folder path" readOnly value={root} onFocus={(event) => event.target.select()} />}
+    {root && <input className={styles.path} aria-label="Default mods folder path" readOnly value={root} onFocus={(event) => event.target.select()} />}
     {!isTauri() && <p className={styles.notice}>Folder mods are available in the desktop application.</p>}
     {(actionError || errors.length > 0) && <div role="alert" className={styles.errors}>
       {actionError && <p>{actionError}</p>}
@@ -48,7 +49,7 @@ export function ModManager({ onClose }: { onClose: () => void }) {
     </fieldset>)}
     <footer className={styles.description}>
       Changes apply immediately and survive restarts. Disabling never deletes your mods or existing document content.
-      Legacy templates remain available; copy them into Mods/Templates to manage them here.
+      Legacy templates remain available separately; copy them into the configured Template Path to manage them here.
       Executable plugins, including a community Ruler, are reserved for stage 2. The built-in Ruler is unchanged.
     </footer>
   </dialog>

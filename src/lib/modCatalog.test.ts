@@ -22,6 +22,19 @@ function memoryFs(initial: Record<string, string> = {}) {
 }
 
 describe('declarative mod folders', () => {
+  it('uses configured directories without changing activation IDs or discovering Plugins', async () => {
+    const { io } = memoryFs({
+      '/Custom/Snippets/notes/one.md': '# Custom',
+      '/Custom/Templates/book/index.md': '# Book',
+      '/Mods/Snippets/old/one.md': '# Old',
+      '/Custom/Plugins/executable/index.js': 'throw Error("never execute")',
+    })
+    const result = await discoverMods(io, '/Mods', ['Snippets/notes'], { Snippets: '/Custom/Snippets', Templates: '/Custom/Templates' })
+    expect(result.mods.map(mod => mod.id)).toEqual(['Snippets/notes', 'Templates/book'])
+    expect(result.mods[0].enabled).toBe(false)
+    expect(result.snippets).toEqual([])
+    expect(result.mods[1].folder).toBe('/Custom/Templates/book')
+  })
   it('discovers Markdown groups and templates, never JavaScript plugins', async () => {
     const { io } = memoryFs({
       '/Mods/Templates/adventure/index.md': '---\ntemplateName: My Adventure\n---\n# Begin',

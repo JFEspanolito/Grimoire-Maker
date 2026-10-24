@@ -1,5 +1,7 @@
+import { MAX_THEME_BYTES } from './themeDecorations'
 import { appConfigDir, join } from '@tauri-apps/api/path'
 import { exists, mkdir, readDir, readTextFile } from '@tauri-apps/plugin-fs'
+import { loadLibraryPaths } from './preferences'
 
 export interface ThemeInfo {
   id: string
@@ -10,7 +12,6 @@ export interface ThemeInfo {
 export const DEFAULT_THEME = 'parchment'
 
 export const ID_PATTERN = /^[A-Za-z0-9_-]+$/
-const MAX_THEME_BYTES = 256 * 1024
 
 const BUILTIN_CSS = import.meta.glob('../styles/themes/*.css', {
   query: '?raw',
@@ -33,6 +34,11 @@ const builtins = Object.entries(BUILTIN_CSS).map(([path, css]) => {
 })
 
 export const BUILTIN_THEMES: ThemeInfo[] = builtins.map((b) => b.info)
+
+/** Original bytes are retained when the color editor creates a built-in copy. */
+export function builtinThemeCss(id: string): string | undefined {
+  return builtins.find((theme) => theme.info.id === id)?.css
+}
 
 export function applyStyle(styleId: string, css: string): void {
   let el = document.getElementById(styleId)
@@ -74,7 +80,8 @@ export interface UserThemes {
  * installs every valid file. A bad file is reported in `errors`, never fatal.
  */
 export async function loadUserThemes(): Promise<UserThemes> {
-  const dir = await ensureConfigSubdir('themes')
+  const dir = (await loadLibraryPaths()).themes
+  if (!(await exists(dir))) await mkdir(dir, { recursive: true })
 
   const themes: ThemeInfo[] = []
   const errors: string[] = []
@@ -82,7 +89,7 @@ export async function loadUserThemes(): Promise<UserThemes> {
   const taken = new Set(BUILTIN_THEMES.map((t) => t.id))
 
   const entries = (await readDir(dir))
-    .filter((e) => e.isFile && e.name.toLowerCase().endsWith('.css'))
+    .filter((e) => e.isFile && !e.isSymlink && e.name.toLowerCase().endsWith('.css'))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   for (const entry of entries) {
@@ -97,7 +104,7 @@ export async function loadUserThemes(): Promise<UserThemes> {
     }
     try {
       const css = await readTextFile(`${dir}/${entry.name}`)
-      if (css.length > MAX_THEME_BYTES) throw new Error('file is larger than 256 KB')
+      if (new TextEncoder().encode(css).length > MAX_THEME_BYTES) throw new Error('file is larger than 24 MB')
       if (!hasThemeSelector(css, id)) {
         throw new Error(`no [data-theme='${id}'] selector found`)
       }

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useUnsavedClose } from './useUnsavedClose'
 import { useDocumentStore } from '../stores/documentStore'
+import capability from '../../src-tauri/capabilities/default.json'
 
 const native = vi.hoisted(() => ({ close: vi.fn(async () => {}), onCloseRequested: vi.fn() }))
 const saveAll = vi.hoisted(() => vi.fn(async () => true))
@@ -10,6 +11,11 @@ vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => native }))
 vi.mock('./useFileSystem', () => ({ isTauri: () => true, useFileSystem: () => ({ saveAll }) }))
 function Harness() { useUnsavedClose(); return null }
 afterEach(() => { useDocumentStore.getState().resetDocuments(); vi.clearAllMocks() })
+
+it('authorizes the SDK destroy operation after main-window close protection allows closing', () => {
+  expect(capability.windows).toEqual(['main'])
+  expect(capability.permissions).toContain('core:window:allow-destroy')
+})
 
 it('prevents native close until every buffer saves and retains window on cancellation', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)

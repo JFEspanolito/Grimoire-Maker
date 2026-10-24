@@ -1,36 +1,7 @@
-import { useSettingsStore } from '../../../stores/settingsStore'
-import { PAGE_SIZES } from '../../../types/document'
 import type { GrimoirePlugin } from '../../../types/plugin'
-import { create } from 'zustand'
-
-/** Reference plugin: a toggleable overlay showing margin and bleed guides. */
-const useRulerState = create<{ visible: boolean; toggle: () => void }>((set) => ({
-  visible: false,
-  toggle: () => set((s) => ({ visible: !s.visible })),
-}))
-
-function RulerOverlay() {
-  const visible = useRulerState((s) => s.visible)
-  const { pageSize, marginMm, bleedMm } = useSettingsStore()
-  if (!visible) return null
-
-  const { widthMm, heightMm, label } = PAGE_SIZES[pageSize]
-  return (
-    <div className="pointer-events-none absolute inset-0 z-20" aria-hidden>
-      <div
-        className="absolute border border-dashed border-sky-500"
-        style={{ inset: `${marginMm}mm` }}
-      />
-      <div
-        className="absolute border border-dashed border-rose-500"
-        style={{ inset: `${bleedMm}mm` }}
-      />
-      <span className="absolute left-2 top-2 rounded bg-black/70 px-1 text-[10px] text-white">
-        {label} · {widthMm}×{heightMm} mm · margin {marginMm} · bleed {bleedMm}
-      </span>
-    </div>
-  )
-}
+import { useRulerState } from './rulerState'
+import { RulerOverlay } from './RulerOverlay'
+import { useSettingsStore } from '../../../stores/settingsStore'
 
 export const pixelRuler: GrimoirePlugin = {
   id: 'builtin.pixel-ruler',
@@ -40,7 +11,13 @@ export const pixelRuler: GrimoirePlugin = {
     api.registerCommand({
       id: 'pixel-ruler.toggle',
       label: 'Ruler',
-      run: () => useRulerState.getState().toggle(),
+      run: () => {
+        const settings = useSettingsStore.getState()
+        if (settings.viewMode !== 'edit') {
+          settings.setViewMode('edit')
+          useRulerState.setState({ visible: true })
+        } else useRulerState.getState().toggle()
+      },
     })
     api.registerOverlay({ id: 'pixel-ruler.overlay', title: 'Ruler', component: RulerOverlay })
   },

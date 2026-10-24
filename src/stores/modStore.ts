@@ -30,7 +30,7 @@ export const useModStore = create<ModState>((set, get) => {
     const paths = await prepareModLibrary()
     set({ root: paths.root })
     const disabled = await readDisabledMods(paths.preferences)
-    const catalog = await discoverMods(modFs, paths.root, disabled)
+    const catalog = await discoverMods(modFs, paths.root, disabled, { Snippets: paths.snippets, Templates: paths.templates })
     const themeStore = useThemeStore.getState()
     const taken = new Set([...BUILTIN_THEMES, ...themeStore.userThemes].map((theme) => theme.id))
     const templateMods = catalog.mods.filter((mod) => mod.kind === MOD_KIND.TEMPLATES)

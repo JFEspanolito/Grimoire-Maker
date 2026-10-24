@@ -9,6 +9,7 @@ import { loadImageUrl, revokeImageUrl } from '../../../lib/images'
 import { positionImageOnPage } from '../../../lib/imagePlacement'
 import { PAGE_SIZES } from '../../../types/document'
 import { DocumentPathContext } from '../DocumentPathContext'
+import { reportError } from '../../../lib/errorLogging'
 
 const ANCHOR_LABEL: Record<string, string> = {
   header: 'Header image',
@@ -36,7 +37,8 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const rect = image.getBoundingClientRect()
     if (!bounds.width || !rect.width) return
     const scale = PAGE_SIZES[useSettingsStore.getState().pageSize].widthMm / bounds.width
-    const next = { left: (rect.left + rect.width - bounds.left) * scale, top: (rect.top + rect.height - bounds.top) * scale }
+    const origin = image.closest('.grimoire-content-box[data-placement="free"]')?.getBoundingClientRect() ?? bounds
+    const next = { left: (rect.left + rect.width - origin.left) * scale, top: (rect.top + rect.height - origin.top) * scale }
     setCorner((old) => old?.left === next.left && old.top === next.top ? old : next)
   }
 
@@ -61,6 +63,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     if (!page) return
     const pageRect = page.getBoundingClientRect()
     const imageRect = image.getBoundingClientRect()
+    const origin = image.closest('.grimoire-content-box[data-placement="free"]')?.getBoundingClientRect() ?? pageRect
     if (!pageRect.width || !imageRect.width) return
     // Own this gesture before the browser generates a text-selection/native drag.
     event.preventDefault()
@@ -99,6 +102,12 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       if (!moved && Math.hypot(deltaX, deltaY) < 3) return
       position = positionImageOnPage(pageRect, imageRect, pageWidthMm, pageHeightMm, deltaX, deltaY)
       if (!position) return
+      // An absolute group is the containing block, while page bounds still define scale and limits.
+      const scale = pageWidthMm / pageRect.width
+      position = {
+        xMm: Math.round(Math.max(0, position.xMm - (origin.left - pageRect.left) * scale) * 100) / 100,
+        yMm: Math.round(Math.max(0, position.yMm - (origin.top - pageRect.top) * scale) * 100) / 100,
+      }
       moved = true
       image.style.position = 'absolute'
       image.style.left = `${position.xMm}mm`
@@ -165,7 +174,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0) return
     const image = imageRef.current
-    const page = image?.closest('.grimoire-page')
+    const page = image?.closest<HTMLElement>('.grimoire-page')
     if (!image || !page) return
     const pageRect = page.getBoundingClientRect()
     const rect = image.getBoundingClientRect()
@@ -183,10 +192,31 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const mmPerPx = pageSize.widthMm / pageRect.width
     const ratio = rect.height / rect.width
     const startWidth = rect.width * mmPerPx
+    const wrapper = image.parentElement
+    let flowWidth = wrapper?.getBoundingClientRect().width || pageRect.width
+    if (anchor === 'flow' && (align === 'left' || align === 'right') && wrapper?.parentElement) {
+      // Floats shrink around their image. Measure the containing column fragment,
+      // not that shrink-to-fit wrapper or the union of both columns.
+      const container = wrapper.parentElement
+      const fragments = Array.from(container.getClientRects()).filter(fragment => fragment.width > 0)
+      const center = rect.left + rect.width / 2
+      const column = fragments.find(fragment => center >= fragment.left && center <= fragment.right
+        && rect.top < fragment.bottom && rect.bottom > fragment.top)
+        ?? fragments.find(fragment => center >= fragment.left && center <= fragment.right)
+      if (column) {
+        const blockStyle = getComputedStyle(container)
+        const floatStyle = getComputedStyle(wrapper)
+        const spacing = [blockStyle.paddingLeft, blockStyle.paddingRight, blockStyle.borderLeftWidth,
+          blockStyle.borderRightWidth, floatStyle.marginLeft, floatStyle.marginRight]
+          .reduce((sum, value) => sum + (parseFloat(value) || 0), 0)
+        const scale = pageRect.width / (page.offsetWidth || pageRect.width)
+        flowWidth = Math.max(0, column.width - spacing * scale)
+      }
+    }
     const available = anchor === 'free'
       ? Math.min(pageSize.widthMm - (rect.left - pageRect.left) * mmPerPx,
         (pageSize.heightMm - (rect.top - pageRect.top) * mmPerPx) / ratio)
-      : (image.parentElement?.getBoundingClientRect().width || pageRect.width) * mmPerPx
+      : flowWidth * mmPerPx
     const maximum = Math.max(5, Math.min(500, available))
     let nextWidth = startWidth
     let moved = false
@@ -238,7 +268,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
         setFailure(null)
       },
       (e: unknown) => {
-        if (!cancelled) setFailure({ src, message: e instanceof Error ? e.message : String(e) })
+        if (!cancelled) { reportError('editor.image.load', e); setFailure({ src, message: e instanceof Error ? e.message : String(e) }) }
       },
     )
     return () => {
