@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
 import { useDocumentStore } from '../../stores/documentStore'
@@ -10,6 +10,8 @@ import styles from './MenuBar.module.css'
 import { ModManager } from '../mods/ModManager'
 import { useImportSection } from '../../stores/explorerStore'
 import { NewProjectDialog } from '../project/NewProjectDialog'
+
+const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
 type Panel = 'files' | 'templates' | 'snippets'
 interface Props {
@@ -23,9 +25,12 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const workspace = useDocumentStore((s) => s.workspaceRoot)
   const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
+  const split = useTabStore((s) => s.split)
+  const viewMode = useSettingsStore((s) => s.viewMode)
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
   const bar = useRef<HTMLElement>(null)
   const closeMenus = () => bar.current?.querySelectorAll('details[open]').forEach((menu) => menu.removeAttribute('open'))
   useEffect(() => {
@@ -61,12 +66,6 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <button disabled={!workspace || !importSection} title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'} onClick={() => void run(() => actions.importInto())}>Import…</button>
         <hr />
         <button disabled={readOnly} onClick={() => void run(print)}>Export PDF…</button>
-      </div>
-    </details>
-    <details name="application-menu">
-      <summary>Project</summary>
-      <div className={styles.menu}>
-        <button onClick={() => void run(actions.openWorkspace)}>Open Project…</button>
         <hr />
         <ProjectArchiveActions workspacePath={workspace} onRestored={actions.openRestored} />
       </div>
@@ -77,18 +76,36 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         {(['files', 'templates', 'snippets'] as const).map((panel) => <button key={panel}
           aria-label={`${visiblePanels[panel] ? 'Hide' : 'Show'} ${panel} panel`}
           aria-pressed={visiblePanels[panel]} onClick={() => onTogglePanel(panel)}>
-          {visiblePanels[panel] ? '✓ ' : ''}{panel[0].toUpperCase() + panel.slice(1)}
+          <span className={styles.check} aria-hidden="true">{visiblePanels[panel] ? '✓' : ''}</span>{panel[0].toUpperCase() + panel.slice(1)}
         </button>)}
         <hr />
-        <button onClick={() => void run(() => useTabStore.getState().toggleSplit())}>Toggle Split View</button>
-        <button onClick={() => void run(() => useSettingsStore.getState().setViewMode('edit'))}>Edit</button>
-        <button disabled={readOnly} onClick={() => void run(() => useSettingsStore.getState().setViewMode('pages'))}>Page Preview</button>
+        <button aria-label="Split View" aria-pressed={split} onClick={() => void run(() => useTabStore.getState().toggleSplit())}>
+          <span className={styles.check} aria-hidden="true">{split ? '✓' : ''}</span>Split View
+        </button>
+        <button aria-label="Page View" aria-pressed={viewMode !== 'edit'} disabled={readOnly}
+          title={viewMode === 'edit' ? 'Preview paginated pages' : 'Return to editing'}
+          onClick={() => void run(() => useSettingsStore.getState().setViewMode(viewMode === 'edit' ? 'pages' : 'edit'))}>
+          <span className={styles.check} aria-hidden="true">{viewMode !== 'edit' ? '✓' : ''}</span>Page View
+        </button>
+        {viewMode !== 'edit' && <label className={styles.layout}>Preview layout
+          <select aria-label="Preview layout" value={viewMode} disabled={readOnly}
+            onChange={(event) => useSettingsStore.getState().setViewMode(event.target.value === 'spreads' ? 'spreads' : 'pages')}>
+            <option value="pages">Single pages</option><option value="spreads">Facing pages</option>
+          </select>
+        </label>}
       </div>
     </details>
-    <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
+    <details name="application-menu">
+      <summary>Settings</summary>
+      <div className={styles.menu}>
+        <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
+        <button type="button" onClick={() => { closeMenus(); setPreferencesOpen(true) }}>Preferences…</button>
+      </div>
+    </details>
     <span className={styles.name}>GRIMOIRE MAKER</span>
     {error && <span role="alert" className={styles.error}>{error}</span>}
   </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
+    {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog onClose={() => setPreferencesOpen(false)} /></Suspense>}
   </>
 }

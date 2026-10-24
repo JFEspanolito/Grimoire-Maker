@@ -169,7 +169,7 @@ export function FileTree() {
   const root = useDocumentStore((s) => s.workspaceRoot)
   const recent = useSessionStore((s) => s.recentWorkspaces)
   const workspaceError = useSessionStore((s) => s.workspaceError)
-  const { openWorkspace, openRecent, openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
+  const { openRecent, openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
     useFileSystem()
   const [selected, setSelected] = useState<FileNode | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
@@ -299,9 +299,6 @@ export function FileTree() {
             onClick={() => startCreate('new-folder')}
           >
             + Folder
-          </button>
-          <button className={actionButton} onClick={() => void run(openWorkspace)}>
-            Open
           </button>
         </div>
       </div>

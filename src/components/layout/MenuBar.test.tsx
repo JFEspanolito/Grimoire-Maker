@@ -2,6 +2,9 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import { MenuBar } from './MenuBar'
+import { Toolbar } from './Toolbar'
+import { useTabStore } from '../../stores/tabStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 const openWorkspace = vi.hoisted(() => vi.fn())
 const saveFile = vi.hoisted(() => vi.fn())
@@ -17,14 +20,51 @@ it('groups application actions in keyboard-accessible menus', async () => {
   const root = createRoot(container)
   const toggle = vi.fn()
   await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={toggle} />))
-  expect(Array.from(container.querySelectorAll('summary')).map((item) => item.textContent)).toEqual(['File', 'Project', 'View'])
-  await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Open Project…')?.click())
+  expect(Array.from(container.querySelectorAll('summary')).map((item) => item.textContent)).toEqual(['File', 'View', 'Settings'])
+  await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Open Folder…')?.click())
   expect(openWorkspace).toHaveBeenCalledOnce()
   await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Save')?.click())
   expect(saveFile).toHaveBeenCalledOnce()
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Hide files panel"]')?.click())
   expect(toggle).toHaveBeenCalledWith('files')
   await act(async () => root.unmount())
+})
+
+it('has reversible marked view actions and no duplicated toolbar commands', async () => {
+  useTabStore.getState().reset('/chapter.md')
+  useSettingsStore.getState().setViewMode('edit')
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><Toolbar /></>))
+    const view = Array.from(container.querySelectorAll('details')).find((menu) => menu.querySelector('summary')?.textContent === 'View')!
+    const split = view.querySelector<HTMLButtonElement>('[aria-label="Split View"]')!
+    expect(split?.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => split.click())
+    expect(split.getAttribute('aria-pressed')).toBe('true')
+    expect(split.textContent).toContain('✓')
+    const page = view.querySelector<HTMLButtonElement>('[aria-label="Page View"]')!
+    expect(page?.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => page.click())
+    expect(useSettingsStore.getState().viewMode).toBe('pages')
+    expect(page.getAttribute('aria-pressed')).toBe('true')
+    await act(async () => page.click())
+    expect(useSettingsStore.getState().viewMode).toBe('edit')
+    expect(page.getAttribute('aria-pressed')).toBe('false')
+    const toolbar = container.querySelector('header')!
+    for (const label of ['Open', 'Save', 'Import', 'Export PDF', 'Files', 'Templates', 'Snippets', 'Split View']) {
+      expect(Array.from(toolbar.querySelectorAll('button')).some((button) => button.textContent?.trim() === label)).toBe(false)
+    }
+    expect(toolbar.querySelector('[aria-label="Theme"]')).toBeNull()
+    expect(toolbar.querySelector('[aria-label="View"]')).toBeNull()
+    const settings = Array.from(container.querySelectorAll('details')).find((menu) => menu.querySelector('summary')?.textContent === 'Settings')!
+    expect(settings.textContent).toContain('Mod Manager')
+    expect(settings.textContent).toContain('Preferences…')
+  } finally {
+    await act(async () => root.unmount())
+    useTabStore.getState().reset(null)
+    useSettingsStore.getState().setViewMode('edit')
+  }
 })
 
 it('makes file creation and opening folders discoverable in File', async () => {

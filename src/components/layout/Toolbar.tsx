@@ -1,149 +1,37 @@
-import { useState } from 'react'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
-import { useFileSystem } from '../../hooks/useFileSystem'
-import { usePrint } from '../../hooks/usePrint'
-import { useThemeStore } from '../../stores/themeStore'
-import { resolveTheme } from '../../lib/themes'
-import { PAGE_SIZES, type PageSizeId, type ViewMode } from '../../types/document'
+import { PAGE_SIZES, type PageSizeId } from '../../types/document'
 import { ProjectName } from './ProjectName'
-import { useTabStore } from '../../stores/tabStore'
-import { useImportSection } from '../../stores/explorerStore'
 import styles from './Toolbar.module.css'
 
-const btn = styles.button
-
-const VIEWS: [ViewMode, string][] = [
-  ['edit', 'Edit'],
-  ['pages', 'Pages'],
-  ['spreads', 'Spreads'],
-]
-
-type Panel = 'files' | 'templates' | 'snippets'
-
-export function Toolbar({ visiblePanels, onTogglePanel }: {
-  visiblePanels: Record<Panel, boolean>
-  onTogglePanel: (panel: Panel) => void
-}) {
-  const { openFile, saveFile, importInto } = useFileSystem()
-  const importSection = useImportSection()
-  const [importError, setImportError] = useState('')
-  const importFiles = async () => {
-    setImportError('')
-    try { await importInto() } catch (cause) {
-      setImportError(cause instanceof Error ? cause.message : String(cause))
-    }
-  }
-  const exportPdf = usePrint()
-  const { pageSize, columns, theme, viewMode, setPageSize, setColumns, setTheme, setViewMode } =
-    useSettingsStore()
-  const { themes, dir: themesDir, errors: themeErrors } = useThemeStore()
-  const dirty = useDocumentStore((s) => s.document.dirty)
-  const commands = usePluginRegistry((s) => s.commands)
-  const split = useTabStore((s) => s.split)
-  const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
-
+/** Document identity and page setup; application actions live in the menus. */
+export function Toolbar() {
+  const { pageSize, columns, setPageSize, setColumns } = useSettingsStore()
+  const dirty = useDocumentStore((state) => state.document.dirty)
+  const commands = usePluginRegistry((state) => state.commands)
   return (
     <header className={styles.toolbar}>
-      <div className={styles.group} role="group" aria-label="Document actions">
-      <ProjectName />
-      {dirty && <span className="text-amber-400" title="Unsaved document changes">•</span>}
-      <button className={btn} onClick={() => void openFile().catch(() => undefined)}>
-        Open
-      </button>
-      <button className={btn} disabled={readOnly} onClick={() => void saveFile().catch(() => undefined)}>
-        Save
-      </button>
-      <button type="button" className={btn} disabled={!importSection}
-        title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'}
-        onClick={() => void importFiles()}>
-        Import
-      </button>
-      <button className={btn} disabled={readOnly} onClick={exportPdf}>
-        Export PDF
-      </button>
-      {importError && <span role="alert" className="text-xs text-red-400">{importError}</span>}
-      </div>
-      <div className={styles.group} role="group" aria-label="Panels">
-        {(['files', 'templates', 'snippets'] as const).map((panel) => (
-          <button
-            key={panel}
-            type="button"
-            className={`${btn} ${visiblePanels[panel] ? 'bg-white/10' : ''}`}
-            aria-label={`${visiblePanels[panel] ? 'Hide' : 'Show'} ${panel} panel`}
-            aria-pressed={visiblePanels[panel]}
-            onClick={() => onTogglePanel(panel)}
-          >
-            {panel[0].toUpperCase() + panel.slice(1)}
-          </button>
-        ))}
+      <div className={styles.group} role="group" aria-label="Current project">
+        <ProjectName />
+        {dirty && <span className={styles.dirty} title="Unsaved document changes">•</span>}
       </div>
       <div className={styles.group} role="group" aria-label="Page setup">
-      <select
-        aria-label="Page size"
-        value={pageSize}
-        onChange={(e) => setPageSize(e.target.value as PageSizeId)}
-        className="rounded bg-transparent text-sm"
-      >
-        {Object.values(PAGE_SIZES).map((p) => (
-          <option key={p.id} value={p.id} className="text-black">
-            {p.label}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="Columns"
-        value={columns}
-        onChange={(e) => setColumns(Number(e.target.value) as 1 | 2)}
-        className="rounded bg-transparent text-sm"
-      >
-        <option value={1} className="text-black">1 column</option>
-        <option value={2} className="text-black">2 columns</option>
-      </select>
+        <label className={styles.field}>Page size
+          <select aria-label="Page size" value={pageSize} onChange={(event) => setPageSize(event.target.value as PageSizeId)}>
+            {Object.values(PAGE_SIZES).map((size) => <option key={size.id} value={size.id}>{size.label}</option>)}
+          </select>
+        </label>
+        <label className={styles.field}>Columns
+          <select aria-label="Columns" value={columns} onChange={(event) => setColumns(Number(event.target.value) as 1 | 2)}>
+            <option value={1}>1</option>
+            <option value={2}>2</option>
+          </select>
+        </label>
       </div>
-      <div className={styles.group} role="group" aria-label="Appearance and preview">
-      <select
-        aria-label="View"
-        disabled={readOnly}
-        title="Edit the sheet, or preview the paginated pages and facing spreads"
-        value={viewMode}
-        onChange={(e) => setViewMode(e.target.value as ViewMode)}
-        className="rounded bg-transparent text-sm"
-      >
-        {VIEWS.map(([value, label]) => (
-          <option key={value} value={value} className="text-black">
-            {label}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="Theme"
-        title={[themesDir && `Custom themes folder: ${themesDir}`, ...themeErrors].filter(Boolean).join('\n')}
-        value={resolveTheme(theme, themes)}
-        onChange={(e) => setTheme(e.target.value)}
-        className="rounded bg-transparent text-sm"
-      >
-        {themes.map((t) => (
-          <option key={t.id} value={t.id} className="text-black">
-            {t.name}
-          </option>
-        ))}
-      </select>
-      {themeErrors.length > 0 && (
-        <span className="text-xs text-amber-400" title={themeErrors.join('\n')}>
-          {themeErrors.length} theme error{themeErrors.length > 1 ? 's' : ''}
-        </span>
-      )}
-      </div>
-      <span className={styles.tools} role="group" aria-label="Editor tools">
-        {commands.map((c) => (
-          <button key={c.id} className={btn} onClick={c.run}>
-            {c.label}
-          </button>
-        ))}
-        <button type="button" className={btn} aria-pressed={split} onClick={() => useTabStore.getState().toggleSplit()}>Split View</button>
-      </span>
+      {commands.length > 0 && <div className={styles.tools} role="group" aria-label="Editor tools">
+        {commands.map((command) => <button key={command.id} className={styles.button} onClick={command.run}>{command.label}</button>)}
+      </div>}
     </header>
   )
 }

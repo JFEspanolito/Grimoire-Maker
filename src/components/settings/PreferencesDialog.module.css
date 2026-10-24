@@ -1,0 +1,22 @@
+.dialog { position: fixed; inset: 0; margin: auto; width: min(44rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; padding: 1.25rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; }
+.dialog::backdrop { background: #0009; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.header h2 { font-size: 1.15rem; font-weight: 600; }
+.header button { font-size: 1.3rem; }
+.section { margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #ffffff20; }
+.section h3 { margin-bottom: .65rem; font-size: .8rem; font-weight: 600; color: #cfb37c; }
+.description { color: #bcb7ac; font-size: .8rem; line-height: 1.6; }
+.theme { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+.theme select { min-width: 12rem; padding: .4rem .6rem; background: #201f1d; color: #f0eee9; border: 1px solid #ffffff20; border-radius: .25rem; }
+.path { display: flex; flex-direction: column; gap: .35rem; margin: .85rem 0; }
+.pathControls { display: flex; gap: .5rem; }
+.pathControls input { min-width: 0; flex: 1; padding: .4rem .5rem; border: 1px solid #ffffff20; border-radius: .25rem; background: #0002; font-size: .8rem; }
+.dialog button { padding: .4rem .65rem; border-radius: .25rem; background: #ffffff10; white-space: nowrap; cursor: pointer; }
+.dialog button:hover:not(:disabled) { background: #ffffff20; }
+.dialog button:disabled { opacity: .4; cursor: default; }
+.dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.error { margin-top: .75rem; color: #f0a29b; overflow-wrap: anywhere; white-space: pre-line; }
+.notice { margin-top: .75rem; color: #bad1b1; }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #ffffff20; }
+.footer span { color: #bcb7ac; font-size: .75rem; }
+@media (max-width: 480px) { .dialog { padding: 1rem; } .pathControls { flex-wrap: wrap; } .pathControls input { flex-basis: 100%; } }

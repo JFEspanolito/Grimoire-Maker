@@ -5,7 +5,7 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { FileTree } from './FileTree'
 import { useExplorerStore } from '../../stores/explorerStore'
 import { useTabStore } from '../../stores/tabStore'
-import { Toolbar } from '../layout/Toolbar'
+import { MenuBar } from '../layout/MenuBar'
 
 vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
 
@@ -33,17 +33,16 @@ afterEach(async () => {
 })
 
 describe('project explorer', () => {
-  it('imports from the toolbar immediately before Export PDF into the selected binder section', async () => {
+  it('imports from the File menu into the selected binder section', async () => {
     useDocumentStore.getState().setWorkspace('/book', ['Draft', 'Research', 'Trash'].map((name) => ({ name, path: `/book/${name}`, isDirectory: true, children: [] })))
     const container = document.createElement('div')
     root = createRoot(container)
-    await act(async () => root?.render(<><Toolbar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><FileTree /></>))
+    await act(async () => root?.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><FileTree /></>))
     for (const section of ['Draft', 'Research']) {
       await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Collapse ${section}"]`)?.click())
-      const buttons = Array.from(container.querySelectorAll('button')).filter((item) => item.textContent === 'Import')
+      const buttons = Array.from(container.querySelectorAll('button')).filter((item) => item.textContent === 'Importâ€¦')
       expect(buttons).toHaveLength(1)
-      expect(buttons[0].closest('header')).not.toBeNull()
-      expect(buttons[0].nextElementSibling?.textContent).toBe('Export PDF')
+      expect(buttons[0].closest('details')?.querySelector('summary')?.textContent).toBe('File')
       expect(buttons[0].title).toBe(`Import into ${section}`)
       await act(async () => buttons[0].click())
       expect(importIntoMock).toHaveBeenCalledWith()

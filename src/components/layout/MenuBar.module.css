@@ -11,3 +11,6 @@
 .bar :focus-visible { outline: 2px solid #cfb37c; outline-offset: 1px; }
 .name { margin-left: auto; letter-spacing: .15em; color: #b5aea0; font-size: .65rem; }
 .error { max-width: 24rem; color: #f0a29b; overflow-wrap: anywhere; }
+.check { display: inline-block; width: 1.25rem; color: #cfb37c; }
+.layout { display: flex; flex-direction: column; gap: .35rem; padding: .4rem .65rem; color: #bcb7ac; }
+.layout select { padding: .3rem; border-radius: .25rem; background: #201f1d; color: #f0eee9; }

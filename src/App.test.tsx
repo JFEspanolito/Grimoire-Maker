@@ -7,14 +7,7 @@ vi.mock('./hooks/useFileSystem', () => ({
   isTauri: () => false,
   useFileSystem: () => ({ restoreSession: vi.fn() }),
 }))
-vi.mock('./components/layout/Toolbar', () => ({
-  Toolbar: ({ visiblePanels, onTogglePanel }: {
-    visiblePanels: Record<'files' | 'templates' | 'snippets', boolean>
-    onTogglePanel: (panel: 'files' | 'templates' | 'snippets') => void
-  }) => <div>{(['files', 'templates', 'snippets'] as const).map((panel) => (
-    <button key={panel} onClick={() => onTogglePanel(panel)}>{visiblePanels[panel] ? `Hide ${panel}` : `Show ${panel}`}</button>
-  ))}</div>,
-}))
+vi.mock('./components/layout/Toolbar', () => ({ Toolbar: () => null }))
 vi.mock('./components/sidebar/FileTree', () => ({ FileTree: () => <div>Files panel</div> }))
 vi.mock('./components/templates/TemplateCatalog', () => ({ TemplateCatalog: () => <div>Templates panel</div> }))
 vi.mock('./components/snippets/SnippetPalette', () => ({ SnippetPalette: () => <div>Snippets panel</div> }))
@@ -36,11 +29,9 @@ it('hides each horizontal panel independently and restores it', async () => {
 
   for (const panel of ['files', 'templates', 'snippets']) {
     expect(container.textContent).toContain(`${panel[0].toUpperCase()}${panel.slice(1)} panel`)
-    await act(async () => Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === `Hide ${panel}`)?.click())
+    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Hide ${panel} panel"]`)?.click())
     expect(container.textContent).not.toContain(`${panel[0].toUpperCase()}${panel.slice(1)} panel`)
-    await act(async () => Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent === `Show ${panel}`)?.click())
+    await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Show ${panel} panel"]`)?.click())
     expect(container.textContent).toContain(`${panel[0].toUpperCase()}${panel.slice(1)} panel`)
   }
 })
