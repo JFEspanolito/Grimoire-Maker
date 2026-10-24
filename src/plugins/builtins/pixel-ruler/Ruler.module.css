@@ -10,10 +10,11 @@
 .row .handle { left: 0; top: -5px; width: 12px; height: 10px; cursor: ns-resize; }
 .column .handle { top: 0; left: -5px; width: 10px; height: 12px; cursor: ew-resize; }
 .handle:hover, .handle:focus-visible { background: #0e7490; outline: 2px solid #cfb37c; }
-.controls { position: absolute; left: 16px; top: 6px; z-index: 1; pointer-events: auto; color: #f0eee9; font: 12px/1.4 system-ui, sans-serif; }
-.controls summary { width: fit-content; cursor: pointer; padding: 3px 8px; border-radius: 4px; background: #201f1dee; }
+.controls { position: relative; z-index: 40; pointer-events: auto; color: #f0eee9; font: 12px/1.4 system-ui, sans-serif; }
+.controls summary { width: fit-content; cursor: pointer; padding: 4px 8px; border-radius: 4px; list-style: none; font-size: 14px; }
+.controls summary::-webkit-details-marker { display: none; }
 .controls summary:hover { background: #45423b; }
-.panel { width: min(320px, 75vw); padding: 8px; background: #272623; border: 1px solid #59564e; border-radius: 4px; box-shadow: 0 4px 12px #0004; }
+.panel { position: absolute; left: 0; top: calc(100% + 4px); width: min(320px, 75vw); padding: 8px; background: #272623; border: 1px solid #59564e; border-radius: 4px; box-shadow: 0 4px 12px #0004; }
 .panel p { margin: 0 0 6px; color: #bcb7ac; }
 .actions { display: flex; gap: 4px; margin-bottom: 6px; }
 .panel button { padding: 3px 7px; border-radius: 3px; }

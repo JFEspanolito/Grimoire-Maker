@@ -1,9 +1,11 @@
+import { reportError } from '../../lib/errorLogging'
 import { useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { useDocumentStore } from '../../stores/documentStore'
 import { importImage } from '../../lib/images'
 import { ImageControls, type ImageAttrs } from './ImageControls'
 import { TableControls } from './TableControls'
+import { GuidesMenu } from '../../plugins/builtins/pixel-ruler/GuidesMenu'
 
 interface Action {
   id: string
@@ -158,6 +160,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
       const src = await importImage(documentPath)
       if (src && !editor.isDestroyed) editor.chain().focus().setImage({ src, alt: '' }).run()
     } catch (e) {
+      reportError('editor.image.import', e)
       setError(e instanceof Error ? e.message : String(e))
     }
   }
@@ -204,6 +207,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         >
           🖼 Image
         </button>
+        <GuidesMenu />
         {error && <span className="text-xs text-red-400">{error}</span>}
       </div>
       <ImageControls editor={editor} attrs={state?.image ?? null} />

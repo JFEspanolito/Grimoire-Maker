@@ -8,7 +8,7 @@ import { usePluginRegistry } from '../../plugins/plugin-manager'
  * canvas shows one sheet at true millimetre size with column layout applied.
  */
 export function PageView({ children, onPageClick, onPagePointerDown }: { children: ReactNode; onPageClick?: MouseEventHandler<HTMLDivElement>; onPagePointerDown?: PointerEventHandler<HTMLDivElement> }) {
-  const { pageSize, columns, marginMm } = useSettingsStore()
+  const { pageSize, columns, marginMm, zoom } = useSettingsStore()
   const overlays = usePluginRegistry((s) => s.overlays)
   const size = PAGE_SIZES[pageSize]
 
@@ -20,7 +20,7 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   }
 
   return (
-    <div className="mx-auto my-8 w-fit">
+    <div className="mx-auto my-8 w-fit" data-editor-zoom style={{ zoom }}>
       <div className="grimoire-page relative shadow-xl" style={style} onClick={onPageClick} onPointerDown={onPagePointerDown}>
         {children}
         {overlays.map(({ id, component: Overlay }) => (

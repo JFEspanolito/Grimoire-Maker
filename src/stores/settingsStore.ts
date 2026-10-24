@@ -7,6 +7,8 @@ interface SettingsState {
   columns: 1 | 2
   theme: ThemeId
   viewMode: ViewMode
+  zoom: number
+  setZoom: (zoom: number) => void
   /** Print bleed in millimetres. */
   bleedMm: number
   marginMm: number
@@ -23,6 +25,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   columns: 2,
   theme: 'parchment',
   viewMode: 'edit',
+  zoom: 1,
+  setZoom: (zoom) => { if (Number.isFinite(zoom)) set({ zoom: Math.max(0.25, Math.min(3, zoom)) }) },
   bleedMm: 3,
   marginMm: 15,
   rulerGuides: [],

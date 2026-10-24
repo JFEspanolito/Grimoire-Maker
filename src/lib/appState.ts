@@ -11,6 +11,7 @@ export interface PersistedSettings {
   columns?: 1 | 2
   theme?: ThemeId
   rulerGuides?: RulerGuide[]
+  zoom?: number
 }
 
 /** What survives a restart. Stored as `state.json` in the app config folder. */
@@ -54,7 +55,8 @@ export async function loadAppState(): Promise<AppState> {
       lastFile: asPath(raw.lastFile),
       settings: typeof raw.settings === 'object' && raw.settings ? raw.settings : {},
     }
-  } catch {
+  } catch (error) {
+    console.error('Could not load session state', error)
     return emptyState()
   }
 }
@@ -98,8 +100,8 @@ export const forgetWorkspace =
 /** Saves page setup whenever it changes; returns the unsubscribe function. */
 export function watchSettings(): () => void {
   return useSettingsStore.subscribe((s, prev) => {
-    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides) return
-    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides }).catch((error: unknown) => {
+    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.zoom === prev.zoom) return
+    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, zoom: s.zoom }).catch((error: unknown) => {
       useSessionStore.getState().setWorkspaceError(`Could not save preferences: ${error instanceof Error ? error.message : String(error)}`)
     })
   })

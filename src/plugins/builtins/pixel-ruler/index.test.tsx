@@ -5,6 +5,8 @@ import { pixelRuler } from './index'
 import { registerPlugin, usePluginRegistry } from '../../plugin-manager'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { useDocumentStore } from '../../../stores/documentStore'
+import { useRulerState } from './rulerState'
+import { GuidesMenu } from './GuidesMenu'
 
 let root: Root
 let host: HTMLDivElement
@@ -13,19 +15,35 @@ const Overlay = usePluginRegistry.getState().overlays.find((entry) => entry.id =
 const toggle = () => usePluginRegistry.getState().commands.find((entry) => entry.id === 'pixel-ruler.toggle')!.run()
 const button = (label: string) => host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!
 
+it('keeps guide lines visible while the measurement ruler is off', async () => {
+  await act(async () => {
+    useSettingsStore.getState().setRulerGuides([{ id: 'independent', axis: 'row', positionMm: 50 }])
+    useRulerState.setState({ visible: false })
+  })
+  expect(host.querySelector('[data-guide-axis="row"]')).not.toBeNull()
+})
+
+it('returns to editing and shows measurements when Ruler is clicked from page preview', async () => {
+  await act(async () => useSettingsStore.getState().setViewMode('pages'))
+  await act(async () => toggle())
+  expect(useSettingsStore.getState().viewMode).toBe('edit')
+  expect(useRulerState.getState().visible).toBe(true)
+})
+
 beforeEach(async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
-  useSettingsStore.setState({ pageSize: 'a4', rulerGuides: [] })
+  useSettingsStore.setState({ pageSize: 'a4', rulerGuides: [], viewMode: 'edit', zoom: 1 })
+  useRulerState.setState({ visible: true })
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root.render(<Overlay />))
-  if (!host.firstChild) await act(async () => toggle())
+  await act(async () => root.render(<><GuidesMenu /><Overlay /></>))
 })
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
-  useSettingsStore.setState({ pageSize: 'a4', rulerGuides: [] })
+  useSettingsStore.setState({ pageSize: 'a4', rulerGuides: [], viewMode: 'edit', zoom: 1 })
+  useRulerState.setState({ visible: false })
 })
 
 it('moves guides with the keyboard, removes them, and retains off-page guides when changing paper size', async () => {
@@ -77,7 +95,8 @@ it('adds many visual row and column guides without changing document content', a
   expect(useDocumentStore.getState().document).toBe(before)
   const saved = useSettingsStore.getState()
   await act(async () => toggle())
-  expect(host.firstChild).toBeNull()
+  expect(host.querySelectorAll('[data-guide-axis]')).toHaveLength(31)
+  expect(host.querySelector('[data-ruler-overlay]')?.textContent).not.toContain('margin')
   await act(async () => toggle())
   expect(host.querySelectorAll('[data-guide-axis]')).toHaveLength(31)
   expect(useSettingsStore.getState()).toBe(saved)

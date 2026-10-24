@@ -2,21 +2,11 @@ import { useSettingsStore } from '../../../stores/settingsStore'
 import { PAGE_SIZES } from '../../../types/document'
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { GUIDE_AXIS, type GuideAxis, type RulerGuide } from '../../../types/ruler'
+import { GUIDE_AXIS, type RulerGuide } from '../../../types/ruler'
 import styles from './Ruler.module.css'
 
 import { useRulerState } from './rulerState'
-
-const clamp = (value: number, maximum: number) => Math.round(Math.max(0, Math.min(value, maximum)) * 10) / 10
-const updateGuide = (id: string, positionMm: number) => {
-  const store = useSettingsStore.getState()
-  store.setRulerGuides(store.rulerGuides.map((guide) => guide.id === id ? { ...guide, positionMm } : guide))
-}
-const removeGuide = (id: string) => {
-  const store = useSettingsStore.getState()
-  store.setRulerGuides(store.rulerGuides.filter((guide) => guide.id !== id))
-}
-
+import { clamp, updateGuide, removeGuide } from './guideActions'
 
 function GuideLine({ guide, maximum, pageWidthMm }: { guide: RulerGuide; maximum: number; pageWidthMm: number }) {
   const row = guide.axis === GUIDE_AXIS.ROW
@@ -66,46 +56,17 @@ function GuideLine({ guide, maximum, pageWidthMm }: { guide: RulerGuide; maximum
 
 export function RulerOverlay() {
   const visible = useRulerState((s) => s.visible)
-  const { pageSize, marginMm, bleedMm, rulerGuides, setRulerGuides } = useSettingsStore()
-  if (!visible) return null
+  const { pageSize, marginMm, bleedMm, rulerGuides } = useSettingsStore()
+  if (!visible && !rulerGuides.length) return null
   const { widthMm, heightMm, label } = PAGE_SIZES[pageSize]
-  const add = (axis: GuideAxis) => {
-    const maximum = axis === GUIDE_AXIS.ROW ? heightMm : widthMm
-    const store = useSettingsStore.getState()
-    const last = store.rulerGuides.findLast((guide) => guide.axis === axis)?.positionMm ?? marginMm
-    const positionMm = last + 10 < maximum ? last + 10 : marginMm
-    store.setRulerGuides([...store.rulerGuides, { id: crypto.randomUUID(), axis, positionMm }])
-  }
   return <div className={styles.overlay} data-ruler-overlay="true">
-    <span className={styles.measurements}>{label} · {widthMm}×{heightMm} mm · margin {marginMm} · bleed {bleedMm}</span>
+    {visible && <><span className={styles.measurements}>{label} · {widthMm}×{heightMm} mm · margin {marginMm} · bleed {bleedMm}</span>
     <div className={styles.margin} style={{ inset: `${marginMm}mm` }} aria-hidden="true" />
-    <div className={styles.bleed} style={{ inset: `${bleedMm}mm` }} aria-hidden="true" />
+    <div className={styles.bleed} style={{ inset: `${bleedMm}mm` }} aria-hidden="true" /></>}
     {rulerGuides.map((guide) => {
       const maximum = guide.axis === GUIDE_AXIS.ROW ? heightMm : widthMm
       return guide.positionMm <= maximum && <GuideLine key={guide.id} guide={guide} maximum={maximum} pageWidthMm={widthMm} />
     })}
-    <details className={styles.controls} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
-      <summary>Guides · {rulerGuides.length}</summary>
-      <div className={styles.panel}>
-        <div className={styles.actions}>
-          <button type="button" aria-label="Add row guide" onClick={() => add(GUIDE_AXIS.ROW)}>+ Row</button>
-          <button type="button" aria-label="Add column guide" onClick={() => add(GUIDE_AXIS.COLUMN)}>+ Column</button>
-          <button type="button" disabled={!rulerGuides.length} onClick={() => setRulerGuides([])}>Clear</button>
-        </div>
-        <p>Visual only. Drag the edge handles or enter millimetres. Not printed.</p>
-        <div className={styles.list}>
-          {rulerGuides.map((guide, index) => {
-            const maximum = guide.axis === GUIDE_AXIS.ROW ? heightMm : widthMm
-            const label = `${guide.axis === GUIDE_AXIS.ROW ? 'Row' : 'Column'} ${index + 1}`
-            return <div key={guide.id} className={styles.entry}>
-              <label>{label}<input type="number" aria-label={`${label} position (mm)`} min={0} max={maximum} step={0.1} value={guide.positionMm}
-                onChange={(event) => { const value = event.target.valueAsNumber; if (Number.isFinite(value)) updateGuide(guide.id, clamp(value, maximum)) }} /> mm</label>
-              {guide.positionMm > maximum && <span title="Outside the current page size">Outside page</span>}
-              <button type="button" aria-label={`Remove ${label}`} onClick={() => removeGuide(guide.id)}>×</button>
-            </div>
-          })}
-        </div>
-      </div>
-    </details>
+
   </div>
 }
