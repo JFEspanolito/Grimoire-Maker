@@ -5,6 +5,7 @@ import styles from './Toolbar.module.css'
 import { useRulerState } from '../../plugins/builtins/pixel-ruler/rulerState'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
+import { EDITOR_ZOOMS } from '../../lib/zoom'
 
 /** Project identity and editor tools; view settings live in the menus. */
 export function Toolbar() {
@@ -23,7 +24,7 @@ export function Toolbar() {
       <div className={styles.tools} role="group" aria-label="Editor tools">
         <label className={styles.zoom}>Zoom
           <select aria-label="Editor zoom" value={zoom} disabled={!documentTools || viewMode !== 'edit'} onChange={(event) => setZoom(Number(event.target.value))}>
-            {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((value) => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}
+            {Array.from(new Set<number>([...EDITOR_ZOOMS, zoom])).sort((a, b) => a - b).map((value) => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}
           </select>
         </label>
         {commands.map((command) => <button key={command.id} className={styles.button}

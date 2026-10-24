@@ -6,6 +6,7 @@ import { resolveTheme } from '../../lib/themes'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useThemeStore } from '../../stores/themeStore'
+import { useWheelZoom } from '../../hooks/useWheelZoom'
 
 type Status =
   | { kind: 'rendering' }
@@ -28,6 +29,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
   const host = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<Status>({ kind: 'rendering' })
   const [zoom, setZoom] = useState(mode === 'spreads' ? 0.5 : 0.75)
+  const zoomRef = useWheelZoom(zoom, setZoom, ZOOMS)
   const activeTheme = resolveTheme(theme, themes)
 
   useEffect(() => {
@@ -89,19 +91,20 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
         <label className="ml-auto flex items-center gap-1">
           Zoom
           <select
-            className="rounded bg-white/10 px-1 py-0.5 text-sm text-white"
+            aria-label="Preview zoom"
+            className="rounded bg-neutral-800 px-1 py-0.5 text-sm text-white [color-scheme:dark]"
             value={zoom}
             onChange={(e) => setZoom(Number(e.target.value))}
           >
             {ZOOMS.map((z) => (
-              <option key={z} value={z} className="text-black">
+              <option key={z} value={z} className="bg-neutral-800 text-white">
                 {Math.round(z * 100)}%
               </option>
             ))}
           </select>
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div ref={zoomRef} className="min-h-0 flex-1 overflow-auto">
         <div
           ref={host}
           className="page-preview"

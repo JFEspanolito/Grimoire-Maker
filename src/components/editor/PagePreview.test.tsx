@@ -88,3 +88,23 @@ it.each(['resolve', 'reject'] as const)('releases styles after an in-flight prev
   await act(async () => finish())
   expect(destroy).toHaveBeenCalledOnce()
 })
+
+it('zooms the preview with Ctrl+wheel without repaginating or capturing plain scrolling', async () => {
+  vi.mocked(paginate).mockImplementation(async (previewer, _request, target) => { initialize(previewer, target) })
+  await act(async () => root.render(<PagePreview mode="pages" />))
+  await act(async () => vi.advanceTimersByTimeAsync(400))
+  const preview = container.querySelector<HTMLElement>('.page-preview')!
+  const wheel = async (deltaY: number, ctrlKey = true) => {
+    const event = new WheelEvent('wheel', { deltaY, ctrlKey, bubbles: true, cancelable: true })
+    await act(async () => preview.dispatchEvent(event))
+    return event
+  }
+  expect((await wheel(-100)).defaultPrevented).toBe(true)
+  expect(preview.style.zoom).toBe('1')
+  await wheel(100)
+  expect(preview.style.zoom).toBe('0.75')
+  expect((await wheel(100, false)).defaultPrevented).toBe(false)
+  expect(preview.style.zoom).toBe('0.75')
+  await act(async () => vi.advanceTimersByTimeAsync(400))
+  expect(paginate).toHaveBeenCalledOnce()
+})

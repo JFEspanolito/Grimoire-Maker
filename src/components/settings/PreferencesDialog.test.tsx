@@ -140,6 +140,10 @@ it('organizes preferences with a section index and a basic shortcut reference', 
     const save = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Save All'))!
     expect(Array.from(save.querySelectorAll('kbd')).map(key => key.textContent)).toEqual(['Ctrl', 'S'])
     expect(panel.textContent).toContain('Bold')
+    for (const [label, direction] of [['Zoom In', 'Scroll Up'], ['Zoom Out', 'Scroll Down']]) {
+      const row = Array.from(panel.querySelectorAll('tr')).find(item => item.textContent?.includes(label))!
+      expect(Array.from(row.querySelectorAll('kbd')).map(key => key.textContent)).toEqual(['Ctrl', direction])
+    }
     await act(async () => tabs[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })))
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
     expect(document.activeElement).toBe(tabs[0])

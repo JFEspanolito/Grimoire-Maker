@@ -7,7 +7,7 @@ import { useTemplateStore } from '../../stores/templateStore'
 import { resolveTheme } from '../../lib/themes'
 import styles from './PreferencesDialog.module.css'
 import { ThemeCustomizer } from './ThemeCustomizer'
-import { EDITOR_SHORTCUTS, FILE_SHORTCUTS } from '../../lib/shortcuts'
+import { EDITOR_SHORTCUTS, FILE_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
 import { reportError } from '../../lib/errorLogging'
 
 const PATH_FIELDS: { kind: LibraryKind; label: string }[] = [
@@ -141,12 +141,13 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
     </section>
     <section className={styles.section} role="tabpanel" id="preferences-shortcuts" aria-labelledby="preferences-tab-shortcuts" hidden={section !== 'shortcuts'}>
       <h3>Shortcuts</h3>
-      <p className={styles.description}>Use Cmd instead of Ctrl on macOS. Editing shortcuts apply while writing in the document. File shortcuts are paused while a dialog is open.</p>
+      <p className={styles.description}>Use Cmd instead of Ctrl for keyboard shortcuts on macOS. Editing shortcuts apply while writing in the document. Hold Ctrl and scroll over a page to zoom in editing or page view. File and zoom shortcuts are paused while a dialog is open.</p>
       <table className={styles.shortcuts}>
         <thead><tr><th scope="col">Action</th><th scope="col">Shortcut</th></tr></thead>
         <tbody>{[
           ...Object.values(FILE_SHORTCUTS).map(({ label, key }) => ({ label, keys: ['Ctrl', key.toUpperCase()] })),
           ...EDITOR_SHORTCUTS,
+          ...ZOOM_SHORTCUTS,
         ].map(({ label, keys }) => <tr key={label}><td>{label}</td><td>{keys.map((key, index) => <span key={key}>{index > 0 && <span aria-hidden="true"> + </span>}<kbd>{key}</kbd></span>)}</td></tr>)}</tbody>
       </table>
     </section>

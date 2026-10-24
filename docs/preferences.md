@@ -25,3 +25,11 @@ Preferences has a left-hand section index and right-hand content: Appearance, Co
 Shortcuts lists the application bindings and the editor's existing formatting shortcuts. Ctrl+S saves all changed documents, Ctrl+O opens a file, and Ctrl+N creates a file through the same actions as File. Use Cmd instead of Ctrl on macOS. These file shortcuts do not run during dialogs, composition, or key repetition. Document editing supports Ctrl+Z, Ctrl+Shift+Z, Ctrl+B, Ctrl+I, and Ctrl+U. These are fixed defaults, not editable bindings.
 
 Recent Folders is available under File rather than duplicated in the file explorer. It uses the existing recent-workspace history and opening behavior.
+
+Hold Ctrl and scroll up over a page to zoom in, or down to zoom out. This follows the zoom selector's stops (25%–300% in editing view; 40%–100% in page preview), without changing document dimensions or PDF output. Regular scrolling is unchanged. Zoom shortcuts are listed in Shortcuts and are paused while a dialog is open.
+
+## Editing columns and physical sheets
+
+Text fills the first column to the bottom margin, then the second column, then the next sheet. Short documents are not balanced between columns while typing. Sheets have an 8 mm visual gap; theme backgrounds and ruler overlays repeat at each physical sheet's size. The document remains one continuous Markdown/editor buffer, including its undo history.
+
+This editing layout requires native `column-height` and `column-wrap` support. Older WebViews show a notice and a readable single-column editing fallback without changing the saved column setting or Page View/PDF layout. Page View remains the print-layout reference. Free-positioned document images and content boxes retain their existing first-sheet coordinate system; repeated theme decorations are separate from those objects.

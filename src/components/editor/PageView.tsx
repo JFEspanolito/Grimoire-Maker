@@ -1,31 +1,64 @@
-import type { CSSProperties, MouseEventHandler, PointerEventHandler, ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEventHandler, type ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { PAGE_SIZES } from '../../types/document'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
+import { useWheelZoom } from '../../hooks/useWheelZoom'
+import { EDITOR_ZOOMS } from '../../lib/zoom'
+import styles from './PageView.module.css'
 
-/**
- * Virtual physical sheet. Real pagination (Paged.js) runs at export time; the
- * canvas shows one sheet at true millimetre size with column layout applied.
- */
+const PAGE_GAP_MM = 8
+const PX_PER_MM = 96 / 25.4
+
+/** One continuous editor, flowing down each column and then onto the next sheet. */
 export function PageView({ children, onPageClick, onPagePointerDown }: { children: ReactNode; onPageClick?: MouseEventHandler<HTMLDivElement>; onPagePointerDown?: PointerEventHandler<HTMLDivElement> }) {
-  const { pageSize, columns, marginMm, zoom } = useSettingsStore()
+  const { pageSize, columns, marginMm, zoom, setZoom } = useSettingsStore()
+  const zoomRef = useWheelZoom(zoom, setZoom, EDITOR_ZOOMS)
   const overlays = usePluginRegistry((s) => s.overlays)
   const size = PAGE_SIZES[pageSize]
+  const flow = useRef<HTMLDivElement>(null)
+  const [sheetCount, setSheetCount] = useState(1)
+  const paginated = typeof CSS !== 'undefined' && !!CSS.supports?.('column-wrap', 'wrap') && CSS.supports('column-height', '100px')
+  const contentHeight = Math.max(1, size.heightMm - 2 * marginMm)
+  const rowGap = 2 * marginMm + PAGE_GAP_MM
+
+  useEffect(() => {
+    const element = flow.current
+    if (!paginated || !element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => {
+      // ResizeObserver measures unzoomed CSS pixels. Allow one pixel of rounding
+      // so a fully filled last row does not create a spurious blank sheet.
+      const count = Math.ceil((entry.contentRect.height + rowGap * PX_PER_MM - 1) / ((contentHeight + rowGap) * PX_PER_MM))
+      setSheetCount(Math.max(1, count))
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [paginated, contentHeight, rowGap])
+
+  const visibleSheets = paginated ? sheetCount : 1
 
   const style: CSSProperties = {
     width: `${size.widthMm}mm`,
-    minHeight: `${size.heightMm}mm`,
+    minHeight: `${visibleSheets * size.heightMm + (visibleSheets - 1) * PAGE_GAP_MM}mm`,
     padding: `${marginMm}mm`,
-    columnCount: columns,
+  }
+  const flowStyle = {
+    '--page-columns': String(columns),
+    '--content-height': `${contentHeight}mm`,
+    '--row-gap': `${rowGap}mm`,
   }
 
   return (
-    <div className="mx-auto my-8 w-fit" data-editor-zoom style={{ zoom }}>
-      <div className="grimoire-page relative shadow-xl" style={style} onClick={onPageClick} onPointerDown={onPagePointerDown}>
-        {children}
-        {overlays.map(({ id, component: Overlay }) => (
-          <Overlay key={id} />
-        ))}
+    <div ref={zoomRef} className="mx-auto my-8 w-fit" data-editor-zoom style={{ zoom }}>
+      {!paginated && <p role="status" className={styles.notice}>Sequential columns require a newer WebView. Showing one editing column; Page View and PDF keep your column setting.</p>}
+      <div className={`grimoire-page ${paginated ? styles.pages : ''} relative`} style={style} onClick={onPageClick} onPointerDown={onPagePointerDown}>
+        {Array.from({ length: visibleSheets }, (_, index) => <div key={index}>
+          {paginated && <div aria-hidden="true" data-editor-sheet={index + 1} className={`grimoire-page ${styles.paper}`}
+            style={{ top: `${index * (size.heightMm + PAGE_GAP_MM)}mm`, height: `${size.heightMm}mm` }} />}
+          <div className={styles.overlays} style={{ top: `${index * (size.heightMm + PAGE_GAP_MM)}mm`, height: `${size.heightMm}mm` }}>
+            {overlays.map(({ id, component: Overlay }) => <Overlay key={id} />)}
+          </div>
+        </div>)}
+        <div ref={flow} className={styles.flow} data-page-flow data-paginated={paginated} style={flowStyle as CSSProperties}>{children}</div>
       </div>
     </div>
   )

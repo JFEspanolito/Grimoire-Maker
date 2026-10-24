@@ -13,6 +13,11 @@ export const EDITOR_SHORTCUTS = [
   { label: 'Underline', keys: ['Ctrl', 'U'] },
 ] as const
 
+export const ZOOM_SHORTCUTS = [
+  { label: 'Zoom In', keys: ['Ctrl', 'Scroll Up'] },
+  { label: 'Zoom Out', keys: ['Ctrl', 'Scroll Down'] },
+] as const
+
 export function fileShortcut(event: KeyboardEvent): keyof typeof FILE_SHORTCUTS | undefined {
   if (event.defaultPrevented || event.isComposing || event.altKey || event.shiftKey || !(event.ctrlKey || event.metaKey)) return
   return (Object.keys(FILE_SHORTCUTS) as (keyof typeof FILE_SHORTCUTS)[])
