@@ -35,6 +35,11 @@ const builtins = Object.entries(BUILTIN_CSS).map(([path, css]) => {
 
 export const BUILTIN_THEMES: ThemeInfo[] = builtins.map((b) => b.info)
 
+/** Original bytes are retained when the color editor creates a built-in copy. */
+export function builtinThemeCss(id: string): string | undefined {
+  return builtins.find((theme) => theme.info.id === id)?.css
+}
+
 export function applyStyle(styleId: string, css: string): void {
   let el = document.getElementById(styleId)
   if (!el) {

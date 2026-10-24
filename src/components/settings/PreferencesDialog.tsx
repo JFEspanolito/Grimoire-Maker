@@ -6,12 +6,15 @@ import { useThemeStore } from '../../stores/themeStore'
 import { useTemplateStore } from '../../stores/templateStore'
 import { resolveTheme } from '../../lib/themes'
 import styles from './PreferencesDialog.module.css'
+import { ThemeCustomizer } from './ThemeCustomizer'
+import { reportError } from '../../lib/errorLogging'
 
 const PATH_FIELDS: { kind: LibraryKind; label: string }[] = [
   { kind: 'plugins', label: 'Plugin Path' },
   { kind: 'snippets', label: 'Snippet Path' },
   { kind: 'templates', label: 'Template Path' },
   { kind: 'themes', label: 'Theme Path' },
+  { kind: 'logs', label: 'Logs Path' },
 ]
 
 export function PreferencesDialog({ onClose }: { onClose: () => void }) {
@@ -24,6 +27,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [customizing, setCustomizing] = useState(false)
   const { theme, setTheme } = useSettingsStore()
   const { themes, errors: themeErrors } = useThemeStore()
 
@@ -38,7 +42,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
     if (!desktop) return
     void loadLibraryPaths().then(
       (value) => { if (!cancelled) setPaths(value) },
-      (cause: unknown) => { if (!cancelled) setError(String(cause instanceof Error ? cause.message : cause)) },
+      (cause: unknown) => { if (!cancelled) { reportError('preferences.load', cause); setError(String(cause instanceof Error ? cause.message : cause)) } },
     ).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [attempt, desktop])
@@ -53,6 +57,10 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
       const updated = await changeLibraryPath(kind)
       if (!updated) return
       setPaths(updated)
+      if (kind === 'logs') {
+        setNotice('Logs folder updated. Existing logs were copied; new errors are recorded there without restarting.')
+        return
+      }
       // Templates may provide themes, so preserve the existing load order.
       await useThemeStore.getState().reload()
       await useTemplateStore.getState().reload()
@@ -63,6 +71,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
         setNotice('Contents copied. The new folder is active; originals were kept. No restart needed.')
       }
     } catch (cause) {
+      reportError('preferences.change-path', cause)
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       locked.current = false
@@ -70,8 +79,9 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return <dialog ref={dialog} className={styles.dialog} aria-labelledby="preferences-title" aria-busy={busy}
-    onCancel={(event) => { event.preventDefault(); if (!locked.current) onClose() }}>
+  return <dialog ref={dialog} className={styles.dialog} aria-labelledby={customizing ? 'customize-theme-title' : 'preferences-title'} aria-busy={busy}
+    onCancel={(event) => { event.preventDefault(); if (!locked.current) { if (customizing) setCustomizing(false); else onClose() } }}>
+    {customizing ? <ThemeCustomizer onClose={() => setCustomizing(false)} onBusyChange={(value) => { locked.current = value; setBusy(value) }} /> : <>
     <header className={styles.header}>
       <h2 id="preferences-title">Preferences</h2>
       <button type="button" aria-label="Close preferences" disabled={busy} onClick={onClose}>×</button>
@@ -84,6 +94,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
           {themes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </label>
+      <button type="button" disabled={busy} onClick={() => setCustomizing(true)}>Customize Theme</button>
       {themeErrors.length > 0 && <p className={styles.error} role="alert">{themeErrors.join('\n')}</p>}
     </section>
     <section className={styles.section} aria-labelledby="libraries-title">
@@ -99,6 +110,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
         </span>
       </label>)}
       <p className={styles.description}>External executable plugins are reserved for stage 2. Changing Plugin Path does not enable them.</p>
+      <p className={styles.description}>Errors are recorded as .txt files in Logs Path. Check logs for private information before sharing them.</p>
     </section>
     {busy && <p role="status">Selecting a folder or copying content…</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
@@ -108,5 +120,6 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
       <span>Preferences are saved in setting.json. No restart needed.</span>
       <button type="button" disabled={busy} onClick={onClose}>Done</button>
     </footer>
+    </>}
   </dialog>
 }
