@@ -8,6 +8,7 @@ import { pageColumns, projectPageText } from '../../lib/pageProperties'
 import { PageHeaderFooter } from './PageHeaderFooter'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEventHandler, type ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useLayoutStore } from '../../stores/layoutStore'
 import { PAGE_GAP_MM, pageGeometry, sheetCountForHeight } from '../../lib/pageLayout'
 import { alignSections, isSectionContentMutation } from '../../lib/sectionLayout'
 import { PluginSlot } from '../../plugins/PluginSlot'
@@ -69,6 +70,11 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
     edits.observe(element, { childList: true, characterData: true, subtree: true })
     return () => { observer.disconnect(); edits.disconnect(); cancelAnimationFrame(frame) }
   }, [paginated, contentHeight, rowGap])
+
+  const publishSheets = useLayoutStore(state => state.setSheets)
+  const sheetsShown = paginated ? sheetCount : 1
+  const layoutKey = (path === undefined ? current?.path : path) ?? '__untitled__'
+  useEffect(() => { publishSheets(layoutKey, sheetsShown) }, [publishSheets, layoutKey, sheetsShown])
 
   const spreads = paginated && viewMode === 'spreads'
   const visibleSheets = paginated

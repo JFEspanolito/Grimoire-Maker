@@ -1,0 +1,8 @@
+.bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 1.75rem; padding: .15rem .75rem; border-top: 1px solid #ffffff18; background: #1f1e1c; color: #bcb7ac; font-size: .75rem; }
+.stats, .views { display: flex; align-items: center; gap: .25rem; }
+.stat, .view { display: inline-flex; align-items: center; gap: .3rem; padding: .2rem .5rem; border-radius: .25rem; color: inherit; cursor: pointer; }
+.stat:hover, .view:hover { background: #ffffff12; color: #f0eee9; }
+.view[aria-pressed='true'] { background: #ffffff1c; color: #f0eee9; }
+.value { color: #f0eee9; font-variant-numeric: tabular-nums; }
+.view svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.bar :focus-visible { outline: 2px solid #cfb37c; outline-offset: 1px; }
