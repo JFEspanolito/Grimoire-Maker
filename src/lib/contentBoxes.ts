@@ -12,7 +12,9 @@ export function insertContentBox(editor: Editor, content: Content, position?: nu
     : !Array.isArray(content) && content.type === 'doc' ? content
       : { type: 'doc', content: Array.isArray(content) ? content : [content] }
   const document = createDocument(html, editor.schema)
-  const box = { type: 'standardContentBox', attrs, content: document.toJSON().content }
+  // The page is made of sections; a box holds only the blocks inside them.
+  const blocks = (document.toJSON().content as { type: string; content?: unknown[] }[]).flatMap((node) => node.type === 'section' ? node.content ?? [] : [node])
+  const box = { type: 'standardContentBox', attrs, content: blocks }
   let insertion = position
   const resolved = editor.state.doc.resolve(position ?? editor.state.selection.from)
   // New groups are siblings, even when the caret/drop point is inside an existing group.

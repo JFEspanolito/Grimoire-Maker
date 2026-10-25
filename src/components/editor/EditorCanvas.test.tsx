@@ -111,7 +111,7 @@ it('restores a text cursor on margin pointerdown after an image selection', asyn
   const editors: Editor[] = []
   await act(async () => root?.render(<EditorCanvas onReady={(value) => { editors.push(value) }} />))
   const editor = editors[0]
-  await act(async () => { editor.commands.setNodeSelection(0) })
+  await act(async () => { editor.commands.setNodeSelection(1) })
   editor.view.dom.blur()
   const down = new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 })
   await act(async () => {
@@ -134,7 +134,7 @@ it.each(['flow', 'free'])('resizes a selected %s image from its corner without m
   const image = container.querySelector<HTMLImageElement>('.grimoire-image img')!
   vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 420, height: 594 } as DOMRect)
   vi.spyOn(image, 'getBoundingClientRect').mockReturnValue({ left: 60, top: 80, width: 80, height: 100 } as DOMRect)
-  await act(async () => { editor.commands.setNodeSelection(0); image.dispatchEvent(new Event('load')) })
+  await act(async () => { editor.commands.setNodeSelection(1); image.dispatchEvent(new Event('load')) })
   const handle = container.querySelector<HTMLButtonElement>('[aria-label="Resize image"]')
   expect(handle).not.toBeNull()
   const pointer = (type: string, x: number, y: number) => {
@@ -157,7 +157,7 @@ it.each(['flow', 'free'])('resizes a selected %s image from its corner without m
   const saved = useDocumentStore.getState().document.body
   await act(async () => { editor.commands.undo() })
   expect(editor.getAttributes('image').widthMm).toBe(40)
-  await act(async () => { editor.commands.setContent(saved); editor.commands.setNodeSelection(0) })
+  await act(async () => { editor.commands.setContent(saved); editor.commands.setNodeSelection(1) })
   expect(editor.getAttributes('image')).toMatchObject({ anchor, xMm: 30, yMm: 40, widthMm: 60 })
 })
 
@@ -174,20 +174,20 @@ it('keeps Push text after choosing it, typing, and dragging the image to another
   }
   await act(async () => root?.render(<Harness />))
   editor.setOptions({ editorProps: { handleScrollToSelection: () => true } })
-  await act(async () => { editor.commands.setNodeSelection(0) })
+  await act(async () => { editor.commands.setNodeSelection(1) })
   const placement = container.querySelector<HTMLSelectElement>('[aria-label="Text placement"]')!
   await act(async () => { placement.value = 'flow'; placement.dispatchEvent(new Event('change', { bubbles: true })) })
   expect(editor.getAttributes('image').anchor).toBe('flow')
   await act(async () => {
-    editor.commands.setTextSelection(2)
+    editor.commands.setTextSelection(3)
     editor.view.dispatch(editor.state.tr.insertText('Typed '))
   })
-  expect(editor.state.doc.firstChild?.attrs.anchor).toBe('flow')
+  expect(editor.state.doc.firstChild!.firstChild?.attrs.anchor).toBe('flow')
   const page = container.querySelector<HTMLElement>('.grimoire-page')!
   const image = container.querySelector<HTMLImageElement>('.grimoire-image img')!
   vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 420, height: 594 } as DOMRect)
   vi.spyOn(image, 'getBoundingClientRect').mockReturnValue({ left: 60, top: 80, width: 80, height: 100 } as DOMRect)
-  vi.spyOn(editor.view, 'posAtCoords').mockImplementation(() => ({ pos: editor.state.doc.content.size, inside: -1 }))
+  vi.spyOn(editor.view, 'posAtCoords').mockImplementation(() => ({ pos: (editor.state.doc.content.size - 1), inside: -1 }))
   const pointer = (type: string, x: number, y: number) => {
     const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })
     Object.defineProperty(event, 'pointerId', { value: 1 })
@@ -198,14 +198,14 @@ it('keeps Push text after choosing it, typing, and dragging the image to another
   await act(async () => window.dispatchEvent(pointer('pointerup', 100, 240)))
   expect(editor.getAttributes('image')).toMatchObject({ anchor: 'flow', widthMm: 40 })
   expect(container.querySelector<HTMLSelectElement>('[aria-label="Text placement"]')?.value).toBe('flow')
-  expect(editor.state.doc.firstChild?.type.name).toBe('paragraph')
+  expect(editor.state.doc.firstChild!.firstChild?.type.name).toBe('paragraph')
   expect(editor.getText()).toContain('Typed Before')
   expect(editor.getText()).toContain('After')
   expect(useDocumentStore.getState().document.body).not.toContain('data-anchor="free"')
   const saved = useDocumentStore.getState().document.body
   await act(async () => { editor.commands.undo() })
-  expect(editor.state.doc.firstChild?.type.name).toBe('image')
-  expect(editor.state.doc.firstChild?.attrs.anchor).toBe('flow')
+  expect(editor.state.doc.firstChild!.firstChild?.type.name).toBe('image')
+  expect(editor.state.doc.firstChild!.firstChild?.attrs.anchor).toBe('flow')
   expect(editor.getText()).toContain('Typed Before')
   await act(async () => { editor.commands.setContent(saved) })
   const images: string[] = []
@@ -237,9 +237,9 @@ it.each([['left', 40, 40], ['right', 40, 40], ['left', 140, 54], ['right', 140, 
   await act(async () => image.dispatchEvent(pointer('pointerdown', 80, 180)))
   await act(async () => window.dispatchEvent(pointer('pointermove', x, 100)))
   await act(async () => window.dispatchEvent(pointer('pointerup', x, 100)))
-  expect(editor.state.doc.firstChild?.type.name).toBe('image')
+  expect(editor.state.doc.firstChild!.firstChild?.type.name).toBe('image')
   expect(editor.getAttributes('image')).toMatchObject({ align: side, anchor: 'flow', widthMm: fittedWidth })
-  expect(editor.state.doc.child(1).textContent).toBe('Beside this paragraph')
+  expect(editor.state.doc.firstChild!.child(1).textContent).toBe('Beside this paragraph')
   expect(useDocumentStore.getState().document.body).toContain(`data-align="${side}"`)
 })
 
@@ -260,7 +260,7 @@ it.each(['left', 'right'])('grows a %s wrapped image within its second column wi
     { left: 20, right: 190, top: 20, bottom: 300, width: 170 },
     { left: 230, right: 400, top: 20, bottom: 300, width: 170 },
   ] as unknown as DOMRectList)
-  await act(async () => { editor.commands.setNodeSelection(0); image.dispatchEvent(new Event('load')) })
+  await act(async () => { editor.commands.setNodeSelection(1); image.dispatchEvent(new Event('load')) })
   const handle = container.querySelector<HTMLButtonElement>('[aria-label="Resize image"]')!
   const pointer = (type: string, x: number, y: number) => {
     const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })

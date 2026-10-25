@@ -11,13 +11,13 @@ const markdown = (value: Editor) => (value.storage as unknown as { markdown: { g
 it('inserts a free box with a 2 px black border that survives saving and reopening', () => {
   editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'Body text' })
   expect(insertFloatingBox(editor)).toBe(true)
-  const box = editor.getJSON().content?.find((node) => node.type === 'standardContentBox')
+  const box = editor.getJSON().content?.[0].content?.find((node) => node.type === 'standardContentBox')
   expect(box?.attrs).toMatchObject({ placement: 'free', widthMm: 60, borderWidth: 2, borderColor: '#000000' })
   const saved = markdown(editor)
   expect(saved).toContain('data-border-width="2"')
   expect(saved).toContain('border:2px solid #000000')
   const reopened = new Editor({ extensions: EDITOR_EXTENSIONS, content: saved })
-  expect(reopened.getJSON().content?.find((node) => node.type === 'standardContentBox')?.attrs).toMatchObject({ placement: 'free', borderWidth: 2, borderColor: '#000000' })
+  expect(reopened.getJSON().content?.[0].content?.find((node) => node.type === 'standardContentBox')?.attrs).toMatchObject({ placement: 'free', borderWidth: 2, borderColor: '#000000' })
   reopened.destroy()
 })
 

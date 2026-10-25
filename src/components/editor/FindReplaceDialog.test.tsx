@@ -27,7 +27,7 @@ async function open(content: string) {
   const click = (label: string) => act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('dialog button')).find((button) => button.textContent === label)!.click())
   return { container, find: inputs[0], replace: inputs[1], set, click, unmount: () => act(async () => root.unmount()) }
 }
-const text = () => editor!.getText()
+const text = () => editor!.getText().trim()
 
 it('counts matches, highlights them and steps through them', async () => {
   const { container, find, set, click, unmount } = await open('Dragon and dragon and DRAGON')

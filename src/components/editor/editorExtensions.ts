@@ -7,11 +7,14 @@ import { GrimoireImageNode } from './extensions/imageNode'
 import { TableExtensions } from './extensions/tables'
 import { ContentBox } from './extensions/ContentBox'
 import { BlockFormat } from './extensions/blockFormat'
+import { Section, SectionDocument } from './extensions/section'
 import { SearchHighlight } from './extensions/searchHighlight'
 
 /** What the page editor can read and write; the book export renders documents with the same set. */
 export const EDITOR_EXTENSIONS = [
-  StarterKit,
+  StarterKit.configure({ document: false }),
+  SectionDocument,
+  Section,
   BlockFormat,
   TextStyle,
   Color,
