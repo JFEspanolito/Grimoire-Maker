@@ -54,7 +54,7 @@ afterEach(async () => {
 })
 it('seeds executable plugins but keeps snippets declarative and isolates broken packages', async () => {
  await prepareModLibrary()
- expect(Object.keys(MOD_EXAMPLES).filter(p => p.startsWith('Templates/'))).toHaveLength(3)
+ expect(Object.keys(MOD_EXAMPLES).filter(p => /^Templates\/[^/]+\/index.md$/.test(p))).toHaveLength(3)
  await put('Mods/Snippets/Community/nested/01-note.md', '---\nsnippetName: Custom note\n---\n## Custom')
  await put('Mods/Snippets/Community/ignored.js', 'throw Error("must not run")')
  await put('Mods/Plugins/probe/index.js', 'throw Error("must not run")')
@@ -167,4 +167,25 @@ it('ZIP import routes into Mods, export round-trips, application preserves prior
  expect(await fs.readFile(index, 'utf8')).toContain('# Imported')
  expect(await fs.readFile(`${scope.root}/project/Draft/downloaded-1/chapters/01.md`, 'utf8')).toBe('# First')
  expect(new Uint8Array(await fs.readFile(`${scope.root}/project/Draft/downloaded-1/assets/map.png`))).toEqual(files['assets/map.png'])
+})
+
+it('upgrades legacy template examples without replacing edits and applies every chapter', async () => {
+  const marker = `${scope.root}/Mods/Templates/.complete-templates-v1-seeded`
+  await fs.rm(marker, { force: true })
+  await put('Mods/Templates/classic-fantasy/index.md', '---\ntemplateName: My edited adventure\n---\n# Keep my edits')
+  await fs.rm(`${scope.root}/Mods/Templates/classic-fantasy/chapters`, { recursive: true, force: true })
+  await prepareModLibrary()
+  expect(await fs.readFile(`${scope.root}/Mods/Templates/classic-fantasy/index.md`, 'utf8')).toContain('Keep my edits')
+  const { templates } = await loadUserTemplates(new Set(), { dir: `${scope.root}/Mods/Templates`, reservedIds: [] })
+  for (const template of templates) {
+    expect(template.requiresProject).toBe(true)
+    const index = await applyTemplateFiles(template, `${scope.root}/project`)
+    for (const [path, text] of Object.entries(MOD_EXAMPLES)) {
+      const prefix = `Templates/${template.id}/chapters/`
+      if (!path.startsWith(prefix)) continue
+      const relative = path.slice(`Templates/${template.id}/`.length)
+      expect(await fs.readFile(`${index.slice(0, -'index.md'.length)}${relative}`, 'utf8')).toBe(text)
+    }
+    expect(await fs.access(`${index.slice(0, -'index.md'.length)}README.md`).then(() => true, () => false)).toBe(false)
+  }
 })

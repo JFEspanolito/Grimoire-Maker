@@ -6,7 +6,10 @@ vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn(), mkdir: vi.fn(), readD
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(stat).mockResolvedValue({ size: 100 } as Awaited<ReturnType<typeof stat>>) })
 
 it('ships declarative content plus complete executable Zoom and Ruler packages', () => {
-  expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Templates/'))).toHaveLength(3)
+  for (const id of ['classic-fantasy', 'quick-one-shot', 'a5-zine']) {
+    expect(MOD_EXAMPLES[`Templates/${id}/README.md`]).toContain('Create your own')
+    expect(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`Templates/${id}/chapters/`)).length).toBeGreaterThanOrEqual(3)
+  }
   expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Snippets/'))).toHaveLength(5)
   expect(Object.keys(MOD_EXAMPLES).filter(path => !path.startsWith('Plugins/')).every(path => path.endsWith('.md'))).toBe(true)
   expect(MOD_EXAMPLES['Plugins/zoom/zoom.tsx']).toContain('registerToolbar')

@@ -34,6 +34,17 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
     return false
   }))
   await seedExamples(modFs, root, examples)
+  if (paths.templates === `${root}/Templates` && !(await exists(`${root}/Templates/.complete-templates-v1-seeded`))) {
+    const templateExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Templates/')))
+    for (const [relative, contents] of Object.entries(templateExamples)) {
+      const segments = relative.split('/')
+      let parent = root
+      for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(modFs, parent, name)
+      const path = `${parent}/${segments.at(-1)}`
+      if (!(await exists(path))) await modFs.writeTextFile(path, contents)
+    }
+    await modFs.writeTextFile(`${root}/Templates/.complete-templates-v1-seeded`, '1\n')
+  }
   if (paths.plugins === `${root}/Plugins` && !(await exists(`${root}/Plugins/.executable-plugins-v1-seeded`))) {
     const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/')))
     for (const [relative, contents] of Object.entries(pluginExamples)) {

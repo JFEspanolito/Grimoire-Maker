@@ -51,3 +51,10 @@ it('lets a section shrink again when its text shrinks, and leaves a hidden layou
   alignSections(flow)
   expect(section.style.minHeight).toBe('7px')
 })
+
+it('sums the fragments of a section split across spread columns instead of using its bounding box', () => {
+  const [{ section, flow }] = layout(1000)
+  vi.spyOn(section, 'getClientRects').mockReturnValue([{ height: 100 }, { height: 80 }] as unknown as DOMRectList)
+  alignSections(flow)
+  expect(section.style.minHeight).toContain('calc(2 ')
+})
