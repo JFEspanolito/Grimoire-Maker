@@ -5,6 +5,7 @@ import {
   loadUserThemes,
   type ThemeInfo,
 } from '../lib/themes'
+import { prepareModLibrary, readDisabledMods } from '../lib/modLibrary'
 
 installBuiltinThemes()
 
@@ -34,7 +35,15 @@ export const useThemeStore = create<ThemeState>((set) => ({
   errors: [],
   reload: async () => {
     try {
-      const { dir, themes, errors } = await loadUserThemes()
+      const disabled = await prepareModLibrary()
+        .then((paths) => readDisabledMods(paths.preferences))
+        .catch(() => [] as string[])
+      const disabledThemeIds = new Set(
+        disabled
+          .filter((id) => id.startsWith('Themes/'))
+          .map((id) => id.slice('Themes/'.length)),
+      )
+      const { dir, themes, errors } = await loadUserThemes(disabledThemeIds)
       set((s) => ({ userThemes: themes, themes: merge(themes, s.templateThemes), dir, errors }))
     } catch (e) {
       set({ errors: [`Could not read the themes folder: ${e instanceof Error ? e.message : String(e)}`] })

@@ -43,6 +43,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
   const [modsOpen, setModsOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [preferencesSection, setPreferencesSection] = useState<'appearance' | 'folders'>('appearance')
   const [statisticsOpen, setStatisticsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [orderOpen, setOrderOpen] = useState(false)
@@ -164,15 +165,15 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <summary ref={settingsSummary}>Settings</summary>
       <div className={styles.menu}>
         <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
-        <button type="button" onClick={() => { closeMenus(); setPreferencesOpen(true) }}>Preferences…</button>
+        <button type="button" onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesOpen(true) }}>Preferences…</button>
         <button type="button" onClick={() => openInfo('about')}>About</button>
         <button type="button" onClick={() => openInfo('tutorial')}>Tutorial</button>
       </div>
     </details>
     {error && <span role="alert" className={styles.error}>{error}</span>}
-  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}
+  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} onEditPaths={() => { setModsOpen(false); setPreferencesSection('folders'); setPreferencesOpen(true) }} />}
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
-    {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog onClose={() => setPreferencesOpen(false)} /></Suspense>}
+    {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog initialSection={preferencesSection} onClose={() => setPreferencesOpen(false)} /></Suspense>}
     {statisticsOpen && <StatisticsDialog onClose={() => setStatisticsOpen(false)} />}
     {propertiesOpen && <PropertiesDialog editor={editor} onClose={() => setPropertiesOpen(false)} />}
     {orderOpen && workspace && <DocumentOrderDialog root={workspace} onClose={() => setOrderOpen(false)} />}

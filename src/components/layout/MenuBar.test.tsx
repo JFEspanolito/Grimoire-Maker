@@ -10,6 +10,7 @@ import { importImage } from '../../lib/images'
 import { useDocumentStore } from '../../stores/documentStore'
 import { MenuBar } from './MenuBar'
 import { Toolbar } from './Toolbar'
+import { EditorToolbar } from '../editor/EditorToolbar'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -50,7 +51,7 @@ it('has reversible marked view actions and no duplicated toolbar commands', asyn
   const container = document.createElement('div')
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} /><Toolbar /></>))
+    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} /><Toolbar /><EditorToolbar editor={null} /></>))
     const view = Array.from(container.querySelectorAll('details')).find((menu) => menu.querySelector('summary')?.textContent === 'View')!
     const split = view.querySelector<HTMLButtonElement>('[aria-label="Split View"]')!
     expect(split?.getAttribute('aria-pressed')).toBe('false')
@@ -103,7 +104,7 @@ it('keeps page setup only in Document and omits repeated application branding', 
   const container = document.createElement('div')
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} /><Toolbar /></>))
+    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} /><Toolbar /><EditorToolbar editor={null} /></>))
     const nav = container.querySelector('nav')!
     const menus = Array.from(nav.querySelectorAll('details'))
     const view = menus.find((menu) => menu.querySelector('summary')?.textContent === 'View')!

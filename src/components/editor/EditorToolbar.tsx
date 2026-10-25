@@ -5,6 +5,9 @@ import { TableControls } from './TableControls'
 import { FindReplaceDialog } from './FindReplaceDialog'
 import { canChangeIndent, changeIndent } from './extensions/blockFormat'
 import { GuidesMenu } from '../../plugins/builtins/pixel-ruler/GuidesMenu'
+import { useSettingsStore } from '../../stores/settingsStore'
+import { useTabStore } from '../../stores/tabStore'
+import toolbarStyles from '../layout/Toolbar.module.css'
 
 interface Action {
   id: string
@@ -72,6 +75,9 @@ function computedStyleAtCaret(editor: Editor): CSSStyleDeclaration | null {
 /** Formatting controls for the active editor; each button reflects the current selection. */
 export function EditorToolbar({ editor }: { editor: Editor | null }) {
   const [finding, setFinding] = useState(false)
+  const { viewMode, setViewMode } = useSettingsStore()
+  const active = useTabStore((state) => state.active)
+  const documentTools = !active || /\.md$/i.test(active)
   // Re-evaluates the per-button state on every transaction, so active styling follows the caret.
   const state = useEditorState({
     editor,
@@ -140,6 +146,12 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
       <GuidesMenu />
       <button type="button" className={btn} disabled={!editor} title="Find and replace" aria-label="Find and replace"
         onMouseDown={(e) => e.preventDefault()} onClick={() => setFinding(true)}>Find</button>
+      <label className={toolbarStyles.zoom}>Page view
+        <select aria-label="Page view" value={viewMode === 'spreads' ? 'spreads' : 'edit'} disabled={!documentTools}
+          onChange={(event) => setViewMode(event.target.value === 'spreads' ? 'spreads' : 'edit')}>
+          <option value="edit">Single page</option><option value="spreads">Spread</option>
+        </select>
+      </label>
     </div>,
   }
 

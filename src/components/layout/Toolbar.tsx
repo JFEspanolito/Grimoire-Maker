@@ -3,18 +3,21 @@ import { usePluginRegistry } from '../../plugins/plugin-manager'
 import { ProjectName } from './ProjectName'
 import styles from './Toolbar.module.css'
 import { useRulerState } from '../../plugins/builtins/pixel-ruler/rulerState'
-import { useSettingsStore } from '../../stores/settingsStore'
+import { ZoomControl } from '../../plugins/builtins/zoom'
 import { useTabStore } from '../../stores/tabStore'
-import { EDITOR_ZOOMS } from '../../lib/zoom'
+import { useModStore } from '../../stores/modStore'
 
 /** Project identity and editor tools; view settings live in the menus. */
 export function Toolbar() {
   const dirty = useDocumentStore((state) => state.document.dirty)
   const commands = usePluginRegistry((state) => state.commands)
   const rulerVisible = useRulerState((state) => state.visible)
-  const { zoom, setZoom, viewMode, setViewMode } = useSettingsStore()
   const active = useTabStore((state) => state.active)
+  const mods = useModStore((state) => state.mods)
+  const zoomEnabled = mods.find((mod) => mod.id === 'Plugins/zoom')?.enabled ?? true
+  const rulerEnabled = mods.find((mod) => mod.id === 'Plugins/pixel-ruler')?.enabled ?? true
   const documentTools = !active || /\.md$/i.test(active)
+  const visibleCommands = commands.filter((command) => command.id !== 'pixel-ruler.toggle' || rulerEnabled)
   return (
     <header className={styles.toolbar}>
       <div className={styles.group} role="group" aria-label="Current project">
@@ -22,18 +25,8 @@ export function Toolbar() {
         {dirty && <span className={styles.dirty} title="Unsaved document changes">•</span>}
       </div>
       <div className={styles.tools} role="group" aria-label="Editor tools">
-        <label className={styles.zoom}>Page view
-          <select aria-label="Page view" value={viewMode === 'spreads' ? 'spreads' : 'edit'} disabled={!documentTools}
-            onChange={(event) => setViewMode(event.target.value === 'spreads' ? 'spreads' : 'edit')}>
-            <option value="edit">Single page</option><option value="spreads">Spread</option>
-          </select>
-        </label>
-        <label className={styles.zoom}>Zoom
-          <select aria-label="Editor zoom" value={zoom} disabled={!documentTools} onChange={(event) => setZoom(Number(event.target.value))}>
-            {Array.from(new Set<number>([...EDITOR_ZOOMS, zoom])).sort((a, b) => a - b).map((value) => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}
-          </select>
-        </label>
-        {commands.map((command) => <button key={command.id} className={styles.button}
+        {zoomEnabled && <ZoomControl />}
+        {visibleCommands.map((command) => <button key={command.id} className={styles.button}
           disabled={command.id === 'pixel-ruler.toggle' && !documentTools}
           aria-pressed={command.id === 'pixel-ruler.toggle' ? rulerVisible : undefined}
           title={command.id === 'pixel-ruler.toggle' ? 'Show or hide page measurements in editing view' : undefined}

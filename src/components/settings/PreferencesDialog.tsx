@@ -26,7 +26,7 @@ const SECTIONS = { appearance: 'Appearance', folders: 'Content folders', shortcu
 type Section = keyof typeof SECTIONS
 const SECTION_IDS = Object.keys(SECTIONS) as Section[]
 
-export function PreferencesDialog({ onClose }: { onClose: () => void }) {
+export function PreferencesDialog({ onClose, initialSection = 'appearance' }: { onClose: () => void; initialSection?: Section }) {
   const desktop = isTauri()
   const dialog = useRef<HTMLDialogElement>(null)
   const locked = useRef(false)
@@ -38,7 +38,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   const [attempt, setAttempt] = useState(0)
   const [customizing, setCustomizing] = useState(false)
   const [pendingDeleteTheme, setPendingDeleteTheme] = useState<ThemeInfo | null>(null)
-  const [section, setSection] = useState<Section>('appearance')
+  const [section, setSection] = useState<Section>(initialSection)
   const { theme, setTheme } = useSettingsStore()
   const { themes, userThemes = [], errors: themeErrors } = useThemeStore()
   const activeThemeId = resolveTheme(theme, themes)

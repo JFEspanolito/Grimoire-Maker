@@ -131,7 +131,7 @@ describe('toolbar layout and text controls', () => {
     expect(sequence).toEqual([
       'Undo', 'Redo', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
       'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', '//',
-      'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', '//', 'Find and replace',
+      'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', '//', 'Find and replace', 'Page view',
     ])
     const alignment = bar.querySelector<HTMLSelectElement>('[aria-label="Alignment"]')!
     expect(Array.from(alignment.options, (option) => option.textContent)).toEqual(['Left', 'Centered', 'Right', 'Justified'])

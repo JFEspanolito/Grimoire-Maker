@@ -20,7 +20,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
   const { placement, widthMm, heightMm, xMm, yMm } = node.attrs
   const borderWidth = boxBorderWidth(node.attrs.borderWidth)
   const borderColor = boxBorderColor(node.attrs.borderColor)
-  const attributes = boxAttributes(node.attrs)
+  const { class: boxClassName, style: _boxStyle, ...attributes } = boxAttributes(node.attrs)
   const change = (attrs: Record<string, unknown>) => {
     const position = getPos()
     if (typeof position !== 'number') return
@@ -109,7 +109,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
     } else change({ placement: next, xMm: null, yMm: null })
   }
   return (
-    <NodeViewWrapper {...attributes} ref={boxRef} data-selected={selected || editing}
+    <NodeViewWrapper className={boxClassName} {...attributes} ref={boxRef} data-selected={selected || editing}
       style={{ width: widthMm === null ? undefined : `${boxNumber(widthMm, 5)}mm`,
         ...(borderWidth === null ? {} : { border: `${borderWidth}px solid ${borderColor}`, padding: '2mm', boxSizing: 'border-box' as const }),
         minHeight: heightMm === null ? undefined : `${boxNumber(heightMm, 5)}mm`,

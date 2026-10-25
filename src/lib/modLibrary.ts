@@ -27,9 +27,24 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
   await ensureModDirectory(modFs, root, 'Plugins')
   await ensureModDirectory(modFs, root, 'Templates')
   // Seed only the original default library. Never populate a user's custom directory implicitly.
-  const examples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) =>
-    path.startsWith('Templates/') ? paths.templates === `${root}/Templates` : paths.snippets === `${root}/Snippets`))
+  const examples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => {
+    if (path.startsWith('Templates/')) return paths.templates === `${root}/Templates`
+    if (path.startsWith('Snippets/')) return paths.snippets === `${root}/Snippets`
+    if (path.startsWith('Plugins/')) return paths.plugins === `${root}/Plugins`
+    return false
+  }))
   await seedExamples(modFs, root, examples)
+  if (paths.plugins === `${root}/Plugins` && !(await exists(`${root}/Plugins/.plugins-seeded`))) {
+    const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/')))
+    for (const [relative, contents] of Object.entries(pluginExamples)) {
+      const segments = relative.split('/')
+      let parent = root
+      for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(modFs, parent, name)
+      const path = `${parent}/${segments.at(-1)}`
+      if (!(await exists(path))) await modFs.writeTextFile(path, contents)
+    }
+    await modFs.writeTextFile(`${root}/Plugins/.plugins-seeded`, '1\n')
+  }
   return { root, ...paths, preferences: `${config}/mods.json` }
 }
 

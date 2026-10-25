@@ -11,6 +11,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { PAGE_GAP_MM, pageGeometry, sheetCountForHeight } from '../../lib/pageLayout'
 import { alignSections } from '../../lib/sectionLayout'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
+import { useModStore } from '../../stores/modStore'
 import { useWheelZoom } from '../../hooks/useWheelZoom'
 import { EDITOR_ZOOMS } from '../../lib/zoom'
 import styles from './PageView.module.css'
@@ -29,7 +30,8 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   const columns = pageColumns(frontmatter, defaultColumns)
   const pageText = projectPageText(workspace, frontmatter, project, path)
   const zoomRef = useWheelZoom(zoom, setZoom, EDITOR_ZOOMS)
-  const overlays = usePluginRegistry((s) => s.overlays)
+  const rulerEnabled = useModStore((s) => s.mods.find((m) => m.id === 'Plugins/pixel-ruler')?.enabled ?? true)
+  const overlays = usePluginRegistry((s) => s.overlays).filter((o) => o.id !== 'pixel-ruler.overlay' || rulerEnabled)
   const size = pageGeometry(pageSize, marginMm)
   const flow = useRef<HTMLDivElement>(null)
   const [sheetCount, setSheetCount] = useState(1)
