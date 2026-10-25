@@ -11,12 +11,23 @@ export function boxNumber(value: unknown, minimum = 0): number | null {
   return Number.isFinite(number) ? Math.min(500, Math.max(minimum, number)) : null
 }
 
+export const BOX_BORDER_MAX_PX = 12
+export const DEFAULT_BORDER_COLOR = '#000000'
+/** Only plain hex colors reach a style attribute, so a stored value can never inject CSS. */
+export const boxBorderColor = (value: unknown): string => typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value.toLowerCase() : DEFAULT_BORDER_COLOR
+export function boxBorderWidth(value: unknown): number | null {
+  const width = boxNumber(value)
+  return width === null || width === 0 ? null : Math.min(BOX_BORDER_MAX_PX, Math.round(width))
+}
+
 export function boxAttributes(attrs: PMNode['attrs']): Record<string, string> {
   const placement = attrs.placement === 'free' ? 'free' : 'flow'
   const width = boxNumber(attrs.widthMm, 5)
   const height = boxNumber(attrs.heightMm, 5)
   const x = boxNumber(attrs.xMm)
   const y = boxNumber(attrs.yMm)
+  const border = boxBorderWidth(attrs.borderWidth)
+  const borderColor = boxBorderColor(attrs.borderColor)
   return {
     'data-type': 'standard-content-box',
     'data-placement': placement,
@@ -25,7 +36,8 @@ export function boxAttributes(attrs: PMNode['attrs']): Record<string, string> {
     ...(height === null ? {} : { 'data-height-mm': String(height) }),
     ...(x === null ? {} : { 'data-x-mm': String(x) }),
     ...(y === null ? {} : { 'data-y-mm': String(y) }),
-    style: `${width === null ? '' : `width:${width}mm;`}${height === null ? '' : `min-height:${height}mm;`}${placement === 'free' ? `position:absolute;left:${x ?? 0}mm;top:${y ?? 0}mm;` : ''}`,
+    ...(border === null ? {} : { 'data-border-width': String(border), 'data-border-color': borderColor }),
+    style: `${border === null ? '' : `border:${border}px solid ${borderColor};padding:2mm;box-sizing:border-box;`}${width === null ? '' : `width:${width}mm;`}${height === null ? '' : `min-height:${height}mm;`}${placement === 'free' ? `position:absolute;left:${x ?? 0}mm;top:${y ?? 0}mm;` : ''}`,
   }
 }
 
@@ -45,6 +57,8 @@ export const ContentBox = Node.create({
       heightMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.heightMm, 5) },
       xMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.xMm) },
       yMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.yMm) },
+      borderWidth: { default: null, rendered: false, parseHTML: (element) => boxBorderWidth(element.dataset.borderWidth) },
+      borderColor: { default: DEFAULT_BORDER_COLOR, rendered: false, parseHTML: (element) => boxBorderColor(element.dataset.borderColor) },
     }
   },
   parseHTML() { return [{ tag: 'div[data-type="standard-content-box"]' }] },

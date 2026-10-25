@@ -5,7 +5,7 @@ import { useSettingsStore } from '../../../stores/settingsStore'
 import { PAGE_SIZES } from '../../../types/document'
 import { editorSheetRect, editorStackOrigin, positionImageOnPage } from '../../../lib/imagePlacement'
 import { moveContentBox } from '../../../lib/contentBoxes'
-import { boxAttributes, boxNumber } from './ContentBox'
+import { BOX_BORDER_MAX_PX, boxAttributes, boxBorderColor, boxBorderWidth, boxNumber } from './ContentBox'
 
 /** Only the handle moves a group; its children retain ordinary editable text/table/image behavior. */
 export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps) {
@@ -18,6 +18,8 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
   } })
   useEffect(() => () => stopDrag.current?.(), [])
   const { placement, widthMm, heightMm, xMm, yMm } = node.attrs
+  const borderWidth = boxBorderWidth(node.attrs.borderWidth)
+  const borderColor = boxBorderColor(node.attrs.borderColor)
   const attributes = boxAttributes(node.attrs)
   const change = (attrs: Record<string, unknown>) => {
     const position = getPos()
@@ -109,6 +111,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
   return (
     <NodeViewWrapper {...attributes} ref={boxRef} data-selected={selected || editing}
       style={{ width: widthMm === null ? undefined : `${boxNumber(widthMm, 5)}mm`,
+        ...(borderWidth === null ? {} : { border: `${borderWidth}px solid ${borderColor}`, padding: '2mm', boxSizing: 'border-box' as const }),
         minHeight: heightMm === null ? undefined : `${boxNumber(heightMm, 5)}mm`,
         position: placement === 'free' ? 'absolute' : undefined,
         left: placement === 'free' ? `${boxNumber(xMm) ?? 0}mm` : undefined,
@@ -123,6 +126,10 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
           value={widthMm ?? ''} onChange={(event) => change({ widthMm: boxNumber(event.target.value, 5) })} /></label>
         <label>Height <input aria-label="Content box height" title="Minimum height in millimetres; expands to fit content" type="number" min="5" max="500" placeholder="Auto"
           value={heightMm ?? ''} onChange={(event) => change({ heightMm: boxNumber(event.target.value, 5) })} /></label>
+        <label>Border <input aria-label="Content box border width" title="Border width in pixels; 0 removes it" type="number" min="0" max={BOX_BORDER_MAX_PX}
+          value={borderWidth ?? 0} onChange={(event) => change({ borderWidth: boxBorderWidth(event.target.value) })} /></label>
+        <input aria-label="Content box border color" title="Border color" type="color" value={borderColor}
+          onChange={(event) => change({ borderColor: boxBorderColor(event.target.value) })} />
         <button type="button" aria-label="Delete content box" title="Delete the entire content box" onClick={() => {
           const position = getPos()
           if (typeof position !== 'number') return

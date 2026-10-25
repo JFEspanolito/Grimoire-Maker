@@ -5,14 +5,14 @@ import { closeHistory } from '@tiptap/pm/history'
 import { dropPoint } from '@tiptap/pm/transform'
 
 /** All document-producing plugins use this boundary; ordinary editor commands stay unchanged. */
-export function insertContentBox(editor: Editor, content: Content, position?: number): boolean {
+export function insertContentBox(editor: Editor, content: Content, position?: number, attrs: Record<string, unknown> = {}): boolean {
   if (content === null) return false
   const markdown = (editor.storage as unknown as { markdown: { parser: { parse(value: string): string } } }).markdown
   const html = typeof content === 'string' ? markdown.parser.parse(content)
     : !Array.isArray(content) && content.type === 'doc' ? content
       : { type: 'doc', content: Array.isArray(content) ? content : [content] }
   const document = createDocument(html, editor.schema)
-  const box = { type: 'standardContentBox', content: document.toJSON().content }
+  const box = { type: 'standardContentBox', attrs, content: document.toJSON().content }
   let insertion = position
   const resolved = editor.state.doc.resolve(position ?? editor.state.selection.from)
   // New groups are siblings, even when the caret/drop point is inside an existing group.
