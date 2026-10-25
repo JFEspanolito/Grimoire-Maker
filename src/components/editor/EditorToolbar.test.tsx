@@ -10,6 +10,7 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { EditorToolbar } from './EditorToolbar'
 import { GrimoireImage } from './extensions/image'
 import { TableExtensions } from './extensions/tables'
+import { EDITOR_EXTENSIONS } from './editorExtensions'
 
 
 let root: Root | null = null
@@ -115,5 +116,45 @@ describe('context row', () => {
     expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Table'])
     await act(async () => { editor!.commands.deleteTable() })
     expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Image layout'])
+  })
+})
+
+describe('toolbar layout and text controls', () => {
+  it('orders the groups with simple separators and offers color, size, alignment and indent', async () => {
+    editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'Hello world' })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<EditorToolbar editor={editor} />))
+    const bar = container.querySelector('[role="toolbar"]')!
+    const sequence = Array.from(bar.querySelectorAll('[role="separator"], button, select, input')).filter((item) => !item.closest('details')).map((item) =>
+      item.getAttribute('role') === 'separator' ? '//' : item.getAttribute('aria-label') ?? item.textContent)
+    expect(sequence).toEqual([
+      'Undo', 'Redo', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
+      'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', '//',
+      'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', '//', 'Find and replace',
+    ])
+    const alignment = bar.querySelector<HTMLSelectElement>('[aria-label="Alignment"]')!
+    expect(Array.from(alignment.options, (option) => option.textContent)).toEqual(['Left', 'Centered', 'Right', 'Justified'])
+  })
+
+  it('applies size, color, alignment and indent to the selection', async () => {
+    editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'Hello world' })
+    editor.commands.selectAll()
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<EditorToolbar editor={editor} />))
+    const change = (selector: string, value: string) => act(async () => {
+      const element = container.querySelector<HTMLSelectElement | HTMLInputElement>(selector)!
+      const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
+      Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(element, value)
+      element.dispatchEvent(new Event(element instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }))
+    })
+    await change('[aria-label="Text size"]', '20')
+    await change('[aria-label="Text color"]', '#336699')
+    await change('[aria-label="Alignment"]', 'justify')
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Increase indent"]')!.click())
+    expect(editor.getAttributes('textStyle')).toMatchObject({ fontSize: '20px', color: '#336699' })
+    expect(editor.getAttributes('paragraph')).toMatchObject({ textAlign: 'justify', indent: 1 })
+    expect(container.querySelector<HTMLSelectElement>('[aria-label="Text size"]')!.value).toBe('20')
   })
 })

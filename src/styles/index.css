@@ -355,3 +355,7 @@ body,
 .grimoire-content .character-sheet th {
   text-align: center;
 }
+
+/* Find dialog highlights */
+.grimoire-content .search-match { background: #f5c54299; border-radius: 2px; }
+.grimoire-content .search-current { background: #f08a24; color: #1c1b19; }
