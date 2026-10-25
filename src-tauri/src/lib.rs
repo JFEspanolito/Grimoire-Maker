@@ -32,6 +32,7 @@ pub fn run() {
             commands::version_control::git_stage,
             commands::version_control::git_unstage,
             commands::version_control::git_commit,
+            commands::version_control::git_auto_commit,
             commands::version_control::git_init,
             commands::workspace::restore_workspace,
             commands::workspace::rename_workspace,

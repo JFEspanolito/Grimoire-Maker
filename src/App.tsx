@@ -22,6 +22,7 @@ import styles from './App.module.css'
 import { VersionControlPanel } from './components/version-control/VersionControlPanel'
 import { useDocumentStore } from './stores/documentStore'
 import { useAutoSave } from './hooks/useAutoSave'
+import { useAutoCommit } from './hooks/useAutoCommit'
 import { useRepositoryStatus } from './hooks/useRepositoryStatus'
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
   const [gitOpen, setGitOpen] = useState(true)
   const [sessionReady, setSessionReady] = useState(false)
   useAutoSave(sessionReady)
+  useAutoCommit(sessionReady)
   const workspace = useDocumentStore((s) => s.workspaceRoot)
   useEffect(() => { if (workspace) void useProjectStore.getState().load(workspace) }, [workspace])
   const repository = useRepositoryStatus(workspace)

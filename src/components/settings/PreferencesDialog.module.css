@@ -38,3 +38,10 @@
 @media (max-width: 640px) { .layout { grid-template-columns: minmax(0, 1fr); } .sections { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid #ffffff20; padding: 0 0 .75rem; } }
 
 .customizingLayout { margin-top: 1rem; border-top: 1px solid #ffffff20; padding-top: 1rem; }
+
+.autoCommit { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid #ffffff20; }
+.autoCommitToggle { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; cursor: pointer; }
+.autoCommitMessage { display: grid; gap: .35rem; margin: 1rem 0; }
+.autoCommitMessage input { width: 100%; min-width: 0; padding: .4rem; background: #201f1d; border: 1px solid #ffffff20; border-radius: .25rem; color: #f0eee9; }
+.autoCommit input:hover { border-color: #cfb37c80; }
+.autoCommitToggle:hover { color: #e8cf9a; }

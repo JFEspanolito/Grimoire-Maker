@@ -581,3 +581,12 @@ it('restores the configured auto save interval, with a five-minute default for o
   await actions.restoreSession()
   expect(useSettingsStore.getState().autoSaveSeconds).toBe(300)
 })
+
+
+it('hydrates auto commits including explicit false and restores defaults for legacy settings', async () => {
+  vi.mocked(loadSettings).mockResolvedValueOnce({ autoCommitEnabled: false, autoCommitMinutes: 45, autoCommitMessage: 'Saved writing' })
+  await actions.restoreSession()
+  expect(useSettingsStore.getState()).toMatchObject({ autoCommitEnabled: false, autoCommitMinutes: 45, autoCommitMessage: 'Saved writing' })
+  await actions.restoreSession()
+  expect(useSettingsStore.getState()).toMatchObject({ autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' })
+})

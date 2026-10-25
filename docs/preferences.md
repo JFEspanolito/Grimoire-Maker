@@ -41,6 +41,14 @@ Settings > Preferences > Auto save defaults to 5 minutes. Enter minutes and seco
 
 Only modified documents with existing file paths are saved, including inactive tabs. Untitled documents require one manual save and never trigger a timer-driven dialog. Saving uses the same serialized file-action queue and snapshot acknowledgement as manual Save: typing during a write remains dirty for the next save. Failed files remain dirty and report an error; other dirty files are still attempted. Timers begin after session restoration, never overlap writes, and wait for the selected interval after completion before trying again. Autosave never stages or commits Git changes.
 
+### Auto commits
+
+The Auto commits subsection is enabled by default and runs every 20 minutes while the application is open with a project selected. Change the interval (1–1440 minutes), edit the default message `update content automatically`, or disable it, then choose **Save**. These preferences persist across restarts.
+
+Automatic commits require Git and an existing project repository. Missing Git, projects without a repository, and unchanged repositories are skipped. Each run stages all nonignored saved project files with `git add .` and commits them with the configured message, including new files and deletions. It never creates a repository or pushes to a remote. Unsaved editor buffers remain the responsibility of Save or Auto save.
+
+The timer starts after session restoration and waits for the configured interval after each operation finishes. App Git operations are serialized; invalid messages, missing Git identity, and in-progress Git operations are rejected before staging. Other failures are recorded in the error log; a failure after staging may leave files staged for review in Source Control.
+
 ## Configuration directory
 
 On Windows the default configuration directory is `%APPDATA%/GriomoireMaker`; the application identifier remains `app.grimoiremaker.desktop`. On first launch with no new directory, the old configuration is copied through a private staging directory and published only after successful completion. The old directory is retained. Internal library paths are rebased to the new root; external custom paths and project/session paths are preserved. An existing new directory is authoritative, never merged with stale old settings. Migration failures abort startup and report the retained staging directory, rather than initialize over partial data. Linked/reparse files and directories are rejected.
@@ -59,7 +67,7 @@ Project **Book name**, **Author**, and optional **Co-Author** are also available
 
 For the selected Markdown file, **Page title** and **Page columns** are saved with the file using Save or Auto save. Columns may be **Default**, **1 column**, or **2 columns**. Default inherits the application column setting; an explicit selection affects only that Markdown file (all physical sheets it produces). Editing, Page View, spreads, and PDF use the same override.
 
-Project properties and Page properties are independently collapsible and start expanded. Collapsing a group preserves its fields.
+Project properties and Page properties are independently collapsible and start collapsed. Collapsing a group preserves its fields.
 
 Book name is project metadata shared by Properties, the toolbar title, and the theme placeholder {book}. The toolbar pencil edits this same value without renaming or moving the folder. Projects without a saved Book name display their folder name as a fallback.
 

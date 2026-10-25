@@ -272,7 +272,7 @@ export function useFileSystem() {
       const state = await loadAppState()
       useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
 
-      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds } = await loadSettings()
+      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage } = await loadSettings()
       const settings = useSettingsStore.getState()
       if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
       if (columns === 1 || columns === 2) settings.setColumns(columns)
@@ -280,6 +280,7 @@ export function useFileSystem() {
       settings.setRulerGuides(rulerGuides ?? [])
       settings.setZoom(typeof zoom === 'number' ? zoom : 1)
       settings.setAutoSaveSeconds(autoSaveSeconds ?? 300)
+      settings.setAutoCommitSettings(autoCommitEnabled ?? true, autoCommitMinutes ?? 20, autoCommitMessage ?? 'update content automatically')
 
       const { lastWorkspace } = state
       if (!lastWorkspace) return

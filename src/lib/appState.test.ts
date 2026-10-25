@@ -10,13 +10,13 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: vi.fn(), mkdir: vi.fn(), readTextFile: vi.fn(), writeTextFile: vi.fn(),
 }))
 let stop: (() => void) | undefined
-afterEach(() => { stop?.(); useSettingsStore.setState({ theme: 'parchment', rulerGuides: [], zoom: 1, autoSaveSeconds: 300 }); vi.clearAllMocks() })
+afterEach(() => { stop?.(); useSettingsStore.setState({ theme: 'parchment', rulerGuides: [], zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' }); vi.clearAllMocks() })
 
 it('saves appearance through the shared native settings writer, not workspace state', async () => {
   stop = watchSettings()
   useSettingsStore.getState().setTheme('sci-fi')
   await Promise.resolve()
-  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], zoom: 1, autoSaveSeconds: 300 })
+  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' })
   expect(writeTextFile).not.toHaveBeenCalled()
 })
 
@@ -51,4 +51,17 @@ it('persists the editable auto save interval without touching session files', as
   await Promise.resolve()
   expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ autoSaveSeconds: 90 }))
   expect(writeTextFile).not.toHaveBeenCalled()
+})
+
+
+it('persists auto commit preferences and rejects invalid settings atomically', async () => {
+  expect(useSettingsStore.getState()).toMatchObject({ autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' })
+  stop = watchSettings()
+  useSettingsStore.getState().setAutoCommitSettings(false, 45, 'Saved writing')
+  await Promise.resolve()
+  expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ autoCommitEnabled: false, autoCommitMinutes: 45, autoCommitMessage: 'Saved writing' }))
+  for (const [minutes, message] of [[0, 'valid'], [1441, 'valid'], [1.5, 'valid'], [20, '   '], [20, '\0'], [20, 'é'.repeat(2049)]] as const) {
+    useSettingsStore.getState().setAutoCommitSettings(true, minutes, message)
+    expect(useSettingsStore.getState()).toMatchObject({ autoCommitEnabled: false, autoCommitMinutes: 45, autoCommitMessage: 'Saved writing' })
+  }
 })

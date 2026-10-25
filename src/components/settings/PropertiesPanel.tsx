@@ -9,8 +9,8 @@ export function PropertiesPanel() {
   const active = useTabStore(state => state.active)
   const markdown = !active || /\.md$/i.test(active)
   return <div className={styles.panel}>
-    <details open><summary>Project properties</summary><ProjectSettings /></details>
-    <details open><summary>Page properties</summary>
+    <details><summary>Project properties</summary><ProjectSettings /></details>
+    <details><summary>Page properties</summary>
       {markdown ? <div className={styles.form}>
         <p>{document.path?.split(/[\\/]/).at(-1) ?? 'Unsaved page'} — applies to this Markdown file only.</p>
         <label>Page title<input aria-label="Page title" value={String(document.frontmatter.title ?? '')}

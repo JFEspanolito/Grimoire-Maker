@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { commitChanges, diffChange, getRepositoryStatus, initializeRepository, stageChange, unstageChange } from '../../lib/versionControl'
 import type { GitDiff, GitEntry, RepositoryStatus } from '../../lib/versionControl'
 import styles from './VersionControlPanel.module.css'
-import { notifyRepositoryChanged } from '../../lib/repositoryEvents'
+import { notifyRepositoryChanged, REPOSITORY_CHANGED } from '../../lib/repositoryEvents'
 import { GitDiffDialog } from './GitDiffDialog'
 
 interface VersionControlPanelProps {
@@ -18,7 +18,7 @@ interface Selection {
 
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
 
-/** A local-only panel: nothing initializes, stages or commits without an explicit click. */
+/** Manual local source-control actions; automatic commits are configured separately. */
 export function VersionControlPanel(props: VersionControlPanelProps) {
   return <ProjectVersionControlPanel key={props.workspace ?? ''} {...props} />
 }
@@ -33,19 +33,39 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
   const [diff, setDiff] = useState<GitDiff | null>(null)
   const epoch = useRef(0)
   const pending = useRef(false)
+  const refreshQueued = useRef(false)
+  const flushRefresh = useRef(() => {})
 
   useEffect(() => {
     const current = ++epoch.current
     if (!workspace) return
-    pending.current = true
-    getRepositoryStatus(workspace).then((value) => {
-      if (current === epoch.current) setStatus(value)
-    }).catch((reason: unknown) => {
-      if (current === epoch.current) { reportError('git.operation', reason); setError(errorText(reason)) }
-    }).finally(() => {
-      if (current === epoch.current) { pending.current = false; setBusy(false) }
-    })
-    return () => { epoch.current = current + 1 }
+    const refresh = () => {
+      if (current !== epoch.current) return
+      if (pending.current) { refreshQueued.current = true; return }
+      refreshQueued.current = false
+      pending.current = true
+      setBusy(true)
+      getRepositoryStatus(workspace).then((value) => {
+        if (current === epoch.current) { setStatus(value); setSelection(null); setDiff(null) }
+      }).catch((reason: unknown) => {
+        if (current === epoch.current) { reportError('git.operation', reason); setError(errorText(reason)) }
+      }).finally(() => {
+        if (current === epoch.current) {
+          pending.current = false; setBusy(false)
+          flushRefresh.current()
+        }
+      })
+    }
+    flushRefresh.current = () => { if (refreshQueued.current) refresh() }
+    refresh()
+    window.addEventListener(REPOSITORY_CHANGED, refresh)
+    return () => {
+      epoch.current = current + 1
+      pending.current = false
+      refreshQueued.current = false
+      window.removeEventListener(REPOSITORY_CHANGED, refresh)
+      flushRefresh.current = () => {}
+    }
   }, [workspace])
 
   async function run(operation: (project: string) => Promise<void>, successMessage = '') {
@@ -68,7 +88,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
       if (current === epoch.current) { reportError('git.operation', reason); setError(errorText(reason)) }
     } finally {
       notifyRepositoryChanged()
-      if (current === epoch.current) { pending.current = false; setBusy(false) }
+      if (current === epoch.current) { pending.current = false; setBusy(false); flushRefresh.current() }
     }
   }
 
@@ -86,7 +106,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
     } catch (reason) {
       if (current === epoch.current) { reportError('git.operation', reason); setError(errorText(reason)) }
     } finally {
-      if (current === epoch.current) { pending.current = false; setBusy(false) }
+      if (current === epoch.current) { pending.current = false; setBusy(false); flushRefresh.current() }
     }
   }
 

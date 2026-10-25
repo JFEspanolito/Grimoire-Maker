@@ -67,6 +67,15 @@ describe('VersionControlPanel', () => {
     expect(actions.commitChanges).not.toHaveBeenCalled()
   })
 
+  it('refreshes changes after an automatic commit event without mutating Git', async () => {
+    await render()
+    actions.getRepositoryStatus.mockResolvedValue({ ...repository, entries: [] })
+    await act(async () => window.dispatchEvent(new Event('grimoire:repository-changed')))
+    expect(container.textContent).toContain('Working tree clean.')
+    expect(actions.commitChanges).not.toHaveBeenCalled()
+    expect(actions.stageChange).not.toHaveBeenCalled()
+  })
+
   it('shows aligned Original and Incoming change columns with removed and added lines in a modal', async () => {
     actions.diffChange.mockResolvedValueOnce({ text: 'diff --git a/chapter.md b/chapter.md\n--- a/chapter.md\n+++ b/chapter.md\n@@ -1,2 +1,2 @@\n-old text\n+new text\n same text\n', binary: false, truncated: false })
     await render()

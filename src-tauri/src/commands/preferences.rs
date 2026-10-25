@@ -77,6 +77,12 @@ pub struct UserSettings {
     zoom: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     auto_save_seconds: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auto_commit_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auto_commit_minutes: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auto_commit_message: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Debug)]
@@ -96,6 +102,12 @@ struct RulerGuide {
 
 impl UserSettings {
     fn validate(&self) -> Result<(), String> {
+        if self.auto_commit_minutes.is_some_and(|value| !(1..=1440).contains(&value)) {
+            return Err("Auto commit interval must be between 1 and 1440 minutes".into());
+        }
+        if self.auto_commit_message.as_ref().is_some_and(|message| message.trim().is_empty() || message.len() > 4096 || message.contains('\0')) {
+            return Err("Provide an auto commit message of 1–4096 bytes without null characters".into());
+        }
         if self
             .auto_save_seconds
             .is_some_and(|value| !(1..=86400).contains(&value))
@@ -280,6 +292,15 @@ fn save_settings_in(config: &Path, mut settings: UserSettings) -> Result<(), Str
     }
     if settings.auto_save_seconds.is_none() {
         settings.auto_save_seconds = preferences.settings.auto_save_seconds;
+    }
+    if settings.auto_commit_enabled.is_none() {
+        settings.auto_commit_enabled = preferences.settings.auto_commit_enabled;
+    }
+    if settings.auto_commit_minutes.is_none() {
+        settings.auto_commit_minutes = preferences.settings.auto_commit_minutes;
+    }
+    if settings.auto_commit_message.is_none() {
+        settings.auto_commit_message = preferences.settings.auto_commit_message.clone();
     }
     preferences.settings = settings;
     publish_preferences(config, &preferences)
@@ -560,6 +581,42 @@ mod preferences_tests {
             legacy_bytes
         );
     }
+    #[test]
+    fn preferences_autocommit_roundtrip_preservation_and_bounds() {
+        let config = scratch("autocommit");
+        let legacy = read_preferences(&config).unwrap().settings;
+        assert!(legacy.auto_commit_enabled.is_none());
+        assert!(legacy.auto_commit_minutes.is_none());
+        assert!(legacy.auto_commit_message.is_none());
+        let values = serde_json::json!({"autoCommitEnabled": false, "autoCommitMinutes": 45, "autoCommitMessage": "Saved writing"});
+        save_settings_in(&config, serde_json::from_value(values.clone()).unwrap()).unwrap();
+        save_settings_in(&config, UserSettings { theme: Some("modern".into()), ..Default::default() }).unwrap();
+        let saved = serde_json::to_value(read_preferences(&config).unwrap().settings).unwrap();
+        for key in ["autoCommitEnabled", "autoCommitMinutes", "autoCommitMessage"] {
+            assert_eq!(saved[key], values[key]);
+        }
+        let before = fs::read(config.join(PREFERENCES_FILE)).unwrap();
+        for invalid in [
+            serde_json::json!({"autoCommitMinutes": 0}),
+            serde_json::json!({"autoCommitMinutes": 1441}),
+            serde_json::json!({"autoCommitMessage": "   "}),
+            serde_json::json!({"autoCommitMessage": "\0"}),
+            serde_json::json!({"autoCommitMessage": "é".repeat(2049)}),
+        ] {
+            assert!(save_settings_in(&config, serde_json::from_value(invalid).unwrap()).is_err());
+            assert_eq!(fs::read(config.join(PREFERENCES_FILE)).unwrap(), before);
+        }
+        for invalid in [serde_json::json!({"autoCommitMinutes": -1}), serde_json::json!({"autoCommitMinutes": 1.5}), serde_json::json!({"autoCommitEnabled": "false"})] {
+            assert!(serde_json::from_value::<UserSettings>(invalid).is_err());
+        }
+        for minutes in [1, 20, 1440] {
+            save_settings_in(&config, serde_json::from_value(serde_json::json!({"autoCommitEnabled": true, "autoCommitMinutes": minutes, "autoCommitMessage": "é".repeat(2048)})).unwrap()).unwrap();
+            let saved = read_preferences(&config).unwrap().settings;
+            assert_eq!(saved.auto_commit_enabled, Some(true));
+            assert_eq!(saved.auto_commit_minutes, Some(minutes));
+        }
+    }
+
     #[test]
     fn preferences_autosave_roundtrip_preservation_and_bounds() {
         let config = scratch("autosave");

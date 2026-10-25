@@ -36,6 +36,11 @@ async function input(label: string, value: string) {
     field.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
+it('starts project and page properties collapsed', () => {
+  const sections = Array.from(host.querySelectorAll('details'))
+  expect(sections.map(section => section.querySelector('summary')?.textContent)).toEqual(['Project properties', 'Page properties'])
+  expect(sections.every(section => !section.open)).toBe(true)
+})
 it('saves Author at project scope, not in page frontmatter', async () => {
   await input('Author', 'Jane')
   await act(async () => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
@@ -96,9 +101,13 @@ it('does not duplicate an in-flight blur save and retains edits after a failed s
   expect(saveProjectSettings).toHaveBeenCalledTimes(2)
   expect(host.textContent).toContain('Project settings saved.')
 })
-it('starts both property groups open and collapses each independently without discarding fields', async () => {
+it('opens collapsed property groups and collapses each independently without discarding fields', async () => {
   const groups = host.querySelectorAll('details')
   expect(groups).toHaveLength(2)
+  expect(groups[0].open).toBe(false)
+  expect(groups[1].open).toBe(false)
+  await act(async () => groups[0].querySelector('summary')!.click())
+  await act(async () => groups[1].querySelector('summary')!.click())
   expect(groups[0].open).toBe(true)
   expect(groups[1].open).toBe(true)
   await input('Author', 'Draft author')

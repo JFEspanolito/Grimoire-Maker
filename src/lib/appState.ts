@@ -13,6 +13,9 @@ export interface PersistedSettings {
   theme?: ThemeId
   rulerGuides?: RulerGuide[]
   zoom?: number
+  autoCommitEnabled?: boolean
+  autoCommitMinutes?: number
+  autoCommitMessage?: string
   autoSaveSeconds?: number
 }
 
@@ -102,8 +105,8 @@ export const forgetWorkspace =
 /** Saves page setup whenever it changes; returns the unsubscribe function. */
 export function watchSettings(): () => void {
   return useSettingsStore.subscribe((s, prev) => {
-    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.zoom === prev.zoom && s.autoSaveSeconds === prev.autoSaveSeconds) return
-    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, zoom: s.zoom, autoSaveSeconds: s.autoSaveSeconds }).catch((error: unknown) => {
+    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.zoom === prev.zoom && s.autoSaveSeconds === prev.autoSaveSeconds && s.autoCommitEnabled === prev.autoCommitEnabled && s.autoCommitMinutes === prev.autoCommitMinutes && s.autoCommitMessage === prev.autoCommitMessage) return
+    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, zoom: s.zoom, autoSaveSeconds: s.autoSaveSeconds, autoCommitEnabled: s.autoCommitEnabled, autoCommitMinutes: s.autoCommitMinutes, autoCommitMessage: s.autoCommitMessage }).catch((error: unknown) => {
       useSessionStore.getState().setWorkspaceError(`Could not save preferences: ${error instanceof Error ? error.message : String(error)}`)
     })
   })
