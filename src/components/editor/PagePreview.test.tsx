@@ -1,3 +1,5 @@
+import { useDocumentStore } from '../../stores/documentStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -107,4 +109,17 @@ it('zooms the preview with Ctrl+wheel without repaginating or capturing plain sc
   expect(preview.style.zoom).toBe('0.75')
   await act(async () => vi.advanceTimersByTimeAsync(400))
   expect(paginate).toHaveBeenCalledOnce()
+})
+
+it('paginates the selected file with its column override', async () => {
+  vi.mocked(paginate).mockImplementation(async (previewer, _request, target) => { initialize(previewer, target) })
+  useSettingsStore.setState({ columns: 2 })
+  useDocumentStore.getState().loadFromRaw('/book/a.md', '---\ncolumns: 1\n---\nA')
+  await act(async () => root.render(<PagePreview mode="pages" />))
+  await act(async () => vi.advanceTimersByTimeAsync(400))
+  expect(vi.mocked(paginate).mock.calls.at(-1)![1].columns).toBe(1)
+  await act(async () => useDocumentStore.getState().loadFromRaw('/book/b.md', 'B'))
+  await act(async () => vi.advanceTimersByTimeAsync(400))
+  expect(vi.mocked(paginate).mock.calls.at(-1)![1].columns).toBe(2)
+  await act(async () => useDocumentStore.getState().resetDocuments())
 })

@@ -10,13 +10,13 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: vi.fn(), mkdir: vi.fn(), readTextFile: vi.fn(), writeTextFile: vi.fn(),
 }))
 let stop: (() => void) | undefined
-afterEach(() => { stop?.(); useSettingsStore.setState({ theme: 'parchment', rulerGuides: [], zoom: 1 }); vi.clearAllMocks() })
+afterEach(() => { stop?.(); useSettingsStore.setState({ theme: 'parchment', rulerGuides: [], zoom: 1, autoSaveSeconds: 300 }); vi.clearAllMocks() })
 
 it('saves appearance through the shared native settings writer, not workspace state', async () => {
   stop = watchSettings()
   useSettingsStore.getState().setTheme('sci-fi')
   await Promise.resolve()
-  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], zoom: 1 })
+  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], zoom: 1, autoSaveSeconds: 300 })
   expect(writeTextFile).not.toHaveBeenCalled()
 })
 
@@ -43,4 +43,12 @@ it('surfaces save failures instead of leaving an unhandled rejection', async () 
   useSettingsStore.getState().setTheme('sci-fi')
   await Promise.resolve()
   expect(useSessionStore.getState().workspaceError).toBe('Could not save preferences: disk full')
+})
+
+it('persists the editable auto save interval without touching session files', async () => {
+  stop = watchSettings()
+  useSettingsStore.getState().setAutoSaveSeconds(90)
+  await Promise.resolve()
+  expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ autoSaveSeconds: 90 }))
+  expect(writeTextFile).not.toHaveBeenCalled()
 })

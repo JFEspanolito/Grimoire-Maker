@@ -20,7 +20,7 @@ The legacy `templates` directory under application configuration remains a separ
 
 ## Sections and shortcuts
 
-Preferences has a left-hand section index and right-hand content: Appearance, Content folders, and Shortcuts. Select a section or use Up/Down, Home, and End while focusing its tab. On narrow windows the index wraps above the content. Theme customization stays within Appearance; return with Back before switching sections.
+Preferences has a left-hand section index and right-hand content: Appearance, Content folders, Shortcuts, and Auto save. Select a section or use Up/Down, Home, and End while focusing its tab. On narrow windows the index wraps above the content. Theme customization stays within Appearance; return with Back before switching sections.
 
 Shortcuts lists the application bindings and the editor's existing formatting shortcuts. Ctrl+S saves all changed documents, Ctrl+O opens a file, and Ctrl+N creates a file through the same actions as File. Use Cmd instead of Ctrl on macOS. These file shortcuts do not run during dialogs, composition, or key repetition. Document editing supports Ctrl+Z, Ctrl+Shift+Z, Ctrl+B, Ctrl+I, and Ctrl+U. These are fixed defaults, not editable bindings.
 
@@ -33,3 +33,36 @@ Hold Ctrl and scroll up over a page to zoom in, or down to zoom out. This follow
 Text fills the first column to the bottom margin, then the second column, then the next sheet. Short documents are not balanced between columns while typing. Sheets have an 8 mm visual gap; theme backgrounds and ruler overlays repeat at each physical sheet's size. The document remains one continuous Markdown/editor buffer, including its undo history.
 
 This editing layout requires native `column-height` and `column-wrap` support. Older WebViews show a notice and a readable single-column editing fallback without changing the saved column setting or Page View/PDF layout. Page View remains the print-layout reference. Free-positioned document images and content boxes retain their existing first-sheet coordinate system; repeated theme decorations are separate from those objects.
+
+
+## Auto save
+
+Settings > Preferences > Auto save defaults to 5 minutes. Enter minutes and seconds, then choose Apply interval; the total must be between 1 second and 24 hours. The value is stored as integer `settings.autoSaveSeconds` in `setting.json`, takes effect without restarting, and defaults to 300 for older settings. Callers omitting it preserve the saved value.
+
+Only modified documents with existing file paths are saved, including inactive tabs. Untitled documents require one manual save and never trigger a timer-driven dialog. Saving uses the same serialized file-action queue and snapshot acknowledgement as manual Save: typing during a write remains dirty for the next save. Failed files remain dirty and report an error; other dirty files are still attempted. Timers begin after session restoration, never overlap writes, and wait for the selected interval after completion before trying again. Autosave never stages or commits Git changes.
+
+## Configuration directory
+
+On Windows the default configuration directory is `%APPDATA%/GriomoireMaker`; the application identifier remains `app.grimoiremaker.desktop`. On first launch with no new directory, the old configuration is copied through a private staging directory and published only after successful completion. The old directory is retained. Internal library paths are rebased to the new root; external custom paths and project/session paths are preserved. An existing new directory is authoritative, never merged with stale old settings. Migration failures abort startup and report the retained staging directory, rather than initialize over partial data. Linked/reparse files and directories are rejected.
+
+The new root is shared by settings, session history, Mods, themes, logging, and workspace/Git authorization. Themes Path receives editable built-in examples and a README once per folder, without replacing existing files.
+
+## Source control marker
+
+The Git button shows a gold marker for saved uncommitted changes, including staged, unstaged and untracked files, even while its panel is collapsed. Status refreshes after app saves/Git operations, on window focus, and every five seconds. A failed refresh retains the last known marker and shows an unavailable indicator; unsaved editor buffers are distinct from Git's on-disk changes. Pack ZIP and Restore ZIP have been removed from File; template package import/export is unchanged.
+
+## Project and page properties
+
+Open **Properties** below Snippets for **Project properties** and **Page properties**. The panel remains available when Snippets is hidden.
+
+Project **Book name**, **Author**, and optional **Co-Author** are also available in **Settings > Preferences > Project**. Changes save automatically when a field loses focus; **Save project settings** remains available for manual saving and retries. Both actions store them in `.grimoire-project.json` inside the project folder. These values are shared by all Markdown files, not global application preferences. A page-level author does not override the project author.
+
+For the selected Markdown file, **Page title** and **Page columns** are saved with the file using Save or Auto save. Columns may be **Default**, **1 column**, or **2 columns**. Default inherits the application column setting; an explicit selection affects only that Markdown file (all physical sheets it produces). Editing, Page View, spreads, and PDF use the same override.
+
+Project properties and Page properties are independently collapsible and start expanded. Collapsing a group preserves its fields.
+
+Book name is project metadata shared by Properties, the toolbar title, and the theme placeholder {book}. The toolbar pencil edits this same value without renaming or moving the folder. Projects without a saved Book name display their folder name as a fallback.
+
+Co-Author and Artist are link-style actions that open separate project credit lists. Each row stores **Name**, **Social media** (handle or URL), and **Platform**, for example `Midrava | @midrava | Instagram`. Use **Add artist** or **Add co-author** to add people, remove entries as needed, and use **Save** to save; Cancel or Escape discards the modal edits. Book name and Author keep their focus-leave auto-save and manual Save button.
+
+Existing single Co-Author values appear as an initial list entry. The header/footer placeholder `{coAuthor}` displays the names from the saved list, separated by commas. Artist credits are retained in project settings. Neither list changes folder names.

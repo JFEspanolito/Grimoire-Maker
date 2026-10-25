@@ -6,7 +6,10 @@
 .sidebar.rail { width: 2.5rem; }
 .explorer { flex: 1; min-height: 0; overflow-y: auto; }
 .sourceControl { flex-shrink: 0; margin-top: auto; border-top: 1px solid #ffffff18; }
-.gitToggle { width: 100%; padding: .5rem; text-align: left; font-size: .75rem; color: #d1c5ad; }
-.gitToggle:hover, .gitToggle[aria-expanded='true'] { background: #ffffff0c; }
+.gitToggle { width: 100%; padding: .5rem; text-align: left; font-size: .75rem; color: #d1c5ad; cursor: pointer; }
+.gitToggle[aria-expanded='true'] { background: #ffffff0c; }
+.gitToggle:hover:not(:disabled) { background: #ffffff25; color: #ffe2a6; }
+.gitToggle:active:not(:disabled) { background: #cfb37c40; color: #fff; }
 .gitToggle:focus-visible { outline: 2px solid #cfb37c; outline-offset: -2px; }
 .gitPanel { max-height: 50vh; overflow-y: auto; }
+.gitMarker { display: inline-block; margin-left: .4rem; color: #e1bd78; }

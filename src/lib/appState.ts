@@ -1,4 +1,5 @@
-import { appConfigDir, join } from '@tauri-apps/api/path'
+import { join } from '@tauri-apps/api/path'
+import { configRoot } from './configRoot'
 import { exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { useSettingsStore } from '../stores/settingsStore'
 import type { PageSizeId, ThemeId } from '../types/document'
@@ -12,6 +13,7 @@ export interface PersistedSettings {
   theme?: ThemeId
   rulerGuides?: RulerGuide[]
   zoom?: number
+  autoSaveSeconds?: number
 }
 
 /** What survives a restart. Stored as `state.json` in the app config folder. */
@@ -36,7 +38,7 @@ const emptyState = (): AppState => ({
 const asPath = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
 
 async function statePath(): Promise<string> {
-  const dir = await appConfigDir()
+  const dir = await configRoot()
   if (!(await exists(dir))) await mkdir(dir, { recursive: true })
   return (await join(dir, 'state.json')).replaceAll('\\', '/')
 }
@@ -100,8 +102,8 @@ export const forgetWorkspace =
 /** Saves page setup whenever it changes; returns the unsubscribe function. */
 export function watchSettings(): () => void {
   return useSettingsStore.subscribe((s, prev) => {
-    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.zoom === prev.zoom) return
-    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, zoom: s.zoom }).catch((error: unknown) => {
+    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.zoom === prev.zoom && s.autoSaveSeconds === prev.autoSaveSeconds) return
+    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, zoom: s.zoom, autoSaveSeconds: s.autoSaveSeconds }).catch((error: unknown) => {
       useSessionStore.getState().setWorkspaceError(`Could not save preferences: ${error instanceof Error ? error.message : String(error)}`)
     })
   })

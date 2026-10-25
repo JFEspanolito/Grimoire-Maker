@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::Command;
 
 use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
 
 fn normalize(path: &str) -> String {
@@ -12,10 +12,7 @@ fn normalize(path: &str) -> String {
 
 /// Whether `path` is one of the workspaces recorded in `state.json`.
 fn is_remembered(app: &AppHandle, path: &str) -> Result<bool, String> {
-    let state_path = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| e.to_string())?
+    let state_path = crate::config_root::path(&app)?
         .join(crate::config::STATE_FILE);
     let Ok(raw) = fs::read_to_string(state_path) else {
         return Ok(false);
@@ -158,10 +155,7 @@ fn rename_workspace_in(
 /// Renames only the active remembered project, including its persisted workspace and file paths.
 #[tauri::command]
 pub fn rename_workspace(app: AppHandle, path: String, name: String) -> Result<String, String> {
-    let state_path = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| e.to_string())?
+    let state_path = crate::config_root::path(&app)?
         .join(crate::config::STATE_FILE);
     rename_workspace_in(&state_path, Path::new(&path), &name, |destination| {
         app.fs_scope()
@@ -197,10 +191,7 @@ fn open_folder_in(
 /// Opens an active-project directory in the operating system's file explorer.
 #[tauri::command]
 pub fn open_folder(app: AppHandle, path: String) -> Result<(), String> {
-    let state_path = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| e.to_string())?
+    let state_path = crate::config_root::path(&app)?
         .join(crate::config::STATE_FILE);
     open_folder_in(&state_path, Path::new(&path), |folder| {
         #[cfg(target_os = "windows")]

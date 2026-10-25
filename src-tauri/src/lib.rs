@@ -1,5 +1,7 @@
 mod commands;
 mod config;
+mod config_root;
+mod safe_copy;
 mod ipc;
 mod pdf;
 
@@ -7,6 +9,7 @@ mod pdf;
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            config_root::initialize(app.handle()).map_err(std::io::Error::other)?;
             commands::error_logs::initialize(app.handle());
             config::ensure(app.handle());
             if let Err(error) = commands::preferences::restore_scopes(app.handle()) {
@@ -18,6 +21,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            config_root::config_root,
             commands::files::list_markdown_files,
             commands::export::export_pdf,
             commands::export::pdf_export_route,

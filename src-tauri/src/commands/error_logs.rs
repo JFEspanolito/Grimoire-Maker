@@ -1,7 +1,6 @@
 //! Bounded, native-owned text logs. Never delete or overwrite an existing segment.
-use super::preferences::{
-    default_logs, lock_ancestors, logs_directory_locked, reject_special, CHANGES,
-};
+use super::preferences::{default_logs, logs_directory_locked, CHANGES};
+use crate::safe_copy::{lock_ancestors, reject_special};
 use std::{
     fs::{self, File, OpenOptions},
     io::Write,
@@ -9,7 +8,7 @@ use std::{
     sync::OnceLock,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const MAX_MESSAGE_BYTES: usize = 16 * 1024;
 const MAX_SEGMENT_BYTES: u64 = 1024 * 1024;
@@ -174,11 +173,7 @@ pub async fn append_error_log(
     message: String,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        append_in(
-            &app.path().app_config_dir().map_err(|e| e.to_string())?,
-            &source,
-            &message,
-        )
+        append_in(&crate::config_root::path(&app)?, &source, &message)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -203,7 +198,7 @@ fn best_effort_in(config: &Path, source: &str, message: &str) {
 }
 
 pub fn initialize(app: &AppHandle) {
-    if let Ok(config) = app.path().app_config_dir() {
+    if let Ok(config) = crate::config_root::path(app) {
         if CONFIG.set(config).is_ok() {
             let previous = std::panic::take_hook();
             std::panic::set_hook(Box::new(move |info| {

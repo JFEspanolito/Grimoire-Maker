@@ -1,12 +1,13 @@
 //! Native-owned library selection. Renderer arguments never authorize arbitrary paths.
+use crate::safe_copy::{copy_entries, inventory, lock_ancestors, open_checked};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::Mutex,
 };
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_fs::FsExt;
 
@@ -61,58 +62,6 @@ fn text(path: &Path) -> Result<String, String> {
         .map(|p| p.replace('\\', "/"))
         .ok_or_else(|| "Directory path is not valid Unicode".into())
 }
-fn metadata(path: &Path) -> Result<fs::Metadata, String> {
-    let info = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
-    reject_special(&info)?;
-    Ok(info)
-}
-pub(super) fn reject_special(info: &fs::Metadata) -> Result<(), String> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        if info.file_attributes() & 0x400 != 0 {
-            return Err("Links and reparse points are not supported".into());
-        }
-    }
-    if info.file_type().is_symlink() || !(info.is_dir() || info.is_file()) {
-        return Err("Links and special files are not supported".into());
-    }
-    Ok(())
-}
-
-/// Windows handles deny rename/delete while paths are in use and open reparse points themselves.
-pub(super) fn open_checked(path: &Path, directory: bool) -> Result<File, String> {
-    let before = metadata(path)?;
-    if before.is_dir() != directory {
-        return Err("Expected a regular directory or file".into());
-    }
-    let mut options = OpenOptions::new();
-    options.read(true);
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        options.custom_flags(0x00200000 | if directory { 0x02000000 } else { 0 });
-        options.share_mode(if directory { 3 } else { 1 });
-    }
-    let file = options.open(path).map_err(|e| e.to_string())?;
-    let after = file.metadata().map_err(|e| e.to_string())?;
-    reject_special(&after)?;
-    if after.is_dir() != directory {
-        return Err("Directory changed during access".into());
-    }
-    Ok(file)
-}
-
-pub(super) fn lock_ancestors(path: &Path, locks: &mut Vec<File>) -> Result<(), String> {
-    if !path.is_absolute() {
-        return Err("Library paths must be absolute".into());
-    }
-    for ancestor in path.ancestors().collect::<Vec<_>>().into_iter().rev() {
-        locks.push(open_checked(ancestor, true)?);
-    }
-    Ok(())
-}
-
 #[derive(Clone, Default, Deserialize, Serialize, PartialEq, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UserSettings {
@@ -126,6 +75,8 @@ pub struct UserSettings {
     ruler_guides: Option<Vec<RulerGuide>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     zoom: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    auto_save_seconds: Option<u32>,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Debug)]
@@ -145,6 +96,12 @@ struct RulerGuide {
 
 impl UserSettings {
     fn validate(&self) -> Result<(), String> {
+        if self
+            .auto_save_seconds
+            .is_some_and(|value| !(1..=86400).contains(&value))
+        {
+            return Err("Auto save interval must be between 1 and 86400 seconds".into());
+        }
         if self
             .zoom
             .is_some_and(|value| !value.is_finite() || !(0.25..=3.0).contains(&value))
@@ -321,39 +278,11 @@ fn save_settings_in(config: &Path, mut settings: UserSettings) -> Result<(), Str
     if settings.zoom.is_none() {
         settings.zoom = preferences.settings.zoom;
     }
+    if settings.auto_save_seconds.is_none() {
+        settings.auto_save_seconds = preferences.settings.auto_save_seconds;
+    }
     preferences.settings = settings;
     publish_preferences(config, &preferences)
-}
-
-struct CopyEntry {
-    relative: PathBuf,
-    source: Option<File>,
-}
-fn inventory(
-    root: &Path,
-    relative: &Path,
-    entries: &mut Vec<CopyEntry>,
-    locks: &mut Vec<File>,
-) -> Result<(), String> {
-    for child in fs::read_dir(root.join(relative)).map_err(|e| e.to_string())? {
-        let child = child.map_err(|e| e.to_string())?;
-        let relative = relative.join(child.file_name());
-        let path = root.join(&relative);
-        if metadata(&path)?.is_dir() {
-            locks.push(open_checked(&path, true)?);
-            entries.push(CopyEntry {
-                relative: relative.clone(),
-                source: None,
-            });
-            inventory(root, &relative, entries, locks)?;
-        } else {
-            entries.push(CopyEntry {
-                relative,
-                source: Some(open_checked(&path, false)?),
-            });
-        }
-    }
-    Ok(())
 }
 
 fn publish(config: &Path, paths: &LibraryPaths) -> Result<(), String> {
@@ -425,22 +354,7 @@ fn change_in(
             Err(e) => return Err(e.to_string()),
         }
     }
-    for mut entry in entries {
-        let target = destination.join(&entry.relative);
-        if let Some(ref mut input) = entry.source {
-            let mut output = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&target)
-                .map_err(|e| e.to_string())?;
-            std::io::copy(input, &mut output)
-                .and_then(|_| output.sync_all())
-                .map_err(|e| e.to_string())?;
-        } else {
-            fs::create_dir(&target).map_err(|e| e.to_string())?;
-            locks.push(open_checked(&target, true)?);
-        }
-    }
+    copy_entries(entries, &destination, &mut locks, |_, _| Ok(None))?;
     grant(&destination)?;
     *paths.get_mut(kind) = text(&destination)?;
     publish(config, &paths)?;
@@ -449,7 +363,7 @@ fn change_in(
 
 pub fn restore_scopes(app: &AppHandle) -> Result<LibraryPaths, String> {
     let _guard = CHANGES.lock().map_err(|e| e.to_string())?;
-    let config = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    let config = crate::config_root::path(&app)?;
     let paths = read_paths(&config)?;
     let mut locks = Vec::new();
     for path in paths.all() {
@@ -465,7 +379,7 @@ pub fn restore_scopes(app: &AppHandle) -> Result<LibraryPaths, String> {
 pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = CHANGES.lock().map_err(|e| e.to_string())?;
-        let config = app.path().app_config_dir().map_err(|e| e.to_string())?;
+        let config = crate::config_root::path(&app)?;
         Ok(read_preferences(&config)?.settings)
     })
     .await
@@ -476,7 +390,7 @@ pub async fn load_settings(app: AppHandle) -> Result<UserSettings, String> {
 pub async fn save_settings(app: AppHandle, settings: UserSettings) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = CHANGES.lock().map_err(|e| e.to_string())?;
-        let config = app.path().app_config_dir().map_err(|e| e.to_string())?;
+        let config = crate::config_root::path(&app)?;
         save_settings_in(&config, settings)
     })
     .await
@@ -506,7 +420,7 @@ pub async fn change_library_path(
             return Ok(None);
         };
         let destination = destination.into_path().map_err(|e| e.to_string())?;
-        let config = app.path().app_config_dir().map_err(|e| e.to_string())?;
+        let config = crate::config_root::path(&app)?;
         change_in(&config, kind, &destination, |path| {
             app.fs_scope()
                 .allow_directory(path, true)
@@ -646,6 +560,61 @@ mod preferences_tests {
             legacy_bytes
         );
     }
+    #[test]
+    fn preferences_autosave_roundtrip_preservation_and_bounds() {
+        let config = scratch("autosave");
+        assert!(read_preferences(&config)
+            .unwrap()
+            .settings
+            .auto_save_seconds
+            .is_none());
+        let settings: UserSettings =
+            serde_json::from_value(serde_json::json!({"autoSaveSeconds": 300})).unwrap();
+        save_settings_in(&config, settings).unwrap();
+        save_settings_in(
+            &config,
+            UserSettings {
+                theme: Some("modern".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            read_preferences(&config)
+                .unwrap()
+                .settings
+                .auto_save_seconds,
+            Some(300)
+        );
+        let before = fs::read(config.join(PREFERENCES_FILE)).unwrap();
+        for value in [0, 86401] {
+            let invalid =
+                serde_json::from_value(serde_json::json!({"autoSaveSeconds": value})).unwrap();
+            assert!(save_settings_in(&config, invalid).is_err());
+            assert_eq!(fs::read(config.join(PREFERENCES_FILE)).unwrap(), before);
+        }
+        for value in [1, 90, 86400] {
+            save_settings_in(
+                &config,
+                serde_json::from_value(serde_json::json!({"autoSaveSeconds": value})).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                read_preferences(&config)
+                    .unwrap()
+                    .settings
+                    .auto_save_seconds,
+                Some(value)
+            );
+        }
+        for value in [serde_json::json!(-1), serde_json::json!(1.5)] {
+            assert!(serde_json::from_value::<UserSettings>(
+                serde_json::json!({"autoSaveSeconds": value})
+            )
+            .is_err());
+        }
+    }
+
     #[test]
     fn preferences_zoom_roundtrip_preservation_and_bounds() {
         let config = scratch("zoom");

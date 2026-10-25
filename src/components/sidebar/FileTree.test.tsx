@@ -216,3 +216,23 @@ it('does not duplicate recent folders in the explorer', async () => {
     expect(container.querySelector('[aria-label="Recent folders"]')).toBeNull()
   } finally { useSessionStore.getState().setRecentWorkspaces(previous) }
 })
+
+it('starts Asset and Assets collapsed, including asynchronously loaded trees, and preserves manual expansion', async () => {
+  useDocumentStore.getState().setWorkspace('/book', [])
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root?.render(<FileTree />))
+  const tree = ['Assets', 'asset', 'Draft'].map(name => ({
+    name, path: `/book/${name}`, isDirectory: true,
+    children: [{ name: 'image.png', path: `/book/${name}/image.png`, isDirectory: false }],
+  }))
+  await act(async () => useDocumentStore.getState().setWorkspace('/book', tree))
+  expect(container.querySelector('[aria-label="Expand Assets"]')).not.toBeNull()
+  expect(container.querySelector('[aria-label="Expand asset"]')).not.toBeNull()
+  expect(container.querySelector('[aria-label="Collapse Draft"]')).not.toBeNull()
+  expect(container.querySelector('[data-tree-path="/book/Assets/image.png"]')).toBeNull()
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Expand Assets"]')!.click())
+  expect(container.querySelector('[data-tree-path="/book/Assets/image.png"]')).not.toBeNull()
+  await act(async () => useDocumentStore.getState().setWorkspace('/book', [...tree]))
+  expect(container.querySelector('[aria-label="Collapse Assets"]')).not.toBeNull()
+})

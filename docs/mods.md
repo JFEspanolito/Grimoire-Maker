@@ -130,3 +130,6 @@ file beside it; the previous preferences remain intact.
 
 Community executable plugins and the Ruler mod are stage 2. The existing built-in
 Ruler continues to work and is not managed by these content-mod checkboxes.
+
+
+On Windows the default configuration root is `%APPDATA%/GriomoireMaker`. Existing configuration is copied from the former identifier-named directory without deleting the original; custom external library paths are retained. Editable theme examples and their README are installed in Themes Path, independently of Markdown snippet/template examples.

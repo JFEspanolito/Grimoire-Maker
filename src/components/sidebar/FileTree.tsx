@@ -28,7 +28,7 @@ interface TreeContext {
   root: string | null
   selected: string | null
   editing: Editing | null
-  collapsed: ReadonlySet<string>
+  collapsed: ReadonlyMap<string, boolean>
   onSelect: (node: FileNode) => void
   onToggle: (path: string) => void
   onOpen: (path: string) => void
@@ -38,6 +38,7 @@ interface TreeContext {
   onContextMenu: (node: FileNode, x: number, y: number) => void
 }
 
+const collapsedByDefault = (path: string) => /(?:^|[\\/])assets?$/i.test(path)
 const parentOf = (path: string): string => path.slice(0, path.lastIndexOf('/'))
 const actionButton = 'rounded px-2 py-1 hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-30 disabled:pointer-events-none'
 
@@ -73,7 +74,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
   const sectionRoot = ['Draft', 'Research', 'Trash'].some((section) => node.path.toLowerCase() === `${ctx.root}/${section}`.toLowerCase())
   const drag = useDraggable({ id: node.path, disabled: sectionRoot, data: { label } })
   const drop = useDroppable({ id: node.path, data: { directory: node.isDirectory ? node.path : parentOf(node.path) } })
-  const expanded = !ctx.collapsed.has(node.path)
+  const expanded = !(ctx.collapsed.get(node.path) ?? collapsedByDefault(node.path))
   const renaming = ctx.editing?.kind === 'rename' && ctx.editing.path === node.path
   const creatingHere =
     node.isDirectory &&
@@ -174,7 +175,7 @@ export function FileTree() {
   const { openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
     useFileSystem()
   const [selected, setSelected] = useState<FileNode | null>(null)
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
+  const [collapsed, setCollapsed] = useState<Map<string, boolean>>(() => new Map())
   const [editing, setEditing] = useState<Editing | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ node: FileNode; x: number; y: number } | null>(null)
@@ -220,8 +221,8 @@ export function FileTree() {
     const dir = targetDir()
     if (dir) {
       setCollapsed((current) => {
-        const next = new Set(current)
-        next.delete(dir)
+        const next = new Map(current)
+        next.set(dir, false)
         return next
       })
       setEditing({ kind, dir })
@@ -272,9 +273,8 @@ export function FileTree() {
     collapsed,
     onSelect: (node) => { setSelected(node); useExplorerStore.getState().selectPath(node.path) },
     onToggle: (path) => setCollapsed((current) => {
-      const next = new Set(current)
-      if (next.has(path)) next.delete(path)
-      else next.add(path)
+      const next = new Map(current)
+      next.set(path, !(current.get(path) ?? collapsedByDefault(path)))
       return next
     }),
     onOpen: (path) => void run(() => openFile(path)),

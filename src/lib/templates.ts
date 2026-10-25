@@ -118,7 +118,8 @@ export async function loadUserTemplates(takenThemeIds: Set<string>, options: Tem
           if (!hasThemeSelector(themeCss, id)) throw new Error(`no [data-theme='${id}'] selector found`)
           if (takenThemeIds.has(id)) throw new Error(`theme "${id}" is already taken`)
           takenThemeIds.add(id)
-          themes.push({ id, name: themeName(themeCss, label), builtin: false })
+          const headerFooter = readThemeHeaderFooter(themeCss)
+          themes.push({ id, name: themeName(themeCss, label), builtin: false, ...(headerFooter && { headerFooter }) })
           css.push(themeCss)
           frontmatter.theme ??= id
         } catch (e) {
@@ -152,3 +153,4 @@ export async function loadUserTemplates(takenThemeIds: Set<string>, options: Tem
   applyStyle(options.styleId ?? 'grimoire-template-themes', css.join('\n'))
   return { dir, templates, themes, errors }
 }
+import { readThemeHeaderFooter } from './themeHeaderFooter'

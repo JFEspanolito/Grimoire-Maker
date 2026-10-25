@@ -1,3 +1,5 @@
+import { useProjectStore } from '../../stores/projectStore'
+import { loadProjectSettings, saveProjectSettings } from '../../lib/projectSettings'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -7,6 +9,11 @@ import { ProjectName } from './ProjectName'
 const renameWorkspace = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ renameWorkspace }) }))
 
+vi.mock('../../lib/projectSettings', () => ({
+  EMPTY_PROJECT: { name: '', author: '', coAuthor: '' },
+  loadProjectSettings: vi.fn(async () => ({ name: '', author: 'Alice', coAuthor: 'Bob' })),
+  saveProjectSettings: vi.fn(async () => {}),
+}))
 let root: Root | null = null
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
 afterEach(async () => {
@@ -15,15 +22,13 @@ afterEach(async () => {
   document.body.replaceChildren()
   useDocumentStore.getState().setWorkspace(null, [])
   vi.clearAllMocks()
+  useProjectStore.setState({ entries: {} })
 })
 
 describe('project name', () => {
-  it('renames the project from the toolbar', async () => {
+  it('edits project metadata without renaming the folder or changing its pages', async () => {
     useDocumentStore.getState().setWorkspace('/projects/Old Project', [])
-    renameWorkspace.mockImplementation(async () => {
-      useDocumentStore.getState().setWorkspace('/projects/New Project', [])
-      return '/projects/New Project'
-    })
+    useDocumentStore.getState().loadFromRaw('/projects/Old Project/chapter.md', '# Unchanged')
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -40,11 +45,14 @@ describe('project name', () => {
     })
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Save project name"]')?.click())
 
-    expect(renameWorkspace).toHaveBeenCalledWith('New Project')
+    expect(renameWorkspace).not.toHaveBeenCalled()
+    expect(saveProjectSettings).toHaveBeenCalledWith('/projects/Old Project', { name: 'New Project', author: 'Alice', coAuthor: 'Bob' })
+    expect(useDocumentStore.getState().workspaceRoot).toBe('/projects/Old Project')
+    expect(useDocumentStore.getState().document.path).toBe('/projects/Old Project/chapter.md')
     expect(container.textContent).toContain('New Project')
   })
 
-  it('uses the project folder name instead of a chapter title', async () => {
+  it('uses the project folder as a fallback name instead of a chapter title', async () => {
     useDocumentStore.getState().setWorkspace('/projects/My Grimoire', [])
     useDocumentStore.getState().loadFromRaw('/projects/My Grimoire/Draft/chapter.md', '---\ntitle: Chapter One\n---\n# Chapter')
     const container = document.createElement('div')
@@ -54,4 +62,16 @@ describe('project name', () => {
     expect(container.textContent).toContain('My Grimoire')
     expect(container.textContent).not.toContain('Chapter One')
   })
+})
+
+it('shows the same saved book name as Properties and keeps it through folder changes', async () => {
+  vi.mocked(loadProjectSettings).mockResolvedValueOnce({ name: 'My Book', author: 'Alice', coAuthor: '' })
+  useDocumentStore.getState().setWorkspace('/projects/folder-name', [])
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root?.render(<ProjectName />))
+  expect(container.textContent).toContain('My Book')
+  await act(async () => useProjectStore.getState().save('/projects/folder-name', { name: 'Updated from Properties', author: 'Alice', coAuthor: '' }))
+  expect(container.textContent).toContain('Updated from Properties')
+  expect(renameWorkspace).not.toHaveBeenCalled()
 })

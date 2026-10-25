@@ -1,6 +1,6 @@
 # Local source control
 
-The Source control panel at the bottom of the project sidebar uses the system Git executable. Install Git and make it available on `PATH`; missing Git and identity errors appear in the panel.
+The Source control panel at the bottom of the project sidebar uses the system Git executable. Install Git and make it available on `PATH`; missing Git and identity errors appear in the panel. If Git is missing, the panel says "Source Control requires Git. Please download it from the official Git website." and links to https://git-scm.com/install/. The editor remains usable without Git.
 
 1. Open a project. If it has no repository, click **Initialize Git repository** explicitly. Initialization is refused inside an enclosing repository: open that repository root or use a separate project folder instead.
 2. Save editor changes before staging. The panel only reads files on disk; unsaved buffers are not included.
@@ -21,3 +21,9 @@ The Source control panel at the bottom of the project sidebar uses the system Gi
 ## Integration
 
 Mount `VersionControlPanel` with `workspace: string | null` and optional `hasUnsavedChanges: boolean`. The public native commands are `git_status`, `git_diff`, `git_stage`, `git_unstage`, `git_commit`, and `git_init`. The commit command requires the `indexFingerprint` returned by status as its `expectedIndex` parameter. Native command registration belongs in `src-tauri/src/lib.rs`.
+
+## Side-by-side change preview
+
+Click a file under Changes, Staged changes, or Untracked files to open a read-only modal. **Original** is on the left and **Incoming change** on the right. Deleted lines are red with a minus marker; added lines are green with a plus marker. Context lines and Git line numbers remain aligned.
+
+Staged comparisons show HEAD versus the index; unstaged comparisons show the index versus the working tree. This is a change preview, not a merge action. Close it with **Close** or Escape. Binary files, unavailable diffs, and truncated previews are reported in the dialog. At most 5,000 diff lines are displayed, with an explicit notice when more exist.

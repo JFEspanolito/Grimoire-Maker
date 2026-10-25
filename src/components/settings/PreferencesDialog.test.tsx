@@ -131,7 +131,7 @@ it('organizes preferences with a section index and a basic shortcut reference', 
   container.querySelector('dialog')!.open = true
   try {
     const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-    expect(tabs.map(tab => tab.textContent)).toEqual(['Appearance', 'Content folders', 'Shortcuts'])
+    expect(tabs.map(tab => tab.textContent)).toEqual(['Appearance', 'Content folders', 'Shortcuts', 'Auto save', 'Project'])
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
     await act(async () => tabs[2].click())
     const panel = container.querySelector<HTMLElement>('#preferences-shortcuts')!
@@ -151,4 +151,32 @@ it('organizes preferences with a section index and a basic shortcut reference', 
     expect(container.querySelector<HTMLElement>('#preferences-folders')!.hidden).toBe(false)
     expect(tabs[1].getAttribute('aria-selected')).toBe('true')
   } finally { container.remove() }
+})
+
+it('exposes Auto save directly and applies minutes plus seconds without accepting invalid intervals', async () => {
+  await act(async () => container.querySelector<HTMLButtonElement>('#preferences-tab-autosave')!.click())
+  const panel = container.querySelector<HTMLElement>('#preferences-autosave')!
+  expect(panel.hidden).toBe(false)
+  const minutes = panel.querySelector<HTMLInputElement>('[aria-label="Auto save minutes"]')!
+  const seconds = panel.querySelector<HTMLInputElement>('[aria-label="Auto save seconds"]')!
+  expect(minutes.value).toBe('5'); expect(seconds.value).toBe('0')
+  const change = async (input: HTMLInputElement, value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    await act(async () => input.dispatchEvent(new Event('input', { bubbles: true })))
+  }
+  await change(minutes, '1'); await change(seconds, '30')
+  await act(async () => panel.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(useSettingsStore.getState().autoSaveSeconds).toBe(90)
+  await change(minutes, '0'); await change(seconds, '0')
+  await act(async () => panel.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(useSettingsStore.getState().autoSaveSeconds).toBe(90)
+  expect(panel.querySelector('[role="alert"]')?.textContent).toContain('1 second')
+  useSettingsStore.getState().setAutoSaveSeconds(300)
+})
+
+it('exposes project settings in Preferences', async () => {
+  await act(async () => container.querySelector<HTMLButtonElement>('#preferences-tab-project')!.click())
+  const panel = container.querySelector<HTMLElement>('#preferences-project')!
+  expect(panel.hidden).toBe(false)
+  expect(panel.textContent).toContain('Project properties')
 })

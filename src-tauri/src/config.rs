@@ -6,7 +6,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 pub const STATE_FILE: &str = "state.json";
 const BACKUP_FILE: &str = "state.json.bak";
@@ -47,9 +47,7 @@ pub fn ensure_in(dir: &Path) -> io::Result<()> {
 /// A config folder that cannot be written must not stop the app from starting,
 /// so failures are reported and swallowed.
 pub fn ensure(app: &AppHandle) {
-    let result = app
-        .path()
-        .app_config_dir()
+    let result = crate::config_root::path(app)
         .map_err(|e| io::Error::other(e.to_string()))
         .and_then(|dir| ensure_in(&dir));
     if let Err(e) = result {

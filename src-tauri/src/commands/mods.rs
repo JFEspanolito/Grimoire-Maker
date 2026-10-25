@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 /// This command has no renderer-selected path and does not weaken workspace folder guards.
 fn mods_folder(config: &Path) -> Result<PathBuf, String> {
@@ -22,10 +22,7 @@ fn mods_folder(config: &Path) -> Result<PathBuf, String> {
 
 #[tauri::command]
 pub fn open_mods_folder(app: AppHandle) -> Result<(), String> {
-    let config = app
-        .path()
-        .app_config_dir()
-        .map_err(|error| error.to_string())?;
+    let config = crate::config_root::path(&app)?;
     let folder = mods_folder(&config)?;
     #[cfg(target_os = "windows")]
     let program = "explorer.exe";

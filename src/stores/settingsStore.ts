@@ -8,6 +8,8 @@ interface SettingsState {
   theme: ThemeId
   viewMode: ViewMode
   zoom: number
+  autoSaveSeconds: number
+  setAutoSaveSeconds: (seconds: number) => void
   setZoom: (zoom: number) => void
   /** Print bleed in millimetres. */
   bleedMm: number
@@ -26,6 +28,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   theme: 'parchment',
   viewMode: 'edit',
   zoom: 1,
+  autoSaveSeconds: 300,
+  setAutoSaveSeconds: (seconds) => {
+    if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400) set({ autoSaveSeconds: seconds })
+  },
   setZoom: (zoom) => { if (Number.isFinite(zoom)) set({ zoom: Math.max(0.25, Math.min(3, zoom)) }) },
   bleedMm: 3,
   marginMm: 15,

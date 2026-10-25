@@ -1,3 +1,11 @@
+import { useContext } from 'react'
+import { DocumentPathContext } from './DocumentPathContext'
+import { useDocumentStore } from '../../stores/documentStore'
+import { useProjectStore } from '../../stores/projectStore'
+import { useThemeStore } from '../../stores/themeStore'
+import { resolveTheme } from '../../lib/themes'
+import { pageColumns, projectPageText } from '../../lib/pageProperties'
+import { PageHeaderFooter } from './PageHeaderFooter'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEventHandler, type ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { PAGE_SIZES } from '../../types/document'
@@ -11,7 +19,16 @@ const PX_PER_MM = 96 / 25.4
 
 /** One continuous editor, flowing down each column and then onto the next sheet. */
 export function PageView({ children, onPageClick, onPagePointerDown }: { children: ReactNode; onPageClick?: MouseEventHandler<HTMLDivElement>; onPagePointerDown?: PointerEventHandler<HTMLDivElement> }) {
-  const { pageSize, columns, marginMm, zoom, setZoom } = useSettingsStore()
+  const { pageSize, columns: defaultColumns, theme, marginMm, zoom, setZoom } = useSettingsStore()
+  const path = useContext(DocumentPathContext)
+  const current = useDocumentStore(state => path === undefined || state.document.path === path ? state.document : state.buffers[path ?? '__untitled__'])
+  const workspace = useDocumentStore(state => state.workspaceRoot)
+  const project = useProjectStore(state => workspace ? state.entries[workspace]?.settings : undefined)
+  const themes = useThemeStore(state => state.themes)
+  const layout = themes.find(item => item.id === resolveTheme(theme, themes))?.headerFooter
+  const frontmatter = current?.frontmatter ?? {}
+  const columns = pageColumns(frontmatter, defaultColumns)
+  const pageText = projectPageText(workspace, frontmatter, project)
   const zoomRef = useWheelZoom(zoom, setZoom, EDITOR_ZOOMS)
   const overlays = usePluginRegistry((s) => s.overlays)
   const size = PAGE_SIZES[pageSize]
@@ -55,6 +72,7 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
           {paginated && <div aria-hidden="true" data-editor-sheet={index + 1} className={`grimoire-page ${styles.paper}`}
             style={{ top: `${index * (size.heightMm + PAGE_GAP_MM)}mm`, height: `${size.heightMm}mm` }} />}
           <div className={styles.overlays} style={{ top: `${index * (size.heightMm + PAGE_GAP_MM)}mm`, height: `${size.heightMm}mm` }}>
+            <PageHeaderFooter layout={layout} context={{ ...pageText, page: index + 1, pages: visibleSheets }} marginMm={marginMm} />
             {overlays.map(({ id, component: Overlay }) => <Overlay key={id} />)}
           </div>
         </div>)}

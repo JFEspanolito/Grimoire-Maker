@@ -8,6 +8,9 @@
 .hint { margin: .45rem 0; opacity: .7; line-height: 1.45; }
 .warning { margin: .5rem 0; color: var(--color-accent, #d1ad74); line-height: 1.4; }
 .error { margin: .5rem 0; color: #f08e8e; white-space: pre-wrap; overflow-wrap: anywhere; }
+.error a { color: #cfb37c; text-decoration: underline; text-underline-offset: .2em; }
+.error a:hover { color: #ffe2a6; }
+.error a:focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
 .branch { margin: .6rem 0; overflow: hidden; text-overflow: ellipsis; }
 .files { max-height: 12rem; overflow: auto; }
 .group h4 { display: flex; justify-content: space-between; margin: .45rem 0 .2rem; font-size: .72rem; }

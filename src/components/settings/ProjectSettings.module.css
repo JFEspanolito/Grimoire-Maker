@@ -1,0 +1,21 @@
+.form { display: grid; gap: .75rem; min-width: 0; }
+.form label { display: grid; gap: .35rem; font-size: .8rem; }
+.form input, .form select { min-width: 0; width: 100%; padding: .4rem; border: 1px solid #ffffff25; border-radius: .25rem; background: #201f1d; color: #f0eee9; }
+.form p { font-size: .75rem; color: #bcb7ac; overflow-wrap: anywhere; }
+.form button { padding: .4rem .65rem; border-radius: .25rem; background: #ffffff10; cursor: pointer; }
+.form button:disabled { opacity: .5; cursor: default; }
+.panel { padding: .75rem; display: grid; gap: 1rem; }
+.panel summary { font-size: .85rem; font-weight: 600; color: #cfb37c; cursor: pointer; }
+.panel details[open] > summary { margin-bottom: .75rem; }
+.panel summary:focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.panel details + details { border-top: 1px solid #ffffff20; padding-top: 1rem; }
+.creditLinks { display: flex; flex-wrap: wrap; gap: 1rem; }
+.form .creditLink { padding: 0; background: none; border: 0; color: #cfb37c; text-decoration: underline; text-underline-offset: .2em; }
+.form button:hover:not(:disabled) { background: #ffffff25; color: #fff4dd; box-shadow: inset 0 0 0 1px #cfb37c80; }
+.form button:active:not(:disabled) { background: #cfb37c40; box-shadow: inset 0 0 0 1px #cfb37c; }
+.form .creditLink:hover:not(:disabled) { color: #ffe2a6; background: #cfb37c20; text-decoration-thickness: 2px; box-shadow: none; }
+.form .creditLink:active:not(:disabled) { color: #ffffff; background: #cfb37c40; }
+.form :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.form input:hover:not(:disabled), .form select:hover:not(:disabled) { border-color: #cfb37c99; }
+.panel summary:hover { color: #ffe2a6; background: #ffffff14; border-radius: .25rem; }
+.panel summary:active { color: #fff; background: #cfb37c30; }

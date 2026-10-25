@@ -1,3 +1,5 @@
+import { pageColumns, projectPageText } from '../../lib/pageProperties'
+import { useProjectStore } from '../../stores/projectStore'
 import { useEffect, useRef, useState } from 'react'
 import { Previewer } from 'pagedjs'
 import { paginate } from '../../lib/exportPdf'
@@ -22,8 +24,12 @@ const DEBOUNCE_MS = 400
  * one page at a time or as facing pages (first page on the right, like a book).
  */
 export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
-  const { pageSize, columns, theme, bleedMm, marginMm } = useSettingsStore()
+  const { pageSize, columns: defaultColumns, theme, bleedMm, marginMm } = useSettingsStore()
   const themes = useThemeStore((s) => s.themes)
+  const workspace = useDocumentStore(state => state.workspaceRoot)
+  const frontmatter = useDocumentStore(state => state.document.frontmatter)
+  const project = useProjectStore(state => workspace ? state.entries[workspace]?.settings : undefined)
+  const columns = pageColumns(frontmatter, defaultColumns)
   const body = useDocumentStore((s) => s.document.body)
   const path = useDocumentStore((s) => s.document.path)
   const host = useRef<HTMLDivElement>(null)
@@ -31,6 +37,8 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
   const [zoom, setZoom] = useState(mode === 'spreads' ? 0.5 : 0.75)
   const zoomRef = useWheelZoom(zoom, setZoom, ZOOMS)
   const activeTheme = resolveTheme(theme, themes)
+
+  const headerFooter = themes.find(item => item.id === activeTheme)?.headerFooter
 
   useEffect(() => {
     const container = host.current
@@ -55,7 +63,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       running = true
       setStatus({ kind: 'rendering' })
       container.append(stage)
-      paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm }, stage).then(
+      paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm, headerFooter, pageText: projectPageText(workspace, frontmatter, project) }, stage).then(
         () => {
           if (!cancelled) setStatus({ kind: 'ready', pages: stage.querySelectorAll('.pagedjs_page').length })
         },
@@ -78,7 +86,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       // An in-flight run still owns its styles; release them once it settles.
       if (!running) release()
     }
-  }, [pageSize, columns, activeTheme, bleedMm, marginMm, body, path])
+  }, [pageSize, columns, activeTheme, bleedMm, marginMm, body, path, headerFooter, workspace, frontmatter, project])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

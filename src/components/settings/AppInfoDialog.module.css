@@ -1,0 +1,19 @@
+.dialog { position: fixed; inset: 0; margin: auto; width: min(26rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; padding: 1.25rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; }
+.dialog::backdrop { background: #0009; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.header h2 { font-size: 1.15rem; font-weight: 600; }
+.dialog button { padding: .4rem .65rem; border-radius: .25rem; background: #ffffff10; cursor: pointer; }
+.dialog button:hover:not(:disabled) { background: #ffffff20; }
+.dialog button:disabled { opacity: .45; cursor: default; }
+.dialog .dismiss { font-size: 1.3rem; }
+.dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.content { display: grid; gap: 1.1rem; padding-top: .85rem; }
+.content section { display: grid; justify-items: start; gap: .4rem; }
+.content h3 { font-size: .85rem; font-weight: 600; color: #cfb37c; }
+.content .appName { color: #f0eee9; font-size: 1.2rem; }
+.content a { color: #cfb37c; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: .2em; }
+.content a:hover { color: #f0eee9; }
+.github { display: inline-flex; align-items: center; gap: .5rem; margin-top: .35rem; }
+.muted { color: #bcb7ac; font-size: .8rem; line-height: 1.6; }
+.tutorial { margin: 1rem 0; line-height: 1.6; }
+.footer { display: flex; justify-content: flex-end; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #ffffff20; }

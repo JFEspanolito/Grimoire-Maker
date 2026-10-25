@@ -1,3 +1,8 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
+import { PageHeaderFooter } from '../components/editor/PageHeaderFooter'
+import type { PageTextContext, ThemeHeaderFooter } from './themeHeaderFooter'
+import pageTextCss from '../styles/page-text.css?raw'
 import { prepareThemeBackgrounds } from './themeDecorations'
 import { Previewer } from 'pagedjs'
 import { invoke } from '@tauri-apps/api/core'
@@ -11,6 +16,8 @@ export interface PageRequest {
   theme: ThemeId
   bleedMm: number
   marginMm: number
+  headerFooter?: ThemeHeaderFooter
+  pageText?: Omit<PageTextContext, 'page' | 'pages'>
 }
 
 export interface ExportRequest extends PageRequest {
@@ -96,9 +103,20 @@ export async function paginate(
   await prepareThemeBackgrounds(request.theme)
   await previewer.preview(
     buildContent(request),
-    [{ 'print.css': printCss }, { 'export.css': pageRules(request) }],
+    [{ 'print.css': printCss }, { 'page-text.css': pageTextCss }, { 'export.css': pageRules(request) }],
     target,
   )
+  if (request.headerFooter) {
+    const pages = target.querySelectorAll<HTMLElement>('.pagedjs_page')
+    pages.forEach((page, index) => {
+      const sheet = page.querySelector<HTMLElement>('.pagedjs_sheet') ?? page
+      sheet.insertAdjacentHTML('beforeend', renderToStaticMarkup(createElement(PageHeaderFooter, {
+        layout: request.headerFooter,
+        context: { ...request.pageText, page: index + 1, pages: pages.length },
+        marginMm: request.marginMm,
+      })))
+    })
+  }
 }
 
 /**

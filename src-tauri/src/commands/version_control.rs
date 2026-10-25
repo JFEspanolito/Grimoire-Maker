@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const OUTPUT_LIMIT: usize = 512 * 1024;
 static OPERATIONS: Mutex<()> = Mutex::new(());
@@ -60,6 +60,14 @@ fn drain(mut pipe: impl Read) -> std::io::Result<(Vec<u8>, bool)> {
         let keep = size.min(OUTPUT_LIMIT.saturating_sub(output.len()));
         output.extend_from_slice(&buffer[..keep]);
         truncated |= keep < size;
+    }
+}
+
+fn git_start_error(error: std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        "Source Control requires Git. Please download it from https://git-scm.com/install/.".into()
+    } else {
+        format!("Could not start Git: {error}")
     }
 }
 
@@ -114,9 +122,7 @@ fn execute(root: &Path, args: &[String], extra_config: &[String]) -> Result<Outp
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    let mut child = command.spawn().map_err(|error| {
-        format!("Could not start Git. Install Git and ensure it is on PATH: {error}")
-    })?;
+    let mut child = command.spawn().map_err(git_start_error)?;
     let stdout = child.stdout.take().ok_or("Git stdout unavailable")?;
     let stderr = child.stderr.take().ok_or("Git stderr unavailable")?;
     let out = std::thread::spawn(move || drain(stdout));
@@ -600,10 +606,7 @@ async fn in_project<T: Send + 'static>(
     workspace: String,
     work: impl FnOnce(&Path) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
-    let state = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| e.to_string())?
+    let state = crate::config_root::path(&app)?
         .join(crate::config::STATE_FILE);
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = OPERATIONS
@@ -668,6 +671,20 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn missing_git_explains_the_requirement_and_official_download() {
+        assert_eq!(
+            git_start_error(std::io::Error::from(std::io::ErrorKind::NotFound)),
+            "Source Control requires Git. Please download it from https://git-scm.com/install/."
+        );
+        let denied = git_start_error(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "Access denied",
+        ));
+        assert_eq!(denied, "Could not start Git: Access denied");
+        assert!(!denied.contains("download"));
+    }
 
     fn scratch(label: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(

@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { commitChanges, diffChange, getRepositoryStatus, initializeRepository, stageChange, unstageChange } from '../../lib/versionControl'
 import type { GitDiff, GitEntry, RepositoryStatus } from '../../lib/versionControl'
 import styles from './VersionControlPanel.module.css'
+import { notifyRepositoryChanged } from '../../lib/repositoryEvents'
+import { GitDiffDialog } from './GitDiffDialog'
 
 interface VersionControlPanelProps {
   workspace: string | null
@@ -65,6 +67,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
     } catch (reason) {
       if (current === epoch.current) { reportError('git.operation', reason); setError(errorText(reason)) }
     } finally {
+      notifyRepositoryChanged()
       if (current === epoch.current) { pending.current = false; setBusy(false) }
     }
   }
@@ -118,7 +121,9 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
       <button disabled={!workspace || busy} onClick={() => void run(async () => {})} aria-label="Refresh source control">Refresh</button>
     </div>
     {!workspace && <p className={styles.hint}>Open a project to use Git.</p>}
-    {error && <p className={styles.error} role="alert">{error}</p>}
+    {error && <p className={styles.error} role="alert">{error.startsWith('Source Control requires Git.')
+      ? <>Source Control requires Git. Please download it from <a href="https://git-scm.com/install/" target="_blank" rel="noopener noreferrer">the official Git website</a>.</>
+      : error}</p>}
     {busy && <p className={styles.hint} role="status">Working…</p>}
     {notice && <p className={styles.hint} role="status">{notice}</p>}
     {workspace && status && !status.isRepository && <div className={styles.empty}>
@@ -145,11 +150,8 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
         <button type="submit" disabled={busy || !staged.length || !message.trim()}>Commit staged ({staged.length})</button>
         <p className={styles.hint}>Commits all staged files only. Git hooks and signing are bypassed. No remote operations.</p>
       </form>
-      {selection && <details className={styles.diff} open>
-        <summary>{selection.staged ? 'Staged' : 'Working tree'} diff: {selection.path}</summary>
-        {diff?.binary ? <p>Binary file: text diff unavailable.</p> : <pre tabIndex={0} aria-label="Selected file diff">{diff?.text || (busy ? 'Loading diff…' : 'No text changes.')}</pre>}
-        {diff?.truncated && <p className={styles.warning}>Preview truncated. The full file is not shown.</p>}
-      </details>}
+      {selection && <GitDiffDialog path={selection.path} staged={selection.staged} diff={diff} loading={busy}
+        error={error} onClose={() => setSelection(null)} />}
     </>}
   </section>
 }

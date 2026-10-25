@@ -526,3 +526,58 @@ it('restores appearance from setting.json rather than stale session settings', a
   expect(useSettingsStore.getState()).toMatchObject({ theme: 'sci-fi', columns: 1, pageSize: 'letter', rulerGuides, zoom: 1.5 })
   expect(state.settings.theme).toBe('parchment')
 })
+
+it('autosaves named dirty buffers without dialogs or switching the focused tab', async () => {
+  const store = useDocumentStore.getState()
+  store.loadFromRaw('/a.md', 'A'); store.setBody('edited A')
+  store.loadFromRaw('/b.md', 'B'); store.setBody('edited B')
+  store.loadFromRaw(null, ''); store.setBody('untitled edit')
+  useTabStore.getState().reset(null)
+  await actions.autoSave()
+  expect(writeTextFile).toHaveBeenCalledWith('/a.md', 'edited A')
+  expect(writeTextFile).toHaveBeenCalledWith('/b.md', 'edited B')
+  expect(writeTextFile).toHaveBeenCalledTimes(2)
+  expect(save).not.toHaveBeenCalled()
+  expect(useDocumentStore.getState().document.path).toBeNull()
+  expect(useDocumentStore.getState().document.dirty).toBe(true)
+  expect(useTabStore.getState().active).toBeNull()
+})
+
+it('autosave preserves edits made during writing and continues after an individual failure', async () => {
+  const store = useDocumentStore.getState()
+  store.loadFromRaw('/a.md', 'A'); store.setBody('edited A')
+  store.loadFromRaw('/b.md', 'B'); store.setBody('edited B')
+  vi.mocked(writeTextFile).mockImplementationOnce(async () => { throw new Error('disk full') })
+  vi.mocked(writeTextFile).mockImplementationOnce(async () => { useDocumentStore.getState().setBody('newer B') })
+  await expect(actions.autoSave()).rejects.toThrow('disk full')
+  expect(writeTextFile).toHaveBeenCalledTimes(2)
+  expect(useDocumentStore.getState().buffers['/a.md'].dirty).toBe(true)
+  expect(useDocumentStore.getState().document.dirty).toBe(true)
+  expect(useDocumentStore.getState().document.body).toBe('newer B')
+  expect(useSessionStore.getState().workspaceError).toContain('disk full')
+})
+
+it.each(['manual-first', 'automatic-first'])('serializes both save paths (%s) and takes queued snapshots at execution time', async (order) => {
+  const store = useDocumentStore.getState()
+  store.loadFromRaw('/a.md', 'A'); store.setBody('first')
+  useTabStore.getState().reset('/a.md')
+  let finish!: () => void
+  vi.mocked(writeTextFile).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve }))
+  const first = order === 'manual-first' ? actions.saveFile() : actions.autoSave()
+  await vi.waitFor(() => expect(writeTextFile).toHaveBeenCalledOnce())
+  store.setBody('second')
+  const second = order === 'manual-first' ? actions.autoSave() : actions.saveFile()
+  await Promise.resolve()
+  expect(writeTextFile).toHaveBeenCalledOnce()
+  finish(); await first; await second
+  expect(writeTextFile).toHaveBeenNthCalledWith(2, '/a.md', 'second')
+  expect(useDocumentStore.getState().document.dirty).toBe(false)
+})
+
+it('restores the configured auto save interval, with a five-minute default for older settings', async () => {
+  vi.mocked(loadSettings).mockResolvedValueOnce({ autoSaveSeconds: 90 })
+  await actions.restoreSession()
+  expect(useSettingsStore.getState().autoSaveSeconds).toBe(90)
+  await actions.restoreSession()
+  expect(useSettingsStore.getState().autoSaveSeconds).toBe(300)
+})
