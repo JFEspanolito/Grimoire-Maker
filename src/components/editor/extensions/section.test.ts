@@ -47,3 +47,19 @@ it('remembers columns on a first section and merges a section back into the prev
   expect(sections(editor!)).toHaveLength(1)
   expect(editor!.commands.mergeSectionWithPrevious()).toBe(false)
 })
+
+it('remembers which sections were generated for a page and which the author started', () => {
+  create('One\n\nTwo\n\nThree')
+  const section = editor!.state.doc.firstChild!
+  const start = 1 + section.child(0).nodeSize
+  editor!.commands.setPageColumns({ start, next: start + section.child(1).nodeSize, columns: 1 })
+  expect(markdown(editor!)).toContain('<div data-type="section-break" data-columns="1" data-auto="true"></div>')
+  const reopened = create(markdown(editor!))
+  expect(reopened.state.doc.children.map((node) => [node.textContent, node.attrs.columns, node.attrs.auto])).toEqual([
+    ['One', null, false], ['Two', 1, true], ['Three', null, true],
+  ])
+  // A break the author inserts is never generated, even inside a generated section.
+  reopened.commands.setTextSelection(reopened.state.doc.child(0).nodeSize + 2)
+  reopened.commands.insertSectionBreak()
+  expect(reopened.state.doc.children.map((node) => node.attrs.auto)).toEqual([false, true, false, true])
+})

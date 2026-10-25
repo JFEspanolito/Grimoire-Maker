@@ -41,12 +41,9 @@
   row-gap: 8mm;
 }
 
-/*
- * Slice, not clone: the stack's padding is the sheet margin. Cloning it would repeat the margin in every
- * column, push each row 2 * margin lower than its sheet and spill into a phantom extra fragment.
- */
+/* The stack's margin repeats in every column, so each row starts at its own sheet's margin. */
 .spread > .pages {
-  box-decoration-break: slice;
+  box-decoration-break: clone;
 }
 
 .spread .paper {

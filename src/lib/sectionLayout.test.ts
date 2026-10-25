@@ -52,9 +52,20 @@ it('lets a section shrink again when its text shrinks, and leaves a hidden layou
   expect(section.style.minHeight).toBe('7px')
 })
 
-it('sums the fragments of a section split across spread columns instead of using its bounding box', () => {
-  const [{ section, flow }] = layout(1000)
-  vi.spyOn(section, 'getClientRects').mockReturnValue([{ height: 100 }, { height: 80 }] as unknown as DOMRectList)
-  alignSections(flow)
-  expect(section.style.minHeight).toContain('calc(2 ')
+it('measures a spread with its column breaking switched off, then restores it', () => {
+  const [{ section, flow }] = layout(100)
+  const spread = document.createElement('div')
+  spread.dataset.pageLayout = 'spreads'
+  spread.append(flow)
+  const during: string[] = []
+  vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (this: HTMLElement) {
+    // The row probes must be measured unbroken too, or a row reads shorter than it is and every section counts an extra row.
+    if (this === section || this.hasAttribute('data-section-layout-probe')) during.push(`${spread.style.getPropertyValue('column-count')}/${spread.style.getPropertyValue('column-wrap')}`)
+    const height = this.style.height === 'var(--content-height)' ? 100 : this.style.height === 'var(--row-gap)' ? 20 : Number(this.dataset.height ?? 0)
+    return { height } as DOMRect
+  })
+  expect(alignSections(flow)).toBe(1)
+  expect(during).toEqual(['1/nowrap', '1/nowrap', '1/nowrap'])
+  expect(spread.style.getPropertyValue('column-count')).toBe('')
+  expect(spread.style.getPropertyValue('column-wrap')).toBe('')
 })

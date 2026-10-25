@@ -35,8 +35,10 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   const shown = useRef(1)
   const flips = useRef<number[]>([])
   const paginated = typeof CSS !== 'undefined' && !!CSS.supports?.('column-wrap', 'wrap') && CSS.supports('column-height', '100px')
+  const spreads = paginated && viewMode === 'spreads'
   const contentHeight = size.contentHeightMm
-  const rowGap = size.rowGapMm
+  // A spread breaks the stack after every row, so rows are only the sheet gap apart; a single page also spans the margins.
+  const rowGap = spreads ? PAGE_GAP_MM : size.rowGapMm
 
   useEffect(() => {
     const element = flow.current
@@ -76,7 +78,6 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   const layoutKey = (path === undefined ? current?.path : path) ?? '__untitled__'
   useEffect(() => { publishSheets(layoutKey, sheetsShown) }, [publishSheets, layoutKey, sheetsShown])
 
-  const spreads = paginated && viewMode === 'spreads'
   const visibleSheets = paginated
     ? (spreads ? Math.max(2, sheetCount + (sheetCount % 2)) : sheetCount)
     : 1
