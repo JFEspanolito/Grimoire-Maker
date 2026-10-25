@@ -15,12 +15,14 @@ const moveEntryMock = vi.hoisted(() => vi.fn())
 const openFolderMock = vi.hoisted(() => vi.fn())
 const importIntoMock = vi.hoisted(() => vi.fn())
 const renameEntryMock = vi.hoisted(() => vi.fn())
+const deleteFromTrashMock = vi.hoisted(() => vi.fn())
+const refreshTreeMock = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/useFileSystem', () => ({
   useFileSystem: () => ({
     openWorkspace: vi.fn(), openRecent: vi.fn(), openFile: openFileMock,
     createFile: vi.fn(), createFolder: vi.fn(), renameEntry: renameEntryMock, renameWorkspace: vi.fn(), moveEntry: moveEntryMock,
     openFolder: openFolderMock,
-    importInto: importIntoMock,
+    importInto: importIntoMock, deleteFromTrash: deleteFromTrashMock, refreshTree: refreshTreeMock,
   }),
 }))
 
@@ -235,4 +237,47 @@ it('starts Asset and Assets collapsed, including asynchronously loaded trees, an
   expect(container.querySelector('[data-tree-path="/book/Assets/image.png"]')).not.toBeNull()
   await act(async () => useDocumentStore.getState().setWorkspace('/book', [...tree]))
   expect(container.querySelector('[aria-label="Collapse Assets"]')).not.toBeNull()
+})
+
+describe('explorer toolbar and Trash', () => {
+  it('refreshes the file list on demand', async () => {
+    useDocumentStore.getState().setWorkspace('/book', [])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    const buttons = Array.from(container.querySelectorAll('button')).map((button) => button.getAttribute('aria-label') ?? button.textContent)
+    expect(buttons.slice(0, 3)).toEqual(['+ File', '+ Folder', 'Refresh file list'])
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Refresh file list"]')!.click())
+    expect(refreshTreeMock).toHaveBeenCalledOnce()
+  })
+
+  it('offers a confirmed Delete only for items already in Trash', async () => {
+    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: vi.fn() })
+    Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: vi.fn() })
+    useDocumentStore.getState().setWorkspace('/book', [
+      { name: 'Draft', path: '/book/Draft', isDirectory: true, children: [{ name: 'Live.md', path: '/book/Draft/Live.md', isDirectory: false }] },
+      { name: 'Trash', path: '/book/Trash', isDirectory: true, children: [{ name: 'Old.md', path: '/book/Trash/Old.md', isDirectory: false }] },
+    ])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    const menuItems = () => Array.from(container.querySelectorAll('[role="menuitem"]'), (item) => item.textContent)
+    const openMenu = (path: string) => act(async () => container.querySelector(`[data-tree-path="${path}"]`)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 5, clientY: 5 })))
+    await openMenu('/book/Draft/Live.md')
+    expect(menuItems()).not.toContain('Delete…')
+    await openMenu('/book/Trash/Old.md')
+    expect(menuItems()).toContain('Delete…')
+    expect(menuItems()).not.toContain('Move to Trash')
+    const click = (label: string) => act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('button, [role="menuitem"]')).find((item) => item.textContent === label)!.click())
+    await click('Delete…')
+    const dialog = container.querySelector('dialog')!
+    expect(dialog.textContent).toContain('recycle bin')
+    await click('Cancel')
+    expect(container.querySelector('dialog')).toBeNull()
+    expect(deleteFromTrashMock).not.toHaveBeenCalled()
+    await openMenu('/book/Trash/Old.md')
+    await click('Delete…')
+    await click('Delete')
+    expect(deleteFromTrashMock).toHaveBeenCalledWith('/book/Trash/Old.md')
+  })
 })

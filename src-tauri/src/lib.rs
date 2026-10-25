@@ -37,6 +37,7 @@ pub fn run() {
             commands::workspace::restore_workspace,
             commands::workspace::rename_workspace,
             commands::workspace::open_folder,
+            commands::workspace::delete_from_trash,
             commands::mods::open_mods_folder,
             commands::preferences::load_library_paths,
             commands::preferences::change_library_path,

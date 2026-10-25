@@ -1,6 +1,6 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { copyFile, exists, mkdir, readFile } from '@tauri-apps/plugin-fs'
-import { assetFolder, normalizePath, relativePath } from './assetPaths'
+import { assetFolder, imageReference, normalizePath, relativePath } from './assetPaths'
 
 const MIME: Record<string, string> = {
   png: 'image/png',
@@ -45,10 +45,17 @@ export const revokeImageUrl = (url: string): void => {
  * in the Markdown, or null if the dialog was cancelled.
  */
 export async function importImage(documentPath: string, workspaceRoot: string | null = null): Promise<string | null> {
-  const picked = await open({ filters: [{ name: 'Images', extensions: Object.keys(MIME) }] })
+  const projectRoot = workspaceRoot?.replaceAll('\\', '/').replace(/\/+$/, '') ?? null
+  // Start where the project's images already are, so reusing one is the easy path.
+  const picked = await open({
+    defaultPath: projectRoot && (await exists(`${projectRoot}/Assets`)) ? `${projectRoot}/Assets` : undefined,
+    filters: [{ name: 'Images', extensions: Object.keys(MIME) }],
+  })
   if (typeof picked !== 'string') return null
 
   const source = picked.replaceAll('\\', '/')
+  // An image that already lives in the project is referenced in place: no second copy.
+  if (projectRoot && source.startsWith(`${projectRoot}/`)) return imageReference(documentPath, source)
   const assets = assetFolder(documentPath, workspaceRoot) ?? `${dirOf(documentPath)}/assets`
   if (!(await exists(assets))) await mkdir(assets, { recursive: true })
 

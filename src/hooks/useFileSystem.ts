@@ -324,6 +324,22 @@ export function useFileSystem() {
     throw error
   }), [loadFromRaw, persistDocument, remember])
 
+  /** Sends a Trash item to the system recycle bin and drops any open tab or buffer inside it. */
+  const deleteFromTrash = useCallback((path: string) => runFileAction(async () => {
+    await invoke('delete_from_trash', { path })
+    const inside = (candidate: string) => candidate === path || candidate.startsWith(`${path}/`)
+    const documents = useDocumentStore.getState()
+    for (const open of [...useTabStore.getState().paths, ...Object.keys(documents.buffers), documents.document.path ?? ''].filter(inside)) {
+      useTabStore.getState().remove(open)
+      useDocumentStore.getState().forget(open)
+    }
+    const next = useTabStore.getState().active
+    if (next && /\.md$/i.test(next)) useDocumentStore.getState().activate(next)
+    else if (next) useDocumentStore.getState().deactivate()
+    else if (useDocumentStore.getState().document.path === null) loadFromRaw(null, '')
+    await refreshTree()
+  }), [loadFromRaw, refreshTree])
+
   const applyTemplate = useCallback((template: Template) => runFileAction(async (): Promise<boolean> => {
     const root = useDocumentStore.getState().workspaceRoot
     if (!root && template.location?.kind === 'package' && template.requiresProject !== false) {
@@ -447,5 +463,6 @@ export function useFileSystem() {
     openFolder,
     renameWorkspace,
     moveEntry,
+    deleteFromTrash,
   }
 }

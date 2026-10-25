@@ -1,5 +1,13 @@
 const slashes = (path: string) => path.replaceAll('\\', '/').replace(/\/+$/, '')
 
+export const isImageFile = (path: string) => /\.(png|jpe?g|gif|webp|svg)$/i.test(path)
+
+/** The `src` that points a document at an image already in the project, without copying it. */
+export function imageReference(documentPath: string, imagePath: string): string {
+  const document = slashes(documentPath)
+  return relativePath(document.slice(0, document.lastIndexOf('/')), imagePath)
+}
+
 /** Resolves `.` and `..` segments so a relative asset path can be read inside the fs scope. */
 export function normalizePath(path: string): string {
   const out: string[] = []

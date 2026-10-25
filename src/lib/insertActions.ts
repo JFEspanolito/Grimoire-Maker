@@ -7,6 +7,13 @@ export const insertQuote = (editor: Editor) => editor.chain().focus().toggleBloc
 export const insertDivider = (editor: Editor) => editor.chain().focus().setHorizontalRule().run()
 export const insertTable = (editor: Editor) => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
 
+/** Layout every newly placed image starts with; the image controls change it afterwards. */
+export function newImageAttrs(src: string) {
+  const file = src.split('/').pop() ?? ''
+  const dot = file.lastIndexOf('.')
+  return { src, alt: dot > 0 ? file.slice(0, dot) : file, align: 'center', widthMm: 55, frame: 'shadow', opacity: 1, anchor: 'flow' }
+}
+
 /** Copies a picked image next to the document and inserts it. Throws a user-readable error. */
 export async function insertImage(editor: Editor) {
   const documentPath = useDocumentStore.getState().document.path
@@ -14,5 +21,5 @@ export async function insertImage(editor: Editor) {
     throw new Error('Save this document as Markdown before importing an image. Then choose Insert → Image to pick a PNG, JPG, GIF, WebP, or SVG file.')
   }
   const src = await importImage(documentPath, useDocumentStore.getState().workspaceRoot)
-  if (src && !editor.isDestroyed) editor.chain().focus().setImage({ src, alt: '' }).run()
+  if (src && !editor.isDestroyed) editor.chain().focus().insertContent({ type: 'image', attrs: newImageAttrs(src) }).run()
 }

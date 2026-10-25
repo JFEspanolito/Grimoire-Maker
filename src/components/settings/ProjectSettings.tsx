@@ -44,9 +44,9 @@ function ProjectFields({ root }: { root: string }) {
       <button key={group} type="button" className={styles.creditLink} aria-label={CONTRIBUTOR_GROUPS[group]} aria-haspopup="dialog" data-contributors
         disabled={!entry.ready || entry.busy} onClick={async () => { if (await persist()) setEditingGroup(group) }}>
         {CONTRIBUTOR_GROUPS[group]} ({entry.settings[group]?.length ?? (group === 'coAuthors' && entry.settings.coAuthor ? 1 : 0)})
-      </button>)}</div>
-    <button type="button" className={styles.creditLink} aria-haspopup="dialog" disabled={!entry.ready || entry.busy}
-      onClick={async () => { if (await persist()) setOrderOpen(true) }}>Document Order…</button>
+      </button>)}
+      <button type="button" className={styles.creditLink} aria-haspopup="dialog" disabled={!entry.ready || entry.busy}
+        onClick={async () => { if (await persist()) setOrderOpen(true) }}>Document Order…</button></div>
     {entry.error && <p role="alert">{entry.error}</p>}
     {!entry.ready && !entry.busy && <button type="button" onClick={() => void useProjectStore.getState().load(root)}>Retry project settings</button>}
     <button type="submit" disabled={!entry.ready || entry.busy}>{entry.busy ? 'Working…' : 'Save project settings'}</button>

@@ -153,6 +153,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <button type="button" onClick={() => { closeMenus(); setPropertiesOpen(true) }}>Properties…</button>
         <button type="button" disabled={!workspace} onClick={() => { closeMenus(); setOrderOpen(true) }}>Document Order…</button>
         <button type="button" onClick={() => { closeMenus(); setStatisticsOpen(true) }}>Statistics…</button>
+        <hr />
+        <button type="button" onClick={() => { closeMenus(); setExportOpen(true) }}>Export PDF…</button>
       </div>
     </details>}
     <details name="application-menu">

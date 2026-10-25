@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { Markdown } from 'tiptap-markdown'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TableExtensions } from '../editor/extensions/tables'
+import { GrimoireImage } from '../editor/extensions/image'
 import { importImage } from '../../lib/images'
 import { useDocumentStore } from '../../stores/documentStore'
 import { MenuBar } from './MenuBar'
@@ -120,7 +121,7 @@ it('keeps page setup only in Document and omits repeated application branding', 
     await act(async () => { size!.value = 'letter'; size!.dispatchEvent(new Event('change', { bubbles: true })) })
     await act(async () => { columns!.value = '1'; columns!.dispatchEvent(new Event('change', { bubbles: true })) })
     expect(useSettingsStore.getState()).toMatchObject({ pageSize: 'letter', columns: 1 })
-    for (const entry of ['Properties…', 'Document Order…', 'Statistics…']) expect(documentMenu.textContent).toContain(entry)
+    for (const entry of ['Properties…', 'Document Order…', 'Statistics…', 'Export PDF…']) expect(documentMenu.textContent).toContain(entry)
   } finally {
     await act(async () => root.unmount())
     useSettingsStore.setState({ pageSize: initial.pageSize, columns: initial.columns })
@@ -306,6 +307,17 @@ describe('Insert menu', () => {
     await act(async () => item('Image…').click())
     expect(importImage).toHaveBeenCalledWith('/workspace/Draft/Chapter.md', null)
     expect(refreshTree).toHaveBeenCalledOnce()
+    await unmount()
+  })
+  it('places a chosen image centered, 55 mm wide, shadowed and pushing text, with its file name as alt text', async () => {
+    useDocumentStore.getState().loadFromRaw('/workspace/Draft/Chapter.md', '')
+    vi.mocked(importImage).mockResolvedValue('../Assets/The Map.v2.png')
+    editor = new Editor({ extensions: [StarterKit, GrimoireImage] })
+    const { item, unmount } = await mount(editor)
+    await act(async () => item('Image…').click())
+    expect(editor.getJSON().content?.find((node) => node.type === 'image')?.attrs).toMatchObject({
+      src: '../Assets/The Map.v2.png', alt: 'The Map.v2', align: 'center', widthMm: 55, frame: 'shadow', opacity: 1, anchor: 'flow',
+    })
     await unmount()
   })
 })

@@ -1,6 +1,7 @@
 import { reportError } from '../../lib/errorLogging'
 import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { ConfirmDialog } from '../layout/ConfirmDialog'
 import {
   DndContext,
   DragOverlay,
@@ -19,6 +20,9 @@ import { splitBinder } from '../../lib/binder'
 import type { FileNode } from '../../types/document'
 import { useExplorerStore } from '../../stores/explorerStore'
 import { documentLabel } from '../../lib/documentLabel'
+import { imageReference, isImageFile } from '../../lib/assetPaths'
+import { findSnippetDropTarget } from '../../lib/snippetDrop'
+import { newImageAttrs } from '../../lib/insertActions'
 
 type Editing =
   | { kind: 'new-file' | 'new-folder'; dir: string }
@@ -173,7 +177,7 @@ export function FileTree() {
   const tree = useDocumentStore((s) => s.tree)
   const root = useDocumentStore((s) => s.workspaceRoot)
   const workspaceError = useSessionStore((s) => s.workspaceError)
-  const { openFile, openFolder, createFile, createFolder, renameEntry, moveEntry } =
+  const { openFile, openFolder, createFile, createFolder, renameEntry, moveEntry, deleteFromTrash, refreshTree } =
     useFileSystem()
   const [selected, setSelected] = useState<FileNode | null>(null)
   const [collapsed, setCollapsed] = useState<Map<string, boolean>>(() => new Map())
@@ -181,6 +185,7 @@ export function FileTree() {
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<{ node: FileNode; x: number; y: number } | null>(null)
   const [draggedLabel, setDraggedLabel] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<FileNode | null>(null)
 
   useEffect(() => {
     if (!menu) return
@@ -244,6 +249,16 @@ export function FileTree() {
   const onDragEnd = (event: DragEndEvent) => {
     setDraggedLabel(null)
     const from = String(event.active.id)
+    // An image dropped on a page is inserted by reference: the file already exists in the project.
+    if (isImageFile(from) && event.activatorEvent instanceof MouseEvent) {
+      const target = findSnippetDropTarget(event.activatorEvent.clientX + event.delta.x, event.activatorEvent.clientY + event.delta.y)
+      if (target) {
+        if (!target.documentPath) return setError('Save this document as Markdown before adding images to it.')
+        setError(null)
+        target.editor.chain().focus().setTextSelection(target.position).insertContent({ type: 'image', attrs: newImageAttrs(imageReference(target.documentPath, from)) }).run()
+        return
+      }
+    }
     const dir = event.over?.data.current?.directory
     if (typeof dir !== 'string' || from === dir || dir.startsWith(`${from}/`) || parentOf(from) === dir) return
     if (['Draft', 'Research', 'Trash'].some((section) => from.toLowerCase() === `${root}/${section}`.toLowerCase())) return
@@ -308,6 +323,18 @@ export function FileTree() {
           >
             + Folder
           </button>
+          <button
+            className={`${actionButton} ml-1 px-1`}
+            title="Refresh file list"
+            aria-label="Refresh file list"
+            disabled={!root}
+            onClick={() => void run(refreshTree)}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          </button>
         </div>
       </div>
       {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
@@ -365,6 +392,12 @@ export function FileTree() {
               Open in New Tab
             </button>
           )}
+          {inTrash && !isBinderRoot && (
+            <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left text-red-300 hover:bg-white/10"
+              onClick={() => { setPendingDelete(menu.node); setMenu(null) }}>
+              Delete…
+            </button>
+          )}
           {!inTrash && !isBinderRoot && (
             <button type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
               onClick={() => void run(() => deleteEntry(menu.node))}>
@@ -373,6 +406,10 @@ export function FileTree() {
           )}
         </div>
       )}
+      {pendingDelete && <ConfirmDialog title="Delete permanently"
+        message={`Delete "${documentLabel(pendingDelete.name, pendingDelete.isDirectory)}"? It will be sent to the system recycle bin and removed from the project.`}
+        confirmLabel="Delete" danger onCancel={() => setPendingDelete(null)}
+        onConfirm={() => { const node = pendingDelete; setPendingDelete(null); void run(() => deleteFromTrash(node.path)) }} />}
       {!root && <p className="text-xs text-white/40">Open a folder to manage files.</p>}
     </div>
   )

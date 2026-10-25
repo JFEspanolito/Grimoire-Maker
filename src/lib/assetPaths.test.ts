@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { assetFolder, normalizePath, relativePath } from './assetPaths'
+import { assetFolder, imageReference, isImageFile, normalizePath, relativePath } from './assetPaths'
 
 it('mirrors the document folder under Assets, dropping the Draft section name', () => {
   expect(assetFolder('/w/Draft/Chapter 1/Scene.md', '/w')).toBe('/w/Assets/Chapter 1')
@@ -20,4 +20,10 @@ it('builds and resolves relative paths between the document and its asset', () =
   expect(relative).toBe('../../Assets/Chapter 1/map.png')
   expect(normalizePath(`/w/Draft/Chapter 1/${relative}`)).toBe('/w/Assets/Chapter 1/map.png')
   expect(relativePath('/w/Draft', '/w/Draft/assets/x.png')).toBe('assets/x.png')
+})
+
+it('references an existing project image from a document without copying it', () => {
+  expect(imageReference('/w/Draft/Chapter 1/Scene.md', '/w/Assets/Chapter 1/map.png')).toBe('../../Assets/Chapter 1/map.png')
+  expect(imageReference('C:\\w\\Draft\\Scene.md', 'C:/w/Assets/map.png')).toBe('../Assets/map.png')
+  expect(['a.PNG', 'b.jpeg', 'c.svg', 'd.md', 'e.pdf'].map(isImageFile)).toEqual([true, true, true, false, false])
 })

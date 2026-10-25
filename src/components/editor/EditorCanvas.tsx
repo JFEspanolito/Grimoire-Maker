@@ -34,7 +34,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     },
   })
 
-  useEffect(() => editor ? registerSnippetDropTarget(editor) : undefined, [editor])
+  useEffect(() => editor ? registerSnippetDropTarget(editor, documentPath ?? null) : undefined, [editor, documentPath])
 
   useEffect(() => {
     if (!editor || !active) return
