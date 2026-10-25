@@ -26,3 +26,6 @@
 .diff summary { cursor: pointer; overflow-wrap: anywhere; }
 .diff pre { max-height: 16rem; overflow: auto; white-space: pre; font-size: .65rem; padding: .35rem; background: rgb(0 0 0 / .15); }
 .empty p { margin: .5rem 0; }
+.contextMenu { position: fixed; z-index: 50; display: grid; gap: .15rem; min-width: 10rem; padding: .25rem; border: 1px solid var(--color-border, #57515b); border-radius: .35rem; background: #262523; box-shadow: 0 8px 24px rgb(0 0 0 / .45); }
+.contextMenu button { border: 0; text-align: left; padding: .35rem .55rem; width: 100%; }
+.dangerItem { color: #f08e8e !important; }

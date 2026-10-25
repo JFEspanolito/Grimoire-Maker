@@ -1,5 +1,7 @@
 import { MAX_THEME_BYTES, decorationCss, readThemeDecorations, stripDecorationCss, type ThemeDecoration } from './themeDecorations'
+import { invoke } from '@tauri-apps/api/core'
 import { readDir, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs'
+import { save } from '@tauri-apps/plugin-dialog'
 import { loadLibraryPaths } from './preferences'
 import { builtinThemeCss, hasThemeSelector, ID_PATTERN, type ThemeInfo } from './themes'
 import { encodeHeaderFooter, readThemeHeaderFooter, stripHeaderFooter, type ThemeHeaderFooter } from './themeHeaderFooter'
@@ -126,4 +128,27 @@ export async function saveThemeDraft(draft: ThemeDraft, name: string, colors: Th
     }
   }
   return { id, name: title, builtin: false }
+}
+
+/** Deletes a user-owned theme file from the configured themes directory. */
+export async function deleteUserTheme(id: string): Promise<void> {
+  if (!ID_PATTERN.test(id)) throw new Error('Invalid theme ID')
+  await invoke<void>('delete_user_theme', { id })
+}
+
+/** Exports a user-owned theme as a standalone `.css` file for sharing with the community. Returns false if cancelled. */
+export async function exportUserTheme(id: string): Promise<boolean> {
+  if (!ID_PATTERN.test(id)) throw new Error('Invalid theme ID')
+  const { themes: directory } = await loadLibraryPaths()
+  const entry = (await readDir(directory)).find((file) => file.name.replace(/\.css$/i, '') === id)
+  if (!entry) throw new Error('The theme file was removed. Reload themes and try again.')
+  await regularFile(directory, entry.name)
+  const css = await readTextFile(`${directory}/${entry.name}`)
+  const target = await save({
+    defaultPath: `${id}.css`,
+    filters: [{ name: 'Grimoire Theme', extensions: ['css'] }],
+  })
+  if (!target) return false
+  await writeTextFile(target, css)
+  return true
 }

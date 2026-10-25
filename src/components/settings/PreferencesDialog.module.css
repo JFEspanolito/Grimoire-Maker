@@ -17,8 +17,9 @@
 .section h3 { margin-bottom: .65rem; font-size: .8rem; font-weight: 600; color: #cfb37c; }
 .description { color: #bcb7ac; font-size: .8rem; line-height: 1.6; }
 .theme { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
-.themeControls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); align-items: center; gap: .5rem; flex: 1; min-width: min(100%, 22rem); }
-.theme select { width: 100%; min-width: 0; padding: .4rem .6rem; background: #201f1d; color: #f0eee9; border: 1px solid #ffffff20; border-radius: .25rem; }
+.themeControls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex: 1; min-width: min(100%, 22rem); }
+.theme select { flex: 1 1 11rem; min-width: 0; padding: .4rem .6rem; background: #201f1d; color: #f0eee9; border: 1px solid #ffffff20; border-radius: .25rem; }
+.dangerButton { color: #f0a29b; }
 .path { display: flex; flex-direction: column; gap: .35rem; margin: .85rem 0; }
 .pathControls { display: flex; gap: .5rem; }
 .pathControls input { min-width: 0; flex: 1; padding: .4rem .5rem; border: 1px solid #ffffff20; border-radius: .25rem; background: #0002; font-size: .8rem; }

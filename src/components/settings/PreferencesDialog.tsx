@@ -4,13 +4,15 @@ import { isTauri } from '../../hooks/useFileSystem'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { useTemplateStore } from '../../stores/templateStore'
-import { resolveTheme } from '../../lib/themes'
+import { resolveTheme, type ThemeInfo } from '../../lib/themes'
+import { deleteUserTheme, exportUserTheme } from '../../lib/themeEditor'
 import styles from './PreferencesDialog.module.css'
 import { ThemeCustomizer } from './ThemeCustomizer'
 import { EDITOR_SHORTCUTS, FILE_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
-import { reportError } from '../../lib/errorLogging'
+import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { ProjectSettings } from './ProjectSettings'
 import { AutoSaveSettings } from './AutoSaveSettings'
+import { ConfirmDialog } from '../layout/ConfirmDialog'
 
 const PATH_FIELDS: { kind: LibraryKind; label: string }[] = [
   { kind: 'plugins', label: 'Plugin Path' },
@@ -35,9 +37,12 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
   const [notice, setNotice] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [customizing, setCustomizing] = useState(false)
+  const [pendingDeleteTheme, setPendingDeleteTheme] = useState<ThemeInfo | null>(null)
   const [section, setSection] = useState<Section>('appearance')
   const { theme, setTheme } = useSettingsStore()
-  const { themes, errors: themeErrors } = useThemeStore()
+  const { themes, userThemes = [], errors: themeErrors } = useThemeStore()
+  const activeThemeId = resolveTheme(theme, themes)
+  const activeCustomTheme = userThemes.find((item) => item.id === activeThemeId) ?? null
 
   useEffect(() => {
     const element = dialog.current
@@ -50,7 +55,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
     if (!desktop) return
     void loadLibraryPaths().then(
       (value) => { if (!cancelled) setPaths(value) },
-      (cause: unknown) => { if (!cancelled) { reportError('preferences.load', cause); setError(String(cause instanceof Error ? cause.message : cause)) } },
+      (cause: unknown) => { if (!cancelled) { reportError('preferences.load', cause); setError(friendlyErrorMessage(cause, 'Could not load your content folders.')) } },
     ).finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [attempt, desktop])
@@ -80,7 +85,46 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
       }
     } catch (cause) {
       reportError('preferences.change-path', cause)
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(friendlyErrorMessage(cause, 'Could not change this folder.'))
+    } finally {
+      locked.current = false
+      setBusy(false)
+    }
+  }
+
+  const handleExportTheme = async () => {
+    if (!activeCustomTheme || locked.current) return
+    locked.current = true
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const exported = await exportUserTheme(activeCustomTheme.id)
+      if (exported) setNotice(`Theme "${activeCustomTheme.name}" exported.`)
+    } catch (cause) {
+      reportError('theme.export', cause)
+      setError(friendlyErrorMessage(cause, `Could not export theme "${activeCustomTheme.name}".`))
+    } finally {
+      locked.current = false
+      setBusy(false)
+    }
+  }
+
+  const handleDeleteTheme = async (targetTheme: ThemeInfo) => {
+    if (locked.current) return
+    locked.current = true
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      await deleteUserTheme(targetTheme.id)
+      await useThemeStore.getState().reload()
+      const nextThemes = useThemeStore.getState().themes ?? []
+      setTheme(resolveTheme(theme, nextThemes))
+      setNotice(`Theme "${targetTheme.name}" deleted.`)
+    } catch (cause) {
+      reportError('theme.delete', cause)
+      setError(friendlyErrorMessage(cause, `Could not delete theme "${targetTheme.name}".`))
     } finally {
       locked.current = false
       setBusy(false)
@@ -116,11 +160,15 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
       <div className={styles.theme}>
         <label htmlFor="preferences-theme">Select Theme</label>
         <div className={styles.themeControls}>
-        <select id="preferences-theme" aria-label="Select Theme" value={resolveTheme(theme, themes)} disabled={busy}
+        <select id="preferences-theme" aria-label="Select Theme" value={activeThemeId} disabled={busy}
           onChange={(event) => setTheme(event.target.value)}>
           {themes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
         <button type="button" disabled={busy} onClick={() => setCustomizing(true)}>Customize Theme</button>
+        {activeCustomTheme && <>
+          <button type="button" disabled={busy || !desktop} onClick={() => void handleExportTheme()}>Export Theme</button>
+          <button type="button" className={styles.dangerButton} disabled={busy || !desktop} onClick={() => setPendingDeleteTheme(activeCustomTheme)}>Delete Theme</button>
+        </>}
         </div>
       </div>
       {themeErrors.length > 0 && <p className={styles.error} role="alert">{themeErrors.join('\n')}</p>}
@@ -170,5 +218,9 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
       <span>Preferences are saved in setting.json. No restart needed.</span>
       <button type="button" disabled={busy} onClick={onClose}>Done</button>
     </footer>}
+    {pendingDeleteTheme && <ConfirmDialog title="Delete custom theme"
+      message={`Delete custom theme "${pendingDeleteTheme.name}"? This cannot be undone.`}
+      confirmLabel="Delete" danger onCancel={() => setPendingDeleteTheme(null)}
+      onConfirm={() => { const target = pendingDeleteTheme; setPendingDeleteTheme(null); void handleDeleteTheme(target) }} />}
   </dialog>
 }

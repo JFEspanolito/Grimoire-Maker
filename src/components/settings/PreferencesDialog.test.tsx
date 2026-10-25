@@ -6,17 +6,22 @@ import { useSettingsStore } from '../../stores/settingsStore'
 
 const mocks = vi.hoisted(() => ({
   load: vi.fn(), change: vi.fn(), themes: vi.fn().mockResolvedValue(undefined), templates: vi.fn().mockResolvedValue(undefined),
+  deleteTheme: vi.fn().mockResolvedValue(undefined), exportTheme: vi.fn().mockResolvedValue(true),
   paths: { plugins: '/config/Mods/Plugins', snippets: '/config/Mods/Snippets', templates: '/config/Mods/Templates', themes: '/config/themes', logs: '/config/logs' },
   errors: [] as string[],
+  userThemes: [{ id: 'custom-dark', name: 'Custom Dark', builtin: false }],
 }))
 vi.mock('../../lib/preferences', () => ({ loadLibraryPaths: mocks.load, changeLibraryPath: mocks.change }))
+vi.mock('../../lib/themeEditor', () => ({ deleteUserTheme: mocks.deleteTheme, exportUserTheme: mocks.exportTheme }))
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true }))
 vi.mock('./ThemeCustomizer', () => ({ ThemeCustomizer: ({ onClose, onBusyChange }: { onClose: () => void; onBusyChange: (busy: boolean) => void }) =>
   <section><h2 id="customize-theme-title">Customize Theme</h2><button onClick={onClose}>Back</button><button onClick={() => onBusyChange(true)}>Start saving</button><button onClick={() => onBusyChange(false)}>Finish saving</button></section>,
 }))
 vi.mock('../../stores/themeStore', () => ({ useThemeStore: Object.assign(() => ({
-  themes: [{ id: 'parchment', name: 'Parchment' }, { id: 'modern', name: 'Modern' }, { id: 'sci-fi', name: 'Sci-Fi' }], errors: [],
-}), { getState: () => ({ reload: mocks.themes, errors: mocks.errors }) }) }))
+  themes: [{ id: 'parchment', name: 'Parchment', builtin: true }, { id: 'modern', name: 'Modern', builtin: true }, { id: 'sci-fi', name: 'Sci-Fi', builtin: true }, ...mocks.userThemes],
+  userThemes: mocks.userThemes,
+  errors: [],
+}), { getState: () => ({ reload: mocks.themes, themes: [{ id: 'parchment', name: 'Parchment', builtin: true }, { id: 'modern', name: 'Modern', builtin: true }, { id: 'sci-fi', name: 'Sci-Fi', builtin: true }], errors: mocks.errors }) }) }))
 vi.mock('../../stores/templateStore', () => ({ useTemplateStore: { getState: () => ({ reload: mocks.templates, errors: [] }) } }))
 
 let root: Root
@@ -57,9 +62,35 @@ it('shows all configured directories and selects an existing theme', async () =>
     expect(container.querySelector<HTMLButtonElement>(`[aria-label="Edit ${label}"]`)?.disabled).toBe(false)
   }
   const theme = container.querySelector('select')!
-  expect(Array.from(theme.options).map((option) => option.text)).toEqual(['Parchment', 'Modern', 'Sci-Fi'])
+  expect(Array.from(theme.options).map((option) => option.text)).toEqual(['Parchment', 'Modern', 'Sci-Fi', 'Custom Dark'])
   await act(async () => { theme.value = 'sci-fi'; theme.dispatchEvent(new Event('change', { bubbles: true })) })
   expect(useSettingsStore.getState().theme).toBe('sci-fi')
+})
+
+it('shows Export Theme and Delete Theme only when a custom user theme is selected', async () => {
+  expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Export Theme')).toBe(false)
+  expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'Delete Theme')).toBe(false)
+
+  const theme = container.querySelector('select')!
+  await act(async () => { theme.value = 'custom-dark'; theme.dispatchEvent(new Event('change', { bubbles: true })) })
+
+  const exportBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Export Theme')!
+  const deleteBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Delete Theme')!
+  expect(exportBtn).toBeDefined()
+  expect(deleteBtn).toBeDefined()
+
+  await act(async () => exportBtn.click())
+  expect(mocks.exportTheme).toHaveBeenCalledExactlyOnceWith('custom-dark')
+  expect(container.textContent).toContain('Theme "Custom Dark" exported.')
+
+  await act(async () => deleteBtn.click())
+  const confirmDialog = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="confirm-title"]')!
+  expect(confirmDialog.textContent).toContain('Delete custom theme "Custom Dark"?')
+  const confirmBtn = Array.from(confirmDialog.querySelectorAll('button')).find((b) => b.textContent === 'Delete')!
+  await act(async () => confirmBtn.click())
+  expect(mocks.deleteTheme).toHaveBeenCalledExactlyOnceWith('custom-dark')
+  expect(mocks.themes).toHaveBeenCalledOnce()
+  expect(useSettingsStore.getState().theme).toBe('parchment')
 })
 
 it('changes Logs Path immediately without unrelated catalog reloads', async () => {

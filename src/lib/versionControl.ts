@@ -32,6 +32,9 @@ export const stageChange = (workspace: string, path: string) =>
 export const unstageChange = (workspace: string, path: string) =>
   invoke<void>('git_unstage', { workspace, path })
 
+export const revertChange = (workspace: string, path: string) =>
+  invoke<void>('git_revert', { workspace, path })
+
 export const diffChange = (workspace: string, path: string, staged: boolean) =>
   invoke<GitDiff>('git_diff', { workspace, path, staged })
 
