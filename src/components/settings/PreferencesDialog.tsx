@@ -134,8 +134,8 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance' }: { 
   return <dialog ref={dialog} className={`${styles.dialog} ${customizing ? styles.customizingDialog : ''}`} aria-labelledby={customizing ? 'customize-theme-title' : 'preferences-title'} aria-busy={busy}
     onCancel={(event) => { event.preventDefault(); if (!locked.current) { if (customizing) setCustomizing(false); else onClose() } }}>
     <header className={styles.header}>
-      <h2 id="preferences-title">Preferences</h2>
-      <button type="button" aria-label="Close preferences" disabled={busy} onClick={onClose}>×</button>
+      {!customizing && <h2 id="preferences-title">Preferences</h2>}
+      {!customizing && <button type="button" aria-label="Close preferences" disabled={busy} onClick={onClose}>×</button>}
     </header>
     <div className={customizing ? styles.customizingLayout : styles.layout}>
       {!customizing && <nav className={styles.sections} role="tablist" aria-label="Preferences sections" aria-orientation="vertical">

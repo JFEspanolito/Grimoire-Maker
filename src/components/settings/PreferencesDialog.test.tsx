@@ -106,6 +106,8 @@ it('opens customization in the same modal and protects an in-flight theme save',
   await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Customize Theme')!.click())
   expect(container.querySelectorAll('dialog')).toHaveLength(1)
   expect(container.querySelector('dialog')?.getAttribute('aria-labelledby')).toBe('customize-theme-title')
+  expect(container.querySelector('[aria-label="Close preferences"]')).toBeNull()
+  expect(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Back')).toBeDefined()
   await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Start saving')!.click())
   await act(async () => container.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true })))
   expect(onClose).not.toHaveBeenCalled()
@@ -113,6 +115,7 @@ it('opens customization in the same modal and protects an in-flight theme save',
   await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Finish saving')!.click())
   await act(async () => container.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true })))
   expect(container.querySelector('#preferences-title')).not.toBeNull()
+  expect(container.querySelector('[aria-label="Close preferences"]')).not.toBeNull()
 })
 
 it('activates copied directories and reloads themes before templates', async () => {
