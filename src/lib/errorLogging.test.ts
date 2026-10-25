@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
-import { installErrorLogging, reportError } from './errorLogging'
+import { friendlyErrorMessage, installErrorLogging, reportError } from './errorLogging'
 import { useSessionStore } from '../stores/sessionStore'
 import { useThemeStore } from '../stores/themeStore'
 import { useTemplateStore } from '../stores/templateStore'
@@ -90,4 +90,10 @@ it('bounds pending writes during an error storm', async () => {
   expect(invoke).toHaveBeenCalledTimes(64)
   completions.forEach(complete => complete())
   await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+})
+
+it('replaces raw Tauri ACL and runtime stack dumps with a friendly message while keeping actionable domain messages', () => {
+  const aclDump = 'fs.remove not allowed. Permissions associated with this command: fs:allow-app-write, fs:allow-remove'
+  expect(friendlyErrorMessage(new Error(aclDump), 'Could not delete theme "ThemeTest".')).toBe('Could not delete theme "ThemeTest".')
+  expect(friendlyErrorMessage(new Error('Destination already contains this template'), 'Could not change this folder.')).toBe('Destination already contains this template')
 })

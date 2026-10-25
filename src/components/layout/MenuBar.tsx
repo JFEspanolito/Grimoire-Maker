@@ -1,4 +1,4 @@
-import { reportError } from '../../lib/errorLogging'
+import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
@@ -64,7 +64,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
   const run = async (action: () => unknown | Promise<unknown>) => {
     closeMenus()
     setError('')
-    try { await action() } catch (cause) { reportError('menu.action', cause); setError(cause instanceof Error ? cause.message : String(cause)) }
+    try { await action() } catch (cause) { reportError('menu.action', cause); setError(friendlyErrorMessage(cause)) }
   }
   const onFileShortcut = useEffectEvent((event: KeyboardEvent) => {
     const shortcut = fileShortcut(event)
