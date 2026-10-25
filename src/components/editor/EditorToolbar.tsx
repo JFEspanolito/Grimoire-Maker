@@ -163,8 +163,10 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         ))}
         <GuidesMenu />
       </div>
-      <ImageControls editor={editor} attrs={state?.image ?? null} />
-      {editor && state?.inTable && <TableControls editor={editor} />}
+      {/* One context row: table tools take over the image row's slot, so the layout never grows. */}
+      {editor && state?.inTable && !state.image
+        ? <TableControls editor={editor} />
+        : <ImageControls editor={editor} attrs={state?.image ?? null} />}
     </>
   )
 }

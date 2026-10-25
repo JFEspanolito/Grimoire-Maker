@@ -9,6 +9,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { useDocumentStore } from '../../stores/documentStore'
 import { EditorToolbar } from './EditorToolbar'
 import { GrimoireImage } from './extensions/image'
+import { TableExtensions } from './extensions/tables'
 
 
 let root: Root | null = null
@@ -99,5 +100,20 @@ describe('block formatting and underline', () => {
     expect(editor!.getHTML()).toContain('<u>Sample text</u>')
     await act(async () => { editor!.commands.setTextSelection({ from: 1, to: 12 }); button!.click() })
     expect(editor!.getHTML()).not.toContain('<u>')
+  })
+})
+
+describe('context row', () => {
+  it('shows table tools in the image row slot instead of adding another row', async () => {
+    editor = new Editor({ extensions: [StarterKit, GrimoireImage, ...TableExtensions], content: '<p>Text</p>' })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<EditorToolbar editor={editor} />))
+    const rows = () => Array.from(container.querySelectorAll('[role="group"][aria-label="Image layout"], [role="group"][aria-label="Table"]'))
+    expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Image layout'])
+    await act(async () => { editor!.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run() })
+    expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Table'])
+    await act(async () => { editor!.commands.deleteTable() })
+    expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Image layout'])
   })
 })

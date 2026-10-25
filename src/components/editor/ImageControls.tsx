@@ -97,7 +97,7 @@ export function ImageControls({ editor, attrs: selection }: { editor: Editor | n
       aria-label="Image layout"
       aria-hidden={!active}
       inert={!active}
-      className={`flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 bg-neutral-900 px-3 py-1 ${active ? '' : '[&>label]:invisible'}`}
+      className={`flex min-h-9 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 bg-neutral-900 px-3 py-1 ${active ? '' : '[&>label]:invisible'}`}
     >
       <label className={field}>
         Wrap
