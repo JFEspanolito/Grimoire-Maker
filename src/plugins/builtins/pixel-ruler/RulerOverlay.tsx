@@ -1,3 +1,4 @@
+import { editorSheetRect } from '../../../lib/imagePlacement'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { PAGE_SIZES } from '../../../types/document'
 
@@ -17,7 +18,7 @@ function GuideLine({ guide, maximum, pageWidthMm }: { guide: RulerGuide; maximum
   const start = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0) return
     const page = event.currentTarget.closest('.grimoire-page')
-    const bounds = page?.getBoundingClientRect()
+    const bounds = page ? editorSheetRect(page, event.currentTarget) : undefined
     if (!bounds?.width) return
     event.preventDefault()
     event.stopPropagation()

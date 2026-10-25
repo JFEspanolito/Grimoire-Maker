@@ -8,6 +8,7 @@ import { Previewer } from 'pagedjs'
 import { invoke } from '@tauri-apps/api/core'
 import printCss from '../styles/print.css?raw'
 import { PAGE_SIZES, type PageSizeId, type ThemeId } from '../types/document'
+import { renderNativePages } from './nativePageExport'
 
 /** Everything that decides how the document is paginated. */
 export interface PageRequest {
@@ -120,8 +121,8 @@ export async function paginate(
 }
 
 /**
- * Paginates into a print-only container, then asks Rust to print the webview to
- * PDF. The container and Paged.js styles are always removed.
+ * Uses the editor's native column layout in a print-only container, then asks
+ * Rust to print the webview to PDF. Temporary sheets/styles are always removed.
  */
 export async function exportPdf(request: ExportRequest): Promise<void> {
   if (exportPending) throw new Error('A PDF export is already running')
@@ -133,11 +134,9 @@ export async function exportPdf(request: ExportRequest): Promise<void> {
   printRoot.append(pages)
   document.body.append(printRoot)
 
-  let previewer: Previewer | undefined
   try {
-    previewer = new Previewer()
-    await paginate(previewer, request, pages)
-    await document.fonts.ready
+    await prepareThemeBackgrounds(request.theme)
+    await renderNativePages(request, pages, buildContent(request))
     document.body.classList.add('exporting')
     if (request.route === PDF_ROUTE.DIALOG) {
       await printDialog()
@@ -155,11 +154,7 @@ export async function exportPdf(request: ExportRequest): Promise<void> {
     })
   } finally {
     document.body.classList.remove('exporting')
-    try {
-      previewer?.polisher.destroy()
-    } finally {
-      printRoot.remove()
-      exportPending = false
-    }
+    printRoot.remove()
+    exportPending = false
   }
 }

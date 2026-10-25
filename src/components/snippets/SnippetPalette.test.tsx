@@ -1,3 +1,4 @@
+import { useSettingsStore } from '../../stores/settingsStore'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act } from 'react'
@@ -19,10 +20,12 @@ afterEach(async () => {
   root = null
   useTemplateStore.setState({ templates: OFFICIAL_TEMPLATES })
   useModStore.setState({ ready: false, snippets: [] })
+  useSettingsStore.setState({ viewMode: 'edit' })
 })
 
 describe('snippet palette', () => {
-  it('still inserts a Markdown snippet at the cursor on double-click', async () => {
+  it.each(['edit', 'spreads'] as const)('inserts a Markdown snippet at the cursor in %s layout', async (viewMode) => {
+    useSettingsStore.setState({ viewMode })
     useModStore.setState({ ready: true, snippets: [{ id: 'note', label: 'Note', group: 'Notes', markdown: '## Inserted note' }] })
     const editor = new Editor({ extensions: [StarterKit, ContentBox, Markdown], content: '<p>First</p><p>Last</p>',
       editorProps: { handleScrollToSelection: () => true } })

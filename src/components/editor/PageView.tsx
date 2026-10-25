@@ -8,18 +8,16 @@ import { pageColumns, projectPageText } from '../../lib/pageProperties'
 import { PageHeaderFooter } from './PageHeaderFooter'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEventHandler, type ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { PAGE_SIZES } from '../../types/document'
+import { PAGE_GAP_MM, pageGeometry, sheetCountForHeight } from '../../lib/pageLayout'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
 import { useWheelZoom } from '../../hooks/useWheelZoom'
 import { EDITOR_ZOOMS } from '../../lib/zoom'
 import styles from './PageView.module.css'
 
-const PAGE_GAP_MM = 8
-const PX_PER_MM = 96 / 25.4
 
 /** One continuous editor, flowing down each column and then onto the next sheet. */
 export function PageView({ children, onPageClick, onPagePointerDown }: { children: ReactNode; onPageClick?: MouseEventHandler<HTMLDivElement>; onPagePointerDown?: PointerEventHandler<HTMLDivElement> }) {
-  const { pageSize, columns: defaultColumns, theme, marginMm, zoom, setZoom } = useSettingsStore()
+  const { pageSize, columns: defaultColumns, theme, marginMm, zoom, setZoom, viewMode } = useSettingsStore()
   const path = useContext(DocumentPathContext)
   const current = useDocumentStore(state => path === undefined || state.document.path === path ? state.document : state.buffers[path ?? '__untitled__'])
   const workspace = useDocumentStore(state => state.workspaceRoot)
@@ -31,12 +29,12 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   const pageText = projectPageText(workspace, frontmatter, project)
   const zoomRef = useWheelZoom(zoom, setZoom, EDITOR_ZOOMS)
   const overlays = usePluginRegistry((s) => s.overlays)
-  const size = PAGE_SIZES[pageSize]
+  const size = pageGeometry(pageSize, marginMm)
   const flow = useRef<HTMLDivElement>(null)
   const [sheetCount, setSheetCount] = useState(1)
   const paginated = typeof CSS !== 'undefined' && !!CSS.supports?.('column-wrap', 'wrap') && CSS.supports('column-height', '100px')
-  const contentHeight = Math.max(1, size.heightMm - 2 * marginMm)
-  const rowGap = 2 * marginMm + PAGE_GAP_MM
+  const contentHeight = size.contentHeightMm
+  const rowGap = size.rowGapMm
 
   useEffect(() => {
     const element = flow.current
@@ -44,14 +42,17 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
     const observer = new ResizeObserver(([entry]) => {
       // ResizeObserver measures unzoomed CSS pixels. Allow one pixel of rounding
       // so a fully filled last row does not create a spurious blank sheet.
-      const count = Math.ceil((entry.contentRect.height + rowGap * PX_PER_MM - 1) / ((contentHeight + rowGap) * PX_PER_MM))
+      const count = sheetCountForHeight(entry.contentRect.height, contentHeight, rowGap)
       setSheetCount(Math.max(1, count))
     })
     observer.observe(element)
     return () => observer.disconnect()
   }, [paginated, contentHeight, rowGap])
 
-  const visibleSheets = paginated ? sheetCount : 1
+  const spreads = paginated && viewMode === 'spreads'
+  const visibleSheets = paginated
+    ? (spreads ? Math.max(2, sheetCount + (sheetCount % 2)) : sheetCount)
+    : 1
 
   const style: CSSProperties = {
     width: `${size.widthMm}mm`,
@@ -66,8 +67,11 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
 
   return (
     <div ref={zoomRef} className="mx-auto my-8 w-fit" data-editor-zoom style={{ zoom }}>
-      {!paginated && <p role="status" className={styles.notice}>Sequential columns require a newer WebView. Showing one editing column; Page View and PDF keep your column setting.</p>}
-      <div className={`grimoire-page ${paginated ? styles.pages : ''} relative`} style={style} onClick={onPageClick} onPointerDown={onPagePointerDown}>
+      {!paginated && <p role="status" className={styles.notice}>Sequential columns require a newer WebView. Showing one editing column; update the WebView to use spreads and matching PDF pagination.</p>}
+      <div className={spreads ? styles.spread : undefined}
+        data-page-layout={spreads ? 'spreads' : 'pages'}
+        style={{ '--page-width': `${size.widthMm}mm`, '--page-height': `${size.heightMm}mm` } as CSSProperties}>
+      <div data-editor-stack className={`grimoire-page ${paginated ? styles.pages : ''} relative`} style={style} onClick={onPageClick} onPointerDown={onPagePointerDown}>
         {Array.from({ length: visibleSheets }, (_, index) => <div key={index}>
           {paginated && <div aria-hidden="true" data-editor-sheet={index + 1} className={`grimoire-page ${styles.paper}`}
             style={{ top: `${index * (size.heightMm + PAGE_GAP_MM)}mm`, height: `${size.heightMm}mm` }} />}
@@ -77,6 +81,7 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
           </div>
         </div>)}
         <div ref={flow} className={styles.flow} data-page-flow data-paginated={paginated} style={flowStyle as CSSProperties}>{children}</div>
+      </div>
       </div>
     </div>
   )

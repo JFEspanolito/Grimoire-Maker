@@ -280,3 +280,36 @@ it.each(['left', 'right'])('grows a %s wrapped image within its second column wi
   await act(async () => window.dispatchEvent(pointer('pointercancel', 1000, 1000)))
   expect(image.style.width).toBe('40mm')
 })
+
+
+it('lets an image leave the margin and span across both sheets in Spread view', async () => {
+  vi.stubGlobal('CSS', { supports: () => true })
+  const { useSettingsStore } = await import('../../stores/settingsStore')
+  useSettingsStore.setState({ viewMode: 'spreads', pageSize: 'a4', marginMm: 20 })
+  useDocumentStore.getState().loadFromRaw('/book/chapter.md', '<img src="assets/map.png" data-width-mm="120" />')
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  let editor!: Editor
+  try {
+    await act(async () => root?.render(<EditorCanvas onReady={value => { editor = value }} />))
+    const sheets = container.querySelectorAll<HTMLElement>('[data-editor-sheet]')
+    expect(sheets).toHaveLength(2)
+    vi.spyOn(sheets[0], 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 420, 594))
+    vi.spyOn(sheets[1], 'getBoundingClientRect').mockReturnValue(new DOMRect(420, 0, 420, 594))
+    const image = container.querySelector<HTMLImageElement>('.grimoire-image img')!
+    vi.spyOn(image, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 80, 240, 100))
+    const pointer = (type: string, x: number, y: number) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })
+      Object.defineProperty(event, 'pointerId', { value: 1 })
+      return event
+    }
+    await act(async () => image.dispatchEvent(pointer('pointerdown', 100, 80)))
+    await act(async () => window.dispatchEvent(pointer('pointermove', 300, 100)))
+    await act(async () => window.dispatchEvent(pointer('pointerup', 300, 100)))
+    expect(editor.getAttributes('image')).toMatchObject({ anchor: 'free', xMm: 150, yMm: 50, widthMm: 120 })
+  } finally {
+    await act(async () => useSettingsStore.setState({ viewMode: 'edit' }))
+    vi.unstubAllGlobals()
+  }
+})

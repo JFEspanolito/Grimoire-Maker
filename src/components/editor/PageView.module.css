@@ -36,3 +36,22 @@
   color: #e1bd78;
   font-size: .8rem;
 }
+
+/* Fragment the same live editor into facing book pairs; never clone editable content. */
+.spread {
+  width: calc(2 * var(--page-width));
+  column-count: 2;
+  column-gap: 0;
+  column-height: calc(var(--page-height) + 8mm);
+  column-wrap: wrap;
+  column-fill: auto;
+  row-gap: 8mm;
+}
+
+.spread > .pages {
+  box-decoration-break: clone;
+}
+
+.spread .paper {
+  box-shadow: 0 2mm 6mm rgb(0 0 0 / 0.4), inset -0.25mm 0 0 rgb(0 0 0 / 0.22);
+}

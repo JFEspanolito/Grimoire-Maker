@@ -43,9 +43,12 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
   useEffect(() => {
     const container = host.current
     if (!container) return
-    // Each run paginates into its own stage: a superseded run keeps writing to a
-    // detached element instead of mixing its pages into the current ones.
+    // Paged.js mixes layout pixels with bounding rectangles: never paginate
+    // under display zoom or the facing-page grid.
     const stage = document.createElement('div')
+    stage.dataset.theme = activeTheme
+    stage.style.cssText = 'position:fixed;left:-100000px;top:0;width:max-content;visibility:hidden;pointer-events:none'
+    const display = document.createElement('div')
     let previewer: Previewer | undefined
     let cancelled = false
     let running = false
@@ -56,16 +59,25 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       // Paged.js creates styleEl during preview(), not in its constructor.
       if (previewer?.polisher.styleEl) previewer.polisher.destroy()
       stage.remove()
+      display.remove()
     }
 
     const timer = window.setTimeout(() => {
       previewer = new Previewer()
       running = true
       setStatus({ kind: 'rendering' })
-      container.append(stage)
+      document.body.append(stage)
       paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm, headerFooter, pageText: projectPageText(workspace, frontmatter, project) }, stage).then(
         () => {
-          if (!cancelled) setStatus({ kind: 'ready', pages: stage.querySelectorAll('.pagedjs_page').length })
+          if (!cancelled) {
+            const pages = stage.querySelectorAll('.pagedjs_page').length
+            // Static copies have no pagination observers, so display zoom and
+            // facing layout cannot restart pagination after it has completed.
+            display.replaceChildren(...Array.from(stage.childNodes, node => node.cloneNode(true)))
+            previewer?.chunker.removePages()
+            container.append(display)
+            setStatus({ kind: 'ready', pages })
+          }
         },
         (e: unknown) => {
           if (!cancelled) {
@@ -75,6 +87,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
         },
       ).finally(() => {
         running = false
+        stage.remove()
         if (cancelled) release()
       })
     }, DEBOUNCE_MS)
@@ -83,6 +96,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       cancelled = true
       window.clearTimeout(timer)
       stage.remove()
+      display.remove()
       // An in-flight run still owns its styles; release them once it settles.
       if (!running) release()
     }

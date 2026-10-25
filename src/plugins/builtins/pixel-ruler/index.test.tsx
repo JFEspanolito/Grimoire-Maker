@@ -23,10 +23,12 @@ it('keeps guide lines visible while the measurement ruler is off', async () => {
   expect(host.querySelector('[data-guide-axis="row"]')).not.toBeNull()
 })
 
-it('returns to editing and shows measurements when Ruler is clicked from page preview', async () => {
-  await act(async () => useSettingsStore.getState().setViewMode('pages'))
+it('keeps the editable spread active when toggling measurements', async () => {
+  await act(async () => useSettingsStore.getState().setViewMode('spreads'))
   await act(async () => toggle())
-  expect(useSettingsStore.getState().viewMode).toBe('edit')
+  expect(useSettingsStore.getState().viewMode).toBe('spreads')
+  expect(useRulerState.getState().visible).toBe(false)
+  await act(async () => toggle())
   expect(useRulerState.getState().visible).toBe(true)
 })
 

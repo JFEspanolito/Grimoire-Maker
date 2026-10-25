@@ -29,7 +29,7 @@ export interface AppState {
   settings: PersistedSettings
 }
 
-const MAX_RECENT = 10
+const MAX_RECENT = 6
 
 const emptyState = (): AppState => ({
   lastWorkspace: null,
@@ -55,7 +55,7 @@ export async function loadAppState(): Promise<AppState> {
     return {
       lastWorkspace: asPath(raw.lastWorkspace),
       recentWorkspaces: Array.isArray(raw.recentWorkspaces)
-        ? raw.recentWorkspaces.map(asPath).filter((p): p is string => p !== null)
+        ? raw.recentWorkspaces.map(asPath).filter((p): p is string => p !== null).slice(0, MAX_RECENT)
         : [],
       lastFile: asPath(raw.lastFile),
       settings: typeof raw.settings === 'object' && raw.settings ? raw.settings : {},

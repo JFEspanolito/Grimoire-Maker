@@ -12,7 +12,7 @@ export function Toolbar() {
   const dirty = useDocumentStore((state) => state.document.dirty)
   const commands = usePluginRegistry((state) => state.commands)
   const rulerVisible = useRulerState((state) => state.visible)
-  const { zoom, setZoom, viewMode } = useSettingsStore()
+  const { zoom, setZoom, viewMode, setViewMode } = useSettingsStore()
   const active = useTabStore((state) => state.active)
   const documentTools = !active || /\.md$/i.test(active)
   return (
@@ -22,14 +22,20 @@ export function Toolbar() {
         {dirty && <span className={styles.dirty} title="Unsaved document changes">•</span>}
       </div>
       <div className={styles.tools} role="group" aria-label="Editor tools">
+        <label className={styles.zoom}>Page view
+          <select aria-label="Page view" value={viewMode === 'spreads' ? 'spreads' : 'edit'} disabled={!documentTools}
+            onChange={(event) => setViewMode(event.target.value === 'spreads' ? 'spreads' : 'edit')}>
+            <option value="edit">Single page</option><option value="spreads">Spread</option>
+          </select>
+        </label>
         <label className={styles.zoom}>Zoom
-          <select aria-label="Editor zoom" value={zoom} disabled={!documentTools || viewMode !== 'edit'} onChange={(event) => setZoom(Number(event.target.value))}>
+          <select aria-label="Editor zoom" value={zoom} disabled={!documentTools} onChange={(event) => setZoom(Number(event.target.value))}>
             {Array.from(new Set<number>([...EDITOR_ZOOMS, zoom])).sort((a, b) => a - b).map((value) => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}
           </select>
         </label>
         {commands.map((command) => <button key={command.id} className={styles.button}
           disabled={command.id === 'pixel-ruler.toggle' && !documentTools}
-          aria-pressed={command.id === 'pixel-ruler.toggle' ? rulerVisible && viewMode === 'edit' : undefined}
+          aria-pressed={command.id === 'pixel-ruler.toggle' ? rulerVisible : undefined}
           title={command.id === 'pixel-ruler.toggle' ? 'Show or hide page measurements in editing view' : undefined}
           onClick={command.run}>{command.label}</button>)}
       </div>

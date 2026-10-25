@@ -1,7 +1,6 @@
 import type { GrimoirePlugin } from '../../../types/plugin'
 import { useRulerState } from './rulerState'
 import { RulerOverlay } from './RulerOverlay'
-import { useSettingsStore } from '../../../stores/settingsStore'
 
 export const pixelRuler: GrimoirePlugin = {
   id: 'builtin.pixel-ruler',
@@ -11,13 +10,7 @@ export const pixelRuler: GrimoirePlugin = {
     api.registerCommand({
       id: 'pixel-ruler.toggle',
       label: 'Ruler',
-      run: () => {
-        const settings = useSettingsStore.getState()
-        if (settings.viewMode !== 'edit') {
-          settings.setViewMode('edit')
-          useRulerState.setState({ visible: true })
-        } else useRulerState.getState().toggle()
-      },
+      run: () => useRulerState.getState().toggle(),
     })
     api.registerOverlay({ id: 'pixel-ruler.overlay', title: 'Ruler', component: RulerOverlay })
   },

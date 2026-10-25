@@ -2,10 +2,8 @@ import type { Editor } from '@tiptap/react'
 import { lazy, Suspense } from 'react'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useTabStore } from '../../stores/tabStore'
-import { useSettingsStore } from '../../stores/settingsStore'
 import { EditorCanvas } from '../editor/EditorCanvas'
 import { EditorToolbar } from '../editor/EditorToolbar'
-import { PagePreview } from '../editor/PagePreview'
 import { DocumentTabs } from './DocumentTabs'
 import styles from './DocumentWorkspace.module.css'
 import { useExplorerStore } from '../../stores/explorerStore'
@@ -14,7 +12,6 @@ const FilePreview = lazy(() => import('../viewers/FilePreview').then((module) =>
 
 export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; onReady: (editor: Editor) => void }) {
   const { paths, panes, split, activePane, focusPane, active: activeTab } = useTabStore()
-  const viewMode = useSettingsStore((s) => s.viewMode)
   const activePath = useDocumentStore((s) => s.document.path)
   const focus = (pane: 0 | 1) => {
     useExplorerStore.getState().selectPath(null)
@@ -26,11 +23,10 @@ export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; 
   // Each open file owns a mounted editor, retaining selection, undo and scroll state.
   const documents: (string | null)[] = paths.length ? paths : [null]
   const previewingFile = !!activeTab && !/\.md$/i.test(activeTab)
-  const showWorkspace = viewMode === 'edit' || previewingFile
   return <>
     <DocumentTabs />
-    {viewMode === 'edit' && !previewingFile && <EditorToolbar editor={editor} />}
-    <div className={styles.workspace} data-split={split} hidden={!showWorkspace}>
+    {!previewingFile && <EditorToolbar editor={editor} />}
+    <div className={styles.workspace} data-split={split}>
       {documents.map((path) => {
         const pane = panes[1] === path && split ? 1 : 0
         const visible = panes[pane] === path || (path === null && paths.length === 0)
@@ -48,6 +44,5 @@ export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; 
           Select this view, then open a file or choose a tab.
         </button>)}
     </div>
-    {!showWorkspace && <PagePreview mode={viewMode} />}
   </>
 }

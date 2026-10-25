@@ -48,14 +48,17 @@ it('has reversible marked view actions and no duplicated toolbar commands', asyn
     await act(async () => split.click())
     expect(split.getAttribute('aria-pressed')).toBe('true')
     expect(split.textContent).toContain('✓')
-    const page = view.querySelector<HTMLButtonElement>('[aria-label="Page View"]')!
-    expect(page?.getAttribute('aria-pressed')).toBe('false')
-    await act(async () => page.click())
-    expect(useSettingsStore.getState().viewMode).toBe('pages')
-    expect(page.getAttribute('aria-pressed')).toBe('true')
-    await act(async () => page.click())
-    expect(useSettingsStore.getState().viewMode).toBe('edit')
-    expect(page.getAttribute('aria-pressed')).toBe('false')
+    expect(view.querySelector('[aria-label="Page View"]')).toBeNull()
+    expect(view.querySelector('[aria-label="Preview layout"]')).toBeNull()
+    const layout = container.querySelector<HTMLSelectElement>('[aria-label="Page view"]')!
+    expect(Array.from(layout.options).map(option => option.value)).toEqual(['edit', 'spreads'])
+    layout.value = 'spreads'
+    await act(async () => layout.dispatchEvent(new Event('change', { bubbles: true })))
+    expect(useSettingsStore.getState().viewMode).toBe('spreads')
+    const zoom = container.querySelector<HTMLSelectElement>('[aria-label="Editor zoom"]')!
+    expect(zoom.disabled).toBe(false)
+    expect(Array.from(zoom.options).map(option => option.value)).toContain('3')
+    expect(Array.from(zoom.options).map(option => option.value)).toContain('0.25')
     const toolbar = container.querySelector('header')!
     for (const label of ['Open', 'Save', 'Import', 'Export PDF', 'Files', 'Templates', 'Snippets', 'Split View']) {
       expect(Array.from(toolbar.querySelectorAll('button')).some((button) => button.textContent?.trim() === label)).toBe(false)

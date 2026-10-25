@@ -3,7 +3,7 @@ import { NodeViewContent, NodeViewWrapper, useEditorState, type NodeViewProps } 
 import { closeHistory } from '@tiptap/pm/history'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { PAGE_SIZES } from '../../../types/document'
-import { positionImageOnPage } from '../../../lib/imagePlacement'
+import { editorSheetRect, editorStackOrigin, positionImageOnPage } from '../../../lib/imagePlacement'
 import { moveContentBox } from '../../../lib/contentBoxes'
 import { boxAttributes, boxNumber } from './ContentBox'
 
@@ -31,7 +31,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
     const box = boxRef.current
     const page = box?.closest('.grimoire-page')
     if (!box || !page) return
-    const bounds = page.getBoundingClientRect()
+    const bounds = editorSheetRect(page, box)
     const rect = box.getBoundingClientRect()
     if (!bounds.width || !rect.width) return
     event.preventDefault()
@@ -64,7 +64,11 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
       moved = true
       if (placement === 'free') {
         position = positionImageOnPage(bounds, rect, pageSize.widthMm, pageSize.heightMm, dx, dy)
-        if (position) { box.style.left = `${position.xMm}mm`; box.style.top = `${position.yMm}mm` }
+        if (position) {
+          const origin = editorStackOrigin(page, box)
+          position.yMm += (bounds.top - origin.top) * pageSize.widthMm / bounds.width
+          box.style.left = `${position.xMm}mm`; box.style.top = `${position.yMm}mm`
+        }
       } else {
         // Keep flow occupied during the gesture; do not turn a reorder into absolute placement.
         box.style.opacity = '0.55'
@@ -92,11 +96,13 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
   }
   const setPlacement = (next: string) => {
     const box = boxRef.current
-    const bounds = box?.closest('.grimoire-page')?.getBoundingClientRect()
+    const page = box?.closest('.grimoire-page')
+    const bounds = box && page ? editorSheetRect(page, box) : undefined
     const rect = box?.getBoundingClientRect()
     if (next === 'free' && bounds?.width && rect) {
       const size = PAGE_SIZES[useSettingsStore.getState().pageSize]
       const position = positionImageOnPage(bounds, rect, size.widthMm, size.heightMm, 0, 0)
+      if (position && box && page) position.yMm += (bounds.top - editorStackOrigin(page, box).top) * size.widthMm / bounds.width
       change({ placement: next, ...position, widthMm: boxNumber(rect.width * size.widthMm / bounds.width, 5) })
     } else change({ placement: next, xMm: null, yMm: null })
   }

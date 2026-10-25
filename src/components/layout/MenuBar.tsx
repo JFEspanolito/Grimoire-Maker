@@ -30,7 +30,6 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const split = useTabStore((s) => s.split)
-  const viewMode = useSettingsStore((s) => s.viewMode)
   const { pageSize, columns, setPageSize, setColumns } = useSettingsStore()
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
@@ -111,19 +110,8 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <button aria-label="Split View" aria-pressed={split} onClick={() => void run(() => useTabStore.getState().toggleSplit())}>
           <span className={styles.check} aria-hidden="true">{split ? '✓' : ''}</span>Split View
         </button>
-        <button aria-label="Page View" aria-pressed={viewMode !== 'edit'} disabled={readOnly}
-          title={viewMode === 'edit' ? 'Preview paginated pages' : 'Return to editing'}
-          onClick={() => void run(() => useSettingsStore.getState().setViewMode(viewMode === 'edit' ? 'pages' : 'edit'))}>
-          <span className={styles.check} aria-hidden="true">{viewMode !== 'edit' ? '✓' : ''}</span>Page View
-        </button>
-        {viewMode !== 'edit' && <label className={styles.layout}>Preview layout
-          <select aria-label="Preview layout" value={viewMode} disabled={readOnly}
-            onChange={(event) => useSettingsStore.getState().setViewMode(event.target.value === 'spreads' ? 'spreads' : 'pages')}>
-            <option value="pages">Single pages</option><option value="spreads">Facing pages</option>
-          </select>
-        </label>}
         <hr />
-        <label className={styles.layout}>Page size
+        {!readOnly && <><label className={styles.layout}>Page size
           <select aria-label="Page size" value={pageSize} onChange={(event) => setPageSize(event.target.value as PageSizeId)}>
             {Object.values(PAGE_SIZES).map((size) => <option key={size.id} value={size.id}>{size.label}</option>)}
           </select>
@@ -133,7 +121,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
             <option value={1}>1</option>
             <option value={2}>2</option>
           </select>
-        </label>
+        </label></>}
       </div>
     </details>
     <details name="application-menu">

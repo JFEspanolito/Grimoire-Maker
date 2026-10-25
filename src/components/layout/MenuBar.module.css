@@ -2,15 +2,16 @@
 .bar details { position: relative; }
 .bar summary { cursor: pointer; list-style: none; padding: .25rem .55rem; border-radius: .2rem; }
 .bar summary::-webkit-details-marker { display: none; }
-.bar summary:hover, .bar details[open] summary { background: #ffffff12; }
+.bar summary:hover, .bar details[open] > summary { background: #ffffff12; }
 .menu { position: absolute; top: calc(100% + .2rem); left: 0; z-index: 60; min-width: 15rem; max-width: min(26rem, 90vw); padding: .35rem; background: #272623; border: 1px solid #59564e; border-radius: .25rem; box-shadow: 0 .4rem 1rem #0005; }
 .menu button { display: block; width: 100%; text-align: left; padding: .4rem .65rem; border-radius: .2rem; }
 .menu button:hover:not(:disabled), .menu button[aria-pressed='true'] { background: #ffffff12; }
 .menu button:disabled { opacity: .4; }
 .menu hr { margin: .25rem 0; border-color: #ffffff18; }
-.menu .recent summary { padding: .4rem .65rem; }
+.menu .recent summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .4rem .65rem; }
+.menu .recent summary::after { content: '▸'; opacity: .65; }
 .menu .recentPath { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.recent > div { padding-left: .5rem; }
+.recent > div { position: absolute; top: -.35rem; left: calc(100% + .25rem); z-index: 65; min-width: 16rem; max-width: min(28rem, 80vw); padding: .35rem; background: #272623; border: 1px solid #59564e; border-radius: .25rem; box-shadow: 0 .4rem 1rem #0005; }
 .bar :focus-visible { outline: 2px solid #cfb37c; outline-offset: 1px; }
 .error { max-width: 24rem; color: #f0a29b; overflow-wrap: anywhere; }
 .check { display: inline-block; width: 1.25rem; color: #cfb37c; }
