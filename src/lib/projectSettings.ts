@@ -1,5 +1,6 @@
 import { exists, readTextFile, writeTextFile, rename } from '@tauri-apps/plugin-fs'
 import { validateContributors, type Contributor } from './projectContributors'
+import type { DocumentOrder } from './documentOrder'
 
 export interface ProjectSettings {
   /** Shared display name for the book; editing it never renames the project folder. */
@@ -8,6 +9,8 @@ export interface ProjectSettings {
   coAuthor: string
   coAuthors?: Contributor[]
   artists?: Contributor[]
+  /** Which documents the PDF contains and in what order; absent means every Draft document. */
+  documentOrder?: DocumentOrder
 }
 export const EMPTY_PROJECT: ProjectSettings = { name: '', author: '', coAuthor: '' }
 const filePath = (root: string) => `${root.replace(/[\\/]$/, '')}/.grimoire-project.json`
@@ -20,6 +23,22 @@ async function readMetadata(root: string): Promise<Record<string, unknown>> {
   return value as Record<string, unknown>
 }
 
+const MAX_ORDER_ENTRIES = 5000
+function validatePaths(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MAX_ORDER_ENTRIES) throw new Error('Document order must be a list of at most 5000 documents.')
+  return value.map((path) => {
+    if (typeof path !== 'string' || !path || path.length > 1000 || path.startsWith('/') || /(^|\/)\.\.(\/|$)|\\|^[A-Za-z]:/.test(path)) {
+      throw new Error('Document order may only contain paths inside the project.')
+    }
+    return path
+  })
+}
+function validateDocumentOrder(value: unknown): DocumentOrder {
+  if (!value || typeof value !== 'object') throw new Error('Document order must be an object.')
+  const { order, excluded } = value as Record<string, unknown>
+  return { order: validatePaths(order), excluded: validatePaths(excluded ?? []) }
+}
+
 function validate(value: Record<string, unknown>): ProjectSettings {
   const result = { ...EMPTY_PROJECT }
   for (const key of ['name', 'author', 'coAuthor'] as const) {
@@ -30,6 +49,7 @@ function validate(value: Record<string, unknown>): ProjectSettings {
   for (const key of ['coAuthors', 'artists'] as const) {
     if (value[key] !== undefined) result[key] = validateContributors(value[key])
   }
+  if (value.documentOrder !== undefined) result.documentOrder = validateDocumentOrder(value.documentOrder)
   return result
 }
 
