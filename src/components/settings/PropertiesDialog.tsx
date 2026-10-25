@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
+import type { Editor } from '@tiptap/react'
 import { PropertiesPanel } from './PropertiesPanel'
 import styles from './DocumentOrderDialog.module.css'
 
 /** Every project and page property in one place, opened from the Document menu. */
-export function PropertiesDialog({ onClose }: { onClose: () => void }) {
+export function PropertiesDialog({ onClose, editor = null }: { onClose: () => void; editor?: Editor | null }) {
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const element = dialog.current
@@ -20,7 +21,7 @@ export function PropertiesDialog({ onClose }: { onClose: () => void }) {
       <h2 id="properties-dialog-title">Properties</h2>
       <button type="button" className={styles.dismiss} aria-label="Close Properties" onClick={onClose}>×</button>
     </header>
-    <PropertiesPanel expanded />
+    <PropertiesPanel expanded editor={editor} />
     <footer className={styles.footer}><button type="button" onClick={onClose}>Close</button></footer>
   </dialog>
 }

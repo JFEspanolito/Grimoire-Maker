@@ -4,6 +4,7 @@ import { PageHeaderFooter } from '../components/editor/PageHeaderFooter'
 import flowStyles from '../components/editor/PageView.module.css'
 import type { PageRequest } from './exportPdf'
 import { pageGeometry, PX_PER_MM, sheetCountForHeight } from './pageLayout'
+import { alignSections } from './sectionLayout'
 
 const FREE_SELECTOR = '.grimoire-image[data-anchor="free"] img, img[data-anchor="free"], .grimoire-content-box[data-placement="free"]'
 
@@ -99,6 +100,7 @@ export async function renderNativePages(request: PageRequest, target: HTMLElemen
   try {
     await document.fonts.ready
     await waitForImages(measure)
+    alignSections(flow)
     let count = sheetCountForHeight(flow.getBoundingClientRect().height, contentHeightMm, rowGapMm)
     measure.querySelectorAll<HTMLElement>(FREE_SELECTOR).forEach(element => {
       const { xMm, yMm, widthMm: elWidthMm } = freeElementGeometry(element)

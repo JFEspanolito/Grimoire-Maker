@@ -9,6 +9,7 @@ import { PageHeaderFooter } from './PageHeaderFooter'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEventHandler, type ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { PAGE_GAP_MM, pageGeometry, sheetCountForHeight } from '../../lib/pageLayout'
+import { alignSections } from '../../lib/sectionLayout'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
 import { useWheelZoom } from '../../hooks/useWheelZoom'
 import { EDITOR_ZOOMS } from '../../lib/zoom'
@@ -40,13 +41,21 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
     const element = flow.current
     if (!paginated || !element || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(([entry]) => {
+      alignSections(element)
       // ResizeObserver measures unzoomed CSS pixels. Allow one pixel of rounding
       // so a fully filled last row does not create a spurious blank sheet.
       const count = sheetCountForHeight(entry.contentRect.height, contentHeight, rowGap)
       setSheetCount(Math.max(1, count))
     })
     observer.observe(element)
-    return () => observer.disconnect()
+    // Text that shrinks inside its padded section changes no size, so edits also trigger alignment.
+    let frame = 0
+    const edits = new MutationObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => alignSections(element))
+    })
+    edits.observe(element, { childList: true, characterData: true, subtree: true })
+    return () => { observer.disconnect(); edits.disconnect(); cancelAnimationFrame(frame) }
   }, [paginated, contentHeight, rowGap])
 
   const spreads = paginated && viewMode === 'spreads'

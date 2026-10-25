@@ -1,6 +1,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { Editor } from '@tiptap/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EDITOR_EXTENSIONS } from '../editor/editorExtensions'
 import { PropertiesPanel } from './PropertiesPanel'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -187,4 +189,32 @@ it('cancels list edits without writing and retains failed saves for retry', asyn
   expect(field.value).toBe('Artist One')
   await act(async () => document.querySelector('dialog form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
   expect(document.querySelector('dialog')).toBeNull()
+})
+
+describe('section columns', () => {
+  it('sets the columns of the section under the cursor and can start or merge sections', async () => {
+    Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+    const editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'First\n\nSecond' })
+    editor.commands.setTextSelection(editor.state.doc.firstChild!.firstChild!.nodeSize + 2)
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(<PropertiesPanel expanded editor={editor} />))
+      const label = () => container.querySelector('label:has([aria-label="Section columns"])')!.textContent
+      expect(label()).toContain('(1 of 1)')
+      const click = (text: string) => act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text)!.click())
+      await click('New section here')
+      expect(label()).toContain('(2 of 2)')
+      const select = container.querySelector<HTMLSelectElement>('[aria-label="Section columns"]')!
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, '1')
+        select.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      expect(editor.state.doc.child(1).attrs.columns).toBe(1)
+      expect(editor.state.doc.child(0).attrs.columns).toBeNull()
+      await click('Merge with previous')
+      expect(label()).toContain('(1 of 1)')
+      expect(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Merge with previous')!.disabled).toBe(true)
+    } finally { await act(async () => root.unmount()); editor.destroy() }
+  })
 })

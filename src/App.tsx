@@ -111,7 +111,7 @@ export default function App() {
             <div className={styles.sourceControl}>
               <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
                 onClick={() => togglePanel('properties')}>Properties</button>
-              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel /></div>}
+              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /></div>}
             </div>
           </aside>
         </div>

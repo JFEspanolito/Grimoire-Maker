@@ -8,6 +8,7 @@ import { importImage } from './images'
 /** Content that the Insert menu adds at the caret of the active editor. */
 export const insertQuote = (editor: Editor) => editor.chain().focus().toggleBlockquote().run()
 export const insertDivider = (editor: Editor) => editor.chain().focus().setHorizontalRule().run()
+export const insertSectionBreak = (editor: Editor) => editor.chain().focus().insertSectionBreak().run()
 export const insertTable = (editor: Editor) => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
 
 /**

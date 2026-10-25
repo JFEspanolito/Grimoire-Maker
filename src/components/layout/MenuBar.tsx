@@ -18,7 +18,7 @@ import { ExportPdfDialog, type Book } from './ExportPdfDialog'
 import { DocumentOrderDialog } from '../settings/DocumentOrderDialog'
 import { PropertiesDialog } from '../settings/PropertiesDialog'
 import type { Editor } from '@tiptap/react'
-import { insertDivider, insertFloatingBox, insertImage, insertQuote, insertTable } from '../../lib/insertActions'
+import { insertDivider, insertFloatingBox, insertImage, insertQuote, insertSectionBreak, insertTable } from '../../lib/insertActions'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
@@ -135,6 +135,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <button disabled={!editor} onClick={() => void run(() => insertDivider(editor!))}>Horizontal Rule</button>
         <button disabled={!editor} onClick={() => void run(() => insertQuote(editor!))}>Quote</button>
         <button disabled={!editor} onClick={() => void run(() => insertFloatingBox(editor!))}>Floating Box</button>
+        <button disabled={!editor} onClick={() => void run(() => insertSectionBreak(editor!))}>Section Break</button>
       </div>
     </details>}
     {!readOnly && <details name="application-menu">
@@ -173,7 +174,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
     {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog onClose={() => setPreferencesOpen(false)} /></Suspense>}
     {statisticsOpen && <StatisticsDialog onClose={() => setStatisticsOpen(false)} />}
-    {propertiesOpen && <PropertiesDialog onClose={() => setPropertiesOpen(false)} />}
+    {propertiesOpen && <PropertiesDialog editor={editor} onClose={() => setPropertiesOpen(false)} />}
     {orderOpen && workspace && <DocumentOrderDialog root={workspace} onClose={() => setOrderOpen(false)} />}
     {exportOpen && <ExportPdfDialog onClose={() => setExportOpen(false)}
       onExport={(book?: Book) => { setExportOpen(false); void run(() => print(book)) }} />}

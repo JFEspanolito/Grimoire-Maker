@@ -3,14 +3,7 @@
   background: none !important;
 }
 
-.flow[data-paginated='true'] {
-  column-count: var(--page-columns);
-  column-gap: 8mm;
-  column-height: var(--content-height);
-  column-fill: auto;
-  column-wrap: wrap;
-  row-gap: var(--row-gap);
-}
+/* Columns belong to each section (see index.css); the flow itself is a plain stack of sections. */
 
 /* Keep the flow static: free-positioned images still belong to the outer page. */
 .paper {

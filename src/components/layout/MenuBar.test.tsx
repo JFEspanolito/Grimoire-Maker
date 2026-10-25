@@ -270,7 +270,7 @@ describe('Insert menu', () => {
   it('lists Table, Image, Horizontal Rule and Quote, disabled without an editor', async () => {
     const { menu, unmount } = await mount(null)
     const buttons = Array.from(menu.querySelectorAll('button'))
-    expect(buttons.map((button) => button.textContent)).toEqual(['Table', 'Image…', 'Horizontal Rule', 'Quote', 'Floating Box'])
+    expect(buttons.map((button) => button.textContent)).toEqual(['Table', 'Image…', 'Horizontal Rule', 'Quote', 'Floating Box', 'Section Break'])
     expect(buttons.every((button) => button.disabled)).toBe(true)
     await unmount()
   })
