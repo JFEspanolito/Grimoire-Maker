@@ -83,6 +83,26 @@ pub struct UserSettings {
     auto_commit_minutes: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     auto_commit_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    panels: Option<Panels>,
+}
+
+/// Which side panels and overlays are shown; a missing entry keeps the app default.
+#[derive(Clone, Default, Deserialize, Serialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Panels {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    files: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    templates: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snippets: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    git: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    properties: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_index: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Debug)]
@@ -1140,5 +1160,13 @@ mod preferences_tests {
             read_preferences(&config).unwrap().settings,
             final_value.settings
         );
+    }
+
+    #[test]
+    fn saved_panels_round_trip_and_unknown_panels_are_rejected() {
+        let settings: UserSettings = serde_json::from_str(r#"{"panels":{"files":false,"documentIndex":true}}"#).unwrap();
+        assert_eq!(settings.panels.as_ref().and_then(|p| p.files), Some(false));
+        assert_eq!(serde_json::to_string(&settings).unwrap(), r#"{"panels":{"files":false,"documentIndex":true}}"#);
+        assert!(serde_json::from_str::<UserSettings>(r#"{"panels":{"bogus":true}}"#).is_err());
     }
 }

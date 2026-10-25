@@ -20,7 +20,7 @@ function collectEntries(pane: HTMLElement): Entry[] {
 }
 
 export function DocumentIndex({ path, visible }: { path: string | null; visible: boolean }) {
-  const enabled = useSettingsStore((s) => s.showDocumentIndex)
+  const enabled = useSettingsStore((s) => s.panels.documentIndex)
   const body = useDocumentStore((s) => s.buffers[path ?? '__untitled__']?.body ?? (s.document.path === path ? s.document.body : ''))
   const title = useDocumentStore((s) => (s.buffers[path ?? '__untitled__'] ?? s.document).frontmatter.title)
   const anchor = useRef<HTMLDivElement>(null)

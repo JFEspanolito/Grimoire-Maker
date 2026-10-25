@@ -1,7 +1,7 @@
 import { join } from '@tauri-apps/api/path'
 import { configRoot } from './configRoot'
 import { exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
-import { useSettingsStore } from '../stores/settingsStore'
+import { useSettingsStore, type PanelId } from '../stores/settingsStore'
 import type { PageSizeId, ThemeId } from '../types/document'
 import type { RulerGuide } from '../types/ruler'
 import { saveSettings } from './preferences'
@@ -17,6 +17,7 @@ export interface PersistedSettings {
   autoCommitMinutes?: number
   autoCommitMessage?: string
   autoSaveSeconds?: number
+  panels?: Partial<Record<PanelId, boolean>>
 }
 
 /** What survives a restart. Stored as `state.json` in the app config folder. */
@@ -105,8 +106,8 @@ export const forgetWorkspace =
 /** Saves page setup whenever it changes; returns the unsubscribe function. */
 export function watchSettings(): () => void {
   return useSettingsStore.subscribe((s, prev) => {
-    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.zoom === prev.zoom && s.autoSaveSeconds === prev.autoSaveSeconds && s.autoCommitEnabled === prev.autoCommitEnabled && s.autoCommitMinutes === prev.autoCommitMinutes && s.autoCommitMessage === prev.autoCommitMessage) return
-    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, zoom: s.zoom, autoSaveSeconds: s.autoSaveSeconds, autoCommitEnabled: s.autoCommitEnabled, autoCommitMinutes: s.autoCommitMinutes, autoCommitMessage: s.autoCommitMessage }).catch((error: unknown) => {
+    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.panels === prev.panels && s.zoom === prev.zoom && s.autoSaveSeconds === prev.autoSaveSeconds && s.autoCommitEnabled === prev.autoCommitEnabled && s.autoCommitMinutes === prev.autoCommitMinutes && s.autoCommitMessage === prev.autoCommitMessage) return
+    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, panels: s.panels, zoom: s.zoom, autoSaveSeconds: s.autoSaveSeconds, autoCommitEnabled: s.autoCommitEnabled, autoCommitMinutes: s.autoCommitMinutes, autoCommitMessage: s.autoCommitMessage }).catch((error: unknown) => {
       useSessionStore.getState().setWorkspaceError(`Could not save preferences: ${error instanceof Error ? error.message : String(error)}`)
     })
   })

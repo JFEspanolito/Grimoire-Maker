@@ -16,7 +16,7 @@ it('saves appearance through the shared native settings writer, not workspace st
   stop = watchSettings()
   useSettingsStore.getState().setTheme('sci-fi')
   await Promise.resolve()
-  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' })
+  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], panels: expect.objectContaining({ files: true, documentIndex: true }), zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' })
   expect(writeTextFile).not.toHaveBeenCalled()
 })
 
@@ -64,4 +64,12 @@ it('persists auto commit preferences and rejects invalid settings atomically', a
     useSettingsStore.getState().setAutoCommitSettings(true, minutes, message)
     expect(useSettingsStore.getState()).toMatchObject({ autoCommitEnabled: false, autoCommitMinutes: 45, autoCommitMessage: 'Saved writing' })
   }
+})
+
+it('saves which panels are shown whenever one is toggled', async () => {
+  const unwatch = watchSettings()
+  useSettingsStore.getState().togglePanel('snippets')
+  expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ panels: expect.objectContaining({ snippets: false, files: true }) }))
+  useSettingsStore.getState().togglePanel('snippets')
+  unwatch()
 })

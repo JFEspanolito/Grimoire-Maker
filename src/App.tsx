@@ -28,7 +28,7 @@ import { useRepositoryStatus } from './hooks/useRepositoryStatus'
 export default function App() {
   useUnsavedClose()
   const [editor, setEditor] = useState<Editor | null>(null)
-  const [visiblePanels, setVisiblePanels] = useState({ files: true, templates: true, snippets: true, git: true, properties: true })
+  const visiblePanels = useSettingsStore((s) => s.panels)
   const [sessionReady, setSessionReady] = useState(false)
   useAutoSave(sessionReady)
   useAutoCommit(sessionReady)
@@ -45,8 +45,7 @@ export default function App() {
   const activeTab = useTabStore((s) => s.active)
   const hasTabs = useTabStore((s) => s.paths.length > 0)
   const activeEditor = hasTabs && (!activeTab || !/\.md$/i.test(activeTab)) ? null : editor
-  const togglePanel = (panel: keyof typeof visiblePanels) =>
-    setVisiblePanels((current) => ({ ...current, [panel]: !current[panel] }))
+  const togglePanel = useSettingsStore((s) => s.togglePanel)
 
   // Reopen last session first, then start saving page-setup changes: subscribing
   // earlier would overwrite the saved settings with the defaults.

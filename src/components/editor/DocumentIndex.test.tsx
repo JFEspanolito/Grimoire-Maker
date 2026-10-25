@@ -5,7 +5,7 @@ import { DocumentIndex } from './DocumentIndex'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 
-afterEach(() => { useSettingsStore.getState().setShowDocumentIndex(true); useDocumentStore.getState().resetDocuments() })
+afterEach(() => { useSettingsStore.getState().restorePanels({ documentIndex: true }); useDocumentStore.getState().resetDocuments() })
 
 async function mount() {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
@@ -35,7 +35,7 @@ it('lists H1-H3 headings of the document, indented by level, and scrolls to the 
 })
 
 it('is hidden when Document Index is turned off', async () => {
-  useSettingsStore.getState().setShowDocumentIndex(false)
+  useSettingsStore.getState().restorePanels({ documentIndex: false })
   const { pane, unmount } = await mount()
   expect(pane.querySelector('nav')).toBeNull()
   await unmount()

@@ -22,7 +22,7 @@ import { insertDivider, insertImage, insertQuote, insertTable } from '../../lib/
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
-type Panel = 'files' | 'templates' | 'snippets' | 'git' | 'properties'
+type Panel = Exclude<PanelId, 'documentIndex'>
 interface Props {
   visiblePanels: Record<Panel, boolean>
   onTogglePanel: (panel: Panel) => void
@@ -37,7 +37,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
   const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const split = useTabStore((s) => s.split)
-  const { pageSize, columns, setPageSize, setColumns, showDocumentIndex, setShowDocumentIndex } = useSettingsStore()
+  const { pageSize, columns, setPageSize, setColumns, panels, togglePanel } = useSettingsStore()
+  const showDocumentIndex = panels.documentIndex
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
@@ -121,7 +122,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <button aria-label="Split View" aria-pressed={split} onClick={() => void run(() => useTabStore.getState().toggleSplit())}>
           <span className={styles.check} aria-hidden="true">{split ? '✓' : ''}</span>Split View
         </button>
-        <button aria-label="Document Index" aria-pressed={showDocumentIndex} onClick={() => setShowDocumentIndex(!showDocumentIndex)}>
+        <button aria-label="Document Index" aria-pressed={showDocumentIndex} onClick={() => togglePanel('documentIndex')}>
           <span className={styles.check} aria-hidden="true">{showDocumentIndex ? '✓' : ''}</span>Document Index
         </button>
       </div>
