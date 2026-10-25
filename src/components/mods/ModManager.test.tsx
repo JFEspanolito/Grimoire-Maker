@@ -92,3 +92,23 @@ it('renders two-column category navigation, toggles mods, opens Content folders,
   await act(async () => root.unmount())
   container.remove()
 })
+
+it('offers to install official plugins that are missing and restores the chosen one', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const installOfficial = vi.fn(async () => {})
+  useModStore.setState({
+    busy: false, ready: true, errors: [], reload: vi.fn(async () => {}), installOfficial, mods: [],
+    missingOfficial: [{ folder: 'bookmarks', label: 'Bookmarks', files: {} }],
+  })
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => root.render(<ModManager onClose={() => {}} />))
+  expect(container.querySelector('[aria-label="Install official plugin Bookmarks"]')).toBeNull()
+  await act(async () => container.querySelector<HTMLButtonElement>('[role="tab"]:last-of-type')!.click())
+  const install = container.querySelector<HTMLButtonElement>('[aria-label="Install official plugin Bookmarks"]')!
+  expect(install.textContent).toBe('Install official plugin')
+  await act(async () => install.click())
+  expect(installOfficial).toHaveBeenCalledWith('bookmarks')
+  await act(async () => root.unmount())
+})

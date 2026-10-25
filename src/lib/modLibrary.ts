@@ -2,9 +2,11 @@ import { configRoot } from './configRoot'
 import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
 import { ensureModDirectory, seedExamples, type ModFs } from './modCatalog'
 import { loadLibraryPaths, type LibraryPaths } from './preferences'
+import { installOfficialPlugin, listOfficialPlugins } from './officialPlugins'
 
 const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/Plugins/**/*.{ts,tsx,js,css}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 export const MOD_EXAMPLES = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
+export const OFFICIAL_PLUGINS = listOfficialPlugins(MOD_EXAMPLES)
 export const modFs: ModFs = {
   exists, readDir, readTextFile, stat,
   mkdir: (path) => mkdir(path, { recursive: true }),
@@ -75,4 +77,11 @@ export async function writeDisabledMods(path: string, disabled: string[]): Promi
   const temporary = `${path}.${crypto.randomUUID()}.tmp`
   await writeTextFile(temporary, JSON.stringify({ version: 1, disabled: [...new Set(disabled)].sort() }, null, 2), { createNew: true })
   await rename(temporary, path)
+}
+
+/** Restores one bundled plugin into the configured Plugins folder, e.g. after it was deleted. */
+export async function restoreOfficialPlugin(folder: string): Promise<void> {
+  const plugin = OFFICIAL_PLUGINS.find(item => item.folder === folder)
+  if (!plugin) throw new Error(`${folder} is not an official plugin`)
+  await installOfficialPlugin(modFs, (await prepareModLibrary()).plugins, plugin)
 }

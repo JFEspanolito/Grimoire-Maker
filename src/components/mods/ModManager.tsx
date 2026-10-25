@@ -20,7 +20,7 @@ const CATEGORIES: ModKind[] = [
 
 export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const { mods, busy, errors, reload, setEnabled } = useModStore()
+  const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial } = useModStore()
   const [activeKind, setActiveKind] = useState<ModKind>(MOD_KIND.SNIPPETS)
   const [actionError, setActionError] = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -140,6 +140,16 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
             Trusted local code only. Enabled plugins execute TSX, TS or JS with the app's permissions; they are not sandboxed.
             Copy the complete plugin folder here and refresh. Disable a plugin to unload its controls and registered resources.
           </p>}
+          {activeKind === MOD_KIND.PLUGINS && missingOfficial.length > 0 && <div className={styles.list} aria-label="Official plugins not installed">
+            {missingOfficial.map((plugin) => <div className={styles.row} key={plugin.folder}>
+              <span>
+                <strong>{plugin.label}</strong>
+                <small>Official plugin, not installed</small>
+              </span>
+              <button type="button" className={styles.install} disabled={busy} aria-label={`Install official plugin ${plugin.label}`}
+                onClick={() => void run(() => installOfficial(plugin.folder))}>Install official plugin</button>
+            </div>)}
+          </div>}
           {visibleMods.length === 0 ? (
             <p className={styles.description}>
               {activeKind === MOD_KIND.PLUGINS
