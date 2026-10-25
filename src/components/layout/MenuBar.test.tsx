@@ -120,7 +120,7 @@ it('keeps page setup only in Document and omits repeated application branding', 
     await act(async () => { size!.value = 'letter'; size!.dispatchEvent(new Event('change', { bubbles: true })) })
     await act(async () => { columns!.value = '1'; columns!.dispatchEvent(new Event('change', { bubbles: true })) })
     expect(useSettingsStore.getState()).toMatchObject({ pageSize: 'letter', columns: 1 })
-    expect(documentMenu.textContent).toContain('Statistics…')
+    for (const entry of ['Properties…', 'Document Order…', 'Statistics…']) expect(documentMenu.textContent).toContain(entry)
   } finally {
     await act(async () => root.unmount())
     useSettingsStore.setState({ pageSize: initial.pageSize, columns: initial.columns })
