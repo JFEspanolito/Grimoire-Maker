@@ -54,6 +54,26 @@ beforeEach(async () => {
 
 afterEach(async () => { await act(async () => root.unmount()); vi.clearAllMocks() })
 
+it('previews and saves independent header/footer dividers with a shared color', async () => {
+  const bottom = container.querySelector<HTMLInputElement>('[aria-label="header divider bottom"]')!
+  const top = container.querySelector<HTMLInputElement>('[aria-label="footer divider top"]')!
+  expect(bottom.checked).toBe(true)
+  expect(top.checked).toBe(false)
+  await act(async () => top.click())
+  const color = container.querySelector<HTMLInputElement>('[aria-label="Header and footer divider color"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(color, '#abcdef')
+    color.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(container.querySelector<HTMLElement>('[data-area="header"]')!.style.borderBottom).toBe('1px solid rgb(171, 205, 239)')
+  expect(container.querySelector<HTMLElement>('[data-area="footer"]')!.style.borderTop).toBe('1px solid rgb(171, 205, 239)')
+  await act(async () => container.querySelector<HTMLButtonElement>('[data-action="save"]')!.click())
+  expect(mocks.save.mock.calls.at(-1)![6].divider).toEqual({
+    header: { top: false, bottom: true, left: false, right: false },
+    footer: { top: true, bottom: false, left: false, right: false }, color: '#abcdef',
+  })
+})
+
 
 
 it('provides isolated preview and individual colors without changing the active theme', () => {

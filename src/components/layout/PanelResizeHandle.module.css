@@ -1,0 +1,3 @@
+.handle { flex: 0 0 5px; cursor: col-resize; touch-action: none; user-select: none; background: transparent; }
+.handle:hover, .handle:active { background: #cfb37c80; }
+.handle:focus-visible { background: #cfb37c80; outline: 2px solid #cfb37c; outline-offset: -2px; }

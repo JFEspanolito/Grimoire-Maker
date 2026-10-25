@@ -1,0 +1,4 @@
+.control { display: flex; align-items: center; gap: .35rem; color: #d1c5ad; font: 12px/1.4 system-ui, sans-serif; }
+.control select { border: 1px solid #ffffff20; border-radius: 4px; padding: 2px 4px; background: #302f2c; color: #f0eee9; color-scheme: dark; cursor: pointer; }
+.control select:disabled { opacity: .4; cursor: default; }
+.control select:focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }

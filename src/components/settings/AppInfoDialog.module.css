@@ -1,12 +1,12 @@
 .dialog { position: fixed; inset: 0; margin: auto; width: min(26rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; padding: 1.25rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; }
 .dialog::backdrop { background: #0009; }
-.header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.header h2 { font-size: 1.15rem; font-weight: 600; }
-.dialog button { padding: .4rem .65rem; border-radius: .25rem; background: #ffffff10; cursor: pointer; }
-.dialog button:hover:not(:disabled) { background: #ffffff20; }
-.dialog button:disabled { opacity: .45; cursor: default; }
-.dialog .dismiss { font-size: 1.3rem; }
-.dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.header h2 { font-size: 1.15rem; font-weight: 600; margin: 0; }
+.dialog button, .tourOverlay button { padding: .4rem .65rem; border-radius: .25rem; background: #ffffff10; color: #f0eee9; cursor: pointer; }
+.dialog button:hover:not(:disabled), .tourOverlay button:hover:not(:disabled) { background: #ffffff20; }
+.dialog button:disabled, .tourOverlay button:disabled { opacity: .45; cursor: default; }
+.dialog .dismiss, .tourOverlay .dismiss { font-size: 1.3rem; line-height: 1; padding: .2rem .5rem; }
+.dialog :focus-visible, .tourOverlay :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
 .content { display: grid; gap: 1.1rem; padding-top: .85rem; }
 .content section { display: grid; justify-items: start; gap: .4rem; }
 .content h3 { font-size: .85rem; font-weight: 600; color: #cfb37c; }
@@ -15,5 +15,26 @@
 .content a:hover { color: #f0eee9; }
 .github { display: inline-flex; align-items: center; gap: .5rem; margin-top: .35rem; }
 .muted { color: #bcb7ac; font-size: .8rem; line-height: 1.6; }
-.tutorial { margin: 1rem 0; line-height: 1.6; }
+.tutorial { margin: .75rem 0 .5rem; line-height: 1.55; color: #e5e1d8; }
 .footer { display: flex; justify-content: flex-end; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #ffffff20; }
+
+/* Spotlight Tour Overlay */
+.tourOverlay { position: fixed; inset: 0; margin: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; padding: 0; border: 0; background: transparent; color: #f0eee9; font-size: .85rem; overflow: hidden; }
+.tourOverlay::backdrop { background: transparent; }
+.fullBackdrop { position: fixed; inset: 0; background: rgba(10, 10, 12, 0.72); pointer-events: none; }
+.spotlight { position: fixed; border: 2px solid #cfb37c; border-radius: .4rem; box-shadow: 0 0 0 9999px rgba(10, 10, 12, 0.74), 0 0 1.25rem rgba(207, 179, 124, 0.45); pointer-events: none; transition: left 180ms ease, top 180ms ease, width 180ms ease, height 180ms ease; }
+.popover { position: fixed; inset: 0; margin: auto; width: min(23.75rem, calc(100vw - 2rem)); height: fit-content; padding: 1.1rem 1.2rem; border: 1px solid #cfb37c; border-radius: .45rem; background: #272623; box-shadow: 0 .75rem 2rem rgba(0, 0, 0, 0.65); z-index: 2; }
+.floatingPopover { inset: auto; margin: 0; }
+.stepBadge { display: inline-block; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #cfb37c; margin-bottom: .2rem; }
+.stepTitle { font-size: 1.05rem; font-weight: 600; color: #f0eee9; }
+.howToUse { margin: .5rem 0 .85rem; padding: .55rem .7rem; border-left: 2px solid #cfb37c; border-radius: .2rem; background: #1e1d1a; color: #d6d1c4; font-size: .8rem; line-height: 1.5; }
+.howToUse strong { color: #cfb37c; }
+.dots { display: flex; align-items: center; justify-content: center; gap: .45rem; margin-bottom: .85rem; }
+.dot { width: .55rem; height: .55rem; padding: 0 !important; border-radius: 999px !important; background: #ffffff28 !important; border: 0; }
+.activeDot { width: 1.35rem; background: #cfb37c !important; }
+.tourFooter { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding-top: .75rem; border-top: 1px solid #ffffff1a; }
+.skipButton { background: transparent !important; color: #bcb7ac !important; font-size: .8rem; }
+.skipButton:hover { color: #f0eee9 !important; background: #ffffff12 !important; }
+.navButtons { display: flex; align-items: center; gap: .5rem; }
+.primaryButton { background: #cfb37c !important; color: #1b1a17 !important; font-weight: 600; }
+.primaryButton:hover { background: #dfc693 !important; }

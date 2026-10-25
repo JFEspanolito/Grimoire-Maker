@@ -8,14 +8,15 @@ import { resolveTheme } from '../../lib/themes'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useThemeStore } from '../../stores/themeStore'
-import { useWheelZoom } from '../../hooks/useWheelZoom'
+import { usePluginSurface } from '../../plugins/usePluginSurface'
+import { usePluginRegistry } from '../../plugins/plugin-manager'
+import { PluginBoundary } from '../../plugins/PluginSlot'
 
 type Status =
   | { kind: 'rendering' }
   | { kind: 'ready'; pages: number }
   | { kind: 'error'; message: string }
 
-const ZOOMS = [0.4, 0.5, 0.6, 0.75, 1]
 /** Pagination is slow on long documents; wait for settings and edits to settle. */
 const DEBOUNCE_MS = 400
 
@@ -35,7 +36,8 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
   const host = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<Status>({ kind: 'rendering' })
   const [zoom, setZoom] = useState(mode === 'spreads' ? 0.5 : 0.75)
-  const zoomRef = useWheelZoom(zoom, setZoom, ZOOMS)
+  const zoomRef = usePluginSurface('preview', zoom, setZoom)
+  const tools = usePluginRegistry(state => state.previewToolbar)
   const activeTheme = resolveTheme(theme, themes)
 
   const headerFooter = themes.find(item => item.id === activeTheme)?.headerFooter
@@ -43,9 +45,12 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
   useEffect(() => {
     const container = host.current
     if (!container) return
-    // Each run paginates into its own stage: a superseded run keeps writing to a
-    // detached element instead of mixing its pages into the current ones.
+    // Paged.js mixes layout pixels with bounding rectangles: never paginate
+    // under display zoom or the facing-page grid.
     const stage = document.createElement('div')
+    stage.dataset.theme = activeTheme
+    stage.style.cssText = 'position:fixed;left:-100000px;top:0;width:max-content;visibility:hidden;pointer-events:none'
+    const display = document.createElement('div')
     let previewer: Previewer | undefined
     let cancelled = false
     let running = false
@@ -56,16 +61,25 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       // Paged.js creates styleEl during preview(), not in its constructor.
       if (previewer?.polisher.styleEl) previewer.polisher.destroy()
       stage.remove()
+      display.remove()
     }
 
     const timer = window.setTimeout(() => {
       previewer = new Previewer()
       running = true
       setStatus({ kind: 'rendering' })
-      container.append(stage)
-      paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm, headerFooter, pageText: projectPageText(workspace, frontmatter, project) }, stage).then(
+      document.body.append(stage)
+      paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm, headerFooter, pageText: projectPageText(workspace, frontmatter, project, path) }, stage).then(
         () => {
-          if (!cancelled) setStatus({ kind: 'ready', pages: stage.querySelectorAll('.pagedjs_page').length })
+          if (!cancelled) {
+            const pages = stage.querySelectorAll('.pagedjs_page').length
+            // Static copies have no pagination observers, so display zoom and
+            // facing layout cannot restart pagination after it has completed.
+            display.replaceChildren(...Array.from(stage.childNodes, node => node.cloneNode(true)))
+            previewer?.chunker.removePages()
+            container.append(display)
+            setStatus({ kind: 'ready', pages })
+          }
         },
         (e: unknown) => {
           if (!cancelled) {
@@ -75,6 +89,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
         },
       ).finally(() => {
         running = false
+        stage.remove()
         if (cancelled) release()
       })
     }, DEBOUNCE_MS)
@@ -83,6 +98,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       cancelled = true
       window.clearTimeout(timer)
       stage.remove()
+      display.remove()
       // An in-flight run still owns its styles; release them once it settles.
       if (!running) release()
     }
@@ -96,21 +112,9 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
           {status.kind === 'ready' && `${status.pages} page${status.pages === 1 ? '' : 's'}`}
           {status.kind === 'error' && <span className="text-red-400">Preview failed: {status.message}</span>}
         </span>
-        <label className="ml-auto flex items-center gap-1">
-          Zoom
-          <select
-            aria-label="Preview zoom"
-            className="rounded bg-neutral-800 px-1 py-0.5 text-sm text-white [color-scheme:dark]"
-            value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
-          >
-            {ZOOMS.map((z) => (
-              <option key={z} value={z} className="bg-neutral-800 text-white">
-                {Math.round(z * 100)}%
-              </option>
-            ))}
-          </select>
-        </label>
+        {tools.map(({ id, title, component: Widget }) => <PluginBoundary key={id} identity={Widget} title={title}>
+          <Widget surface={{ kind: 'preview', zoom, setZoom }} />
+        </PluginBoundary>)}
       </div>
       <div ref={zoomRef} className="min-h-0 flex-1 overflow-auto">
         <div

@@ -6,7 +6,7 @@ import { VersionControlPanel } from './VersionControlPanel'
 
 const actions = vi.hoisted(() => ({
   getRepositoryStatus: vi.fn(), initializeRepository: vi.fn(), stageChange: vi.fn(),
-  unstageChange: vi.fn(), diffChange: vi.fn(), commitChanges: vi.fn(),
+  unstageChange: vi.fn(), revertChange: vi.fn(), diffChange: vi.fn(), commitChanges: vi.fn(),
 }))
 vi.mock('../../lib/versionControl', () => actions)
 
@@ -168,5 +168,38 @@ describe('VersionControlPanel', () => {
     await act(async () => resolveOld!({ ...repository, branch: 'old-branch' }))
     expect(container.textContent).toContain('Branch: main')
     expect(container.textContent).not.toContain('old-branch')
+  })
+
+  it('opens a right-click context menu with View Diff, Add, Remove from commit, and Revert', async () => {
+    await render('/books')
+    const unstagedRow = container.querySelector<HTMLButtonElement>('button[aria-label="View unstaged diff for new.md"]')!.closest('li')!
+    await act(async () => {
+      unstagedRow.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }))
+    })
+    const menu = container.querySelector<HTMLElement>('[role="menu"][aria-label="new.md actions"]')!
+    expect(menu).not.toBeNull()
+    const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+    expect(items.map((item) => item.textContent)).toEqual(['View Diff', 'Add', 'Remove from commit', 'Revert'])
+    expect(items[1].disabled).toBe(false)
+    expect(items[2].disabled).toBe(true)
+
+    await act(async () => items[1].click())
+    expect(actions.stageChange).toHaveBeenCalledExactlyOnceWith('/books', 'new.md')
+
+    const stagedRow = container.querySelector<HTMLButtonElement>('button[aria-label="View staged diff for chapter.md"]')!.closest('li')!
+    await act(async () => {
+      stagedRow.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 80, clientY: 120 }))
+    })
+    const stagedMenu = container.querySelector<HTMLElement>('[role="menu"][aria-label="chapter.md actions"]')!
+    const stagedItems = Array.from(stagedMenu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+    expect(stagedItems[1].disabled).toBe(true)
+    expect(stagedItems[2].disabled).toBe(false)
+    await act(async () => stagedItems[3].click())
+
+    const confirmDialog = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="confirm-title"]')!
+    expect(confirmDialog.textContent).toContain('Discard all changes in "chapter.md"')
+    const confirmBtn = Array.from(confirmDialog.querySelectorAll('button')).find((b) => b.textContent === 'Revert')!
+    await act(async () => confirmBtn.click())
+    expect(actions.revertChange).toHaveBeenCalledExactlyOnceWith('/books', 'chapter.md')
   })
 })

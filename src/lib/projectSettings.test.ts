@@ -39,3 +39,16 @@ it('rejects invalid contributor lists without writing', async () => {
   await expect(saveProjectSettings('/book', { name: '', author: '', coAuthor: '' })).rejects.toThrow()
   expect(fs.writeTextFile).not.toHaveBeenCalled()
 })
+
+it('persists the document order and rejects paths that leave the project', async () => {
+  fs.exists.mockResolvedValue(true)
+  fs.readTextFile.mockResolvedValue(JSON.stringify({ author: 'Old' }))
+  const documentOrder = { order: ['Draft/a.md', 'Draft/b.md'], excluded: ['Draft/b.md'] }
+  await saveProjectSettings('/book', { name: '', author: 'Old', coAuthor: '', documentOrder })
+  expect(JSON.parse(fs.writeTextFile.mock.calls[0][1]).documentOrder).toEqual(documentOrder)
+  fs.readTextFile.mockResolvedValue(JSON.stringify({ documentOrder }))
+  expect((await loadProjectSettings('/book')).documentOrder).toEqual(documentOrder)
+  for (const bad of ['../x.md', '/abs.md', 'C:/x.md', 'a\\b.md']) {
+    await expect(saveProjectSettings('/book', { name: '', author: '', coAuthor: '', documentOrder: { order: [bad], excluded: [] } })).rejects.toThrow()
+  }
+})

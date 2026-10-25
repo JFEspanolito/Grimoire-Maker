@@ -5,6 +5,7 @@ import { EMPTY_ENTRY, useProjectStore } from '../../stores/projectStore'
 import styles from './ProjectSettings.module.css'
 import { CONTRIBUTOR_GROUPS, type ContributorGroup } from '../../lib/projectContributors'
 import { ContributorsDialog } from './ContributorsDialog'
+import { DocumentOrderDialog } from './DocumentOrderDialog'
 
 export function ProjectSettings() {
   const root = useDocumentStore(state => state.workspaceRoot)
@@ -16,6 +17,7 @@ function ProjectFields({ root }: { root: string }) {
   const [draft, setDraft] = useState(entry.settings)
   const [saved, setSaved] = useState(false)
   const [editingGroup, setEditingGroup] = useState<ContributorGroup | null>(null)
+  const [orderOpen, setOrderOpen] = useState(false)
   useEffect(() => {
     if (!useProjectStore.getState().entries[root]?.ready) void useProjectStore.getState().load(root)
   }, [root])
@@ -42,12 +44,15 @@ function ProjectFields({ root }: { root: string }) {
       <button key={group} type="button" className={styles.creditLink} aria-label={CONTRIBUTOR_GROUPS[group]} aria-haspopup="dialog" data-contributors
         disabled={!entry.ready || entry.busy} onClick={async () => { if (await persist()) setEditingGroup(group) }}>
         {CONTRIBUTOR_GROUPS[group]} ({entry.settings[group]?.length ?? (group === 'coAuthors' && entry.settings.coAuthor ? 1 : 0)})
-      </button>)}</div>
+      </button>)}
+      <button type="button" className={styles.creditLink} aria-haspopup="dialog" disabled={!entry.ready || entry.busy}
+        onClick={async () => { if (await persist()) setOrderOpen(true) }}>Document Order…</button></div>
     {entry.error && <p role="alert">{entry.error}</p>}
     {!entry.ready && !entry.busy && <button type="button" onClick={() => void useProjectStore.getState().load(root)}>Retry project settings</button>}
     <button type="submit" disabled={!entry.ready || entry.busy}>{entry.busy ? 'Working…' : 'Save project settings'}</button>
     {saved && <p role="status">Project settings saved.</p>}
   </form>
+    {orderOpen && <DocumentOrderDialog root={root} onClose={() => setOrderOpen(false)} />}
     {editingGroup && <ContributorsDialog title={CONTRIBUTOR_GROUPS[editingGroup]}
       initial={entry.settings[editingGroup] ?? (editingGroup === 'coAuthors' && entry.settings.coAuthor
         ? [{ name: entry.settings.coAuthor, socialMedia: '', platform: '' }] : [])}

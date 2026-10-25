@@ -208,6 +208,37 @@ pub fn open_folder(app: AppHandle, path: String) -> Result<(), String> {
     })
 }
 
+/// Sends something that is already in the active project's Trash to the system recycle bin.
+/// Anything outside `<project>/Trash`, and the Trash folder itself, is refused.
+fn recycle_from_trash_in(
+    state_path: &Path,
+    target: &Path,
+    recycle: impl FnOnce(&Path) -> Result<(), String>,
+) -> Result<(), String> {
+    let raw = fs::read_to_string(state_path).map_err(|e| e.to_string())?;
+    let state: Value = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+    let root = state
+        .get("lastWorkspace")
+        .and_then(Value::as_str)
+        .ok_or("No active project folder")?;
+    let trash = fs::canonicalize(Path::new(root).join("Trash")).map_err(|e| e.to_string())?;
+    let selected = fs::canonicalize(target).map_err(|e| e.to_string())?;
+    if selected == trash || !selected.starts_with(&trash) {
+        return Err("Only items inside the project's Trash can be deleted".into());
+    }
+    recycle(&selected)
+}
+
+/// Permanently removes a Trash item from the project by moving it to the system recycle bin.
+#[tauri::command]
+pub fn delete_from_trash(app: AppHandle, path: String) -> Result<(), String> {
+    let state_path = crate::config_root::path(&app)?
+        .join(crate::config::STATE_FILE);
+    recycle_from_trash_in(&state_path, Path::new(&path), |item| {
+        trash::delete(item).map_err(|e| e.to_string())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,5 +375,30 @@ mod tests {
         );
         assert!(open_folder_in(&state_path, &chapter, |_| panic!("must not launch")).is_err());
         fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn recycles_only_items_inside_the_active_projects_trash() {
+        let base = std::env::temp_dir().join(format!("grimoire-recycle-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let project = base.join("Book");
+        fs::create_dir_all(project.join("Trash")).unwrap();
+        fs::create_dir_all(project.join("Draft")).unwrap();
+        fs::write(project.join("Trash/old.md"), "x").unwrap();
+        fs::write(project.join("Draft/keep.md"), "x").unwrap();
+        let state_path = base.join("state.json");
+        fs::write(&state_path, format!("{{\"lastWorkspace\": {:?}}}", project.to_string_lossy())).unwrap();
+
+        let mut recycled = Vec::new();
+        recycle_from_trash_in(&state_path, &project.join("Trash/old.md"), |item| {
+            recycled.push(item.to_path_buf());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(recycled.len(), 1);
+        for refused in [project.join("Draft/keep.md"), project.join("Trash"), project.join("Trash/../Draft/keep.md")] {
+            assert!(recycle_from_trash_in(&state_path, &refused, |_| panic!("must not recycle")).is_err());
+        }
+        fs::remove_dir_all(&base).unwrap();
     }
 }

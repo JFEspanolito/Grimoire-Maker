@@ -1,7 +1,12 @@
 import { parseDocument } from './frontmatter'
 import type { TemplateSnippet } from './templateSnippets'
 
-export const MOD_KIND = { SNIPPETS: 'Snippets', TEMPLATES: 'Templates' } as const
+export const MOD_KIND = {
+  SNIPPETS: 'Snippets',
+  TEMPLATES: 'Templates',
+  THEMES: 'Themes',
+  PLUGINS: 'Plugins',
+} as const
 export type ModKind = (typeof MOD_KIND)[keyof typeof MOD_KIND]
 export interface ModEntry {
   id: string
@@ -61,7 +66,7 @@ export async function discoverMods(io: ModFs, root: string, disabled: string[], 
     if (raw.length > MAX_BYTES) throw new Error('Markdown file exceeds 512 KiB')
     return raw
   }
-  for (const kind of Object.values(MOD_KIND)) {
+  for (const kind of [MOD_KIND.SNIPPETS, MOD_KIND.TEMPLATES] as const) {
     const category = paths?.[kind] ?? await ensureModDirectory(io, root, kind)
     const entries = (await io.readDir(category)).filter((entry) => !entry.name.startsWith('.') && entry.isDirectory && !entry.isSymlink)
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -103,6 +108,52 @@ export async function discoverMods(io: ModFs, root: string, disabled: string[], 
         }
       } catch (error) { mod.errors.push(message(error)) }
       errors.push(...mod.errors.map((error) => `${id}: ${error}`))
+    }
+  }
+  if (paths?.Themes && await io.exists(paths.Themes)) {
+    const themeEntries = (await io.readDir(paths.Themes))
+      .filter((entry) => !entry.name.startsWith('.') && !entry.isDirectory && !entry.isSymlink && /\.css$/i.test(entry.name))
+      .sort((a, b) => a.name.localeCompare(b.name))
+    const seen = new Set<string>()
+    for (const entry of themeEntries) {
+      const stem = entry.name.replace(/\.css$/i, '')
+      const id = modKey(MOD_KIND.THEMES, stem)
+      if (seen.has(id)) continue
+      seen.add(id)
+      const filePath = `${paths.Themes}/${entry.name}`
+      let label = stem
+      const modErrors: string[] = []
+      try {
+        const css = await io.readTextFile(filePath)
+        const match = /\/\*\s*@name:\s*(.+?)\s*\*\//.exec(css)
+        if (match?.[1]) label = match[1]
+      } catch (error) {
+        modErrors.push(message(error))
+      }
+      mods.push({ id, kind: MOD_KIND.THEMES, label, folder: filePath, enabled: !disabled.includes(id), errors: modErrors })
+    }
+  }
+  if (paths?.Plugins && await io.exists(paths.Plugins)) {
+    const pluginEntries = (await io.readDir(paths.Plugins))
+      .filter((entry) => !entry.name.startsWith('.') && entry.isDirectory && !entry.isSymlink)
+      .sort((a, b) => a.name.localeCompare(b.name))
+    if (pluginEntries.length > 256) throw new Error('Plugins: limit of 256 mod folders exceeded')
+    const seen = new Set<string>()
+    for (const entry of pluginEntries) {
+      const id = modKey(MOD_KIND.PLUGINS, entry.name)
+      if (seen.has(id)) continue
+      const folder = `${paths.Plugins}/${entry.name}`
+      seen.add(id)
+      const mod: ModEntry = { id, kind: MOD_KIND.PLUGINS, label: entry.name, folder, enabled: !disabled.includes(id), errors: [] }
+      try {
+        const files = await io.readDir(folder)
+        if (!files.some(file => !file.isDirectory && !file.isSymlink && /\.(tsx?|js)$/i.test(file.name) && !file.name.endsWith('.d.ts'))) {
+          if (!files.some(file => file.name === 'index.md')) continue
+          mod.errors.push('This folder has documentation only; add a TSX, TS or JS plugin entry.')
+        }
+      } catch (error) { mod.errors.push(message(error)) }
+      mods.push(mod)
+      errors.push(...mod.errors.map(error => `${id}: ${error}`))
     }
   }
   return { mods, snippets, errors }

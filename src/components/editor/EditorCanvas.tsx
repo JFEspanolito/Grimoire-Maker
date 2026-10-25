@@ -1,19 +1,13 @@
 import { useEffect, type MouseEvent } from 'react'
 import { TextSelection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import TextAlign from '@tiptap/extension-text-align'
-import { Markdown } from 'tiptap-markdown'
 import { useDocumentStore } from '../../stores/documentStore'
 import { emitPluginEvent, setPluginHost } from '../../plugins/plugin-manager'
-import { CharacterSheet, ReadAloud, Statblock } from './extensions/blocks'
-import { GrimoireImageNode } from './extensions/imageNode'
-import { TableExtensions } from './extensions/tables'
 import { PageView } from './PageView'
+import { EDITOR_EXTENSIONS } from './editorExtensions'
 import { DocumentPathContext } from './DocumentPathContext'
 import { registerSnippetDropTarget } from '../../lib/snippetDrop'
-import { ContentBox } from './extensions/ContentBox'
-import { insertContentBox } from '../../lib/contentBoxes'
+import { focusDocumentEnd, insertContentBox } from '../../lib/contentBoxes'
 
 function getMarkdown(editor: Editor): string {
   return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()
@@ -31,17 +25,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
   const documentPath = path === undefined ? activePath : path
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      GrimoireImageNode,
-      ContentBox,
-      ...TableExtensions,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Statblock,
-      ReadAloud,
-      CharacterSheet,
-      Markdown.configure({ html: true, tightLists: true, breaks: false }),
-    ],
+    extensions: EDITOR_EXTENSIONS,
     content: body,
     onUpdate: ({ editor: e }) => {
       const store = useDocumentStore.getState()
@@ -50,7 +34,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     },
   })
 
-  useEffect(() => editor ? registerSnippetDropTarget(editor) : undefined, [editor])
+  useEffect(() => editor ? registerSnippetDropTarget(editor, documentPath ?? null) : undefined, [editor, documentPath])
 
   useEffect(() => {
     if (!editor || !active) return
@@ -71,8 +55,29 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     if (!editor || event.button !== 0 || !(event.target instanceof Element)) return
     const target = event.target
     if (target.closest('button, input, select, textarea, a, [contenteditable="false"]')) return
-    if (target !== editor.view.dom && target.closest('.ProseMirror')) return
+    const insideProseMirror = target !== editor.view.dom && !!target.closest('.ProseMirror')
+    if (insideProseMirror) {
+      // In paginated/column mode, .grimoire-section fills the full column height, so clicking blank space
+      // below a trailing content box lands directly on the section or ProseMirror root instead of a child block.
+      const isBareContainer = target.classList.contains('grimoire-section') || target.classList.contains('ProseMirror')
+      if (!isBareContainer) return
+      const lastBox = Array.from(target.querySelectorAll<HTMLElement>(':scope > .grimoire-content-box, :scope > .node-standardContentBox')).at(-1)
+      if (!lastBox || event.clientY <= lastBox.getBoundingClientRect().bottom) return
+    }
     event.preventDefault()
+    const inContentBox = (() => {
+      const { $from } = editor.state.selection
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type.name === 'standardContentBox') return true
+      }
+      return false
+    })()
+    const lastSection = editor.state.doc.lastChild
+    const lastBlock = (lastSection?.type.name === 'section' ? lastSection : editor.state.doc).lastChild
+    if (inContentBox || (lastBlock && lastBlock.type.name !== 'paragraph')) {
+      focusDocumentEnd(editor)
+      return
+    }
     editor.commands.focus(editor.state.selection instanceof TextSelection ? undefined : 'end', { scrollIntoView: false })
   }
 

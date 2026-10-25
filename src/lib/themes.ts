@@ -118,7 +118,7 @@ export interface UserThemes {
  * Scans `<configRoot>/themes/*.css`, creating the folder on first run, and
  * installs every valid file. A bad file is reported in `errors`, never fatal.
  */
-export async function loadUserThemes(): Promise<UserThemes> {
+export async function loadUserThemes(disabledIds: ReadonlySet<string> = new Set()): Promise<UserThemes> {
   const dir = (await loadLibraryPaths()).themes
   if (!(await exists(dir))) await mkdir(dir, { recursive: true })
 
@@ -141,6 +141,10 @@ export async function loadUserThemes(): Promise<UserThemes> {
     }
     if (taken.has(id)) {
       errors.push(`${entry.name}: "${id}" is already taken by another theme`)
+      continue
+    }
+    if (disabledIds.has(id.toLowerCase())) {
+      taken.add(id)
       continue
     }
     try {

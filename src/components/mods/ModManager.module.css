@@ -1,20 +1,36 @@
-.dialog { position: fixed; inset: 0; margin: auto; width: min(42rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; padding: 1.25rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; }
+.dialog { position: fixed; inset: 0; margin: auto; width: min(48rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; padding: 1.25rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; }
 .dialog::backdrop { background: #0009; }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
 .header h2 { font-size: 1.15rem; font-weight: 600; }
 .header button { font-size: 1.3rem; }
-.dialog button { padding: .3rem .6rem; border-radius: .25rem; background: #ffffff10; }
+.dialog button { padding: .4rem .65rem; border-radius: .25rem; background: #ffffff10; cursor: pointer; white-space: nowrap; }
 .dialog button:hover:not(:disabled) { background: #ffffff20; }
-.dialog button:disabled { opacity: .4; }
+.dialog button:disabled { opacity: .4; cursor: default; }
 .dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
 .description { font-size: .8rem; line-height: 1.6; color: #bcb7ac; }
-.actions { display: flex; align-items: center; flex-wrap: wrap; gap: .65rem; margin: 1rem 0 .5rem; font-size: .8rem; }
-.path { width: 100%; padding: .35rem .5rem; border: 1px solid #ffffff20; background: #0002; font-size: .75rem; }
-.group { margin: 1.25rem 0; border-top: 1px solid #ffffff20; }
-.group legend { padding-right: .75rem; font-size: .8rem; font-weight: 600; color: #cfb37c; }
-.row { display: flex; align-items: start; gap: .75rem; padding: .65rem .25rem; }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem; margin: .5rem 0 .75rem; font-size: .8rem; }
+.layout { display: grid; grid-template-columns: 10.5rem minmax(0, 1fr); gap: 1.25rem; margin-top: .75rem; border-top: 1px solid #ffffff20; padding-top: 1rem; min-height: 20rem; }
+.nav { display: flex; flex-direction: column; gap: .35rem; border-right: 1px solid #ffffff20; padding-right: 1rem; }
+.dialog .nav button { display: flex; align-items: center; justify-content: space-between; gap: .5rem; text-align: left; background: transparent; }
+.dialog .nav button[aria-selected="true"] { background: #cfb37c20; color: #e8cf9a; box-shadow: inset 2px 0 #cfb37c; }
+.badge { font-size: .72rem; opacity: .75; padding: .05rem .35rem; border-radius: 999px; background: #ffffff12; }
+.viewer { min-width: 0; }
+.viewerTitle { margin-bottom: .65rem; font-size: .85rem; font-weight: 600; color: #cfb37c; }
+.list { display: flex; flex-direction: column; divide-y: 1px solid #ffffff12; }
+.row { display: flex; align-items: start; gap: .75rem; padding: .6rem .35rem; border-bottom: 1px solid #ffffff12; cursor: pointer; }
+.row:hover { background: #ffffff08; }
 .row input { margin-top: .25rem; accent-color: #c3a46a; }
 .row strong { display: block; font-size: .85rem; font-weight: 500; }
 .row small { display: block; overflow-wrap: anywhere; font-size: .7rem; color: #a9a398; }
 .notice { color: #e1bd78; font-size: .8rem; }
 .errors { margin: .75rem 0; color: #f0a29b; font-size: .8rem; overflow-wrap: anywhere; }
+.modalBackdrop { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 1rem; background: #000a; z-index: 20; }
+.modalCard { width: min(28rem, 100%); padding: 1.15rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; box-shadow: 0 12px 32px #0008; display: flex; flex-direction: column; gap: .85rem; }
+.modalHeader { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.modalHeader h3 { font-size: 1rem; font-weight: 600; color: #cfb37c; }
+.field { display: flex; flex-direction: column; gap: .35rem; font-size: .8rem; }
+.field select, .sourceRow input { padding: .4rem .55rem; background: #201f1d; color: #f0eee9; border: 1px solid #ffffff20; border-radius: .25rem; font-size: .8rem; }
+.sourceRow { display: flex; gap: .5rem; }
+.sourceRow input { flex: 1; min-width: 0; }
+.modalActions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .25rem; }
+@media (max-width: 640px) { .layout { grid-template-columns: minmax(0, 1fr); } .nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid #ffffff20; padding: 0 0 .75rem; } }

@@ -5,9 +5,11 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { PageView } from './PageView'
 import { useSettingsStore } from '../../stores/settingsStore'
+import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import { registerPlugin, unregisterPlugin } from '../../plugins/plugin-manager'
 
-beforeEach(() => vi.stubGlobal('CSS', { supports: () => true }))
-afterEach(() => vi.unstubAllGlobals())
+beforeEach(() => { vi.stubGlobal('CSS', { supports: () => true }); registerPlugin(zoomPlugin) })
+afterEach(() => { vi.unstubAllGlobals(); unregisterPlugin(zoomPlugin.id) })
 
 it('zooms only the editor wrapper while preserving physical page dimensions and content', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
@@ -139,4 +141,23 @@ it('uses each split document column override without changing the default', asyn
     expect(flows[1].style.getPropertyValue('--page-columns')).toBe('2')
     expect(useSettingsStore.getState().columns).toBe(2)
   } finally { await act(async () => root.unmount()); useDocumentStore.getState().resetDocuments() }
+})
+
+it('switches page presentation without replacing editable content or zoom', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const host = document.createElement('div')
+  const root = createRoot(host)
+  try {
+    useSettingsStore.setState({ viewMode: 'edit', zoom: 1.25, pageSize: 'b5' })
+    await act(async () => root.render(<PageView><div contentEditable suppressContentEditableWarning>Keep editing</div></PageView>))
+    const editor = host.querySelector('[contenteditable]')
+    await act(async () => useSettingsStore.getState().setViewMode('spreads'))
+    expect(host.querySelector('[contenteditable]')).toBe(editor)
+    expect(host.querySelector('[data-page-layout]')?.getAttribute('data-page-layout')).toBe('spreads')
+    expect(host.querySelectorAll('[data-editor-sheet]')).toHaveLength(2)
+    expect(host.querySelector<HTMLElement>('[data-editor-zoom]')?.style.zoom).toBe('1.25')
+    await act(async () => useSettingsStore.getState().setViewMode('edit'))
+    expect(host.querySelector('[contenteditable]')).toBe(editor)
+    expect(host.querySelectorAll('[data-editor-sheet]')).toHaveLength(1)
+  } finally { await act(async () => root.unmount()); useSettingsStore.setState({ viewMode: 'edit', zoom: 1 }) }
 })

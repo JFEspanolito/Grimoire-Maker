@@ -1,8 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { buildThemeCss, loadThemeDraft, saveThemeDraft, themeColors } from './themeEditor'
+import { buildThemeCss, deleteUserTheme, exportUserTheme, loadThemeDraft, saveThemeDraft, themeColors } from './themeEditor'
 
 const fs = vi.hoisted(() => ({ readDir: vi.fn(), readTextFile: vi.fn(), writeTextFile: vi.fn(), rename: vi.fn() }))
+const dialog = vi.hoisted(() => ({ save: vi.fn() }))
+const core = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('@tauri-apps/plugin-fs', () => fs)
+vi.mock('@tauri-apps/plugin-dialog', () => dialog)
+vi.mock('@tauri-apps/api/core', () => core)
 vi.mock('./preferences', () => ({ loadLibraryPaths: async () => ({ themes: '/themes', templates: '/templates' }) }))
 const source = "/* @name: Custom */\n[data-theme='custom'] { --page-bg: #123456; --page-font: Georgia; }\n[data-theme='custom'] h1 { letter-spacing: .1em; }"
 beforeEach(() => {
@@ -78,4 +82,16 @@ it('loads template themes as copy-only and refuses linked user files', async () 
   expect(fs.readTextFile).toHaveBeenCalledWith('/templates/custom/theme.css')
   fs.readDir.mockResolvedValue([{ name: 'custom.css', isFile: true, isSymlink: true }])
   await expect(loadThemeDraft({ id: 'custom', name: 'Custom', builtin: false }, true)).rejects.toThrow('regular')
+})
+
+it('deletes and exports user-owned themes safely', async () => {
+  dialog.save.mockResolvedValueOnce('/exports/custom.css')
+  expect(await exportUserTheme('custom')).toBe(true)
+  expect(fs.writeTextFile).toHaveBeenCalledWith('/exports/custom.css', source)
+
+  dialog.save.mockResolvedValueOnce(null)
+  expect(await exportUserTheme('custom')).toBe(false)
+
+  await deleteUserTheme('custom')
+  expect(core.invoke).toHaveBeenCalledWith('delete_user_theme', { id: 'custom' })
 })

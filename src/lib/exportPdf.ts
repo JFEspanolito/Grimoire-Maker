@@ -8,6 +8,8 @@ import { Previewer } from 'pagedjs'
 import { invoke } from '@tauri-apps/api/core'
 import printCss from '../styles/print.css?raw'
 import { PAGE_SIZES, type PageSizeId, type ThemeId } from '../types/document'
+import { renderNativePages } from './nativePageExport'
+import { renumberSheets } from './bookSheets'
 
 /** Everything that decides how the document is paginated. */
 export interface PageRequest {
@@ -68,17 +70,12 @@ function pageRules({ pageSize, bleedMm, marginMm }: PageRequest): string {
 @media print { .print-dialog-dismiss { display: none !important; } }`
 }
 
-/** A copy of the editor content, ready to be paginated. The editor itself is never touched. */
-function buildContent(request: PageRequest): HTMLElement {
-  const source = document.querySelector('[data-active-editor]')
-    ? document.querySelector('[data-active-editor="true"] .grimoire-content .ProseMirror')
-    : document.querySelector('.grimoire-content .ProseMirror')
-  if (!source) throw new Error('Editor content not found')
-
+/** Wraps rendered editor HTML as printable content, without the editor-only machinery. */
+export function printableContent(html: string, columns: number): HTMLElement {
   const content = document.createElement('div')
   content.className = 'grimoire-page'
-  content.style.columnCount = String(request.columns)
-  content.innerHTML = `<div class="grimoire-content"><div class="ProseMirror">${source.innerHTML}</div></div>`
+  content.style.columnCount = String(columns)
+  content.innerHTML = `<div class="grimoire-content"><div class="ProseMirror">${html}</div></div>`
   // Editor-only labels would add lines Paged.js measures but the printer never draws.
   content.querySelectorAll('.grimoire-image-chip').forEach((chip) => chip.remove())
   content.querySelectorAll('[data-editor-only], .grimoire-image-resize').forEach((control) => control.remove())
@@ -89,6 +86,25 @@ function buildContent(request: PageRequest): HTMLElement {
     box.querySelectorAll('[data-node-view-content], [data-node-view-content-react]').forEach((wrapper) => wrapper.replaceWith(...wrapper.childNodes))
   })
   return content
+}
+
+/** A copy of the editor content, ready to be paginated. The editor itself is never touched. */
+function buildContent(request: PageRequest): HTMLElement {
+  const source = document.querySelector('[data-active-editor]')
+    ? document.querySelector('[data-active-editor="true"] .grimoire-content .ProseMirror')
+    : document.querySelector('.grimoire-content .ProseMirror')
+  if (!source) throw new Error('Editor content not found')
+  return printableContent(source.innerHTML, request.columns)
+}
+
+/**
+ * Renders the book's documents, in order, as consecutive physical sheets in `target`.
+ * With no `contents` the active editor is the whole book. Returns the sheet count.
+ */
+export async function renderBook(request: PageRequest, target: HTMLElement, contents?: HTMLElement[]): Promise<number> {
+  await prepareThemeBackgrounds(request.theme)
+  for (const content of contents ?? [buildContent(request)]) await renderNativePages(request, target, content)
+  return renumberSheets(request, target)
 }
 
 /**
@@ -120,10 +136,10 @@ export async function paginate(
 }
 
 /**
- * Paginates into a print-only container, then asks Rust to print the webview to
- * PDF. The container and Paged.js styles are always removed.
+ * Uses the editor's native column layout in a print-only container, then asks
+ * Rust to print the webview to PDF. Temporary sheets/styles are always removed.
  */
-export async function exportPdf(request: ExportRequest): Promise<void> {
+export async function exportPdf(request: ExportRequest, contents?: HTMLElement[]): Promise<void> {
   if (exportPending) throw new Error('A PDF export is already running')
   exportPending = true
   const printRoot = document.createElement('div')
@@ -133,11 +149,8 @@ export async function exportPdf(request: ExportRequest): Promise<void> {
   printRoot.append(pages)
   document.body.append(printRoot)
 
-  let previewer: Previewer | undefined
   try {
-    previewer = new Previewer()
-    await paginate(previewer, request, pages)
-    await document.fonts.ready
+    await renderBook(request, pages, contents)
     document.body.classList.add('exporting')
     if (request.route === PDF_ROUTE.DIALOG) {
       await printDialog()
@@ -155,11 +168,7 @@ export async function exportPdf(request: ExportRequest): Promise<void> {
     })
   } finally {
     document.body.classList.remove('exporting')
-    try {
-      previewer?.polisher.destroy()
-    } finally {
-      printRoot.remove()
-      exportPending = false
-    }
+    printRoot.remove()
+    exportPending = false
   }
 }

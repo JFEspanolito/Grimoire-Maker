@@ -16,10 +16,11 @@ it('hides Markdown suffixes in tabs, tooltips and close labels without changing 
   const container = document.createElement('div')
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<DocumentTabs />))
+    await act(async () => root.render(<DocumentTabs markdownViews={{}} onChangeView={() => {}} />))
     expect(container.textContent).toContain('Chapter')
     expect(container.textContent).not.toContain('.MD')
     expect(container.textContent).toContain('image.png')
+    expect(container.querySelector('[aria-label="Change view for image.png"]')).toBeNull()
     const tab = container.querySelector<HTMLButtonElement>('[title="/book/Chapter"]')!
     expect(tab).not.toBeNull()
     await act(async () => tab.click())

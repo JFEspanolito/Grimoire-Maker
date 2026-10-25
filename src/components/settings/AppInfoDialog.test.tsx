@@ -2,9 +2,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import configSource from '../../../src-tauri/tauri.conf.json?raw'
-import { AppInfoDialog } from './AppInfoDialog'
+import packageSource from '../../../package.json?raw'
+import { AppInfoDialog, TUTORIAL_STEPS } from './AppInfoDialog'
 
-const config = JSON.parse(configSource) as { productName: string; version: string }
+const config = { ...(JSON.parse(configSource) as { productName: string }), ...(JSON.parse(packageSource) as { version: string }) }
 let root: Root
 let container: HTMLDivElement
 let trigger: HTMLButtonElement
@@ -49,18 +50,47 @@ it('uses application identity, contact, and an accessible GitHub icon link witho
   } finally { fetch.mockRestore() }
 })
 
-it('shows the English tutorial placeholder and supports Escape, X, Close, and focus restoration', async () => {
-  await act(async () => root.render(<AppInfoDialog kind="tutorial" onClose={close} />))
-  expect(container.textContent).toContain('In development')
-  expect(container.textContent).not.toContain('En desarrollo')
-  expect(container.querySelector('dialog')?.getAttribute('aria-labelledby')).toBe('app-info-title')
-  const cancel = new Event('cancel', { cancelable: true })
-  await act(async () => container.querySelector('dialog')!.dispatchEvent(cancel))
-  expect(cancel.defaultPrevented).toBe(true)
-  expect(close).toHaveBeenCalledTimes(1)
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close Tutorial"]')!.click())
-  await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Close')!.click())
-  expect(close).toHaveBeenCalledTimes(3)
-  await act(async () => root.unmount())
-  expect(document.activeElement).toBe(trigger)
+it('runs the 6-step spotlight tutorial with Next, Back, Skip Tour, X, Escape, and focus restoration', async () => {
+  const sidebar = document.createElement('aside')
+  sidebar.setAttribute('data-tour', 'project-sidebar')
+  vi.spyOn(sidebar, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 40, 260, 600))
+  document.body.append(sidebar)
+  try {
+    await act(async () => root.render(<AppInfoDialog kind="tutorial" onClose={close} />))
+    expect(TUTORIAL_STEPS).toHaveLength(6)
+    expect(container.textContent).toContain('Step 1 of 6')
+    expect(container.textContent).toContain('Project Files, Templates & Git')
+    expect(container.querySelector('[data-tour-spotlight]')).not.toBeNull()
+
+    const next = () => Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Next')!
+    await act(async () => next().click())
+    expect(container.textContent).toContain('Step 2 of 6')
+    expect(container.textContent).toContain('Tabs, Split View & Page Editor')
+
+    const back = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Back')!
+    await act(async () => back.click())
+    expect(container.textContent).toContain('Step 1 of 6')
+
+    for (let i = 0; i < 5; i++) {
+      await act(async () => next().click())
+    }
+    expect(container.textContent).toContain('Step 6 of 6')
+    expect(container.textContent).toContain('Themes, Mods & Export PDF')
+    const finish = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Finish')!
+    await act(async () => finish.click())
+    expect(close).toHaveBeenCalledTimes(1)
+
+    const cancel = new Event('cancel', { cancelable: true })
+    await act(async () => container.querySelector('dialog')!.dispatchEvent(cancel))
+    expect(cancel.defaultPrevented).toBe(true)
+    expect(close).toHaveBeenCalledTimes(2)
+
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close Tutorial"]')!.click())
+    await act(async () => Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Skip Tour')!.click())
+    expect(close).toHaveBeenCalledTimes(4)
+    await act(async () => root.unmount())
+    expect(document.activeElement).toBe(trigger)
+  } finally {
+    sidebar.remove()
+  }
 })

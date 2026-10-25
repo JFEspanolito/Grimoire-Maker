@@ -3,9 +3,9 @@ import { NodeViewContent, NodeViewWrapper, useEditorState, type NodeViewProps } 
 import { closeHistory } from '@tiptap/pm/history'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { PAGE_SIZES } from '../../../types/document'
-import { positionImageOnPage } from '../../../lib/imagePlacement'
+import { editorSheetRect, editorStackOrigin, positionImageOnPage } from '../../../lib/imagePlacement'
 import { moveContentBox } from '../../../lib/contentBoxes'
-import { boxAttributes, boxNumber } from './ContentBox'
+import { BOX_BORDER_MAX_PX, boxAttributes, boxBorderColor, boxBorderWidth, boxNumber } from './ContentBox'
 
 /** Only the handle moves a group; its children retain ordinary editable text/table/image behavior. */
 export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps) {
@@ -18,7 +18,9 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
   } })
   useEffect(() => () => stopDrag.current?.(), [])
   const { placement, widthMm, heightMm, xMm, yMm } = node.attrs
-  const attributes = boxAttributes(node.attrs)
+  const borderWidth = boxBorderWidth(node.attrs.borderWidth)
+  const borderColor = boxBorderColor(node.attrs.borderColor)
+  const { class: boxClassName, style: _boxStyle, ...attributes } = boxAttributes(node.attrs)
   const change = (attrs: Record<string, unknown>) => {
     const position = getPos()
     if (typeof position !== 'number') return
@@ -31,7 +33,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
     const box = boxRef.current
     const page = box?.closest('.grimoire-page')
     if (!box || !page) return
-    const bounds = page.getBoundingClientRect()
+    const bounds = editorSheetRect(page, box)
     const rect = box.getBoundingClientRect()
     if (!bounds.width || !rect.width) return
     event.preventDefault()
@@ -64,7 +66,11 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
       moved = true
       if (placement === 'free') {
         position = positionImageOnPage(bounds, rect, pageSize.widthMm, pageSize.heightMm, dx, dy)
-        if (position) { box.style.left = `${position.xMm}mm`; box.style.top = `${position.yMm}mm` }
+        if (position) {
+          const origin = editorStackOrigin(page, box)
+          position.yMm += (bounds.top - origin.top) * pageSize.widthMm / bounds.width
+          box.style.left = `${position.xMm}mm`; box.style.top = `${position.yMm}mm`
+        }
       } else {
         // Keep flow occupied during the gesture; do not turn a reorder into absolute placement.
         box.style.opacity = '0.55'
@@ -92,17 +98,20 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
   }
   const setPlacement = (next: string) => {
     const box = boxRef.current
-    const bounds = box?.closest('.grimoire-page')?.getBoundingClientRect()
+    const page = box?.closest('.grimoire-page')
+    const bounds = box && page ? editorSheetRect(page, box) : undefined
     const rect = box?.getBoundingClientRect()
     if (next === 'free' && bounds?.width && rect) {
       const size = PAGE_SIZES[useSettingsStore.getState().pageSize]
       const position = positionImageOnPage(bounds, rect, size.widthMm, size.heightMm, 0, 0)
+      if (position && box && page) position.yMm += (bounds.top - editorStackOrigin(page, box).top) * size.widthMm / bounds.width
       change({ placement: next, ...position, widthMm: boxNumber(rect.width * size.widthMm / bounds.width, 5) })
     } else change({ placement: next, xMm: null, yMm: null })
   }
   return (
-    <NodeViewWrapper {...attributes} ref={boxRef} data-selected={selected || editing}
+    <NodeViewWrapper className={boxClassName} {...attributes} ref={boxRef} data-selected={selected || editing}
       style={{ width: widthMm === null ? undefined : `${boxNumber(widthMm, 5)}mm`,
+        ...(borderWidth === null ? {} : { border: `${borderWidth}px solid ${borderColor}`, padding: '2mm', boxSizing: 'border-box' as const }),
         minHeight: heightMm === null ? undefined : `${boxNumber(heightMm, 5)}mm`,
         position: placement === 'free' ? 'absolute' : undefined,
         left: placement === 'free' ? `${boxNumber(xMm) ?? 0}mm` : undefined,
@@ -117,6 +126,10 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
           value={widthMm ?? ''} onChange={(event) => change({ widthMm: boxNumber(event.target.value, 5) })} /></label>
         <label>Height <input aria-label="Content box height" title="Minimum height in millimetres; expands to fit content" type="number" min="5" max="500" placeholder="Auto"
           value={heightMm ?? ''} onChange={(event) => change({ heightMm: boxNumber(event.target.value, 5) })} /></label>
+        <label>Border <input aria-label="Content box border width" title="Border width in pixels; 0 removes it" type="number" min="0" max={BOX_BORDER_MAX_PX}
+          value={borderWidth ?? 0} onChange={(event) => change({ borderWidth: boxBorderWidth(event.target.value) })} /></label>
+        <input aria-label="Content box border color" title="Border color" type="color" value={borderColor}
+          onChange={(event) => change({ borderColor: boxBorderColor(event.target.value) })} />
         <button type="button" aria-label="Delete content box" title="Delete the entire content box" onClick={() => {
           const position = getPos()
           if (typeof position !== 'number') return

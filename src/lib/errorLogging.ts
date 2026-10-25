@@ -27,6 +27,22 @@ function safeText(value: unknown): string {
   return '[non-text error omitted]'
 }
 
+const TECHNICAL_ERROR_PATTERNS = [
+  /Permissions associated with this command:/i,
+  /\bnot allowed\b.*?\bfs:/i,
+  /\b(?:fs|dialog|core|tauri):allow-/i,
+  /\b(?:TypeError|ReferenceError|SyntaxError|RangeError|URIError):/i,
+  /\bat\s+\S+\s+\([^)]+:\d+:\d+\)/,
+]
+
+/** Strips raw Tauri ACL dumps, stack traces, and internal runtime details so UI alerts stay human-readable while full details go to Logs Path. */
+export function friendlyErrorMessage(error: unknown, fallback = 'Could not complete this action. Try again, or check the error logs in Preferences → Content folders.'): string {
+  const raw = safeText(error).trim()
+  if (!raw || raw === '[non-text error omitted]') return fallback
+  if (TECHNICAL_ERROR_PATTERNS.some((pattern) => pattern.test(raw))) return fallback
+  return raw
+}
+
 function warnUnavailable(): void {
   if (warned) return
   warned = true

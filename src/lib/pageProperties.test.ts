@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { pageColumns, projectPageText } from './pageProperties'
+import { pageColumns, pageTitle, projectPageText } from './pageProperties'
 
 it('uses saved book metadata independently of folder names', () => {
   const project = { name: 'Old separate name', author: 'Alice', coAuthor: 'Bob' }
@@ -7,6 +7,12 @@ it('uses saved book metadata independently of folder names', () => {
     book: 'Old separate name', title: 'Chapter', author: 'Alice', coAuthor: 'Bob',
   })
   expect(projectPageText('H:/books/Renamed', {}, project).book).toBe('Old separate name')
+})
+it('titles a saved page by its file name and an unsaved page by its frontmatter', () => {
+  expect(pageTitle({ title: 'Old' }, '/w/Draft/Chapter 1/The Crypt.md')).toBe('The Crypt')
+  expect(pageTitle({ title: 'Old' }, 'C:\\w\\Draft\\Scene.md')).toBe('Scene')
+  expect(pageTitle({ title: 'Draft title' }, null)).toBe('Draft title')
+  expect(projectPageText('/w', { title: 'Old' }, undefined, '/w/Draft/Scene.md').title).toBe('Scene')
 })
 it('preserves page-column overrides and their fallback', () => {
   expect(pageColumns({ columns: 1 }, 2)).toBe(1)

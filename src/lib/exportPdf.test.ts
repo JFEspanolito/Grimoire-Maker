@@ -1,6 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
 import { exportPdf, paginate } from './exportPdf'
+import { renderNativePages } from './nativePageExport'
+
+vi.mock('./nativePageExport', async importOriginal => {
+  const original = await importOriginal<typeof import('./nativePageExport')>()
+  return { ...original, renderNativePages: vi.fn(original.renderNativePages) }
+})
 
 const mocks = vi.hoisted(() => ({ destroy: vi.fn(), preview: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
@@ -13,9 +19,11 @@ const request = { pageSize: 'a4', columns: 1, theme: 'parchment', bleedMm: 0, ma
 describe('PDF lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('CSS', { supports: () => true })
     document.body.innerHTML = '<div class="grimoire-content"><div class="ProseMirror"><p>Text</p></div></div>'
     Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: Promise.resolve() } })
   })
+  afterEach(() => vi.unstubAllGlobals())
   it('keeps paginated content through native PDF completion', async () => {
     let finish!: () => void
     vi.mocked(invoke).mockReturnValue(new Promise<void>((resolve) => { finish = resolve }))
@@ -25,7 +33,8 @@ describe('PDF lifecycle', () => {
     finish()
     await pending
     expect(document.querySelector('.print-root')).toBeNull()
-    expect(mocks.destroy).toHaveBeenCalledOnce()
+    expect(document.querySelector('[data-native-print-style]')).toBeNull()
+    expect(mocks.preview).not.toHaveBeenCalled()
   })
   it('retains the print layout until afterprint, not merely until print returns', async () => {
     vi.spyOn(window, 'print').mockImplementation(() => {})
@@ -51,7 +60,7 @@ describe('PDF lifecycle', () => {
     document.body.append(guide)
     vi.mocked(invoke).mockResolvedValueOnce(undefined)
     await exportPdf({ ...request, outputPath: '/book.pdf' })
-    const content = mocks.preview.mock.calls[0]![0] as HTMLElement
+    const content = vi.mocked(renderNativePages).mock.calls[0]![2]
     expect(content.textContent).toBe('Text')
     expect(content.querySelector('[data-ruler-overlay]')).toBeNull()
     expect(guide.isConnected).toBe(true)
@@ -60,7 +69,7 @@ describe('PDF lifecycle', () => {
     document.querySelector('.ProseMirror')!.innerHTML = '<div class="grimoire-content-box ProseMirror-selectednode" data-placement="free" data-selected="true" style="position:absolute;left:12mm;top:18mm;width:80mm"><div data-editor-only="true">Move content box</div><div data-node-view-content-react><div data-node-view-content><h2>Grouped</h2><table><tbody><tr><td>Kept</td></tr></tbody></table></div></div></div>'
     vi.mocked(invoke).mockResolvedValueOnce(undefined)
     await exportPdf({ ...request, outputPath: '/book.pdf' })
-    const content = mocks.preview.mock.calls[0]![0] as HTMLElement
+    const content = vi.mocked(renderNativePages).mock.calls[0]![2]
     const box = content.querySelector<HTMLElement>('.grimoire-content-box')!
     expect(box.textContent).toBe('GroupedKept')
     expect(box.style.left).toBe('12mm')
@@ -77,7 +86,7 @@ describe('PDF lifecycle', () => {
     vi.spyOn(window, 'print').mockImplementation(() => {})
     const pending = exportPdf({ ...request, route: 'dialog' })
     await vi.waitFor(() => expect(window.print).toHaveBeenCalled())
-    expect(mocks.preview.mock.calls[0]![0].textContent).toContain('Active pane')
+    expect(vi.mocked(renderNativePages).mock.calls[0]![2].textContent).toContain('Active pane')
     await expect(exportPdf({ ...request, outputPath: '/another.pdf' })).rejects.toThrow('already running')
     expect(document.querySelectorAll('.print-root')).toHaveLength(1)
     document.querySelector<HTMLButtonElement>('.print-dialog-dismiss')!.click()
@@ -93,6 +102,7 @@ describe('PDF lifecycle', () => {
 })
 
 it('renders project credits and page counts as safe text on every output page', async () => {
+  const { emptyHeaderFooter } = await import('./themeHeaderFooter')
   document.body.innerHTML = '<div class="grimoire-content"><div class="ProseMirror">Body</div></div>'
   const target = document.createElement('div')
   mocks.preview.mockImplementationOnce(async (_content, _styles, output: HTMLElement) => {
@@ -100,11 +110,12 @@ it('renders project credits and page counts as safe text on every output page', 
   })
   const { Previewer } = await import('pagedjs')
   await paginate(new Previewer(), { ...request,
-    headerFooter: { header: { left: '{author}', center: '', right: '{coAuthor}' }, footer: { left: '', center: '{page}/{pages}', right: '' } },
+    headerFooter: { ...emptyHeaderFooter(), header: { left: '{author}', center: '', right: '{coAuthor}' }, footer: { left: '', center: '{page}/{pages}', right: '' } },
     pageText: { author: '<b>Alice</b>', coAuthor: 'Bob' },
   }, target)
   expect(target.querySelectorAll('[data-theme-page-text]')).toHaveLength(2)
   expect(target.textContent).toContain('<b>Alice</b>Bob1/2')
+  for (const header of target.querySelectorAll<HTMLElement>('.grimoire-page-text-header')) expect(header.style.borderBottom).toBe('1px solid rgb(189, 166, 117)')
   expect(target.textContent).toContain('2/2')
   expect(target.querySelector('b')).toBeNull()
 })

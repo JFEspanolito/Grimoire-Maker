@@ -21,13 +21,15 @@ describe('splitBinder', () => {
       folder('/w/Research'),
       folder('/w/Trash', [file('/w/Trash/old.md')]),
       file('/w/loose.md'),
-      folder('/w/assets'),
+      folder('/w/Assets'),
+      folder('/w/misc'),
     ]
     const view = splitBinder(tree)!
     expect(view.draft?.children?.map((c) => c.name)).toEqual(['ch1.md'])
     expect(view.research?.path).toBe('/w/Research')
     expect(view.trash?.children).toHaveLength(1)
-    expect(view.other.map((n) => n.name)).toEqual(['loose.md', 'assets'])
+    expect(view.assets?.path).toBe('/w/Assets')
+    expect(view.other.map((n) => n.name)).toEqual(['loose.md', 'misc'])
   })
 
   it('is enough to have one of the sections', () => {
@@ -60,15 +62,15 @@ describe('setupBinder', () => {
     }
   }
 
-  it('creates the three folders in a fresh workspace', async () => {
+  it('creates the four folders in a fresh workspace', async () => {
     const fs = fakeFs()
-    expect(await setupBinder(fs, '/w')).toEqual(['Draft', 'Research', 'Trash'])
-    expect(fs.created).toEqual(['/w/Draft', '/w/Research', '/w/Trash'])
+    expect(await setupBinder(fs, '/w')).toEqual(['Draft', 'Research', 'Assets', 'Trash'])
+    expect(fs.created).toEqual(['/w/Draft', '/w/Research', '/w/Assets', '/w/Trash'])
   })
 
   it('only creates what is missing and never touches existing folders', async () => {
     const fs = fakeFs(['/w/Draft'])
-    expect(await setupBinder(fs, '/w')).toEqual(['Research', 'Trash'])
+    expect(await setupBinder(fs, '/w')).toEqual(['Research', 'Assets', 'Trash'])
     expect(fs.created).not.toContain('/w/Draft')
   })
 

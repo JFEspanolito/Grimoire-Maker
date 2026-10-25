@@ -1,10 +1,11 @@
-import { reportError } from '../../lib/errorLogging'
+import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { useEffect, useRef, useState } from 'react'
-import { commitChanges, diffChange, getRepositoryStatus, initializeRepository, stageChange, unstageChange } from '../../lib/versionControl'
+import { commitChanges, diffChange, getRepositoryStatus, initializeRepository, revertChange, stageChange, unstageChange } from '../../lib/versionControl'
 import type { GitDiff, GitEntry, RepositoryStatus } from '../../lib/versionControl'
 import styles from './VersionControlPanel.module.css'
 import { notifyRepositoryChanged, REPOSITORY_CHANGED } from '../../lib/repositoryEvents'
 import { GitDiffDialog } from './GitDiffDialog'
+import { ConfirmDialog } from '../layout/ConfirmDialog'
 
 interface VersionControlPanelProps {
   workspace: string | null
@@ -16,7 +17,14 @@ interface Selection {
   staged: boolean
 }
 
-const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
+interface ContextMenuState {
+  entry: GitEntry
+  staged: boolean
+  x: number
+  y: number
+}
+
+const errorText = (error: unknown) => friendlyErrorMessage(error, 'Could not complete the Git operation.')
 
 /** Manual local source-control actions; automatic commits are configured separately. */
 export function VersionControlPanel(props: VersionControlPanelProps) {
@@ -31,10 +39,24 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
   const [notice, setNotice] = useState('')
   const [selection, setSelection] = useState<Selection | null>(null)
   const [diff, setDiff] = useState<GitDiff | null>(null)
+  const [menu, setMenu] = useState<ContextMenuState | null>(null)
+  const [pendingRevert, setPendingRevert] = useState<GitEntry | null>(null)
   const epoch = useRef(0)
   const pending = useRef(false)
   const refreshQueued = useRef(false)
   const flushRefresh = useRef(() => {})
+
+  useEffect(() => {
+    if (!menu) return
+    const close = () => setMenu(null)
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenu(null) }
+    window.addEventListener('pointerdown', close)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [menu])
 
   useEffect(() => {
     const current = ++epoch.current
@@ -119,7 +141,11 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
     return <section className={styles.group} aria-label={title}>
       <h4>{title} <span>{entries.length}</span></h4>
       <ul>
-        {entries.map((entry) => <li key={entry.path}>
+        {entries.map((entry) => <li key={entry.path} onContextMenu={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (!busy) setMenu({ entry, staged: isStaged, x: event.clientX, y: event.clientY })
+        }}>
           <button className={styles.file} disabled={busy} onClick={() => void showDiff(entry.path, isStaged)}
             title={entry.originalPath ? `${entry.originalPath} → ${entry.path}` : entry.path}
             aria-label={`View ${isStaged ? 'staged' : 'unstaged'} diff for ${entry.path}`}>
@@ -172,6 +198,31 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
       </form>
       {selection && <GitDiffDialog path={selection.path} staged={selection.staged} diff={diff} loading={busy}
         error={error} onClose={() => setSelection(null)} />}
+      {menu && <div role="menu" aria-label={`${menu.entry.path} actions`} className={styles.contextMenu}
+        style={{ left: menu.x, top: menu.y }} onPointerDown={(event) => event.stopPropagation()}>
+        <button type="button" role="menuitem" disabled={busy}
+          onClick={() => { const { entry, staged: isStaged } = menu; setMenu(null); void showDiff(entry.path, isStaged) }}>
+          View Diff
+        </button>
+        <button type="button" role="menuitem" disabled={busy || menu.staged}
+          onClick={() => { const { entry } = menu; setMenu(null); void run((project) => stageChange(project, entry.path)) }}>
+          Add
+        </button>
+        <button type="button" role="menuitem" disabled={busy || !menu.staged}
+          onClick={() => { const { entry } = menu; setMenu(null); void run((project) => unstageChange(project, entry.path)) }}>
+          Remove from commit
+        </button>
+        <button type="button" role="menuitem" className={styles.dangerItem} disabled={busy}
+          onClick={() => { const { entry } = menu; setMenu(null); setPendingRevert(entry) }}>
+          Revert
+        </button>
+      </div>}
+      {pendingRevert && <ConfirmDialog title="Revert changes"
+        message={pendingRevert.indexStatus === '?' || pendingRevert.indexStatus === 'A'
+          ? `Delete "${pendingRevert.path}"? This untracked or newly added file will be permanently removed.`
+          : `Discard all changes in "${pendingRevert.path}" and restore it to HEAD? This cannot be undone.`}
+        confirmLabel="Revert" danger onCancel={() => setPendingRevert(null)}
+        onConfirm={() => { const entry = pendingRevert; setPendingRevert(null); void run((project) => revertChange(project, entry.path), `Reverted ${entry.path}.`) }} />}
     </>}
   </section>
 }

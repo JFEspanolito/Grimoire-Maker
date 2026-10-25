@@ -6,7 +6,14 @@ import { dropPoint } from '@tiptap/pm/transform'
 import { useDocumentStore } from '../../../stores/documentStore'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { loadImageUrl, revokeImageUrl } from '../../../lib/images'
-import { positionImageOnPage } from '../../../lib/imagePlacement'
+import {
+  editorSheetRect,
+  editorSpreadPair,
+  editorStackOrigin,
+  isOutsideContentMargin,
+  positionImageInSpread,
+  positionImageOnPage,
+} from '../../../lib/imagePlacement'
 import { PAGE_SIZES } from '../../../types/document'
 import { DocumentPathContext } from '../DocumentPathContext'
 import { reportError } from '../../../lib/errorLogging'
@@ -19,12 +26,15 @@ const ANCHOR_LABEL: Record<string, string> = {
 
 /** Canvas rendering of an image node: resolves the stored path and applies the layout attributes. */
 export function ImageView({ node, selected, updateAttributes, editor, getPos }: NodeViewProps) {
+  const viewMode = useSettingsStore(state => state.viewMode)
+  const zoom = useSettingsStore(state => state.zoom)
   const activePath = useDocumentStore((s) => s.document.path)
   const panePath = useContext(DocumentPathContext)
   const documentPath = panePath === undefined ? activePath : panePath
   const { src, alt, align, widthMm, frame, opacity, anchor, xMm, yMm } = node.attrs
   const [shown, setShown] = useState<{ src: string; url: string } | null>(null)
   const [failure, setFailure] = useState<{ src: string; message: string } | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const stopDrag = useRef<(() => void) | null>(null)
   const imageRef = useRef<HTMLImageElement>(null)
   const [corner, setCorner] = useState<{ left: number; top: number } | null>(null)
@@ -33,11 +43,11 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const image = imageRef.current
     const page = image?.closest('.grimoire-page')
     if (!image || !page) return
-    const bounds = page.getBoundingClientRect()
+    const bounds = editorSheetRect(page, image)
     const rect = image.getBoundingClientRect()
     if (!bounds.width || !rect.width) return
     const scale = PAGE_SIZES[useSettingsStore.getState().pageSize].widthMm / bounds.width
-    const origin = image.closest('.grimoire-content-box[data-placement="free"]')?.getBoundingClientRect() ?? bounds
+    const origin = image.closest('.grimoire-content-box[data-placement="free"]')?.getBoundingClientRect() ?? editorStackOrigin(page, image)
     const next = { left: (rect.left + rect.width - origin.left) * scale, top: (rect.top + rect.height - origin.top) * scale }
     setCorner((old) => old?.left === next.left && old.top === next.top ? old : next)
   }
@@ -52,7 +62,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     observer.observe(image)
     observer.observe(page)
     return () => observer.disconnect()
-  }, [selected, shown, widthMm, anchor, align, xMm, yMm])
+  }, [selected, shown, widthMm, anchor, align, xMm, yMm, viewMode, zoom])
 
   useEffect(() => () => stopDrag.current?.(), [])
 
@@ -61,9 +71,11 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const image = event.currentTarget
     const page = image.closest('.grimoire-page')
     if (!page) return
-    const pageRect = page.getBoundingClientRect()
+    const pageRect = editorSheetRect(page, image)
     const imageRect = image.getBoundingClientRect()
-    const origin = image.closest('.grimoire-content-box[data-placement="free"]')?.getBoundingClientRect() ?? pageRect
+    const freeBox = image.closest('.grimoire-content-box[data-placement="free"]')
+    const origin = freeBox?.getBoundingClientRect() ?? editorStackOrigin(page, image)
+    const spreadPair = !freeBox ? editorSpreadPair(page, image) : null
     if (!pageRect.width || !imageRect.width) return
     // Own this gesture before the browser generates a text-selection/native drag.
     event.preventDefault()
@@ -78,6 +90,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const pointerId = event.pointerId
     const originalStyle = { position: image.style.position, left: image.style.left, top: image.style.top, width: image.style.width, margin: image.style.margin }
     const renderedWidthMm = imageRect.width * pageWidthMm / pageRect.width
+    const renderedHeightMm = imageRect.height * pageWidthMm / pageRect.width
     let moved = false
     let position: ReturnType<typeof positionImageOnPage> = null
 
@@ -100,14 +113,20 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       const deltaX = next.clientX - startX
       const deltaY = next.clientY - startY
       if (!moved && Math.hypot(deltaX, deltaY) < 3) return
-      position = positionImageOnPage(pageRect, imageRect, pageWidthMm, pageHeightMm, deltaX, deltaY)
-      if (!position) return
-      // An absolute group is the containing block, while page bounds still define scale and limits.
-      const scale = pageWidthMm / pageRect.width
-      position = {
-        xMm: Math.round(Math.max(0, position.xMm - (origin.left - pageRect.left) * scale) * 100) / 100,
-        yMm: Math.round(Math.max(0, position.yMm - (origin.top - pageRect.top) * scale) * 100) / 100,
+      if (spreadPair) {
+        position = positionImageInSpread(spreadPair, imageRect, pageWidthMm, pageHeightMm, deltaX, deltaY)
+      } else {
+        position = positionImageOnPage(pageRect, imageRect, pageWidthMm, pageHeightMm, deltaX, deltaY)
+        if (position) {
+          // An absolute group is the containing block, while page bounds still define scale and limits.
+          const scale = pageWidthMm / pageRect.width
+          position = {
+            xMm: Math.round(Math.max(0, position.xMm - (origin.left - pageRect.left) * scale) * 100) / 100,
+            yMm: Math.round(Math.max(0, position.yMm - (origin.top - pageRect.top) * scale) * 100) / 100,
+          }
+        }
       }
+      if (!position) return
       moved = true
       image.style.position = 'absolute'
       image.style.left = `${position.xMm}mm`
@@ -124,11 +143,30 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       const from = getPos()
       const current = typeof from === 'number' ? editor.state.doc.nodeAt(from) : null
       if (current?.type.name === 'image' && current.attrs.anchor === 'flow' && typeof from === 'number') {
-        // Flow images move as document blocks; dragging must not change text placement.
-        const hit = editor.view.posAtCoords({ left: next.clientX, top: next.clientY })
-        if (!hit) return
+        const marginMm = useSettingsStore.getState().marginMm
+        const outsideMargin = !freeBox && isOutsideContentMargin(
+          position,
+          renderedWidthMm,
+          renderedHeightMm,
+          pageWidthMm,
+          pageHeightMm,
+          marginMm,
+        )
+        let hit: ReturnType<typeof editor.view.posAtCoords> = null
+        try {
+          hit = editor.view.posAtCoords({ left: next.clientX, top: next.clientY })
+        } catch {
+          hit = null
+        }
+        if (!hit) {
+          if (outsideMargin) {
+            updateAttributes({ anchor: 'free', align: 'none', xMm: position.xMm, yMm: position.yMm, widthMm: renderedWidthMm })
+          }
+          return
+        }
         let destination = dropPoint(editor.state.doc, hit.pos, new Slice(Fragment.from(current), 0, 0))
         let movedImage = current
+        let wrappedColumn = false
         const resolved = editor.state.doc.resolve(hit.pos)
         const paragraphPosition = resolved.parent.type.name === 'paragraph' ? resolved.before()
           : resolved.nodeAfter?.type.name === 'paragraph' ? hit.pos
@@ -140,11 +178,16 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
           const column = fragments.find((rect) => next.clientX >= rect.left && next.clientX <= rect.right
             && next.clientY >= rect.top && next.clientY <= rect.bottom)
           if (column) {
+            wrappedColumn = true
             destination = paragraphPosition
             const align = next.clientX < column.left + column.width / 2 ? 'left' : 'right'
             const widthMm = Math.round(Math.min(renderedWidthMm, column.width * pageWidthMm / pageRect.width * 0.45) * 100) / 100
             movedImage = current.type.create({ ...current.attrs, align, widthMm, xMm: null, yMm: null }, null, current.marks)
           }
+        }
+        if (!wrappedColumn && outsideMargin) {
+          updateAttributes({ anchor: 'free', align: 'none', xMm: position.xMm, yMm: position.yMm, widthMm: renderedWidthMm })
+          return
         }
         // Already beside this paragraph: change sides without deleting/reinserting it.
         if (destination === from + current.nodeSize && movedImage !== current) {
@@ -176,7 +219,8 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const image = imageRef.current
     const page = image?.closest<HTMLElement>('.grimoire-page')
     if (!image || !page) return
-    const pageRect = page.getBoundingClientRect()
+    const pageRect = editorSheetRect(page, image)
+    const spreadPair = anchor === 'free' ? editorSpreadPair(page, image) : null
     const rect = image.getBoundingClientRect()
     if (!pageRect.width || !rect.width || !rect.height) return
     event.preventDefault()
@@ -213,9 +257,12 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
         flowWidth = Math.max(0, column.width - spacing * scale)
       }
     }
+    const maxSheetWidthMm = spreadPair?.right ? 2 * pageSize.widthMm : pageSize.widthMm
+    const sheetLeftPx = spreadPair?.right ? spreadPair.left.left : pageRect.left
+    const sheetTopPx = spreadPair?.right ? spreadPair.left.top : pageRect.top
     const available = anchor === 'free'
-      ? Math.min(pageSize.widthMm - (rect.left - pageRect.left) * mmPerPx,
-        (pageSize.heightMm - (rect.top - pageRect.top) * mmPerPx) / ratio)
+      ? Math.min(maxSheetWidthMm - (rect.left - sheetLeftPx) * mmPerPx,
+        (pageSize.heightMm - (rect.top - sheetTopPx) * mmPerPx) / ratio)
       : flowWidth * mmPerPx
     const maximum = Math.max(5, Math.min(500, available))
     let nextWidth = startWidth
@@ -260,22 +307,33 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   useEffect(() => {
     let cancelled = false
     let created: string | null = null
+    setShown(null)
+    setFailure(null)
+    const timer = window.setTimeout(() => {
+      cancelled = true
+      const message = `Image loading timed out: ${src}`
+      reportError('editor.image.load', new Error(message))
+      setFailure({ src, message })
+    }, 15000)
     loadImageUrl(src, documentPath).then(
       (url) => {
         if (cancelled) return revokeImageUrl(url)
+        window.clearTimeout(timer)
         created = url
         setShown({ src, url })
         setFailure(null)
       },
       (e: unknown) => {
+        window.clearTimeout(timer)
         if (!cancelled) { reportError('editor.image.load', e); setFailure({ src, message: e instanceof Error ? e.message : String(e) }) }
       },
     )
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
       if (created) revokeImageUrl(created)
     }
-  }, [src, documentPath])
+  }, [src, documentPath, loadAttempt])
 
   const url = shown && shown.src === src ? shown.url : null
   const error = failure && failure.src === src ? failure.message : null
@@ -299,20 +357,25 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
           {ANCHOR_LABEL[anchor] ?? 'Image'} · {String(src).split('/').pop()}
         </span>
       )}
-      {url ? (
+      {url && !error ? (
         <img
           ref={imageRef}
           src={url}
           alt={alt ?? ''}
           draggable={false}
+          data-x-mm={anchor === 'free' ? (xMm ?? 0) : undefined}
+          data-y-mm={anchor === 'free' ? (yMm ?? 0) : undefined}
+          data-width-mm={widthMm ?? undefined}
           style={imageStyle}
           onPointerDown={startDrag}
           onLoad={placeHandle}
+          onError={() => setFailure({ src, message: `Unable to decode image: ${src}` })}
           onDragStart={(event) => { event.preventDefault(); event.stopPropagation() }}
         />
       ) : (
         <span className="grimoire-image-chip" contentEditable={false}>
-          {error ? `Image not found: ${src}` : 'Loading image…'}
+          {error ? <><span role="alert">{error}</span>{' '}<button type="button"
+            onClick={() => setLoadAttempt(value => value + 1)}>Retry image</button></> : 'Loading image…'}
         </span>
       )}
       {url && selected && corner && (anchor === 'flow' || anchor === 'free') && (
@@ -326,7 +389,8 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
             event.stopPropagation()
             const delta = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1
             const image = imageRef.current
-            const page = image?.closest('.grimoire-page')?.getBoundingClientRect()
+            const pageElement = image?.closest('.grimoire-page')
+            const page = image && pageElement ? editorSheetRect(pageElement, image) : undefined
             const current = widthMm ?? (image && page?.width ? image.getBoundingClientRect().width * PAGE_SIZES[useSettingsStore.getState().pageSize].widthMm / page.width : 40)
             updateAttributes({ widthMm: Math.min(500, Math.max(5, current + delta)) })
           }} />

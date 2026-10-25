@@ -28,7 +28,7 @@ export function TableControls({ editor }: { editor: Editor }) {
     <div
       role="group"
       aria-label="Table"
-      className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 bg-neutral-900 px-3 py-1"
+      className="flex min-h-9 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 bg-neutral-900 px-3 py-1"
     >
       <span className="text-xs text-white/60">Table</span>
       {GROUPS.map((group, i) => (

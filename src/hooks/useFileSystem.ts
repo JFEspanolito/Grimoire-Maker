@@ -272,12 +272,13 @@ export function useFileSystem() {
       const state = await loadAppState()
       useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
 
-      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage } = await loadSettings()
+      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage, panels } = await loadSettings()
       const settings = useSettingsStore.getState()
       if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
       if (columns === 1 || columns === 2) settings.setColumns(columns)
       if (typeof theme === 'string') settings.setTheme(theme)
       settings.setRulerGuides(rulerGuides ?? [])
+      settings.restorePanels(panels)
       settings.setZoom(typeof zoom === 'number' ? zoom : 1)
       settings.setAutoSaveSeconds(autoSaveSeconds ?? 300)
       settings.setAutoCommitSettings(autoCommitEnabled ?? true, autoCommitMinutes ?? 20, autoCommitMessage ?? 'update content automatically')
@@ -323,6 +324,22 @@ export function useFileSystem() {
     useSessionStore.getState().setWorkspaceError(`Could not close file: ${error instanceof Error ? error.message : String(error)}`)
     throw error
   }), [loadFromRaw, persistDocument, remember])
+
+  /** Sends a Trash item to the system recycle bin and drops any open tab or buffer inside it. */
+  const deleteFromTrash = useCallback((path: string) => runFileAction(async () => {
+    await invoke('delete_from_trash', { path })
+    const inside = (candidate: string) => candidate === path || candidate.startsWith(`${path}/`)
+    const documents = useDocumentStore.getState()
+    for (const open of [...useTabStore.getState().paths, ...Object.keys(documents.buffers), documents.document.path ?? ''].filter(inside)) {
+      useTabStore.getState().remove(open)
+      useDocumentStore.getState().forget(open)
+    }
+    const next = useTabStore.getState().active
+    if (next && /\.md$/i.test(next)) useDocumentStore.getState().activate(next)
+    else if (next) useDocumentStore.getState().deactivate()
+    else if (useDocumentStore.getState().document.path === null) loadFromRaw(null, '')
+    await refreshTree()
+  }), [loadFromRaw, refreshTree])
 
   const applyTemplate = useCallback((template: Template) => runFileAction(async (): Promise<boolean> => {
     const root = useDocumentStore.getState().workspaceRoot
@@ -431,6 +448,7 @@ export function useFileSystem() {
     saveAll,
     openRestored: (path: string) => runFileAction(() => activateWorkspace(path.replaceAll('\\', '/'))),
     importInto,
+    refreshTree,
     createProject,
     createNewFile,
     openWorkspace,
@@ -446,5 +464,6 @@ export function useFileSystem() {
     openFolder,
     renameWorkspace,
     moveEntry,
+    deleteFromTrash,
   }
 }

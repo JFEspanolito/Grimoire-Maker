@@ -24,13 +24,15 @@ import { useDocumentStore } from './stores/documentStore'
 import { useAutoSave } from './hooks/useAutoSave'
 import { useAutoCommit } from './hooks/useAutoCommit'
 import { useRepositoryStatus } from './hooks/useRepositoryStatus'
+import { PanelResizeHandle } from './components/layout/PanelResizeHandle'
 
 export default function App() {
   useUnsavedClose()
   const [editor, setEditor] = useState<Editor | null>(null)
-  const [visiblePanels, setVisiblePanels] = useState({ files: true, templates: true, snippets: true })
-  const [propertiesOpen, setPropertiesOpen] = useState(true)
-  const [gitOpen, setGitOpen] = useState(true)
+  const visiblePanels = useSettingsStore((s) => s.panels)
+  const [sidebarWidth, setSidebarWidth] = useState(224)
+  const [snippetsWidth, setSnippetsWidth] = useState(256)
+  const sidebarCollapsed = !visiblePanels.files && !visiblePanels.templates && !visiblePanels.git
   const [sessionReady, setSessionReady] = useState(false)
   useAutoSave(sessionReady)
   useAutoCommit(sessionReady)
@@ -47,8 +49,7 @@ export default function App() {
   const activeTab = useTabStore((s) => s.active)
   const hasTabs = useTabStore((s) => s.paths.length > 0)
   const activeEditor = hasTabs && (!activeTab || !/\.md$/i.test(activeTab)) ? null : editor
-  const togglePanel = (panel: keyof typeof visiblePanels) =>
-    setVisiblePanels((current) => ({ ...current, [panel]: !current[panel] }))
+  const togglePanel = useSettingsStore((s) => s.togglePanel)
 
   // Reopen last session first, then start saving page-setup changes: subscribing
   // earlier would overwrite the saved settings with the defaults.
@@ -86,35 +87,39 @@ export default function App() {
   return (
     <PluginProvider>
       <div data-theme={resolveTheme(theme, themes)} className={styles.shell}>
-        <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
+        <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} editor={activeEditor} />
         <Toolbar />
         <div className={styles.body}>
-            <aside className={`${styles.sidebar} ${!visiblePanels.files && !visiblePanels.templates && !gitOpen ? styles.rail : ''}`}>
+            <aside id="project-sidebar" data-tour="project-sidebar" style={sidebarCollapsed ? undefined : { width: sidebarWidth }} className={`${styles.sidebar} ${sidebarCollapsed ? styles.rail : ''}`}>
               <div className={styles.explorer}>
               {visiblePanels.files && <FileTree />}
               {visiblePanels.templates && <TemplateCatalog />}
               </div>
               <div className={styles.sourceControl}>
-                <button type="button" className={styles.gitToggle} aria-expanded={gitOpen} aria-controls="source-control-panel"
-                  onClick={() => setGitOpen((open) => !open)} title={repository.error ? `Git status unavailable: ${repository.error}` : 'Source control'}>
-                  Git{(visiblePanels.files || visiblePanels.templates || gitOpen) && ' · Source control'}
+                <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.git} aria-controls="source-control-panel"
+                  onClick={() => togglePanel('git')} title={repository.error ? `Git status unavailable: ${repository.error}` : 'Source control'}>
+                  Git{(visiblePanels.files || visiblePanels.templates || visiblePanels.git) && ' · Source control'}
                   {uncommitted > 0 && <span className={styles.gitMarker} aria-label={`${uncommitted} uncommitted changes`} title={`${uncommitted} uncommitted changes`}>●</span>}
                   {repository.error && <span className={styles.gitMarker} aria-label="Git status unavailable">?</span>}
                 </button>
-                {gitOpen && <div id="source-control-panel" className={styles.gitPanel}>
+                {visiblePanels.git && <div id="source-control-panel" className={styles.gitPanel}>
                   <VersionControlPanel workspace={workspace} hasUnsavedChanges={hasUnsavedChanges} />
                 </div>}
               </div>
             </aside>
-          <main className={styles.main}>
+          {!sidebarCollapsed && <PanelResizeHandle label="Resize Files panel" controls="project-sidebar"
+            width={sidebarWidth} otherWidth={snippetsWidth} direction={1} onResize={setSidebarWidth} />}
+          <main data-tour="editor-workspace" className={styles.main}>
             <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
           </main>
-          <aside className={styles.snippets}>
+          <PanelResizeHandle label="Resize Snippets and Properties panel" controls="snippets-sidebar"
+            width={snippetsWidth} otherWidth={sidebarCollapsed ? 40 : sidebarWidth} direction={-1} onResize={setSnippetsWidth} />
+          <aside id="snippets-sidebar" data-tour="snippets-sidebar" style={{ width: snippetsWidth }} className={styles.snippets}>
             <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
             <div className={styles.sourceControl}>
-              <button type="button" className={styles.gitToggle} aria-expanded={propertiesOpen} aria-controls="properties-panel"
-                onClick={() => setPropertiesOpen(open => !open)}>Properties</button>
-              {propertiesOpen && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel /></div>}
+              <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
+                onClick={() => togglePanel('properties')}>Properties</button>
+              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /></div>}
             </div>
           </aside>
         </div>

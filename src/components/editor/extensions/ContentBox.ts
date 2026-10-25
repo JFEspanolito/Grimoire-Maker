@@ -1,5 +1,6 @@
 import { Node, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react'
 import { DOMSerializer, type Node as PMNode } from '@tiptap/pm/model'
+import { TextSelection } from '@tiptap/pm/state'
 import { ContentBoxView } from './ContentBoxView'
 
 export const BOX_PLACEMENTS = ['flow', 'free'] as const
@@ -11,12 +12,23 @@ export function boxNumber(value: unknown, minimum = 0): number | null {
   return Number.isFinite(number) ? Math.min(500, Math.max(minimum, number)) : null
 }
 
+export const BOX_BORDER_MAX_PX = 12
+export const DEFAULT_BORDER_COLOR = '#000000'
+/** Only plain hex colors reach a style attribute, so a stored value can never inject CSS. */
+export const boxBorderColor = (value: unknown): string => typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value.toLowerCase() : DEFAULT_BORDER_COLOR
+export function boxBorderWidth(value: unknown): number | null {
+  const width = boxNumber(value)
+  return width === null || width === 0 ? null : Math.min(BOX_BORDER_MAX_PX, Math.round(width))
+}
+
 export function boxAttributes(attrs: PMNode['attrs']): Record<string, string> {
   const placement = attrs.placement === 'free' ? 'free' : 'flow'
   const width = boxNumber(attrs.widthMm, 5)
   const height = boxNumber(attrs.heightMm, 5)
   const x = boxNumber(attrs.xMm)
   const y = boxNumber(attrs.yMm)
+  const border = boxBorderWidth(attrs.borderWidth)
+  const borderColor = boxBorderColor(attrs.borderColor)
   return {
     'data-type': 'standard-content-box',
     'data-placement': placement,
@@ -25,7 +37,8 @@ export function boxAttributes(attrs: PMNode['attrs']): Record<string, string> {
     ...(height === null ? {} : { 'data-height-mm': String(height) }),
     ...(x === null ? {} : { 'data-x-mm': String(x) }),
     ...(y === null ? {} : { 'data-y-mm': String(y) }),
-    style: `${width === null ? '' : `width:${width}mm;`}${height === null ? '' : `min-height:${height}mm;`}${placement === 'free' ? `position:absolute;left:${x ?? 0}mm;top:${y ?? 0}mm;` : ''}`,
+    ...(border === null ? {} : { 'data-border-width': String(border), 'data-border-color': borderColor }),
+    style: `${border === null ? '' : `border:${border}px solid ${borderColor};padding:2mm;box-sizing:border-box;`}${width === null ? '' : `width:${width}mm;`}${height === null ? '' : `min-height:${height}mm;`}${placement === 'free' ? `position:absolute;left:${x ?? 0}mm;top:${y ?? 0}mm;` : ''}`,
   }
 }
 
@@ -45,11 +58,46 @@ export const ContentBox = Node.create({
       heightMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.heightMm, 5) },
       xMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.xMm) },
       yMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.yMm) },
+      borderWidth: { default: null, rendered: false, parseHTML: (element) => boxBorderWidth(element.dataset.borderWidth) },
+      borderColor: { default: DEFAULT_BORDER_COLOR, rendered: false, parseHTML: (element) => boxBorderColor(element.dataset.borderColor) },
     }
   },
   parseHTML() { return [{ tag: 'div[data-type="standard-content-box"]' }] },
   renderHTML({ node, HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes, boxAttributes(node.attrs)), 0] },
   addNodeView() { return ReactNodeViewRenderer(ContentBoxView) },
+  addKeyboardShortcuts() {
+    const exitBoxAfter = () => {
+      const { state, view } = this.editor
+      const { selection, schema } = state
+      if (!selection.empty || !schema.nodes.paragraph) return false
+      const { $from } = selection
+      let boxDepth = 0
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type.name === 'standardContentBox') { boxDepth = d; break }
+      }
+      if (!boxDepth) return false
+      const boxEnd = $from.end(boxDepth)
+      // Only exit when at the very end of the last block inside the box.
+      if ($from.pos < boxEnd - 1) return false
+      const afterBox = $from.after(boxDepth)
+      const $after = state.doc.resolve(afterBox)
+      if ($after.nodeAfter) {
+        const nextSelection = TextSelection.findFrom($after, 1)
+        if (nextSelection) {
+          view.dispatch(state.tr.setSelection(nextSelection).scrollIntoView())
+          return true
+        }
+      }
+      const tr = state.tr.insert(afterBox, schema.nodes.paragraph.create())
+      tr.setSelection(TextSelection.create(tr.doc, afterBox + 1)).scrollIntoView()
+      view.dispatch(tr)
+      return true
+    }
+    return {
+      ArrowDown: () => exitBoxAfter(),
+      'Mod-Enter': () => exitBoxAfter(),
+    }
+  },
   addStorage() {
     return { markdown: {
       serialize(state: MarkdownState, node: PMNode) {

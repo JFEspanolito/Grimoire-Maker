@@ -2,7 +2,17 @@ import { create } from 'zustand'
 import type { PageSizeId, ThemeId, ViewMode } from '../types/document'
 import type { RulerGuide } from '../types/ruler'
 
+/** Which side panels and overlays are shown; every one is on until the author turns it off. */
+export const PANEL_IDS = ['files', 'templates', 'snippets', 'git', 'properties', 'documentIndex'] as const
+export type PanelId = (typeof PANEL_IDS)[number]
+export type PanelVisibility = Record<PanelId, boolean>
+export const DEFAULT_PANELS: PanelVisibility = { files: true, templates: true, snippets: true, git: true, properties: true, documentIndex: true }
+
 interface SettingsState {
+  panels: PanelVisibility
+  togglePanel: (panel: PanelId) => void
+  /** Applies a saved layout; unknown or missing entries keep their current value. */
+  restorePanels: (saved: Partial<Record<string, unknown>> | undefined) => void
   pageSize: PageSizeId
   columns: 1 | 2
   theme: ThemeId
@@ -32,6 +42,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   theme: 'parchment',
   viewMode: 'edit',
   zoom: 1,
+  panels: DEFAULT_PANELS,
+  togglePanel: (panel) => set((state) => ({ panels: { ...state.panels, [panel]: !state.panels[panel] } })),
+  restorePanels: (saved) => set((state) => ({
+    panels: Object.fromEntries(PANEL_IDS.map((id) => [id, typeof saved?.[id] === 'boolean' ? saved[id] : state.panels[id]])) as PanelVisibility,
+  })),
   autoCommitEnabled: true,
   autoCommitMinutes: 20,
   autoCommitMessage: 'update content automatically',

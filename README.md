@@ -74,7 +74,7 @@ grimoire-maker/
 │   ├── components/        # Editor, Layout, Mods, Project, Settings, Sidebar, Viewers, Git
 │   ├── hooks/             # Filesystem, Print/PDF, AutoSave, Git status, Zoom hooks
 │   ├── lib/               # Pure domain modules (themes, CSS guard, ZIP, DOCX, binder, Git)
-│   ├── plugins/           # Plugin runtime and built-in Pixel & Print Ruler + Guides
+│   ├── plugins/           # Trusted local TS/TSX/JS loader, lifecycle and generic UI slots
 │   ├── stores/            # Zustand state stores
 │   └── styles/            # Global print/page CSS and built-in themes (Parchment, Modern, Dark Fantasy, Sci-Fi)
 └── src-tauri/             # Rust native backend (Tauri v2)
@@ -84,3 +84,7 @@ grimoire-maker/
         ├── config_root.rs # App configuration root & safe migration
         └── safe_copy.rs   # Non-destructive atomic directory/file copying
 ```
+
+### Executable local plugins
+
+Zoom and Ruler are complete copyable source packages in `src/assets/mods/Plugins/`, seeded into the default Plugins content folder without overwriting edits. Active packages are transpiled from disk and render through generic host slots. They are trusted code with the app's permissions, **not sandboxed**. See [Local plugin development](PLUGINS.md) for package layout, supported imports, activation and cleanup.

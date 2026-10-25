@@ -476,6 +476,39 @@ fn unstage_in(root: &Path, path: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn revert_in(root: &Path, path: &str) -> Result<(), String> {
+    require_repository(root)?;
+    let entry = selected_entry(root, path)?;
+    if entry.index_status == "?" {
+        let target = root.join(path);
+        if target.exists() {
+            fs::remove_file(&target).map_err(|e| format!("Could not remove untracked file: {e}"))?;
+        }
+        return Ok(());
+    }
+    let head = git(root, &["rev-parse", "--verify", "HEAD"])?;
+    if !head.success || entry.index_status == "A" {
+        checked(root, &["rm", "--cached", "--force", "--ignore-unmatch", "--", path])?;
+        let target = root.join(path);
+        if target.exists() {
+            fs::remove_file(&target).map_err(|e| format!("Could not remove file: {e}"))?;
+        }
+        return Ok(());
+    }
+    if entry.index_status == "R" {
+        let target = root.join(path);
+        if target.exists() {
+            fs::remove_file(&target).map_err(|e| format!("Could not remove renamed file: {e}"))?;
+        }
+    }
+    let mut args = vec!["restore", "--staged", "--worktree", "--source=HEAD", "--", path];
+    if let Some(original) = &entry.original_path {
+        args.push(original);
+    }
+    checked(root, &args)?;
+    Ok(())
+}
+
 fn diff_in(root: &Path, path: &str, staged: bool) -> Result<GitDiff, String> {
     require_repository(root)?;
     let entry = selected_entry(root, path)?;
@@ -703,6 +736,11 @@ pub async fn git_unstage(app: AppHandle, workspace: String, path: String) -> Res
 }
 
 #[tauri::command]
+pub async fn git_revert(app: AppHandle, workspace: String, path: String) -> Result<(), String> {
+    in_project(app, workspace, move |root| revert_in(root, &path)).await
+}
+
+#[tauri::command]
 pub async fn git_commit(
     app: AppHandle,
     workspace: String,
@@ -914,6 +952,30 @@ mod tests {
         assert_eq!(raw(&root, &["diff", "--cached"]), "");
         assert!(!root.join("old name.md").exists());
         assert!(root.join("new ñame.md").exists());
+    }
+
+    #[test]
+    fn revert_restores_tracked_changes_and_removes_untracked_or_newly_staged_files() {
+        let root = repo("revert");
+        fs::write(root.join("tracked.md"), "original\n").unwrap();
+        stage_in(&root, "tracked.md").unwrap();
+        commit_in(&root, "Initial", &status_in(&root).unwrap().index_fingerprint).unwrap();
+
+        fs::write(root.join("tracked.md"), "modified\n").unwrap();
+        stage_in(&root, "tracked.md").unwrap();
+        revert_in(&root, "tracked.md").unwrap();
+        assert_eq!(fs::read_to_string(root.join("tracked.md")).unwrap().replace("\r\n", "\n"), "original\n");
+        assert!(status_in(&root).unwrap().entries.is_empty());
+
+        fs::write(root.join("untracked.md"), "scratch\n").unwrap();
+        revert_in(&root, "untracked.md").unwrap();
+        assert!(!root.join("untracked.md").exists());
+
+        fs::write(root.join("added.md"), "new staged\n").unwrap();
+        stage_in(&root, "added.md").unwrap();
+        revert_in(&root, "added.md").unwrap();
+        assert!(!root.join("added.md").exists());
+        assert!(status_in(&root).unwrap().entries.is_empty());
     }
 
     #[test]

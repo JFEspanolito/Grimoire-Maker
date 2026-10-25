@@ -1,4 +1,4 @@
-import { reportError } from '../../lib/errorLogging'
+import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { useRef, useState } from 'react'
 import { packProject, restoreProject } from '../../lib/projectArchive'
 import styles from './ProjectArchiveActions.module.css'
@@ -27,7 +27,7 @@ export function ProjectArchiveActions({ workspacePath, onRestored }: ProjectArch
       if (restore) await onRestored(path)
     } catch (cause) {
       reportError('project.archive', cause)
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(friendlyErrorMessage(cause, 'Could not complete the archive operation.'))
     } finally {
       locked.current = false
       setBusy(false)

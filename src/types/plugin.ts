@@ -12,8 +12,29 @@ export interface PluginPanel {
   component: ComponentType
 }
 
+export interface PluginSurface {
+  kind: 'editor' | 'preview'
+  zoom: number
+  setZoom(value: number): void
+}
+export interface PluginSurfaceWidget {
+  id: string
+  title: string
+  component: ComponentType<{ surface: PluginSurface }>
+}
+export interface PluginPageBehavior {
+  id: string
+  mount(element: HTMLElement, surface: PluginSurface): () => void
+}
+
 /** Surface a plugin can use. It never receives app internals directly. */
 export interface PluginApi {
+  registerToolbar(panel: PluginPanel): void
+  registerEditorTool(panel: PluginPanel): void
+  registerPreviewToolbar(panel: PluginSurfaceWidget): void
+  registerPageBehavior(behavior: PluginPageBehavior): void
+  addStyle(css: string): void
+  onCleanup(dispose: () => void): void
   registerCommand(command: PluginCommand): void
   registerPanel(panel: PluginPanel): void
   /** Floating overlay rendered above the page canvas. */

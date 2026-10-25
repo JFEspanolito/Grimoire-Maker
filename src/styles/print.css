@@ -1,54 +1,24 @@
-/* Paged.js / CSS Paged Media rules. Page size is injected at export time. */
-@page {
-  size: A4;
-  margin: 15mm;
-  bleed: 3mm;
-  marks: crop cross;
-}
-
-@page :left {
-  margin-right: 20mm;
-}
-
-@page :right {
-  margin-left: 20mm;
-}
-
-@media print {
-  body {
-    background: none;
-  }
-
-  aside,
-  header {
-    display: none !important;
-  }
-
-  .grimoire-page {
-    box-shadow: none;
-    margin: 0;
-    width: auto !important;
-    padding: 0 !important;
-  }
-
-  .grimoire-content h1 {
-    break-before: page;
-  }
-}
-
-/* Export container: laid out off-screen so Paged.js can measure, shown only when printing. */
+/* Native physical sheets use exactly the editable wrapped-column geometry. */
 .print-root {
   position: fixed;
   top: 0;
   left: -100000px;
 }
 
-@media print {
-  body.exporting #root {
-    display: none !important;
-  }
+.native-print-sheet {
+  position: relative;
+  overflow: hidden;
+  break-after: page;
+  break-inside: avoid;
+}
 
-  body.exporting .print-root {
-    position: static;
-  }
+.native-print-sheet:last-child { break-after: auto; }
+
+@media print {
+  html, body { height: auto !important; margin: 0 !important; }
+  body.exporting > :not(.print-root) { display: none !important; }
+  body.exporting .print-root { position: static; }
+  .print-root { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .print-dialog-dismiss { display: none !important; }
+  .print-root .grimoire-page { box-shadow: none; }
 }

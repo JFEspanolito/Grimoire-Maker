@@ -367,7 +367,7 @@ describe('workspace opening', () => {
     await Promise.all([actions.restoreSession(), actions.restoreSession()])
 
     expect(invoke).toHaveBeenCalledTimes(1)
-    expect(mkdir).toHaveBeenCalledTimes(4)
+    expect(mkdir).toHaveBeenCalledTimes(5)
   })
 
   it('keeps a remembered project when restoration fails instead of forgetting it silently', async () => {

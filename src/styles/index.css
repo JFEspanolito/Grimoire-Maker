@@ -355,3 +355,18 @@ body,
 .grimoire-content .character-sheet th {
   text-align: center;
 }
+
+/* Find dialog highlights */
+.grimoire-content .search-match { background: #f5c54299; border-radius: 2px; }
+.grimoire-content .search-current { background: #f08a24; color: #1c1b19; }
+
+/* Every section owns its column rows; the flow only stacks them, one run of sheets each. */
+[data-paginated='true'] .grimoire-section {
+  column-count: var(--section-columns, var(--page-columns));
+  column-gap: 8mm;
+  column-height: var(--content-height);
+  column-fill: auto;
+  column-wrap: wrap;
+  row-gap: var(--row-gap);
+}
+[data-paginated='true'] .grimoire-section + .grimoire-section { margin-top: var(--row-gap); }

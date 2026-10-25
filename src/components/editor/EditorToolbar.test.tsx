@@ -7,13 +7,11 @@ import sheetStyles from '../../styles/index.css?raw'
 import preflight from 'tailwindcss/preflight.css?raw'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { useDocumentStore } from '../../stores/documentStore'
-import { importImage } from '../../lib/images'
 import { EditorToolbar } from './EditorToolbar'
 import { GrimoireImage } from './extensions/image'
+import { TableExtensions } from './extensions/tables'
+import { EDITOR_EXTENSIONS } from './editorExtensions'
 
-const saveFile = vi.hoisted(() => vi.fn())
-vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ saveFile }) }))
-vi.mock('../../lib/images', () => ({ importImage: vi.fn() }))
 
 let root: Root | null = null
 let editor: Editor | null = null
@@ -21,14 +19,6 @@ let styles: HTMLStyleElement | null = null
 let host: HTMLDivElement | null = null
 const markdownOf = (value: Editor) => (value.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown()
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
-
-it('places the independent Guides menu immediately after Image', async () => {
-  const container = document.createElement('div')
-  root = createRoot(container)
-  await act(async () => root?.render(<EditorToolbar editor={null} />))
-  const image = container.querySelector('[title^="Insert image"]')!
-  expect(image.nextElementSibling?.getAttribute('aria-label')).toBe('Guides')
-})
 
 it('keeps the image layout row mounted and empty when the selection leaves the image', async () => {
   editor = new Editor({ extensions: [StarterKit, GrimoireImage], content: '<p>Text</p><img src="map.png" />' })
@@ -89,11 +79,8 @@ describe('block formatting and underline', () => {
   it.each([
     ['Bulleted list', 'ul', 'listStyle', 'disc outside', '- Sample text'],
     ['Numbered list', 'ol', 'listStyle', 'decimal outside', '1. Sample text'],
-    ['Quote', 'blockquote', 'borderLeftWidth', '3px', '> Sample text'],
-    ['Divider', 'hr', 'borderTopWidth', '2px', '---'],
   ])('%s applies a visible block and persists Markdown', async (label, selector, property, expectedStyle, markdown) => {
     const toolbar = await mountToolbar()
-    if (selector === 'hr') editor!.commands.setTextSelection(12)
     await act(async () => toolbar.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click())
     const block = host!.querySelector(selector)
     expect(block).not.toBeNull()
@@ -117,32 +104,57 @@ describe('block formatting and underline', () => {
   })
 })
 
-describe('image insertion', () => {
-  it('asks to save an unsaved document instead of opening a Markdown picker as if it were the image picker', async () => {
-    useDocumentStore.getState().loadFromRaw(null, '')
-    editor = new Editor({ element: document.createElement('div'), extensions: [StarterKit] })
+describe('context row', () => {
+  it('shows table tools in the image row slot instead of adding another row', async () => {
+    editor = new Editor({ extensions: [StarterKit, GrimoireImage, ...TableExtensions], content: '<p>Text</p>' })
     const container = document.createElement('div')
     root = createRoot(container)
     await act(async () => root?.render(<EditorToolbar editor={editor} />))
+    const rows = () => Array.from(container.querySelectorAll('[role="group"][aria-label="Image layout"], [role="group"][aria-label="Table"]'))
+    expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Image layout'])
+    await act(async () => { editor!.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run() })
+    expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Table'])
+    await act(async () => { editor!.commands.deleteTable() })
+    expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(['Image layout'])
+  })
+})
 
-    await act(async () => container.querySelector<HTMLButtonElement>('button[title^="Insert image"]')?.click())
-
-    expect(container.textContent).toContain('Save this document as Markdown before importing an image.')
-    expect(saveFile).not.toHaveBeenCalled()
-    expect(importImage).not.toHaveBeenCalled()
+describe('toolbar layout and text controls', () => {
+  it('orders the groups with simple separators and offers color, size, alignment and indent', async () => {
+    editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'Hello world' })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<EditorToolbar editor={editor} />))
+    const bar = container.querySelector('[role="toolbar"]')!
+    const sequence = Array.from(bar.querySelectorAll('[role="separator"], button, select, input')).filter((item) => !item.closest('details')).map((item) =>
+      item.getAttribute('role') === 'separator' ? '//' : item.getAttribute('aria-label') ?? item.textContent)
+    expect(sequence).toEqual([
+      'Undo', 'Redo', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
+      'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', '//',
+      'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', '//', 'Find and replace', 'Page view',
+    ])
+    const alignment = bar.querySelector<HTMLSelectElement>('[aria-label="Alignment"]')!
+    expect(Array.from(alignment.options, (option) => option.textContent)).toEqual(['Left', 'Centered', 'Right', 'Justified'])
   })
 
-  it('opens the image picker for a saved document', async () => {
-    useDocumentStore.getState().loadFromRaw('/workspace/Draft/Chapter.md', '')
-    vi.mocked(importImage).mockResolvedValue(null)
-    editor = new Editor({ element: document.createElement('div'), extensions: [StarterKit] })
+  it('applies size, color, alignment and indent to the selection', async () => {
+    editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'Hello world' })
+    editor.commands.selectAll()
     const container = document.createElement('div')
     root = createRoot(container)
     await act(async () => root?.render(<EditorToolbar editor={editor} />))
-
-    await act(async () => container.querySelector<HTMLButtonElement>('button[title^="Insert image"]')?.click())
-
-    expect(importImage).toHaveBeenCalledWith('/workspace/Draft/Chapter.md')
-    expect(saveFile).not.toHaveBeenCalled()
+    const change = (selector: string, value: string) => act(async () => {
+      const element = container.querySelector<HTMLSelectElement | HTMLInputElement>(selector)!
+      const prototype = element instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
+      Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(element, value)
+      element.dispatchEvent(new Event(element instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }))
+    })
+    await change('[aria-label="Text size"]', '20')
+    await change('[aria-label="Text color"]', '#336699')
+    await change('[aria-label="Alignment"]', 'justify')
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Increase indent"]')!.click())
+    expect(editor.getAttributes('textStyle')).toMatchObject({ fontSize: '20px', color: '#336699' })
+    expect(editor.getAttributes('paragraph')).toMatchObject({ textAlign: 'justify', indent: 1 })
+    expect(container.querySelector<HTMLSelectElement>('[aria-label="Text size"]')!.value).toBe('20')
   })
 })

@@ -3,7 +3,7 @@ import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } fro
 import { ensureModDirectory, seedExamples, type ModFs } from './modCatalog'
 import { loadLibraryPaths, type LibraryPaths } from './preferences'
 
-const exampleFiles = import.meta.glob('../assets/mods/**/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/Plugins/**/*.{ts,tsx,js,css}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 export const MOD_EXAMPLES = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
 export const modFs: ModFs = {
   exists, readDir, readTextFile, stat,
@@ -27,9 +27,24 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
   await ensureModDirectory(modFs, root, 'Plugins')
   await ensureModDirectory(modFs, root, 'Templates')
   // Seed only the original default library. Never populate a user's custom directory implicitly.
-  const examples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) =>
-    path.startsWith('Templates/') ? paths.templates === `${root}/Templates` : paths.snippets === `${root}/Snippets`))
+  const examples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => {
+    if (path.startsWith('Templates/')) return paths.templates === `${root}/Templates`
+    if (path.startsWith('Snippets/')) return paths.snippets === `${root}/Snippets`
+    if (path.startsWith('Plugins/')) return paths.plugins === `${root}/Plugins`
+    return false
+  }))
   await seedExamples(modFs, root, examples)
+  if (paths.plugins === `${root}/Plugins` && !(await exists(`${root}/Plugins/.executable-plugins-v1-seeded`))) {
+    const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/')))
+    for (const [relative, contents] of Object.entries(pluginExamples)) {
+      const segments = relative.split('/')
+      let parent = root
+      for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(modFs, parent, name)
+      const path = `${parent}/${segments.at(-1)}`
+      if (!(await exists(path))) await modFs.writeTextFile(path, contents)
+    }
+    await modFs.writeTextFile(`${root}/Plugins/.executable-plugins-v1-seeded`, '1\n')
+  }
   return { root, ...paths, preferences: `${config}/mods.json` }
 }
 

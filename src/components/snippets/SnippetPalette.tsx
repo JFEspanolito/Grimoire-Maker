@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core'
 import type { Editor } from '@tiptap/react'
-import { useSettingsStore } from '../../stores/settingsStore'
 import { useTemplateStore } from '../../stores/templateStore'
 import { useModStore } from '../../stores/modStore'
 import type { TemplateSnippet } from '../../lib/templateSnippets'
@@ -12,15 +11,14 @@ import { insertContentBox } from '../../lib/contentBoxes'
 
 type PaletteSnippet = Snippet | TemplateSnippet
 
-function DraggableSnippet({ snippet, onInsert, disabled }: { snippet: PaletteSnippet; onInsert: () => void; disabled: boolean }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: snippet.id, disabled })
+function DraggableSnippet({ snippet, onInsert }: { snippet: PaletteSnippet; onInsert: () => void }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: snippet.id })
   return (
     <button
       ref={setNodeRef}
       {...listeners}
       {...attributes}
       type="button"
-      disabled={disabled}
       title="Drag onto the page to choose a position, or double-click to insert at the cursor"
       onDoubleClick={onInsert}
       onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); onInsert() } }}
@@ -40,7 +38,6 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [caret, setCaret] = useState<{ left: number; top: number; height: number } | null>(null)
-  const canInsert = useSettingsStore((s) => s.viewMode === 'edit')
   const templates = useTemplateStore((s) => s.templates)
   const ready = useModStore((s) => s.ready)
   const folderSnippets = useModStore((s) => s.snippets)
@@ -48,11 +45,11 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
   const snippets: PaletteSnippet[] = [...(ready ? folderSnippets : SNIPPETS), ...custom]
   const groups = [...new Set(snippets.map((snippet) => snippet.group))]
   const insert = (snippet: PaletteSnippet) => {
-    if (canInsert && editor) insertContentBox(editor, 'markdown' in snippet ? snippet.markdown : snippet.node)
+    if (editor) insertContentBox(editor, 'markdown' in snippet ? snippet.markdown : snippet.node)
   }
 
   const resolveDrop = ({ activatorEvent, delta }: DragMoveEvent | DragEndEvent) => {
-    if (!canInsert || !(activatorEvent instanceof MouseEvent)) return null
+    if (!(activatorEvent instanceof MouseEvent)) return null
     return findSnippetDropTarget(activatorEvent.clientX + delta.x, activatorEvent.clientY + delta.y)
   }
   const onDragEnd = (event: DragEndEvent) => {
@@ -76,7 +73,6 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
       }}>
       <div className="flex flex-col gap-2 p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Snippets</h2>
-        {!canInsert && <p className="text-xs text-amber-400">Switch to Edit view to insert snippets.</p>}
         {groups.map((group) => (
           <details key={group} open className="group" aria-label={group}>
             <summary className="flex cursor-pointer list-none items-center gap-2 rounded px-1 py-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:bg-white/5 [&::-webkit-details-marker]:hidden">
@@ -85,7 +81,7 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
             </summary>
             <div className="mt-2 flex flex-col gap-2">
               {snippets.filter((s) => s.group === group).map((snippet) => (
-                <DraggableSnippet key={snippet.id} snippet={snippet} disabled={!canInsert} onInsert={() => insert(snippet)} />
+                <DraggableSnippet key={snippet.id} snippet={snippet} onInsert={() => insert(snippet)} />
               ))}
             </div>
           </details>

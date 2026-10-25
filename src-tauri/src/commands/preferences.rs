@@ -83,6 +83,26 @@ pub struct UserSettings {
     auto_commit_minutes: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     auto_commit_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    panels: Option<Panels>,
+}
+
+/// Which side panels and overlays are shown; a missing entry keeps the app default.
+#[derive(Clone, Default, Deserialize, Serialize, PartialEq, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Panels {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    files: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    templates: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    snippets: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    git: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    properties: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    document_index: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Debug)]
@@ -448,6 +468,58 @@ pub async fn change_library_path(
                 .map_err(|e| e.to_string())
         })
         .map(Some)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn delete_user_theme_in(config: &Path, id: &str) -> Result<(), String> {
+    if id.is_empty()
+        || id.len() > 64
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+    {
+        return Err("Invalid theme ID".into());
+    }
+    let paths = read_paths(config)?;
+    let themes_dir = fs::canonicalize(&paths.themes).map_err(|e| e.to_string())?;
+    let mut target: Option<PathBuf> = None;
+    for entry in fs::read_dir(&themes_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if let Some(stem) = name
+            .strip_suffix(".css")
+            .or_else(|| name.strip_suffix(".CSS"))
+        {
+            if stem == id {
+                let meta = fs::symlink_metadata(entry.path()).map_err(|e| e.to_string())?;
+                if !meta.is_file() || meta.file_type().is_symlink() {
+                    return Err(
+                        "The theme must be a regular, non-linked file. Reload and try again."
+                            .into(),
+                    );
+                }
+                target = Some(entry.path());
+                break;
+            }
+        }
+    }
+    let file_path =
+        target.ok_or("The theme file was already removed. Reload themes and try again.")?;
+    let resolved = fs::canonicalize(&file_path).map_err(|e| e.to_string())?;
+    if resolved.parent() != Some(themes_dir.as_path()) {
+        return Err("Theme file escapes the configured themes folder".into());
+    }
+    fs::remove_file(&resolved).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_user_theme(app: AppHandle, id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = CHANGES.lock().map_err(|e| e.to_string())?;
+        let config = crate::config_root::path(&app)?;
+        delete_user_theme_in(&config, &id)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1140,5 +1212,25 @@ mod preferences_tests {
             read_preferences(&config).unwrap().settings,
             final_value.settings
         );
+    }
+
+    #[test]
+    fn saved_panels_round_trip_and_unknown_panels_are_rejected() {
+        let settings: UserSettings = serde_json::from_str(r#"{"panels":{"files":false,"documentIndex":true}}"#).unwrap();
+        assert_eq!(settings.panels.as_ref().and_then(|p| p.files), Some(false));
+        assert_eq!(serde_json::to_string(&settings).unwrap(), r#"{"panels":{"files":false,"documentIndex":true}}"#);
+        assert!(serde_json::from_str::<UserSettings>(r#"{"panels":{"bogus":true}}"#).is_err());
+    }
+
+    #[test]
+    fn deletes_only_regular_css_files_inside_configured_themes_folder() {
+        let config = scratch("delete-theme");
+        let paths = read_paths(&config).unwrap();
+        let themes = Path::new(&paths.themes);
+        fs::write(themes.join("theme-test.css"), "/* @name: ThemeTest */").unwrap();
+        delete_user_theme_in(&config, "theme-test").unwrap();
+        assert!(!themes.join("theme-test.css").exists());
+        assert!(delete_user_theme_in(&config, "theme-test").is_err());
+        assert!(delete_user_theme_in(&config, "../outside").is_err());
     }
 }

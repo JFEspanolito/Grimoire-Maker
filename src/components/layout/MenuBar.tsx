@@ -1,4 +1,4 @@
-import { reportError } from '../../lib/errorLogging'
+import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
@@ -13,16 +13,23 @@ import { NewProjectDialog } from '../project/NewProjectDialog'
 import { fileShortcut } from '../../lib/shortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
 import { AppInfoDialog, type InfoDialogKind } from '../settings/AppInfoDialog'
+import { StatisticsDialog } from './StatisticsDialog'
+import { ExportPdfDialog, type Book } from './ExportPdfDialog'
+import { DocumentOrderDialog } from '../settings/DocumentOrderDialog'
+import { PropertiesDialog } from '../settings/PropertiesDialog'
+import type { Editor } from '@tiptap/react'
+import { insertDivider, insertFloatingBox, insertImage, insertQuote, insertSectionBreak, insertTable } from '../../lib/insertActions'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
-type Panel = 'files' | 'templates' | 'snippets'
+type Panel = Exclude<PanelId, 'documentIndex'>
 interface Props {
   visiblePanels: Record<Panel, boolean>
   onTogglePanel: (panel: Panel) => void
+  editor?: Editor | null
 }
 
-export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
+export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) {
   const actions = useFileSystem()
   const print = usePrint()
   const workspace = useDocumentStore((s) => s.workspaceRoot)
@@ -30,12 +37,17 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const split = useTabStore((s) => s.split)
-  const viewMode = useSettingsStore((s) => s.viewMode)
-  const { pageSize, columns, setPageSize, setColumns } = useSettingsStore()
+  const { pageSize, columns, setPageSize, setColumns, panels, togglePanel } = useSettingsStore()
+  const showDocumentIndex = panels.documentIndex
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [preferencesSection, setPreferencesSection] = useState<'appearance' | 'folders'>('appearance')
+  const [statisticsOpen, setStatisticsOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [orderOpen, setOrderOpen] = useState(false)
+  const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [infoDialog, setInfoDialog] = useState<InfoDialogKind | null>(null)
   const settingsSummary = useRef<HTMLElement>(null)
   const bar = useRef<HTMLElement>(null)
@@ -53,7 +65,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const run = async (action: () => unknown | Promise<unknown>) => {
     closeMenus()
     setError('')
-    try { await action() } catch (cause) { reportError('menu.action', cause); setError(cause instanceof Error ? cause.message : String(cause)) }
+    try { await action() } catch (cause) { reportError('menu.action', cause); setError(friendlyErrorMessage(cause)) }
   }
   const onFileShortcut = useEffectEvent((event: KeyboardEvent) => {
     const shortcut = fileShortcut(event)
@@ -95,14 +107,14 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <hr />
         <button disabled={!workspace || !importSection} title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'} onClick={() => void run(() => actions.importInto())}>Import…</button>
         <hr />
-        <button disabled={readOnly} onClick={() => void run(print)}>Export PDF…</button>
+        <button disabled={readOnly} onClick={() => { closeMenus(); setExportOpen(true) }}>Export PDF…</button>
         <hr />
       </div>
     </details>
     <details name="application-menu">
       <summary>View</summary>
       <div className={styles.menu}>
-        {(['files', 'templates', 'snippets'] as const).map((panel) => <button key={panel}
+        {(['files', 'templates', 'snippets', 'git', 'properties'] as const).map((panel) => <button key={panel}
           aria-label={`${visiblePanels[panel] ? 'Hide' : 'Show'} ${panel} panel`}
           aria-pressed={visiblePanels[panel]} onClick={() => onTogglePanel(panel)}>
           <span className={styles.check} aria-hidden="true">{visiblePanels[panel] ? '✓' : ''}</span>{panel[0].toUpperCase() + panel.slice(1)}
@@ -111,18 +123,25 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <button aria-label="Split View" aria-pressed={split} onClick={() => void run(() => useTabStore.getState().toggleSplit())}>
           <span className={styles.check} aria-hidden="true">{split ? '✓' : ''}</span>Split View
         </button>
-        <button aria-label="Page View" aria-pressed={viewMode !== 'edit'} disabled={readOnly}
-          title={viewMode === 'edit' ? 'Preview paginated pages' : 'Return to editing'}
-          onClick={() => void run(() => useSettingsStore.getState().setViewMode(viewMode === 'edit' ? 'pages' : 'edit'))}>
-          <span className={styles.check} aria-hidden="true">{viewMode !== 'edit' ? '✓' : ''}</span>Page View
+        <button aria-label="Document Index" aria-pressed={showDocumentIndex} onClick={() => togglePanel('documentIndex')}>
+          <span className={styles.check} aria-hidden="true">{showDocumentIndex ? '✓' : ''}</span>Document Index
         </button>
-        {viewMode !== 'edit' && <label className={styles.layout}>Preview layout
-          <select aria-label="Preview layout" value={viewMode} disabled={readOnly}
-            onChange={(event) => useSettingsStore.getState().setViewMode(event.target.value === 'spreads' ? 'spreads' : 'pages')}>
-            <option value="pages">Single pages</option><option value="spreads">Facing pages</option>
-          </select>
-        </label>}
-        <hr />
+      </div>
+    </details>
+    {!readOnly && <details name="application-menu">
+      <summary>Insert</summary>
+      <div className={styles.menu}>
+        <button disabled={!editor} onClick={() => void run(() => insertTable(editor!))}>Table</button>
+        <button disabled={!editor} onClick={() => void run(async () => { await insertImage(editor!); await actions.refreshTree() })}>Image…</button>
+        <button disabled={!editor} onClick={() => void run(() => insertDivider(editor!))}>Horizontal Rule</button>
+        <button disabled={!editor} onClick={() => void run(() => insertQuote(editor!))}>Quote</button>
+        <button disabled={!editor} onClick={() => void run(() => insertFloatingBox(editor!))}>Floating Box</button>
+        <button disabled={!editor} onClick={() => void run(() => insertSectionBreak(editor!))}>Section Break</button>
+      </div>
+    </details>}
+    {!readOnly && <details name="application-menu">
+      <summary>Document</summary>
+      <div className={styles.menu}>
         <label className={styles.layout}>Page size
           <select aria-label="Page size" value={pageSize} onChange={(event) => setPageSize(event.target.value as PageSizeId)}>
             {Object.values(PAGE_SIZES).map((size) => <option key={size.id} value={size.id}>{size.label}</option>)}
@@ -134,21 +153,32 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
             <option value={2}>2</option>
           </select>
         </label>
+        <hr />
+        <button type="button" onClick={() => { closeMenus(); setPropertiesOpen(true) }}>Properties…</button>
+        <button type="button" disabled={!workspace} onClick={() => { closeMenus(); setOrderOpen(true) }}>Document Order…</button>
+        <button type="button" onClick={() => { closeMenus(); setStatisticsOpen(true) }}>Statistics…</button>
+        <hr />
+        <button type="button" onClick={() => { closeMenus(); setExportOpen(true) }}>Export PDF…</button>
       </div>
-    </details>
+    </details>}
     <details name="application-menu">
       <summary ref={settingsSummary}>Settings</summary>
       <div className={styles.menu}>
         <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
-        <button type="button" onClick={() => { closeMenus(); setPreferencesOpen(true) }}>Preferences…</button>
+        <button type="button" onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesOpen(true) }}>Preferences…</button>
         <button type="button" onClick={() => openInfo('about')}>About</button>
         <button type="button" onClick={() => openInfo('tutorial')}>Tutorial</button>
       </div>
     </details>
     {error && <span role="alert" className={styles.error}>{error}</span>}
-  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}
+  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} onEditPaths={() => { setModsOpen(false); setPreferencesSection('folders'); setPreferencesOpen(true) }} />}
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
-    {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog onClose={() => setPreferencesOpen(false)} /></Suspense>}
+    {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog initialSection={preferencesSection} onClose={() => setPreferencesOpen(false)} /></Suspense>}
+    {statisticsOpen && <StatisticsDialog onClose={() => setStatisticsOpen(false)} />}
+    {propertiesOpen && <PropertiesDialog editor={editor} onClose={() => setPropertiesOpen(false)} />}
+    {orderOpen && workspace && <DocumentOrderDialog root={workspace} onClose={() => setOrderOpen(false)} />}
+    {exportOpen && <ExportPdfDialog onClose={() => setExportOpen(false)}
+      onExport={(book?: Book) => { setExportOpen(false); void run(() => print(book)) }} />}
     {infoDialog && <AppInfoDialog kind={infoDialog} onClose={() => setInfoDialog(null)} />}
   </>
 }

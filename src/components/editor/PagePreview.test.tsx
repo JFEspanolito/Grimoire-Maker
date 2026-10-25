@@ -6,12 +6,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Previewer } from 'pagedjs'
 import { paginate } from '../../lib/exportPdf'
 import { PagePreview } from './PagePreview'
+import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import { registerPlugin, unregisterPlugin } from '../../plugins/plugin-manager'
 
 vi.mock('../../lib/exportPdf', () => ({ paginate: vi.fn() }))
 
 let root: Root
 let container: HTMLDivElement
 beforeEach(() => {
+  registerPlugin(zoomPlugin)
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   vi.useFakeTimers()
   container = document.createElement('div')
@@ -20,6 +23,7 @@ beforeEach(() => {
 })
 afterEach(async () => {
   await act(async () => root.unmount())
+  unregisterPlugin(zoomPlugin.id)
   container.remove()
   vi.useRealTimers()
   vi.clearAllMocks()
@@ -50,6 +54,34 @@ it('can leave the preview before pagination starts', async () => {
   await act(async () => root.render(null))
   await act(async () => vi.advanceTimersByTimeAsync(400))
   expect(paginate).not.toHaveBeenCalled()
+})
+
+it.each(['pages', 'spreads'] as const)('paginates outside display zoom and keeps two static pages in %s mode', async (mode) => {
+  let targetStage!: HTMLElement
+  let removePages!: ReturnType<typeof vi.spyOn>
+  vi.mocked(paginate).mockImplementation(async (previewer, _request, target) => {
+    targetStage = target
+    expect(target.isConnected).toBe(true)
+    expect(target.closest('.page-preview')).toBeNull()
+    initialize(previewer, target)
+    removePages = vi.spyOn(previewer.chunker, 'removePages').mockImplementation(() => target.replaceChildren())
+  })
+  await act(async () => root.render(<PagePreview mode={mode} />))
+  await act(async () => vi.advanceTimersByTimeAsync(400))
+  expect(container.querySelector('[role="status"]')?.textContent).toBe('2 pages')
+  expect(removePages).toHaveBeenCalledOnce()
+  expect(targetStage.isConnected).toBe(false)
+  expect(container.querySelectorAll('.pagedjs_page')).toHaveLength(2)
+  const zoom = container.querySelector('select')!
+  await act(async () => {
+    zoom.value = '0.4'
+    zoom.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  await act(async () => root.render(<PagePreview mode={mode === 'pages' ? 'spreads' : 'pages'} />))
+  await act(async () => vi.advanceTimersByTimeAsync(1000))
+  expect(paginate).toHaveBeenCalledOnce()
+  expect(container.querySelectorAll('.pagedjs_page')).toHaveLength(2)
+  expect(container.textContent).toContain('First pageSecond page')
 })
 
 it('disconnects page listeners before removing completed preview styles', async () => {
