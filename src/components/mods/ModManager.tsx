@@ -136,10 +136,14 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
 
         <section className={styles.viewer} role="tabpanel" aria-label={`${activeKind} mods`}>
           <h3 className={styles.viewerTitle}>{activeKind}</h3>
+          {activeKind === MOD_KIND.PLUGINS && <p className={styles.description}>
+            Trusted local code only. Enabled plugins execute TSX, TS or JS with the app's permissions; they are not sandboxed.
+            Copy the complete plugin folder here and refresh. Disable a plugin to unload its controls and registered resources.
+          </p>}
           {visibleMods.length === 0 ? (
             <p className={styles.description}>
               {activeKind === MOD_KIND.PLUGINS
-                ? 'No plugins mods found. Executable plugins are reserved for stage 2.'
+                ? 'No plugins found. Add a folder with a TSX, TS or JS plugin entry.'
                 : `No ${activeKind.toLowerCase()} mods found.`}
             </p>
           ) : (

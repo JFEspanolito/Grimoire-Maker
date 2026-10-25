@@ -42,6 +42,37 @@ export const Section = Node.create({
     return { columns: { default: null, rendered: false, parseHTML: (element: HTMLElement) => sectionColumns(element.dataset.columns) } }
   },
   parseHTML() { return [{ tag: 'section[data-type="page-section"]' }] },
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('section')
+      dom.dataset.type = 'page-section'
+      dom.className = 'grimoire-section'
+      const applyColumns = (current: PMNode) => {
+        const columns = sectionColumns(current.attrs.columns)
+        if (columns) {
+          dom.dataset.columns = String(columns)
+          dom.style.setProperty('--section-columns', String(columns))
+        } else {
+          delete dom.dataset.columns
+          dom.style.removeProperty('--section-columns')
+        }
+      }
+      applyColumns(node)
+      return {
+        dom,
+        contentDOM: dom,
+        update(next) {
+          if (next.type !== node.type) return false
+          applyColumns(next)
+          return true
+        },
+        // Pagination owns section styles, not document content. Keep descendant
+        // text/child mutations visible to ProseMirror so editing remains native.
+        ignoreMutation: mutation => mutation.type === 'attributes'
+          && mutation.target === dom && mutation.attributeName === 'style',
+      }
+    }
+  },
   renderHTML({ node }) {
     const columns = sectionColumns(node.attrs.columns)
     return ['section', {

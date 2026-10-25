@@ -1,4 +1,4 @@
-import { useSettingsStore } from '../../../stores/settingsStore'
+import { usePageSettings as useSettingsStore } from '@grimoire/plugin-api'
 
 export const clamp = (value: number, maximum: number) => Math.round(Math.max(0, Math.min(value, maximum)) * 10) / 10
 export const updateGuide = (id: string, positionMm: number) => {

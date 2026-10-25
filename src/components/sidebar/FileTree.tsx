@@ -24,6 +24,9 @@ import { imageReference, isImageFile } from "../../lib/assetPaths";
 import { findSnippetDropTarget } from "../../lib/snippetDrop";
 import { newImageAttrs } from "../../lib/insertActions";
 
+const fileLabel = (name: string, isDirectory = false): string =>
+  isDirectory ? name : name.replace(/(?<=.)\.[^.]+$/, "");
+
 type Editing =
   | { kind: "new-file" | "new-folder"; dir: string }
   | { kind: "rename"; path: string; extension: string };
@@ -75,7 +78,7 @@ function InlineInput({
 }
 
 function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
-  const label = documentLabel(node.name, node.isDirectory);
+  const label = fileLabel(node.name, node.isDirectory);
   const sectionRoot = ["Draft", "Research", "Trash"].some(
     (section) =>
       node.path.toLowerCase() === `${ctx.root}/${section}`.toLowerCase(),
@@ -102,7 +105,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
 
   const row = renaming ? (
     <InlineInput
-      initial={label}
+      initial={documentLabel(node.name, node.isDirectory)}
       onSubmit={ctx.onSubmit}
       onCancel={ctx.onCancel}
     />
@@ -241,6 +244,7 @@ export function FileTree() {
     y: number;
   } | null>(null);
   const [draggedLabel, setDraggedLabel] = useState<string | null>(null);
+  const [imageCaret, setImageCaret] = useState<{ left: number; top: number; height: number } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FileNode | null>(null);
 
   useEffect(() => {
@@ -319,6 +323,7 @@ export function FileTree() {
 
   const onDragEnd = (event: DragEndEvent) => {
     setDraggedLabel(null);
+    setImageCaret(null);
     const from = String(event.active.id);
     // An image dropped on a page is inserted by reference: the file already exists in the project.
     if (isImageFile(from) && event.activatorEvent instanceof MouseEvent) {
@@ -489,10 +494,20 @@ export function FileTree() {
         onDragStart={({ active }) =>
           setDraggedLabel(
             active.data.current?.label ??
-              documentLabel(String(active.id).split("/").pop() ?? ""),
+              fileLabel(String(active.id).split("/").pop() ?? ""),
           )
         }
-        onDragCancel={() => setDraggedLabel(null)}
+        onDragCancel={() => { setDraggedLabel(null); setImageCaret(null); }}
+        onDragMove={(event) => {
+          if (!isImageFile(String(event.active.id)) || !(event.activatorEvent instanceof MouseEvent)) {
+            setImageCaret(null);
+            return;
+          }
+          const target = findSnippetDropTarget(event.activatorEvent.clientX + event.delta.x, event.activatorEvent.clientY + event.delta.y);
+          if (!target) { setImageCaret(null); return; }
+          const point = target.editor.view.coordsAtPos(target.position);
+          setImageCaret({ left: point.left, top: point.top, height: Math.max(18, point.bottom - point.top) });
+        }}
         collisionDetection={(args) => {
           const collisions = pointerWithin(args);
           const rows = collisions.filter((hit) => hit.id !== root);
@@ -525,10 +540,13 @@ export function FileTree() {
             document.body,
           )}
       </DndContext>
+      {imageCaret && createPortal(<div aria-hidden="true" data-image-drop-caret=""
+        style={{ position: 'fixed', pointerEvents: 'none', zIndex: 1000, left: imageCaret.left,
+          top: imageCaret.top, height: imageCaret.height, borderLeft: '3px solid #f59e0b' }} />, document.body)}
       {menu && (
         <div
           role="menu"
-          aria-label={`${documentLabel(menu.node.name, menu.node.isDirectory)} actions`}
+          aria-label={`${fileLabel(menu.node.name, menu.node.isDirectory)} actions`}
           className="fixed z-50 min-w-36 rounded border border-white/20 bg-neutral-800 p-1 shadow-xl"
           style={{ left: menu.x, top: menu.y }}
           onPointerDown={(event) => event.stopPropagation()}
@@ -633,7 +651,7 @@ export function FileTree() {
       {pendingDelete && (
         <ConfirmDialog
           title="Delete permanently"
-          message={`Delete "${documentLabel(pendingDelete.name, pendingDelete.isDirectory)}"? It will be sent to the system recycle bin and removed from the project.`}
+          message={`Delete "${fileLabel(pendingDelete.name, pendingDelete.isDirectory)}"? It will be sent to the system recycle bin and removed from the project.`}
           confirmLabel="Delete"
           danger
           onCancel={() => setPendingDelete(null)}

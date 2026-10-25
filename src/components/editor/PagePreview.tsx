@@ -8,14 +8,15 @@ import { resolveTheme } from '../../lib/themes'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useThemeStore } from '../../stores/themeStore'
-import { useWheelZoom } from '../../hooks/useWheelZoom'
+import { usePluginSurface } from '../../plugins/usePluginSurface'
+import { usePluginRegistry } from '../../plugins/plugin-manager'
+import { PluginBoundary } from '../../plugins/PluginSlot'
 
 type Status =
   | { kind: 'rendering' }
   | { kind: 'ready'; pages: number }
   | { kind: 'error'; message: string }
 
-const ZOOMS = [0.4, 0.5, 0.6, 0.75, 1]
 /** Pagination is slow on long documents; wait for settings and edits to settle. */
 const DEBOUNCE_MS = 400
 
@@ -35,7 +36,8 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
   const host = useRef<HTMLDivElement>(null)
   const [status, setStatus] = useState<Status>({ kind: 'rendering' })
   const [zoom, setZoom] = useState(mode === 'spreads' ? 0.5 : 0.75)
-  const zoomRef = useWheelZoom(zoom, setZoom, ZOOMS)
+  const zoomRef = usePluginSurface('preview', zoom, setZoom)
+  const tools = usePluginRegistry(state => state.previewToolbar)
   const activeTheme = resolveTheme(theme, themes)
 
   const headerFooter = themes.find(item => item.id === activeTheme)?.headerFooter
@@ -110,21 +112,9 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
           {status.kind === 'ready' && `${status.pages} page${status.pages === 1 ? '' : 's'}`}
           {status.kind === 'error' && <span className="text-red-400">Preview failed: {status.message}</span>}
         </span>
-        <label className="ml-auto flex items-center gap-1">
-          Zoom
-          <select
-            aria-label="Preview zoom"
-            className="rounded bg-neutral-800 px-1 py-0.5 text-sm text-white [color-scheme:dark]"
-            value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
-          >
-            {ZOOMS.map((z) => (
-              <option key={z} value={z} className="bg-neutral-800 text-white">
-                {Math.round(z * 100)}%
-              </option>
-            ))}
-          </select>
-        </label>
+        {tools.map(({ id, title, component: Widget }) => <PluginBoundary key={id} identity={Widget} title={title}>
+          <Widget surface={{ kind: 'preview', zoom, setZoom }} />
+        </PluginBoundary>)}
       </div>
       <div ref={zoomRef} className="min-h-0 flex-1 overflow-auto">
         <div

@@ -1,18 +1,18 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { pixelRuler } from './index'
+import pixelRuler from '../../../assets/mods/Plugins/pixel-ruler/pixel-ruler'
 import { registerPlugin, usePluginRegistry } from '../../plugin-manager'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import { useDocumentStore } from '../../../stores/documentStore'
-import { useRulerState } from './rulerState'
-import { GuidesMenu } from './GuidesMenu'
+import { useRulerState } from '../../../assets/mods/Plugins/pixel-ruler/rulerState'
+import { GuidesMenu } from '../../../assets/mods/Plugins/pixel-ruler/GuidesMenu'
 
 let root: Root
 let host: HTMLDivElement
 registerPlugin(pixelRuler)
 const Overlay = usePluginRegistry.getState().overlays.find((entry) => entry.id === 'pixel-ruler.overlay')!.component
-const toggle = () => usePluginRegistry.getState().commands.find((entry) => entry.id === 'pixel-ruler.toggle')!.run()
+const toggle = () => useRulerState.getState().toggle()
 const button = (label: string) => host.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!
 
 it('keeps guide lines visible while the measurement ruler is off', async () => {

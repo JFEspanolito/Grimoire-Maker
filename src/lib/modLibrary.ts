@@ -3,7 +3,7 @@ import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } fro
 import { ensureModDirectory, seedExamples, type ModFs } from './modCatalog'
 import { loadLibraryPaths, type LibraryPaths } from './preferences'
 
-const exampleFiles = import.meta.glob('../assets/mods/**/*.md', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/Plugins/**/*.{ts,tsx,js,css}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 export const MOD_EXAMPLES = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
 export const modFs: ModFs = {
   exists, readDir, readTextFile, stat,
@@ -34,7 +34,7 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
     return false
   }))
   await seedExamples(modFs, root, examples)
-  if (paths.plugins === `${root}/Plugins` && !(await exists(`${root}/Plugins/.plugins-seeded`))) {
+  if (paths.plugins === `${root}/Plugins` && !(await exists(`${root}/Plugins/.executable-plugins-v1-seeded`))) {
     const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/')))
     for (const [relative, contents] of Object.entries(pluginExamples)) {
       const segments = relative.split('/')
@@ -43,7 +43,7 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
       const path = `${parent}/${segments.at(-1)}`
       if (!(await exists(path))) await modFs.writeTextFile(path, contents)
     }
-    await modFs.writeTextFile(`${root}/Plugins/.plugins-seeded`, '1\n')
+    await modFs.writeTextFile(`${root}/Plugins/.executable-plugins-v1-seeded`, '1\n')
   }
   return { root, ...paths, preferences: `${config}/mods.json` }
 }

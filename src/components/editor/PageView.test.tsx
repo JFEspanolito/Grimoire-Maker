@@ -5,9 +5,11 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { PageView } from './PageView'
 import { useSettingsStore } from '../../stores/settingsStore'
+import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import { registerPlugin, unregisterPlugin } from '../../plugins/plugin-manager'
 
-beforeEach(() => vi.stubGlobal('CSS', { supports: () => true }))
-afterEach(() => vi.unstubAllGlobals())
+beforeEach(() => { vi.stubGlobal('CSS', { supports: () => true }); registerPlugin(zoomPlugin) })
+afterEach(() => { vi.unstubAllGlobals(); unregisterPlugin(zoomPlugin.id) })
 
 it('zooms only the editor wrapper while preserving physical page dimensions and content', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)

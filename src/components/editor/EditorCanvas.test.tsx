@@ -6,6 +6,7 @@ import { TextSelection } from '@tiptap/pm/state'
 import { useDocumentStore } from '../../stores/documentStore'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
+import { alignSections } from '../../lib/sectionLayout'
 
 vi.mock('../../lib/images', () => ({
   loadImageUrl: vi.fn(async () => 'blob:map'),
@@ -14,6 +15,30 @@ vi.mock('../../lib/images', () => ({
 
 let root: Root | null = null
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
+it('keeps the loaded image node view across repeated section alignment', async () => {
+  useDocumentStore.getState().loadFromRaw('/book/Draft/Chapter 1/page.md', 'asd\n\n<img src="../../Assets/Chapter 1/FB_IMG_1736916217646.jpg" alt="FB_IMG_1736916217646" data-align="center" data-width-mm="55" data-frame="shadow" />')
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  await act(async () => root?.render(<EditorCanvas onReady={() => undefined} />))
+  const image = container.querySelector('img')
+  expect(image).not.toBeNull()
+  const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return { height: this.style.height === 'var(--content-height)' ? 100 : 20 } as DOMRect
+  })
+  try {
+    for (let i = 0; i < 3; i++) {
+      await act(async () => { alignSections(container); await new Promise(resolve => setTimeout(resolve, 20)) })
+      expect(container.querySelector('img')).toBe(image)
+    }
+    await act(async () => {
+      container.querySelector('.ProseMirror p')!.firstChild!.textContent = 'edited text'
+      await new Promise(resolve => setTimeout(resolve, 20))
+    })
+    expect(useDocumentStore.getState().document.body).toContain('edited text')
+    expect(container.querySelector('img')).toBe(image)
+  } finally { bounds.mockRestore() }
+})
 afterEach(async () => {
   if (root) await act(async () => root?.unmount())
   root = null

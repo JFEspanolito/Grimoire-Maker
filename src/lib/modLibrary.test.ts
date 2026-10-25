@@ -5,10 +5,12 @@ import { MOD_EXAMPLES, readDisabledMods, writeDisabledMods } from './modLibrary'
 vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn(), mkdir: vi.fn(), readDir: vi.fn(), readTextFile: vi.fn(), rename: vi.fn(), stat: vi.fn(), writeTextFile: vi.fn() }))
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(stat).mockResolvedValue({ size: 100 } as Awaited<ReturnType<typeof stat>>) })
 
-it('ships three Markdown templates and five D&D snippets, without executable examples', () => {
+it('ships declarative content plus complete executable Zoom and Ruler packages', () => {
   expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Templates/'))).toHaveLength(3)
   expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Snippets/'))).toHaveLength(5)
-  expect(Object.keys(MOD_EXAMPLES).every((path) => path.endsWith('.md'))).toBe(true)
+  expect(Object.keys(MOD_EXAMPLES).filter(path => !path.startsWith('Plugins/')).every(path => path.endsWith('.md'))).toBe(true)
+  expect(MOD_EXAMPLES['Plugins/zoom/zoom.tsx']).toContain('registerToolbar')
+  expect(MOD_EXAMPLES['Plugins/pixel-ruler/RulerOverlay.tsx']).toContain('GuideLine')
 })
 it('does not silently overwrite malformed preferences', async () => {
   vi.mocked(exists).mockResolvedValue(true)

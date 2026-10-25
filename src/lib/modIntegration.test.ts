@@ -52,7 +52,7 @@ afterEach(async () => {
   if (!root.startsWith(`${temporary}/grimoire-mod-integration-`)) throw new Error('Invalid integration cleanup boundary')
   await fs.rm(scope.root, { recursive: true, force: true })
 })
-it('real temporary filesystem seeds examples, discovers custom nested Markdown and ignores JavaScript and broken/linked packages', async () => {
+it('seeds executable plugins but keeps snippets declarative and isolates broken packages', async () => {
  await prepareModLibrary()
  expect(Object.keys(MOD_EXAMPLES).filter(p => p.startsWith('Templates/'))).toHaveLength(3)
  await put('Mods/Snippets/Community/nested/01-note.md', '---\nsnippetName: Custom note\n---\n## Custom')
@@ -65,7 +65,9 @@ it('real temporary filesystem seeds examples, discovers custom nested Markdown a
  expect(useModStore.getState().snippets.find(s => s.label === 'Custom note')?.markdown).toBe('## Custom')
  expect(useModStore.getState().errors.join()).toContain('index.md')
  expect(useTemplateStore.getState().templates.some(t => t.id === 'linked')).toBe(false)
- expect(scope.reads.some(p => p.endsWith('.js') || p.includes('/Plugins/'))).toBe(false)
+ expect(scope.reads.some(p => p.endsWith('/Snippets/Community/ignored.js'))).toBe(false)
+ expect(scope.reads.some(p => p.endsWith('/Plugins/zoom/zoom.tsx'))).toBe(true)
+ expect(useModStore.getState().errors.join()).toContain('Plugins/probe')
  expect(useTemplateStore.getState().templates).toHaveLength(3)
 })
 it('configured paths survive reload, keep disabled IDs and legacy templates, and receive ZIP imports without reseeding', async () => {
@@ -95,6 +97,18 @@ it('configured paths survive reload, keep disabled IDs and legacy templates, and
   await (await import('./templateActions')).importTemplateZip()
   expect(await fs.readFile(`${scope.paths.templates}/configured/index.md`, 'utf8')).toBe('# Configured')
   expect(scope.reads.some(path => path.endsWith('.js'))).toBe(false)
+})
+
+it('upgrades old descriptor installations without overwriting edited executable files', async () => {
+  const plugins = `${scope.root}/Mods/Plugins`
+  await fs.unlink(`${plugins}/.executable-plugins-v1-seeded`)
+  await fs.writeFile(`${plugins}/.plugins-seeded`, '1\n')
+  await fs.writeFile(`${plugins}/zoom/zoom.tsx`, '// author edit')
+  await fs.unlink(`${plugins}/zoom/script.ts`)
+  await prepareModLibrary()
+  expect(await fs.readFile(`${plugins}/zoom/zoom.tsx`, 'utf8')).toBe('// author edit')
+  expect(await fs.readFile(`${plugins}/zoom/script.ts`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/zoom/script.ts'])
+  expect(await fs.readFile(`${plugins}/.executable-plugins-v1-seeded`, 'utf8')).toBe('1\n')
 })
 it('toggle serializes with refresh and survives a module-level app restart without builtins fallback', async () => {
  await Promise.all([useModStore.getState().setEnabled('Snippets/community', false), useModStore.getState().reload(), useModStore.getState().setEnabled('Snippets/community', true)])

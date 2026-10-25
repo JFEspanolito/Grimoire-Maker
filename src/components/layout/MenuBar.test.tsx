@@ -14,6 +14,8 @@ import { EditorToolbar } from '../editor/EditorToolbar'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import { registerPlugin } from '../../plugins/plugin-manager'
 
 const openWorkspace = vi.hoisted(() => vi.fn())
 const openRecent = vi.hoisted(() => vi.fn())
@@ -46,6 +48,7 @@ it('groups application actions in keyboard-accessible menus', async () => {
 })
 
 it('has reversible marked view actions and no duplicated toolbar commands', async () => {
+  const unloadZoom = registerPlugin(zoomPlugin)
   useTabStore.getState().reset('/chapter.md')
   useSettingsStore.getState().setViewMode('edit')
   const container = document.createElement('div')
@@ -80,6 +83,7 @@ it('has reversible marked view actions and no duplicated toolbar commands', asyn
     expect(settings.textContent).toContain('Preferences…')
   } finally {
     await act(async () => root.unmount())
+    unloadZoom()
     useTabStore.getState().reset(null)
     useSettingsStore.getState().setViewMode('edit')
   }

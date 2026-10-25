@@ -134,20 +134,26 @@ export async function discoverMods(io: ModFs, root: string, disabled: string[], 
     }
   }
   if (paths?.Plugins && await io.exists(paths.Plugins)) {
-    const builtinLabels: Record<string, string> = { 'pixel-ruler': 'Ruler', zoom: 'Zoom' }
     const pluginEntries = (await io.readDir(paths.Plugins))
       .filter((entry) => !entry.name.startsWith('.') && entry.isDirectory && !entry.isSymlink)
       .sort((a, b) => a.name.localeCompare(b.name))
+    if (pluginEntries.length > 256) throw new Error('Plugins: limit of 256 mod folders exceeded')
     const seen = new Set<string>()
     for (const entry of pluginEntries) {
       const id = modKey(MOD_KIND.PLUGINS, entry.name)
       if (seen.has(id)) continue
       const folder = `${paths.Plugins}/${entry.name}`
-      const files = await io.readDir(folder)
-      if (!files.some((file) => file.name === 'index.md' && !file.isDirectory && !file.isSymlink)) continue
       seen.add(id)
-      const label = builtinLabels[entry.name.toLowerCase()] ?? entry.name
-      mods.push({ id, kind: MOD_KIND.PLUGINS, label, folder, enabled: !disabled.includes(id), errors: [] })
+      const mod: ModEntry = { id, kind: MOD_KIND.PLUGINS, label: entry.name, folder, enabled: !disabled.includes(id), errors: [] }
+      try {
+        const files = await io.readDir(folder)
+        if (!files.some(file => !file.isDirectory && !file.isSymlink && /\.(tsx?|js)$/i.test(file.name) && !file.name.endsWith('.d.ts'))) {
+          if (!files.some(file => file.name === 'index.md')) continue
+          mod.errors.push('This folder has documentation only; add a TSX, TS or JS plugin entry.')
+        }
+      } catch (error) { mod.errors.push(message(error)) }
+      mods.push(mod)
+      errors.push(...mod.errors.map(error => `${id}: ${error}`))
     }
   }
   return { mods, snippets, errors }

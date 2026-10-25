@@ -4,7 +4,7 @@ import { ImageControls, type ImageAttrs } from './ImageControls'
 import { TableControls } from './TableControls'
 import { FindReplaceDialog } from './FindReplaceDialog'
 import { canChangeIndent, changeIndent } from './extensions/blockFormat'
-import { GuidesMenu } from '../../plugins/builtins/pixel-ruler/GuidesMenu'
+import { PluginSlot } from '../../plugins/PluginSlot'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
 import toolbarStyles from '../layout/Toolbar.module.css'
@@ -143,7 +143,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
       <div className="flex items-center gap-0.5">{['h1', 'h2', 'h3', 'h4'].map(actionButton)}</div>
     </div>,
     tools: <div className="flex items-center gap-1">
-      <GuidesMenu />
+      <PluginSlot slot="editorTools" />
       <button type="button" className={btn} disabled={!editor} title="Find and replace" aria-label="Find and replace"
         onMouseDown={(e) => e.preventDefault()} onClick={() => setFinding(true)}>Find</button>
       <label className={toolbarStyles.zoom}>Page view

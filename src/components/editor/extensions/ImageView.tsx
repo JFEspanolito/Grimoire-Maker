@@ -34,6 +34,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   const { src, alt, align, widthMm, frame, opacity, anchor, xMm, yMm } = node.attrs
   const [shown, setShown] = useState<{ src: string; url: string } | null>(null)
   const [failure, setFailure] = useState<{ src: string; message: string } | null>(null)
+  const [loadAttempt, setLoadAttempt] = useState(0)
   const stopDrag = useRef<(() => void) | null>(null)
   const imageRef = useRef<HTMLImageElement>(null)
   const [corner, setCorner] = useState<{ left: number; top: number } | null>(null)
@@ -306,22 +307,33 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   useEffect(() => {
     let cancelled = false
     let created: string | null = null
+    setShown(null)
+    setFailure(null)
+    const timer = window.setTimeout(() => {
+      cancelled = true
+      const message = `Image loading timed out: ${src}`
+      reportError('editor.image.load', new Error(message))
+      setFailure({ src, message })
+    }, 15000)
     loadImageUrl(src, documentPath).then(
       (url) => {
         if (cancelled) return revokeImageUrl(url)
+        window.clearTimeout(timer)
         created = url
         setShown({ src, url })
         setFailure(null)
       },
       (e: unknown) => {
+        window.clearTimeout(timer)
         if (!cancelled) { reportError('editor.image.load', e); setFailure({ src, message: e instanceof Error ? e.message : String(e) }) }
       },
     )
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
       if (created) revokeImageUrl(created)
     }
-  }, [src, documentPath])
+  }, [src, documentPath, loadAttempt])
 
   const url = shown && shown.src === src ? shown.url : null
   const error = failure && failure.src === src ? failure.message : null
@@ -345,7 +357,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
           {ANCHOR_LABEL[anchor] ?? 'Image'} · {String(src).split('/').pop()}
         </span>
       )}
-      {url ? (
+      {url && !error ? (
         <img
           ref={imageRef}
           src={url}
@@ -357,11 +369,13 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
           style={imageStyle}
           onPointerDown={startDrag}
           onLoad={placeHandle}
+          onError={() => setFailure({ src, message: `Unable to decode image: ${src}` })}
           onDragStart={(event) => { event.preventDefault(); event.stopPropagation() }}
         />
       ) : (
         <span className="grimoire-image-chip" contentEditable={false}>
-          {error ? `Image not found: ${src}` : 'Loading image…'}
+          {error ? <><span role="alert">{error}</span>{' '}<button type="button"
+            onClick={() => setLoadAttempt(value => value + 1)}>Retry image</button></> : 'Loading image…'}
         </span>
       )}
       {url && selected && corner && (anchor === 'flow' || anchor === 'free') && (

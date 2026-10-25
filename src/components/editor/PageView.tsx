@@ -9,11 +9,9 @@ import { PageHeaderFooter } from './PageHeaderFooter'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEventHandler, type ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { PAGE_GAP_MM, pageGeometry, sheetCountForHeight } from '../../lib/pageLayout'
-import { alignSections } from '../../lib/sectionLayout'
-import { usePluginRegistry } from '../../plugins/plugin-manager'
-import { useModStore } from '../../stores/modStore'
-import { useWheelZoom } from '../../hooks/useWheelZoom'
-import { EDITOR_ZOOMS } from '../../lib/zoom'
+import { alignSections, isSectionContentMutation } from '../../lib/sectionLayout'
+import { PluginSlot } from '../../plugins/PluginSlot'
+import { usePluginSurface } from '../../plugins/usePluginSurface'
 import styles from './PageView.module.css'
 
 
@@ -29,9 +27,7 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   const frontmatter = current?.frontmatter ?? {}
   const columns = pageColumns(frontmatter, defaultColumns)
   const pageText = projectPageText(workspace, frontmatter, project, path)
-  const zoomRef = useWheelZoom(zoom, setZoom, EDITOR_ZOOMS)
-  const rulerEnabled = useModStore((s) => s.mods.find((m) => m.id === 'Plugins/pixel-ruler')?.enabled ?? true)
-  const overlays = usePluginRegistry((s) => s.overlays).filter((o) => o.id !== 'pixel-ruler.overlay' || rulerEnabled)
+  const zoomRef = usePluginSurface('editor', zoom, setZoom)
   const size = pageGeometry(pageSize, marginMm)
   const flow = useRef<HTMLDivElement>(null)
   const [sheetCount, setSheetCount] = useState(1)
@@ -52,7 +48,8 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
     observer.observe(element)
     // Text that shrinks inside its padded section changes no size, so edits also trigger alignment.
     let frame = 0
-    const edits = new MutationObserver(() => {
+    const edits = new MutationObserver((records) => {
+      if (!records.some(isSectionContentMutation)) return
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => alignSections(element))
     })
@@ -88,7 +85,7 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
             style={{ top: `${index * (size.heightMm + PAGE_GAP_MM)}mm`, height: `${size.heightMm}mm` }} />}
           <div className={styles.overlays} style={{ top: `${index * (size.heightMm + PAGE_GAP_MM)}mm`, height: `${size.heightMm}mm` }}>
             <PageHeaderFooter layout={layout} context={{ ...pageText, page: index + 1, pages: visibleSheets }} marginMm={marginMm} />
-            {overlays.map(({ id, component: Overlay }) => <Overlay key={id} />)}
+            <PluginSlot slot="overlays" />
           </div>
         </div>)}
         <div ref={flow} className={styles.flow} data-page-flow data-paginated={paginated} style={flowStyle as CSSProperties}>{children}</div>

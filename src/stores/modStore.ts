@@ -6,6 +6,7 @@ import { BUILTIN_THEMES } from '../lib/themes'
 import type { TemplateSnippet } from '../lib/templateSnippets'
 import { useTemplateStore } from './templateStore'
 import { useThemeStore } from './themeStore'
+import { reconcilePlugins } from '../plugins/plugin-loader'
 
 interface ModState {
   root: string | null
@@ -42,7 +43,8 @@ export const useModStore = create<ModState>((set, get) => {
     // Legacy folders remain readable. A disabled modern package must not reappear via a duplicate legacy ID.
     const reserved = templateMods.map((mod) => mod.folder.split('/').at(-1)!)
     const legacy = await loadUserTemplates(taken, { reservedIds: reserved })
-    const errors = [...catalog.errors, ...modern.errors, ...legacy.errors]
+    const pluginErrors = await reconcilePlugins(modFs, catalog.mods)
+    const errors = [...catalog.errors, ...modern.errors, ...legacy.errors, ...pluginErrors]
     themeStore.setTemplateThemes([...modern.themes, ...legacy.themes])
     useTemplateStore.setState({ templates: [...modern.templates, ...legacy.templates], dir: paths.templates, errors })
     set({ mods: catalog.mods, snippets: catalog.snippets, ready: true, errors })

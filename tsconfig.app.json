@@ -6,6 +6,7 @@
     "module": "esnext",
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
+    "paths": { "@grimoire/plugin-api": ["./src/plugins/plugin-api.ts"] },
     "skipLibCheck": true,
 
     /* Bundler mode */

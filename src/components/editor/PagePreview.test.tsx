@@ -6,12 +6,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Previewer } from 'pagedjs'
 import { paginate } from '../../lib/exportPdf'
 import { PagePreview } from './PagePreview'
+import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import { registerPlugin, unregisterPlugin } from '../../plugins/plugin-manager'
 
 vi.mock('../../lib/exportPdf', () => ({ paginate: vi.fn() }))
 
 let root: Root
 let container: HTMLDivElement
 beforeEach(() => {
+  registerPlugin(zoomPlugin)
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   vi.useFakeTimers()
   container = document.createElement('div')
@@ -20,6 +23,7 @@ beforeEach(() => {
 })
 afterEach(async () => {
   await act(async () => root.unmount())
+  unregisterPlugin(zoomPlugin.id)
   container.remove()
   vi.useRealTimers()
   vi.clearAllMocks()

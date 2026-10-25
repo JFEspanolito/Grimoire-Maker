@@ -1,9 +1,9 @@
-import { editorSheetRect } from '../../../lib/imagePlacement'
-import { useSettingsStore } from '../../../stores/settingsStore'
-import { PAGE_SIZES } from '../../../types/document'
+import { editorSheetRect } from '@grimoire/plugin-api'
+import { usePageSettings as useSettingsStore } from '@grimoire/plugin-api'
+import { PAGE_SIZES } from '@grimoire/plugin-api'
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { GUIDE_AXIS, type RulerGuide } from '../../../types/ruler'
+import { GUIDE_AXIS, type RulerGuide } from '@grimoire/plugin-api'
 import styles from './Ruler.module.css'
 
 import { useRulerState } from './rulerState'

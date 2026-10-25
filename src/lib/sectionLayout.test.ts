@@ -1,7 +1,20 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { alignSections } from './sectionLayout'
+import { alignSections, isSectionContentMutation } from './sectionLayout'
 
 afterEach(() => vi.restoreAllMocks())
+
+it('ignores measurement probes but still observes real content edits', () => {
+  const [{ flow }] = layout(30)
+  const observer = new MutationObserver(() => undefined)
+  observer.observe(flow, { childList: true, characterData: true, subtree: true })
+  alignSections(flow)
+  const probes = observer.takeRecords()
+  expect(probes.length).toBeGreaterThan(0)
+  expect(probes.some(isSectionContentMutation)).toBe(false)
+  flow.querySelector('section')!.append(document.createTextNode('writing'))
+  expect(observer.takeRecords().some(isSectionContentMutation)).toBe(true)
+  observer.disconnect()
+})
 
 /** Rows are 100 tall with a 20 gap; a section reports the height in its data-height attribute. */
 function layout(...heights: number[]) {

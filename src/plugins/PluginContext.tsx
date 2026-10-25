@@ -1,14 +1,6 @@
-import { useEffect, type ReactNode } from 'react'
-import { registerPlugin } from './plugin-manager'
-import { pixelRuler } from './builtins/pixel-ruler'
-import { zoomPlugin } from './builtins/zoom'
+import type { ReactNode } from 'react'
 
-const BUILTINS = [pixelRuler, zoomPlugin]
-
-/** Activates built-in plugins once; registerPlugin is idempotent per id. */
+/** Plugin activation belongs to the configured mod catalog, not bundled imports. */
 export function PluginProvider({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    BUILTINS.forEach(registerPlugin)
-  }, [])
   return <>{children}</>
 }

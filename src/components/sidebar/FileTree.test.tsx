@@ -37,6 +37,23 @@ afterEach(async () => {
 })
 
 describe('project explorer', () => {
+  it('hides file extensions without changing paths or directory names', async () => {
+    useDocumentStore.getState().setWorkspace('/book', [
+      { name: 'cover.jpg', path: '/book/cover.jpg', isDirectory: false },
+      { name: 'chapter.one.md', path: '/book/chapter.one.md', isDirectory: false },
+      { name: 'folder.jpg', path: '/book/folder.jpg', isDirectory: true, children: [] },
+    ])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    const cover = container.querySelector<HTMLElement>('[data-tree-path="/book/cover.jpg"]')!
+    expect(cover.textContent).toContain('cover')
+    expect(cover.textContent).not.toContain('.jpg')
+    expect(container.querySelector('[data-tree-path="/book/chapter.one.md"]')?.textContent).toContain('chapter.one')
+    expect(container.querySelector('[data-tree-path="/book/folder.jpg"]')?.textContent).toContain('folder.jpg')
+    await act(async () => cover.click())
+    expect(openFileMock).toHaveBeenCalledWith('/book/cover.jpg')
+  })
   it('copies the full file path and reports clipboard failures', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
