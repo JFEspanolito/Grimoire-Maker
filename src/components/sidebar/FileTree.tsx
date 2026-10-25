@@ -123,6 +123,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
           {expanded ? '▾' : '▸'}
         </button>
       )}
+      {!node.isDirectory && <span aria-hidden="true" className="mr-1 inline-block w-[1ch]" />}
       <span className={node.isDirectory ? 'text-white/60' : ''}>
         {label}
       </span>
@@ -196,7 +197,7 @@ export function FileTree() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const binder = splitBinder(tree)
   const nodes = binder
-    ? [binder.draft, binder.research, binder.trash, ...binder.other].filter((node): node is FileNode => node !== null)
+    ? [binder.draft, binder.research, binder.assets, binder.trash, ...binder.other].filter((node): node is FileNode => node !== null)
     : tree
 
   const run = async (action: () => Promise<unknown>) => {

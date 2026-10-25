@@ -67,7 +67,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       running = true
       setStatus({ kind: 'rendering' })
       document.body.append(stage)
-      paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm, headerFooter, pageText: projectPageText(workspace, frontmatter, project) }, stage).then(
+      paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm, headerFooter, pageText: projectPageText(workspace, frontmatter, project, path) }, stage).then(
         () => {
           if (!cancelled) {
             const pages = stage.querySelectorAll('.pagedjs_page').length

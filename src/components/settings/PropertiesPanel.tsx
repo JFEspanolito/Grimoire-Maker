@@ -13,8 +13,6 @@ export function PropertiesPanel() {
     <details><summary>Page properties</summary>
       {markdown ? <div className={styles.form}>
         <p>{document.path?.split(/[\\/]/).at(-1) ?? 'Unsaved page'} — applies to this Markdown file only.</p>
-        <label>Page title<input aria-label="Page title" value={String(document.frontmatter.title ?? '')}
-          onChange={event => setFrontmatter({ title: event.target.value })} /></label>
         <label>Page columns<select aria-label="Page columns" value={document.frontmatter.columns === 1 || document.frontmatter.columns === 2 ? document.frontmatter.columns : ''}
           onChange={event => setFrontmatter({ columns: event.target.value === '1' ? 1 : event.target.value === '2' ? 2 : undefined })}>
           <option value="">Default</option><option value="1">1 column</option><option value="2">2 columns</option>

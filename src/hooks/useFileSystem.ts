@@ -431,6 +431,7 @@ export function useFileSystem() {
     saveAll,
     openRestored: (path: string) => runFileAction(() => activateWorkspace(path.replaceAll('\\', '/'))),
     importInto,
+    refreshTree,
     createProject,
     createNewFile,
     openWorkspace,

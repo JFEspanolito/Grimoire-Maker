@@ -26,7 +26,7 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   const layout = themes.find(item => item.id === resolveTheme(theme, themes))?.headerFooter
   const frontmatter = current?.frontmatter ?? {}
   const columns = pageColumns(frontmatter, defaultColumns)
-  const pageText = projectPageText(workspace, frontmatter, project)
+  const pageText = projectPageText(workspace, frontmatter, project, path)
   const zoomRef = useWheelZoom(zoom, setZoom, EDITOR_ZOOMS)
   const overlays = usePluginRegistry((s) => s.overlays)
   const size = pageGeometry(pageSize, marginMm)

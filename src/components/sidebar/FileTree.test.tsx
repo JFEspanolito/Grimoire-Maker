@@ -62,7 +62,7 @@ describe('project explorer', () => {
     useDocumentStore.getState().setWorkspace('/book', ['Draft', 'Research', 'Trash'].map((name) => ({ name, path: `/book/${name}`, isDirectory: true, children: [] })))
     const container = document.createElement('div')
     root = createRoot(container)
-    await act(async () => root?.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><FileTree /></>))
+    await act(async () => root?.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} /><FileTree /></>))
     for (const section of ['Draft', 'Research']) {
       await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Collapse ${section}"]`)?.click())
       const buttons = Array.from(container.querySelectorAll('button')).filter((item) => item.textContent === 'Import…')
