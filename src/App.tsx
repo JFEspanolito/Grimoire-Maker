@@ -89,7 +89,7 @@ export default function App() {
         <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
         <Toolbar />
         <div className={styles.body}>
-            <aside className={`${styles.sidebar} ${!visiblePanels.files && !visiblePanels.templates && !gitOpen ? styles.rail : ''}`}>
+            <aside data-tour="project-sidebar" className={`${styles.sidebar} ${!visiblePanels.files && !visiblePanels.templates && !gitOpen ? styles.rail : ''}`}>
               <div className={styles.explorer}>
               {visiblePanels.files && <FileTree />}
               {visiblePanels.templates && <TemplateCatalog />}
@@ -106,10 +106,10 @@ export default function App() {
                 </div>}
               </div>
             </aside>
-          <main className={styles.main}>
+          <main data-tour="editor-workspace" className={styles.main}>
             <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
           </main>
-          <aside className={styles.snippets}>
+          <aside data-tour="snippets-sidebar" className={styles.snippets}>
             <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
             <div className={styles.sourceControl}>
               <button type="button" className={styles.gitToggle} aria-expanded={propertiesOpen} aria-controls="properties-panel"

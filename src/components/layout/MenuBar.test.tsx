@@ -218,7 +218,7 @@ it('opens About and Tutorial from Settings, closes menus, and restores Settings 
   try {
     await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
     const settings = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Settings')! as HTMLDetailsElement
-    for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'In development']]) {
+    for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'Step 1 of 6']]) {
       settings.open = true
       const action = Array.from(settings.querySelectorAll('button')).find((button) => button.textContent === label)
       expect(action).toBeDefined()

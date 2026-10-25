@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import configSource from '../../../src-tauri/tauri.conf.json?raw'
 import styles from './AppInfoDialog.module.css'
 
@@ -9,9 +9,108 @@ const { productName, version } = JSON.parse(configSource) as { productName: stri
 const PROJECT_URL = 'https://github.com/JFEspanolito/Grimoire-Maker'
 const CONTRIBUTORS_URL = `${PROJECT_URL}/Contributors`
 
+interface TourStep {
+  title: string
+  selectors: readonly string[]
+  placement: 'right' | 'center' | 'bottom' | 'bottom-end' | 'left'
+  description: string
+  usage: string
+}
+
+export const TUTORIAL_STEPS: readonly TourStep[] = [
+  {
+    title: 'Project Files, Templates & Git',
+    selectors: ['[data-tour="project-sidebar"]', 'aside'],
+    placement: 'right',
+    description: 'Organize your manual in Draft, Research, and Trash, start from ready-made book Templates, and record local history with Git · Source control.',
+    usage: 'Use + File or + Folder to create content, drag files between folders, open images/PDF/DOCX in read-only preview tabs, or commit changes in the Git panel.',
+  },
+  {
+    title: 'Tabs, Split View & Page Editor',
+    selectors: ['[data-tour="editor-workspace"]', 'main'],
+    placement: 'center',
+    description: 'Write in Markdown directly on physical sheets with independent multi-tab editing, side-by-side Split View, and 1 or 2 column layouts.',
+    usage: 'Click any sheet to start writing, open multiple documents in tabs, or use View → Split View and Columns to compare and lay out chapters.',
+  },
+  {
+    title: 'Formatting, Images & Alignment Guides',
+    selectors: ['[role="toolbar"][aria-label="Formatting"]'],
+    placement: 'bottom',
+    description: 'Apply headings, lists, and emphasis, insert illustrations with text wrap or free placement, and add millimetre alignment guides.',
+    usage: 'Click Image to import illustrations (use Push text to wrap paragraphs or Over text to drag across pages) and open Guides to add + Row or + Column lines.',
+  },
+  {
+    title: 'Page View, Zoom & Print Ruler',
+    selectors: ['[role="group"][aria-label="Editor tools"]'],
+    placement: 'bottom-end',
+    description: 'Inspect your book as single sheets or open-book facing spreads, scale the workspace, and verify physical margins and bleed.',
+    usage: 'Switch Page view between Single page and Spread, change Zoom (or press Ctrl + mouse wheel), and toggle Ruler to inspect page measurements.',
+  },
+  {
+    title: 'Snippets & Properties',
+    selectors: ['[data-tour="snippets-sidebar"]'],
+    placement: 'left',
+    description: 'Insert reusable RPG blocks inside movable Content Boxes and configure global book credits or per-page layout overrides.',
+    usage: 'Drag Snippets (Character Sheet, Statblock, Read-aloud, d6/d100 tables) onto a page, and edit book title, authors, artists, or page columns in Properties.',
+  },
+  {
+    title: 'Themes, Mods & Export PDF',
+    selectors: ['[aria-label="Application menu"]'],
+    placement: 'bottom',
+    description: 'Customize visual themes, manage installed mod packages, configure auto-save intervals, and publish your finished manual to PDF.',
+    usage: 'Open Settings → Preferences or Mod Manager to customize themes and mods, and select File → Export PDF… to generate and open your print-ready PDF.',
+  },
+]
+
+interface SpotlightRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+function findTourTarget(selectors: readonly string[]): Element | null {
+  for (const selector of selectors) {
+    const element = document.querySelector(selector)
+    if (element) return element
+  }
+  return null
+}
+
+function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['placement']): CSSProperties {
+  if (!rect || typeof window === 'undefined') return {}
+  const vw = window.innerWidth || 1280
+  const vh = window.innerHeight || 800
+  const cardWidth = Math.min(380, vw - 32)
+  const clampX = (x: number) => Math.max(16, Math.min(vw - cardWidth - 16, x))
+  const clampY = (y: number) => Math.max(16, Math.min(vh - 260, y))
+
+  if (placement === 'right') {
+    return { left: `${clampX(rect.left + rect.width + 16)}px`, top: `${clampY(rect.top + 16)}px` }
+  }
+  if (placement === 'left') {
+    return { left: `${clampX(rect.left - cardWidth - 16)}px`, top: `${clampY(rect.top + 16)}px` }
+  }
+  if (placement === 'bottom-end') {
+    return { left: `${clampX(rect.left + rect.width - cardWidth)}px`, top: `${clampY(rect.top + rect.height + 14)}px` }
+  }
+  if (placement === 'bottom') {
+    return { left: `${clampX(rect.left)}px`, top: `${clampY(rect.top + rect.height + 14)}px` }
+  }
+  return {
+    left: `${clampX(rect.left + (rect.width - cardWidth) / 2)}px`,
+    top: `${clampY(rect.top + 32)}px`,
+  }
+}
+
 export function AppInfoDialog({ kind, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const title = kind === INFO_DIALOG.ABOUT ? 'About' : 'Tutorial'
+  const [stepIndex, setStepIndex] = useState(0)
+  const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null)
+  const isTutorial = kind === INFO_DIALOG.TUTORIAL
+  const title = isTutorial ? 'Interactive Tutorial' : 'About'
+  const currentStep = TUTORIAL_STEPS[stepIndex] ?? TUTORIAL_STEPS[0]
+
   useEffect(() => {
     const element = dialog.current
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -22,13 +121,112 @@ export function AppInfoDialog({ kind, onClose }: Props) {
     }
   }, [])
 
+  useLayoutEffect(() => {
+    if (!isTutorial) return
+    const measure = () => {
+      const target = findTourTarget(currentStep.selectors)
+      const rect = target?.getBoundingClientRect()
+      if (rect && rect.width > 0 && rect.height > 0) {
+        setSpotlight({
+          left: Math.max(2, rect.left - 4),
+          top: Math.max(2, rect.top - 4),
+          width: rect.width + 8,
+          height: rect.height + 8,
+        })
+      } else {
+        setSpotlight(null)
+      }
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [isTutorial, currentStep])
+
+  if (isTutorial) {
+    const isLast = stepIndex === TUTORIAL_STEPS.length - 1
+    return (
+      <dialog
+        ref={dialog}
+        className={styles.tourOverlay}
+        aria-labelledby="app-info-title"
+        onCancel={(event) => { event.preventDefault(); onClose() }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowRight' && !isLast) { event.preventDefault(); setStepIndex((i) => i + 1) }
+          if (event.key === 'ArrowLeft' && stepIndex > 0) { event.preventDefault(); setStepIndex((i) => i - 1) }
+        }}
+      >
+        <div
+          data-tour-spotlight
+          aria-hidden="true"
+          className={spotlight ? styles.spotlight : styles.fullBackdrop}
+          style={spotlight ? {
+            left: `${spotlight.left}px`,
+            top: `${spotlight.top}px`,
+            width: `${spotlight.width}px`,
+            height: `${spotlight.height}px`,
+          } : undefined}
+        />
+        <section
+          className={`${styles.popover} ${spotlight ? styles.floatingPopover : ''}`}
+          style={computePopoverStyle(spotlight, currentStep.placement)}
+          aria-label="Tutorial step"
+        >
+          <header className={styles.header}>
+            <div>
+              <span className={styles.stepBadge} role="status">Step {stepIndex + 1} of {TUTORIAL_STEPS.length}</span>
+              <h2 id="app-info-title" className={styles.stepTitle}>{currentStep.title}</h2>
+            </div>
+            <button type="button" className={styles.dismiss} aria-label="Close Tutorial" onClick={onClose}>×</button>
+          </header>
+          <p className={styles.tutorial}>{currentStep.description}</p>
+          <p className={styles.howToUse}><strong>How to use:</strong> {currentStep.usage}</p>
+          <div className={styles.dots} role="tablist" aria-label="Tutorial steps">
+            {TUTORIAL_STEPS.map((step, index) => (
+              <button
+                key={step.title}
+                type="button"
+                role="tab"
+                aria-selected={index === stepIndex}
+                aria-label={`Step ${index + 1}: ${step.title}`}
+                className={`${styles.dot} ${index === stepIndex ? styles.activeDot : ''}`}
+                onClick={() => setStepIndex(index)}
+              />
+            ))}
+          </div>
+          <footer className={styles.tourFooter}>
+            <button type="button" className={styles.skipButton} onClick={onClose}>Skip Tour</button>
+            <div className={styles.navButtons}>
+              {stepIndex > 0 && (
+                <button type="button" onClick={() => setStepIndex((i) => i - 1)}>Back</button>
+              )}
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => {
+                  if (isLast) onClose()
+                  else setStepIndex((i) => i + 1)
+                }}
+              >
+                {isLast ? 'Finish' : 'Next'}
+              </button>
+            </div>
+          </footer>
+        </section>
+      </dialog>
+    )
+  }
+
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="app-info-title"
     onCancel={(event) => { event.preventDefault(); onClose() }}>
     <header className={styles.header}>
       <h2 id="app-info-title">{title}</h2>
       <button type="button" className={styles.dismiss} aria-label={`Close ${title}`} onClick={onClose}>×</button>
     </header>
-    {kind === INFO_DIALOG.ABOUT ? <div className={styles.content}>
+    <div className={styles.content}>
       <section aria-label="Application information">
         <h3 className={styles.appName}>{productName}</h3>
         <p className={styles.muted}>Version {version}</p>
@@ -48,7 +246,7 @@ export function AppInfoDialog({ kind, onClose }: Props) {
         <button type="button" data-credits disabled title={CONTRIBUTORS_URL} aria-describedby="app-credits-note">Contributors (coming soon)</button>
         <p id="app-credits-note" className={styles.muted}>Contributor credits will be available when the repository is public.</p>
       </section>
-    </div> : <p className={styles.tutorial}>In development</p>}
+    </div>
     <footer className={styles.footer}><button type="button" onClick={onClose}>Close</button></footer>
   </dialog>
 }
