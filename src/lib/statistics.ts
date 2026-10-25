@@ -22,10 +22,17 @@ export interface DocumentStatistics {
 
 const WORD = /[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu
 
-/** Drops Markdown syntax so only the prose a reader sees is counted. */
+const ENTITIES: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&apos;': "'", '&nbsp;': ' ' }
+
+/** Drops Markdown and embedded HTML syntax so only the prose a reader sees is counted. */
 function plainText(markdown: string) {
   return markdown
     .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<\/(?:p|h[1-6]|li|tr|blockquote|div)\s*>/gi, '\n')
+    .replace(/<\/(?:td|th)\s*>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?[a-zA-Z][^>]*>/g, '')
+    .replace(/&(?:amp|lt|gt|quot|#39|apos|nbsp);/gi, (match) => ENTITIES[match.toLowerCase()] ?? match)
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
