@@ -37,7 +37,7 @@ afterEach(async () => {
 })
 
 describe('project explorer', () => {
-  it('copies the containing directory and reports clipboard failures', async () => {
+  it('copies the full file path and reports clipboard failures', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
@@ -50,11 +50,11 @@ describe('project explorer', () => {
       await act(async () => root?.render(<FileTree />))
       const copy = async () => {
         await act(async () => container.querySelector('li > div')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })))
-        const action = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent === 'Copy file directory')!
+        const action = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent === 'Copy file path')!
         await act(async () => action.click())
       }
       await copy()
-      expect(writeText).toHaveBeenCalledWith('H:/My Book/Chapter 1')
+      expect(writeText).toHaveBeenCalledWith('H:/My Book/Chapter 1/notes.md')
       expect(container.querySelector('[role="menu"]')).toBeNull()
       writeText.mockRejectedValueOnce(new Error('Clipboard unavailable'))
       await copy()

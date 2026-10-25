@@ -1,5 +1,6 @@
 .dialog { position: fixed; inset: 0; margin: auto; width: min(56rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; padding: 1.25rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; }
 .dialog::backdrop { background: #0009; }
+.customizingDialog { width: min(61.6rem, calc(100vw - 2rem)); }
 .header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .header h2 { font-size: 1.15rem; font-weight: 600; }
 .header button { font-size: 1.3rem; }

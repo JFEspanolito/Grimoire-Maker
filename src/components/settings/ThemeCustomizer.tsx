@@ -425,8 +425,8 @@ export function ThemeCustomizer({
                   ))}
                 </ul>
 
-                <div className={styles.backgroundWorkspace}>
-                  <div>
+                <div className={`${styles.backgroundWorkspace} ${styles.headerFooterWorkspace}`}>
+                  <div className={styles.headerFooterControls}>
                     {PAGE_TEXT_AREAS.map((area) => (
                       <fieldset
                         key={area}

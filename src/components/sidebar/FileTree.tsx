@@ -594,7 +594,7 @@ export function FileTree() {
               role="menuitem"
               className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
               onClick={() => {
-                const path = parentOf(menu.node.path);
+                const path = menu.node.path;
                 setMenu(null);
                 void run(async () => {
                   if (!navigator.clipboard?.writeText) throw new Error("Clipboard is unavailable.");
@@ -602,7 +602,7 @@ export function FileTree() {
                 });
               }}
             >
-              Copy file directory
+              Copy file path
             </button>
           )}
           {inTrash && !isBinderRoot && (
