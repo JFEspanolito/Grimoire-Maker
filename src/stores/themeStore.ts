@@ -21,7 +21,7 @@ interface ThemeState {
 }
 
 const merge = (user: ThemeInfo[], fromTemplates: ThemeInfo[]): ThemeInfo[] => [
-  ...BUILTIN_THEMES,
+  ...BUILTIN_THEMES.filter(theme => !user.some(item => item.id === theme.id)),
   ...user,
   ...fromTemplates,
 ]

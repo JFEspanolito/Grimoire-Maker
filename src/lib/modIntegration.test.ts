@@ -9,6 +9,7 @@ vi.mock('./preferences', async (original) => {
   const actual = await original<typeof import('./preferences')>()
   return { ...actual, loadLibraryPaths: () => scope.paths ? Promise.resolve(scope.paths) : actual.loadLibraryPaths() }
 })
+vi.mock('./configRoot', () => ({ configRoot: async () => scope.root }))
 vi.mock('@tauri-apps/api/path', () => ({ appConfigDir: async () => scope.root, join: async (...parts: string[]) => parts.join('/') }))
 vi.mock('@tauri-apps/plugin-fs', async () => {
   const f = await import('node:fs/promises')

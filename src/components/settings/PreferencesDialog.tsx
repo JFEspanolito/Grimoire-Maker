@@ -9,6 +9,8 @@ import styles from './PreferencesDialog.module.css'
 import { ThemeCustomizer } from './ThemeCustomizer'
 import { EDITOR_SHORTCUTS, FILE_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
 import { reportError } from '../../lib/errorLogging'
+import { ProjectSettings } from './ProjectSettings'
+import { AutoSaveSettings } from './AutoSaveSettings'
 
 const PATH_FIELDS: { kind: LibraryKind; label: string }[] = [
   { kind: 'plugins', label: 'Plugin Path' },
@@ -18,7 +20,7 @@ const PATH_FIELDS: { kind: LibraryKind; label: string }[] = [
   { kind: 'logs', label: 'Logs Path' },
 ]
 
-const SECTIONS = { appearance: 'Appearance', folders: 'Content folders', shortcuts: 'Shortcuts' } as const
+const SECTIONS = { appearance: 'Appearance', folders: 'Content folders', shortcuts: 'Shortcuts', autosave: 'Auto save', project: 'Project' } as const
 type Section = keyof typeof SECTIONS
 const SECTION_IDS = Object.keys(SECTIONS) as Section[]
 
@@ -91,8 +93,8 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
       <h2 id="preferences-title">Preferences</h2>
       <button type="button" aria-label="Close preferences" disabled={busy} onClick={onClose}>×</button>
     </header>
-    <div className={styles.layout}>
-      <nav className={styles.sections} role="tablist" aria-label="Preferences sections" aria-orientation="vertical">
+    <div className={customizing ? styles.customizingLayout : styles.layout}>
+      {!customizing && <nav className={styles.sections} role="tablist" aria-label="Preferences sections" aria-orientation="vertical">
         {SECTION_IDS.map((id, index) => <button key={id} type="button" role="tab" id={`preferences-tab-${id}`}
           aria-controls={`preferences-${id}`} aria-selected={section === id} tabIndex={section === id ? 0 : -1}
           disabled={busy || customizing} onClick={() => setSection(id)}
@@ -105,7 +107,7 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
             setSection(SECTION_IDS[next])
             dialog.current?.querySelector<HTMLButtonElement>(`#preferences-tab-${SECTION_IDS[next]}`)?.focus()
           }}>{SECTIONS[id]}</button>)}
-      </nav>
+      </nav>}
       <div className={styles.content}>
     <section className={styles.section} role="tabpanel" id="preferences-appearance" aria-labelledby="preferences-tab-appearance" hidden={section !== 'appearance'}>
       {customizing ? <ThemeCustomizer onClose={() => setCustomizing(false)} onBusyChange={(value) => { locked.current = value; setBusy(value) }} /> : <>
@@ -152,6 +154,13 @@ export function PreferencesDialog({ onClose }: { onClose: () => void }) {
       </table>
     </section>
     {busy && !customizing && <p role="status">Selecting a folder or copying content…</p>}
+    <section className={styles.section} role="tabpanel" id="preferences-autosave" aria-labelledby="preferences-tab-autosave" hidden={section !== 'autosave'}>
+      <AutoSaveSettings />
+    </section>
+    <section className={styles.section} role="tabpanel" id="preferences-project" aria-labelledby="preferences-tab-project" hidden={section !== 'project'}>
+      <h3>Project properties</h3>
+      {section === 'project' && <ProjectSettings />}
+    </section>
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {!paths && desktop && !loading && <button type="button" onClick={() => { setLoading(true); setError(''); setAttempt((value) => value + 1) }}>Retry loading folders</button>}

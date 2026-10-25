@@ -1,5 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
-import { appConfigDir } from '@tauri-apps/api/path'
+import { configRoot } from './configRoot'
 import type { PersistedSettings } from './appState'
 
 export const LIBRARY_KIND = { PLUGINS: 'plugins', SNIPPETS: 'snippets', TEMPLATES: 'templates', THEMES: 'themes', LOGS: 'logs' } as const
@@ -23,7 +23,7 @@ export function saveSettings(settings: PersistedSettings): Promise<void> {
 /** Native resolution also restores the exact persisted directory scopes, independently of session restoration. */
 export async function loadLibraryPaths(): Promise<LibraryPaths> {
   if (isTauri()) return invoke<LibraryPaths>('load_library_paths')
-  const config = (await appConfigDir()).replaceAll('\\', '/').replace(/\/$/, '')
+  const config = (await configRoot()).replaceAll('\\', '/').replace(/\/$/, '')
   return { plugins: `${config}/Mods/Plugins`, snippets: `${config}/Mods/Snippets`, templates: `${config}/Mods/Templates`, themes: `${config}/themes`, logs: `${config}/logs` }
 }
 

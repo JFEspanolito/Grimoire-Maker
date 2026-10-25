@@ -37,3 +37,8 @@ export const diffChange = (workspace: string, path: string, staged: boolean) =>
 
 export const commitChanges = (workspace: string, message: string, expectedIndex: string) =>
   invoke<void>('git_commit', { workspace, message, expectedIndex })
+
+export type AutoCommitResult = 'committed' | 'indexUpdated' | 'unchanged' | 'noRepository' | 'gitUnavailable'
+
+export const autoCommitChanges = (workspace: string, message: string) =>
+  invoke<AutoCommitResult>('git_auto_commit', { workspace, message })

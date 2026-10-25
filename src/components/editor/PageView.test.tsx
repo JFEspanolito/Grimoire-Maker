@@ -1,3 +1,5 @@
+import { DocumentPathContext } from './DocumentPathContext'
+import { useDocumentStore } from '../../stores/documentStore'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -121,4 +123,20 @@ it('keeps unsupported WebViews readable without changing the selected print colu
     expect(host.querySelector('[role="status"]')?.textContent).toContain('newer WebView')
     expect(useSettingsStore.getState().columns).toBe(2)
   } finally { await act(async () => root.unmount()) }
+})
+
+it('uses each split document column override without changing the default', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  useSettingsStore.setState({ columns: 2 })
+  useDocumentStore.getState().loadFromRaw('/a.md', '---\ncolumns: 1\n---\nA')
+  useDocumentStore.getState().loadFromRaw('/b.md', 'B')
+  const host = document.createElement('div')
+  const root = createRoot(host)
+  try {
+    await act(async () => root.render(<><DocumentPathContext value="/a.md"><PageView>A</PageView></DocumentPathContext><DocumentPathContext value="/b.md"><PageView>B</PageView></DocumentPathContext></>))
+    const flows = host.querySelectorAll<HTMLElement>('[data-page-flow]')
+    expect(flows[0].style.getPropertyValue('--page-columns')).toBe('1')
+    expect(flows[1].style.getPropertyValue('--page-columns')).toBe('2')
+    expect(useSettingsStore.getState().columns).toBe(2)
+  } finally { await act(async () => root.unmount()); useDocumentStore.getState().resetDocuments() }
 })

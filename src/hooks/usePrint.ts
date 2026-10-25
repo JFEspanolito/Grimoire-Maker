@@ -1,3 +1,5 @@
+import { pageColumns, projectPageText } from '../lib/pageProperties'
+import { useProjectStore } from '../stores/projectStore'
 import { useRef } from 'react'
 import { save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
@@ -23,7 +25,10 @@ export function usePrint() {
     try {
       const route = isTauri() ? await invoke<PdfRoute>('pdf_export_route') : PDF_ROUTE.DIALOG
       const { pageSize, columns, theme, bleedMm, marginMm } = useSettingsStore.getState()
-      const title = useDocumentStore.getState().document.frontmatter.title ?? 'grimoire'
+      const { document, workspaceRoot } = useDocumentStore.getState()
+      const title = document.frontmatter.title ?? 'grimoire'
+      const themes = useThemeStore.getState().themes
+      const activeTheme = resolveTheme(theme, themes)
       const outputPath = route === PDF_ROUTE.FILE ? await save({
         defaultPath: `${title}.pdf`,
         filters: [{ name: 'PDF', extensions: ['pdf'] }],
@@ -34,8 +39,10 @@ export function usePrint() {
       }
       await exportPdf({
         pageSize,
-        columns,
-        theme: resolveTheme(theme, useThemeStore.getState().themes),
+        columns: pageColumns(document.frontmatter, columns),
+        theme: activeTheme,
+        headerFooter: themes.find(item => item.id === activeTheme)?.headerFooter,
+        pageText: projectPageText(workspaceRoot, document.frontmatter, workspaceRoot ? useProjectStore.getState().entries[workspaceRoot]?.settings : undefined),
         bleedMm, marginMm, outputPath: outputPath ?? undefined, route })
     } catch (e) {
       console.error('PDF export failed', e)

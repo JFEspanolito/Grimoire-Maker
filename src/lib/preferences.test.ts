@@ -3,11 +3,11 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { changeLibraryPath, loadLibraryPaths, loadSettings, saveSettings } from './preferences'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: vi.fn() }))
-vi.mock('@tauri-apps/api/path', () => ({ appConfigDir: async () => 'C:\\Config\\' }))
+vi.mock('@tauri-apps/api/path', () => ({ configDir: async () => 'C:\\Config\\' }))
 beforeEach(() => vi.resetAllMocks())
 
 it('resolves browser defaults without restoreSession or invoking native commands', async () => {
-  expect(await loadLibraryPaths()).toEqual({ plugins: 'C:/Config/Mods/Plugins', snippets: 'C:/Config/Mods/Snippets', templates: 'C:/Config/Mods/Templates', themes: 'C:/Config/themes', logs: 'C:/Config/logs' })
+  expect(await loadLibraryPaths()).toEqual({ plugins: 'C:/Config/GriomoireMaker/Mods/Plugins', snippets: 'C:/Config/GriomoireMaker/Mods/Snippets', templates: 'C:/Config/GriomoireMaker/Mods/Templates', themes: 'C:/Config/GriomoireMaker/themes', logs: 'C:/Config/GriomoireMaker/logs' })
   expect(invoke).not.toHaveBeenCalled()
 })
 it('reloads native persisted preferences on every load, including startup', async () => {

@@ -3,10 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const invoke = vi.hoisted(() => vi.fn())
 vi.mock('@tauri-apps/api/core', () => ({ invoke }))
 
-import { commitChanges, diffChange, getRepositoryStatus, initializeRepository, stageChange, unstageChange } from './versionControl'
+import { autoCommitChanges, commitChanges, diffChange, getRepositoryStatus, initializeRepository, stageChange, unstageChange } from './versionControl'
 
 describe('local source-control actions', () => {
   beforeEach(() => invoke.mockReset())
+
+  it('runs automatic staging and commit in one native operation and preserves skipped outcomes', async () => {
+    invoke.mockResolvedValueOnce('gitUnavailable')
+    expect(await autoCommitChanges('C:/Books', 'update content automatically')).toBe('gitUnavailable')
+    expect(invoke).toHaveBeenCalledExactlyOnceWith('git_auto_commit', { workspace: 'C:/Books', message: 'update content automatically' })
+  })
 
   it('passes unicode, spaces and rename paths literally to native actions', async () => {
     await stageChange('C:/Books', 'Draft/new résumé.md')

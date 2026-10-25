@@ -1,0 +1,8 @@
+.grimoire-page-text { position: absolute; inset: 0; z-index: 2; pointer-events: none; color: var(--page-fg); font: 9pt/1.2 var(--page-font, Georgia, serif); }
+.grimoire-page-text-row { position: absolute; left: var(--page-text-left); right: var(--page-text-right); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2mm; align-items: center; overflow: hidden; }
+.grimoire-page-text-header { top: 0; height: var(--page-text-top); }
+.grimoire-page-text-footer { bottom: 0; height: var(--page-text-bottom); }
+.grimoire-page-text-row > div { min-width: 0; max-height: 100%; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.grimoire-page-text-left { text-align: left; }
+.grimoire-page-text-center { text-align: center; }
+.grimoire-page-text-right { text-align: right; }

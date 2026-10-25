@@ -5,7 +5,6 @@ import { usePrint } from '../../hooks/usePrint'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
-import { ProjectArchiveActions } from '../project/ProjectArchiveActions'
 import { PAGE_SIZES, type PageSizeId } from '../../types/document'
 import styles from './MenuBar.module.css'
 import { ModManager } from '../mods/ModManager'
@@ -13,6 +12,7 @@ import { useImportSection } from '../../stores/explorerStore'
 import { NewProjectDialog } from '../project/NewProjectDialog'
 import { fileShortcut } from '../../lib/shortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
+import { AppInfoDialog, type InfoDialogKind } from '../settings/AppInfoDialog'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
@@ -36,8 +36,15 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const [modsOpen, setModsOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [infoDialog, setInfoDialog] = useState<InfoDialogKind | null>(null)
+  const settingsSummary = useRef<HTMLElement>(null)
   const bar = useRef<HTMLElement>(null)
   const closeMenus = () => bar.current?.querySelectorAll('details[open]').forEach((menu) => menu.removeAttribute('open'))
+  const openInfo = (kind: InfoDialogKind) => {
+    closeMenus()
+    settingsSummary.current?.focus()
+    setInfoDialog(kind)
+  }
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => { if (!bar.current?.contains(event.target as Node)) closeMenus() }
     document.addEventListener('pointerdown', closeOutside)
@@ -90,7 +97,6 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <hr />
         <button disabled={readOnly} onClick={() => void run(print)}>Export PDF…</button>
         <hr />
-        <ProjectArchiveActions workspacePath={workspace} onRestored={actions.openRestored} />
       </div>
     </details>
     <details name="application-menu">
@@ -131,15 +137,18 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
       </div>
     </details>
     <details name="application-menu">
-      <summary>Settings</summary>
+      <summary ref={settingsSummary}>Settings</summary>
       <div className={styles.menu}>
         <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
         <button type="button" onClick={() => { closeMenus(); setPreferencesOpen(true) }}>Preferences…</button>
+        <button type="button" onClick={() => openInfo('about')}>About</button>
+        <button type="button" onClick={() => openInfo('tutorial')}>Tutorial</button>
       </div>
     </details>
     {error && <span role="alert" className={styles.error}>{error}</span>}
   </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
     {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog onClose={() => setPreferencesOpen(false)} /></Suspense>}
+    {infoDialog && <AppInfoDialog kind={infoDialog} onClose={() => setInfoDialog(null)} />}
   </>
 }

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_fs::FsExt;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
@@ -366,10 +366,7 @@ pub async fn pack_project(app: AppHandle) -> Result<Option<String>, String> {
     let operation = Operation::start()?;
     tauri::async_runtime::spawn_blocking(move || {
         let _operation = operation;
-        let state_path = app
-            .path()
-            .app_config_dir()
-            .map_err(|e| e.to_string())?
+        let state_path = crate::config_root::path(&app)?
             .join(crate::config::STATE_FILE);
         let root = active_root(&state_path)?;
         let name = format!(

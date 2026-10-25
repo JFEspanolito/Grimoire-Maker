@@ -28,8 +28,20 @@
 .dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
 .error { margin-top: .75rem; color: #f0a29b; overflow-wrap: anywhere; white-space: pre-line; }
 .notice { margin-top: .75rem; color: #bad1b1; }
+.autoSave { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin-top: 1rem; }
+.autoSave label { display: grid; gap: .35rem; }
+.autoSave input { width: 6rem; padding: .4rem; background: #201f1d; border: 1px solid #ffffff20; border-radius: .25rem; color: #f0eee9; }
 .footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #ffffff20; }
 .footer span { color: #bcb7ac; font-size: .75rem; }
 @media (max-width: 480px) { .dialog { padding: 1rem; } .pathControls { flex-wrap: wrap; } .pathControls input { flex-basis: 100%; } }
 
 @media (max-width: 640px) { .layout { grid-template-columns: minmax(0, 1fr); } .sections { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid #ffffff20; padding: 0 0 .75rem; } }
+
+.customizingLayout { margin-top: 1rem; border-top: 1px solid #ffffff20; padding-top: 1rem; }
+
+.autoCommit { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid #ffffff20; }
+.autoCommitToggle { display: flex; align-items: center; gap: .5rem; margin-top: 1rem; cursor: pointer; }
+.autoCommitMessage { display: grid; gap: .35rem; margin: 1rem 0; }
+.autoCommitMessage input { width: 100%; min-width: 0; padding: .4rem; background: #201f1d; border: 1px solid #ffffff20; border-radius: .25rem; color: #f0eee9; }
+.autoCommit input:hover { border-color: #cfb37c80; }
+.autoCommitToggle:hover { color: #e8cf9a; }

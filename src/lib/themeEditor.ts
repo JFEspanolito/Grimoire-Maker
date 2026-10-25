@@ -2,6 +2,7 @@ import { MAX_THEME_BYTES, decorationCss, readThemeDecorations, stripDecorationCs
 import { readDir, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs'
 import { loadLibraryPaths } from './preferences'
 import { builtinThemeCss, hasThemeSelector, ID_PATTERN, type ThemeInfo } from './themes'
+import { encodeHeaderFooter, readThemeHeaderFooter, stripHeaderFooter, type ThemeHeaderFooter } from './themeHeaderFooter'
 
 export const COLOR_FIELDS = {
   background: 'Background', text: 'Text', h1: 'H1', h2: 'H2', h3: 'H3', divider: 'Divider',
@@ -37,7 +38,7 @@ function validateName(name: string): string {
   return clean
 }
 
-export function buildThemeCss(source: string, sourceId: string, id: string, name: string, colors: ThemeColors, decorations?: ThemeDecoration[]): string {
+export function buildThemeCss(source: string, sourceId: string, id: string, name: string, colors: ThemeColors, decorations?: ThemeDecoration[], headerFooter?: ThemeHeaderFooter): string {
   if (!ID_PATTERN.test(id) || !ID_PATTERN.test(sourceId)) throw new Error('Invalid theme ID')
   const title = validateName(name)
   for (const key of Object.keys(COLOR_FIELDS) as (keyof ThemeColors)[]) {
@@ -45,7 +46,8 @@ export function buildThemeCss(source: string, sourceId: string, id: string, name
   }
   const selector = `[data-theme='${id}']`
   const backgrounds = decorations ?? readThemeDecorations(source)
-  const css = stripDecorationCss(source).replace(OVERRIDES, '')
+  const pageText = headerFooter ?? readThemeHeaderFooter(source)
+  const css = stripHeaderFooter(stripDecorationCss(source)).replace(OVERRIDES, '')
     .replace(new RegExp(`data-theme=(['"])${sourceId}\\1`, 'g'), `data-theme='${id}'`)
     .replace(/\/\*\s*@name:[\s\S]*?\*\//g, '')
   return `/* @name: ${title} */\n${css}\n/* grimoire-colors:start */
@@ -57,7 +59,7 @@ ${selector} {
 }
 ${[1, 2, 3].map((level) => `${selector} .grimoire-content h${level} { color: ${colors[`h${level}` as keyof ThemeColors]}; }`).join('\n')}
 ${selector} .grimoire-content hr { border-color: ${colors.divider}; }
-/* grimoire-colors:end */\n${decorationCss(id, backgrounds)}\n`
+/* grimoire-colors:end */\n${decorationCss(id, backgrounds)}\n${encodeHeaderFooter(pageText)}\n`
 }
 
 async function regularFile(directory: string, name: string): Promise<void> {
@@ -68,7 +70,7 @@ async function regularFile(directory: string, name: string): Promise<void> {
 export async function loadThemeDraft(theme: ThemeInfo, userOwned: boolean): Promise<ThemeDraft> {
   if (!ID_PATTERN.test(theme.id)) throw new Error('Invalid theme ID')
   const paths = await loadLibraryPaths()
-  let css = builtinThemeCss(theme.id)
+  let css = userOwned ? undefined : builtinThemeCss(theme.id)
   let path: string | null = null
   if (!css) {
     if (userOwned) {
@@ -83,10 +85,11 @@ export async function loadThemeDraft(theme: ThemeInfo, userOwned: boolean): Prom
   }
   if (new TextEncoder().encode(css).length > MAX_BYTES || !hasThemeSelector(css, theme.id)) throw new Error('The theme source is invalid or larger than 24 MB.')
   readThemeDecorations(css)
+  readThemeHeaderFooter(css)
   return { theme, css, path, directory: paths.themes }
 }
 
-export async function saveThemeDraft(draft: ThemeDraft, name: string, colors: ThemeColors, copy: boolean, takenIds: string[], decorations?: ThemeDecoration[]): Promise<ThemeInfo> {
+export async function saveThemeDraft(draft: ThemeDraft, name: string, colors: ThemeColors, copy: boolean, takenIds: string[], decorations?: ThemeDecoration[], headerFooter?: ThemeHeaderFooter): Promise<ThemeInfo> {
   const title = validateName(name)
   const directory = (await loadLibraryPaths()).themes
   if (directory !== draft.directory) throw new Error('Themes Path changed. Reopen Customize Theme before saving.')
@@ -99,7 +102,7 @@ export async function saveThemeDraft(draft: ThemeDraft, name: string, colors: Th
     id = base
     for (let suffix = 2; taken.has(id.toLowerCase()) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(id); suffix++) id = `${base}-${suffix}`
   }
-  const css = buildThemeCss(draft.css, draft.theme.id, id, title, colors, decorations)
+  const css = buildThemeCss(draft.css, draft.theme.id, id, title, colors, decorations, headerFooter)
   if (new TextEncoder().encode(css).length > MAX_BYTES) throw new Error('The saved theme would exceed 24 MB.')
   if (creating) {
     await writeTextFile(`${directory}/${id}.css`, css, { createNew: true })

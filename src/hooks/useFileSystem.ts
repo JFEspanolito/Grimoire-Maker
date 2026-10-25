@@ -22,6 +22,7 @@ import { serializeDocument } from '../lib/frontmatter'
 import { applyTemplateFiles } from '../lib/templateActions'
 import type { Template } from '../lib/templates'
 import { emitPluginEvent } from '../plugins/plugin-manager'
+import { notifyRepositoryChanged } from '../lib/repositoryEvents'
 import { PAGE_SIZES, type FileNode, type GrimoireDocument } from '../types/document'
 
 export const isTauri = (): boolean => '__TAURI_INTERNALS__' in window
@@ -99,6 +100,7 @@ export function useFileSystem() {
     useDocumentStore.getState().markSnapshotSaved(path, snapshot)
     if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path, true)
     emitPluginEvent('document:saved')
+    notifyRepositoryChanged()
     await remember((s) => ({ ...s, lastFile: useTabStore.getState().active }))
     return true
   }, [remember])
@@ -178,6 +180,7 @@ export function useFileSystem() {
   const refreshTree = useCallback(async () => {
     const root = useDocumentStore.getState().workspaceRoot
     if (root) setWorkspace(root, await readTree(root))
+    notifyRepositoryChanged()
   }, [setWorkspace])
 
   const createFile = useCallback(
@@ -269,13 +272,15 @@ export function useFileSystem() {
       const state = await loadAppState()
       useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
 
-      const { pageSize, columns, theme, rulerGuides, zoom } = await loadSettings()
+      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage } = await loadSettings()
       const settings = useSettingsStore.getState()
       if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
       if (columns === 1 || columns === 2) settings.setColumns(columns)
       if (typeof theme === 'string') settings.setTheme(theme)
       settings.setRulerGuides(rulerGuides ?? [])
       settings.setZoom(typeof zoom === 'number' ? zoom : 1)
+      settings.setAutoSaveSeconds(autoSaveSeconds ?? 300)
+      settings.setAutoCommitSettings(autoCommitEnabled ?? true, autoCommitMinutes ?? 20, autoCommitMessage ?? 'update content automatically')
 
       const { lastWorkspace } = state
       if (!lastWorkspace) return
@@ -404,7 +409,25 @@ export function useFileSystem() {
 
   const saveAll = useCallback(() => runFileAction(saveAllDocuments), [saveAllDocuments])
 
+  const autoSave = useCallback(() => runFileAction(async () => {
+    if (!isTauri()) return
+    const state = useDocumentStore.getState()
+    const snapshots = Object.values({ ...state.buffers, [state.document.path ?? '__untitled__']: state.document })
+    const failures: string[] = []
+    for (const snapshot of snapshots) {
+      if (!snapshot.path || !snapshot.dirty) continue
+      try { await persistDocument(snapshot) }
+      catch (error) { failures.push(`${snapshot.path}: ${error instanceof Error ? error.message : String(error)}`) }
+    }
+    if (failures.length) {
+      const error = new Error(`Auto save failed: ${failures.join('; ')}`)
+      useSessionStore.getState().setWorkspaceError(error.message)
+      throw error
+    }
+  }), [persistDocument])
+
   return {
+    autoSave,
     saveAll,
     openRestored: (path: string) => runFileAction(() => activateWorkspace(path.replaceAll('\\', '/'))),
     importInto,

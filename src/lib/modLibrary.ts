@@ -1,4 +1,4 @@
-import { appConfigDir } from '@tauri-apps/api/path'
+import { configRoot } from './configRoot'
 import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
 import { ensureModDirectory, seedExamples, type ModFs } from './modCatalog'
 import { loadLibraryPaths, type LibraryPaths } from './preferences'
@@ -19,7 +19,7 @@ export function prepareModLibrary(): Promise<ModLibraryPaths> {
 }
 
 async function initializeLibrary(): Promise<ModLibraryPaths> {
-  const config = (await appConfigDir()).replaceAll('\\', '/').replace(/\/$/, '')
+  const config = (await configRoot()).replaceAll('\\', '/').replace(/\/$/, '')
   const paths = await loadLibraryPaths()
   if (!(await exists(config))) await mkdir(config, { recursive: true })
   const root = await ensureModDirectory(modFs, config, 'Mods')

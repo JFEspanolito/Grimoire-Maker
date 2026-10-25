@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './print.css';
+@import './page-text.css';
 
 /* Group boxes have no decorative frame. Their direct content stays editable. */
 .grimoire-content-box { position: static; max-width: 100%; break-inside: avoid; }

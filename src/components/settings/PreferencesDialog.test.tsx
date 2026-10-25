@@ -32,6 +32,7 @@ beforeEach(async () => {
   mocks.errors = []
   onClose = vi.fn()
   useSettingsStore.getState().setTheme('parchment')
+  useSettingsStore.getState().setAutoCommitSettings(true, 20, 'update content automatically')
   container = document.createElement('div')
   root = createRoot(container)
   await act(async () => root.render(<PreferencesDialog onClose={onClose} />))
@@ -44,6 +45,7 @@ afterEach(async () => {
   else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
   vi.clearAllMocks()
   useSettingsStore.getState().setTheme('parchment')
+  useSettingsStore.getState().setAutoCommitSettings(true, 20, 'update content automatically')
 })
 
 const edit = () => container.querySelector<HTMLButtonElement>('[aria-label="Edit Template Path"]')!
@@ -131,7 +133,7 @@ it('organizes preferences with a section index and a basic shortcut reference', 
   container.querySelector('dialog')!.open = true
   try {
     const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
-    expect(tabs.map(tab => tab.textContent)).toEqual(['Appearance', 'Content folders', 'Shortcuts'])
+    expect(tabs.map(tab => tab.textContent)).toEqual(['Appearance', 'Content folders', 'Shortcuts', 'Auto save', 'Project'])
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
     await act(async () => tabs[2].click())
     const panel = container.querySelector<HTMLElement>('#preferences-shortcuts')!
@@ -151,4 +153,58 @@ it('organizes preferences with a section index and a basic shortcut reference', 
     expect(container.querySelector<HTMLElement>('#preferences-folders')!.hidden).toBe(false)
     expect(tabs[1].getAttribute('aria-selected')).toBe('true')
   } finally { container.remove() }
+})
+
+it('exposes Auto save directly and applies minutes plus seconds without accepting invalid intervals', async () => {
+  await act(async () => container.querySelector<HTMLButtonElement>('#preferences-tab-autosave')!.click())
+  const panel = container.querySelector<HTMLElement>('#preferences-autosave')!
+  expect(panel.hidden).toBe(false)
+  const minutes = panel.querySelector<HTMLInputElement>('[aria-label="Auto save minutes"]')!
+  const seconds = panel.querySelector<HTMLInputElement>('[aria-label="Auto save seconds"]')!
+  expect(minutes.value).toBe('5'); expect(seconds.value).toBe('0')
+  const change = async (input: HTMLInputElement, value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    await act(async () => input.dispatchEvent(new Event('input', { bubbles: true })))
+  }
+  await change(minutes, '1'); await change(seconds, '30')
+  await act(async () => panel.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(useSettingsStore.getState().autoSaveSeconds).toBe(90)
+  await change(minutes, '0'); await change(seconds, '0')
+  await act(async () => panel.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(useSettingsStore.getState().autoSaveSeconds).toBe(90)
+  expect(panel.querySelector('[role="alert"]')?.textContent).toContain('1 second')
+  useSettingsStore.getState().setAutoSaveSeconds(300)
+})
+
+it('exposes project settings in Preferences', async () => {
+  await act(async () => container.querySelector<HTMLButtonElement>('#preferences-tab-project')!.click())
+  const panel = container.querySelector<HTMLElement>('#preferences-project')!
+  expect(panel.hidden).toBe(false)
+  expect(panel.textContent).toContain('Project properties')
+})
+
+
+it('offers a separate Auto commits form with editable defaults and an off switch', async () => {
+  await act(async () => container.querySelector<HTMLButtonElement>('#preferences-tab-autosave')!.click())
+  const panel = container.querySelector<HTMLElement>('#preferences-autosave')!
+  const enabled = panel.querySelector<HTMLInputElement>('[aria-label="Enable auto commits"]')!
+  const minutes = panel.querySelector<HTMLInputElement>('[aria-label="Auto commit minutes"]')!
+  const message = panel.querySelector<HTMLInputElement>('[aria-label="Auto commit message"]')!
+  expect(enabled.checked).toBe(true)
+  expect(minutes.value).toBe('20')
+  expect(message.value).toBe('update content automatically')
+  expect(panel.querySelectorAll('form')).toHaveLength(2)
+  const change = async (input: HTMLInputElement, value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    await act(async () => input.dispatchEvent(new Event('input', { bubbles: true })))
+  }
+  await change(minutes, '45'); await change(message, 'Saved writing')
+  await act(async () => enabled.click())
+  const form = message.closest('form')!
+  await act(async () => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(useSettingsStore.getState()).toMatchObject({ autoCommitEnabled: false, autoCommitMinutes: 45, autoCommitMessage: 'Saved writing' })
+  await change(minutes, '0')
+  await act(async () => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(useSettingsStore.getState().autoCommitMinutes).toBe(45)
+  expect(form.querySelector('[role="alert"]')).not.toBeNull()
 })

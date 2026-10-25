@@ -1,3 +1,6 @@
+import { useDocumentStore } from '../stores/documentStore'
+import { useSettingsStore } from '../stores/settingsStore'
+import { useProjectStore } from '../stores/projectStore'
 import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -62,4 +65,17 @@ it('prevents duplicate actions and releases the lock after failure', async () =>
   vi.mocked(invoke).mockResolvedValueOnce('dialog')
   await print()
   expect(invoke).toHaveBeenCalledTimes(2)
+})
+
+it('exports page-specific columns and project credits without taking a page author override', async () => {
+  vi.mocked(invoke).mockResolvedValue('dialog')
+  useSettingsStore.setState({ columns: 2 })
+  useDocumentStore.getState().setWorkspace('/book', [])
+  useDocumentStore.getState().loadFromRaw('/book/a.md', '---\ncolumns: 1\nauthor: Ignored\n---\nA')
+  useProjectStore.setState({ entries: { '/book': { ready: true, busy: false, error: '', settings: { name: 'Book', author: 'Alice', coAuthor: 'Bob' } } } })
+  await print()
+  expect(exportPdf).toHaveBeenCalledWith(expect.objectContaining({ columns: 1, pageText: expect.objectContaining({ author: 'Alice', coAuthor: 'Bob' }) }))
+  expect(useSettingsStore.getState().columns).toBe(2)
+  useDocumentStore.getState().resetDocuments()
+  useDocumentStore.getState().setWorkspace(null, [])
 })

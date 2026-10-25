@@ -1,3 +1,5 @@
+import { PropertiesPanel } from './components/settings/PropertiesPanel'
+import { useProjectStore } from './stores/projectStore'
 import { useEffect, useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { Toolbar } from './components/layout/Toolbar'
@@ -19,13 +21,23 @@ import { MenuBar } from './components/layout/MenuBar'
 import styles from './App.module.css'
 import { VersionControlPanel } from './components/version-control/VersionControlPanel'
 import { useDocumentStore } from './stores/documentStore'
+import { useAutoSave } from './hooks/useAutoSave'
+import { useAutoCommit } from './hooks/useAutoCommit'
+import { useRepositoryStatus } from './hooks/useRepositoryStatus'
 
 export default function App() {
   useUnsavedClose()
   const [editor, setEditor] = useState<Editor | null>(null)
   const [visiblePanels, setVisiblePanels] = useState({ files: true, templates: true, snippets: true })
-  const [gitOpen, setGitOpen] = useState(false)
+  const [propertiesOpen, setPropertiesOpen] = useState(true)
+  const [gitOpen, setGitOpen] = useState(true)
+  const [sessionReady, setSessionReady] = useState(false)
+  useAutoSave(sessionReady)
+  useAutoCommit(sessionReady)
   const workspace = useDocumentStore((s) => s.workspaceRoot)
+  useEffect(() => { if (workspace) void useProjectStore.getState().load(workspace) }, [workspace])
+  const repository = useRepositoryStatus(workspace)
+  const uncommitted = repository.status?.isRepository ? repository.status.entries.length : 0
   const hasUnsavedChanges = useDocumentStore((s) => s.document.dirty || Object.values(s.buffers).some((document) => document.dirty))
   const theme = useSettingsStore((s) => s.theme)
   const themes = useThemeStore((s) => s.themes)
@@ -45,6 +57,7 @@ export default function App() {
     let cancelled = false
     let unwatch = () => {}
     void restoreSession()
+      .then(() => { if (!cancelled) setSessionReady(true) })
       .catch((e) => useSessionStore.getState().setWorkspaceError(`Could not restore session: ${e instanceof Error ? e.message : String(e)}`))
       .finally(() => {
         if (!cancelled) unwatch = watchSettings()
@@ -83,7 +96,11 @@ export default function App() {
               </div>
               <div className={styles.sourceControl}>
                 <button type="button" className={styles.gitToggle} aria-expanded={gitOpen} aria-controls="source-control-panel"
-                  onClick={() => setGitOpen((open) => !open)} title="Source control">Git{(visiblePanels.files || visiblePanels.templates || gitOpen) && ' · Source control'}</button>
+                  onClick={() => setGitOpen((open) => !open)} title={repository.error ? `Git status unavailable: ${repository.error}` : 'Source control'}>
+                  Git{(visiblePanels.files || visiblePanels.templates || gitOpen) && ' · Source control'}
+                  {uncommitted > 0 && <span className={styles.gitMarker} aria-label={`${uncommitted} uncommitted changes`} title={`${uncommitted} uncommitted changes`}>●</span>}
+                  {repository.error && <span className={styles.gitMarker} aria-label="Git status unavailable">?</span>}
+                </button>
                 {gitOpen && <div id="source-control-panel" className={styles.gitPanel}>
                   <VersionControlPanel workspace={workspace} hasUnsavedChanges={hasUnsavedChanges} />
                 </div>}
@@ -92,11 +109,14 @@ export default function App() {
           <main className={styles.main}>
             <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
           </main>
-          {visiblePanels.snippets && (
-            <aside className={styles.snippets}>
-              <SnippetPalette editor={activeEditor} />
-            </aside>
-          )}
+          <aside className={styles.snippets}>
+            <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
+            <div className={styles.sourceControl}>
+              <button type="button" className={styles.gitToggle} aria-expanded={propertiesOpen} aria-controls="properties-panel"
+                onClick={() => setPropertiesOpen(open => !open)}>Properties</button>
+              {propertiesOpen && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel /></div>}
+            </div>
+          </aside>
         </div>
       </div>
     </PluginProvider>

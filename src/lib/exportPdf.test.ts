@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke } from '@tauri-apps/api/core'
-import { exportPdf } from './exportPdf'
+import { exportPdf, paginate } from './exportPdf'
 
 const mocks = vi.hoisted(() => ({ destroy: vi.fn(), preview: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
@@ -90,4 +90,21 @@ describe('PDF lifecycle', () => {
     expect(invoke).not.toHaveBeenCalled()
     expect(document.querySelector('.print-root')).toBeNull()
   })
+})
+
+it('renders project credits and page counts as safe text on every output page', async () => {
+  document.body.innerHTML = '<div class="grimoire-content"><div class="ProseMirror">Body</div></div>'
+  const target = document.createElement('div')
+  mocks.preview.mockImplementationOnce(async (_content, _styles, output: HTMLElement) => {
+    output.innerHTML = '<div class="pagedjs_page"><div class="pagedjs_sheet"></div></div><div class="pagedjs_page"><div class="pagedjs_sheet"></div></div>'
+  })
+  const { Previewer } = await import('pagedjs')
+  await paginate(new Previewer(), { ...request,
+    headerFooter: { header: { left: '{author}', center: '', right: '{coAuthor}' }, footer: { left: '', center: '{page}/{pages}', right: '' } },
+    pageText: { author: '<b>Alice</b>', coAuthor: 'Bob' },
+  }, target)
+  expect(target.querySelectorAll('[data-theme-page-text]')).toHaveLength(2)
+  expect(target.textContent).toContain('<b>Alice</b>Bob1/2')
+  expect(target.textContent).toContain('2/2')
+  expect(target.querySelector('b')).toBeNull()
 })

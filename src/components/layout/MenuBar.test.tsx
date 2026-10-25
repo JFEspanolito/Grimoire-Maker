@@ -16,7 +16,6 @@ const createNewFile = vi.hoisted(() => vi.fn())
 const createProject = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openWorkspace, openRecent, saveFile, saveAll, openFile, createNewFile, createProject }), isTauri: () => false }))
 vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
-vi.mock('../project/ProjectArchiveActions', () => ({ ProjectArchiveActions: () => <div>Archives</div> }))
 
 it('groups application actions in keyboard-accessible menus', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
@@ -27,6 +26,8 @@ it('groups application actions in keyboard-accessible menus', async () => {
   expect(Array.from(container.querySelectorAll('nav > details > summary')).map((item) => item.textContent)).toEqual(['File', 'View', 'Settings'])
   await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Open Folder…')?.click())
   expect(openWorkspace).toHaveBeenCalledOnce()
+  expect(container.textContent).not.toContain('Pack ZIP')
+  expect(container.textContent).not.toContain('Restore ZIP')
   await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Save')?.click())
   expect(saveFile).toHaveBeenCalledOnce()
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Hide files panel"]')?.click())
@@ -200,5 +201,37 @@ it('keeps recent folders inside File and reopens the selected path', async () =>
   } finally {
     await act(async () => root.unmount())
     useSessionStore.getState().setRecentWorkspaces(previous)
+  }
+})
+
+it('opens About and Tutorial from Settings, closes menus, and restores Settings focus', async () => {
+  const originalShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
+  const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.open = true } })
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value(this: HTMLDialogElement) { this.open = false } })
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
+    const settings = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Settings')! as HTMLDetailsElement
+    for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'In development']]) {
+      settings.open = true
+      const action = Array.from(settings.querySelectorAll('button')).find((button) => button.textContent === label)
+      expect(action).toBeDefined()
+      await act(async () => action!.click())
+      expect(settings.open).toBe(false)
+      expect(container.querySelector('dialog')?.textContent).toContain(content)
+      await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Close ${label}"]`)!.click())
+      expect(container.querySelector('dialog')).toBeNull()
+      expect(document.activeElement).toBe(settings.querySelector('summary'))
+    }
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+    if (originalShow) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', originalShow)
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
+    if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose)
+    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
   }
 })

@@ -1,0 +1,23 @@
+.dialog { position: fixed; inset: 0; margin: auto; width: min(76rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); padding: 1rem; border: 1px solid #625c50; border-radius: .5rem; background: #272623; color: #f0eee9; font-size: .8rem; }
+.dialog::backdrop { background: #000a; }
+.header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.header h2 { font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
+.header p { color: #bcb7ac; margin-top: .25rem; }
+.header button { flex-shrink: 0; padding: .4rem .75rem; border: 1px solid #625c50; border-radius: .35rem; cursor: pointer; }
+.dialog .header button:hover:not(:disabled) { background: #ffffff25; border-color: #cfb37c; color: #fff4dd; }
+.dialog .header button:active:not(:disabled) { background: #cfb37c40; border-color: #ffe2a6; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: .75rem 0; color: #bcb7ac; }
+.legend span { padding: .15rem .4rem; border-radius: .2rem; }
+.scroll { overflow: auto; max-height: 70vh; border: 1px solid #ffffff20; }
+.table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 32rem; }
+.table th { position: sticky; top: 0; z-index: 1; background: #33312d; padding: .6rem; text-align: left; width: 50%; }
+.table td { vertical-align: top; padding: 0; border-right: 1px solid #ffffff15; }
+.line { display: flex; min-height: 1.5em; line-height: 1.5; font-family: monospace; font-size: .75rem; }
+.line code { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; padding-right: .4rem; }
+.number { flex: 0 0 4.5ch; text-align: right; padding-right: .6ch; opacity: .55; user-select: none; }
+.sign { flex: 0 0 1.5ch; user-select: none; }
+.removed { background: #632b2b; color: #ffd0d0; }
+.added { background: #204c32; color: #c7f4d6; }
+.table .note { background: #ffffff08; color: #bcb7ac; padding: .35rem .6rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: monospace; }
+.warning { color: #e1bd78; margin-top: .75rem; }
+.dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: -2px; }

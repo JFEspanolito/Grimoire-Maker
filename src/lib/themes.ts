@@ -1,12 +1,15 @@
 import { MAX_THEME_BYTES } from './themeDecorations'
-import { appConfigDir, join } from '@tauri-apps/api/path'
-import { exists, mkdir, readDir, readTextFile } from '@tauri-apps/plugin-fs'
+import { join } from '@tauri-apps/api/path'
+import { configRoot } from './configRoot'
+import { exists, mkdir, readDir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { loadLibraryPaths } from './preferences'
+import { readThemeHeaderFooter, type ThemeHeaderFooter } from './themeHeaderFooter'
 
 export interface ThemeInfo {
   id: string
   name: string
   builtin: boolean
+  headerFooter?: ThemeHeaderFooter
 }
 
 export const DEFAULT_THEME = 'parchment'
@@ -51,13 +54,49 @@ export function applyStyle(styleId: string, css: string): void {
 }
 
 /** Built-ins go through the same path as mods, so the CSS contract is identical. */
-export function installBuiltinThemes(): void {
-  applyStyle('grimoire-builtin-themes', builtins.map((b) => b.css).join('\n'))
+export function installBuiltinThemes(overrides: readonly string[] = []): void {
+  applyStyle('grimoire-builtin-themes', builtins.filter(b => !overrides.includes(b.info.id)).map((b) => b.css).join('\n'))
 }
 
-/** `<appConfigDir>/<name>` with forward slashes, created on first use. */
+const exampleJobs = new Map<string, Promise<void>>()
+const EXAMPLE_GUIDE = `# Theme examples
+
+These CSS files are editable examples shipped with Grimoire Maker.
+
+To create a new theme:
+1. Copy a CSS file and give it a unique filename, such as garden.css.
+2. Replace every data-theme selector with [data-theme='garden'].
+3. Change the @name comment to the name shown in the theme selector.
+4. Edit the colors, fonts and other CSS rules. Return to the app to reload.
+
+You can also edit these examples directly or use Settings > Customize Theme.
+Share the CSS file with other users; place downloaded files in Themes Path.
+Theme images created with Customize Theme are embedded in that CSS file.
+Existing files are never overwritten when examples are installed. Examples are
+installed only once per folder. Deleted or invalid default themes fall back to
+the original built-in theme, so the app stays usable.
+`
+
+function seedThemeExamples(dir: string): Promise<void> {
+  const existing = exampleJobs.get(dir)
+  if (existing) return existing
+  const job = (async () => {
+    const marker = `${dir}/.grimoire-theme-examples-v1`
+    if (await exists(marker)) return
+    const examples = [...builtins.map(b => ({ name: `${b.info.id}.css`, text: b.css })), { name: 'README.md', text: EXAMPLE_GUIDE }]
+    for (const example of examples) {
+      const path = `${dir}/${example.name}`
+      if (!(await exists(path))) await writeTextFile(path, example.text, { createNew: true })
+    }
+    await writeTextFile(marker, '1\n', { createNew: true })
+  })().finally(() => { exampleJobs.delete(dir) })
+  exampleJobs.set(dir, job)
+  return job
+}
+
+/** `<configRoot>/<name>` with forward slashes, created on first use. */
 export async function ensureConfigSubdir(name: string): Promise<string> {
-  const dir = (await join(await appConfigDir(), name)).replaceAll('\\', '/')
+  const dir = (await join(await configRoot(), name)).replaceAll('\\', '/')
   if (!(await exists(dir))) await mkdir(dir, { recursive: true })
   return dir
 }
@@ -76,7 +115,7 @@ export interface UserThemes {
 }
 
 /**
- * Scans `<appConfigDir>/themes/*.css`, creating the folder on first run, and
+ * Scans `<configRoot>/themes/*.css`, creating the folder on first run, and
  * installs every valid file. A bad file is reported in `errors`, never fatal.
  */
 export async function loadUserThemes(): Promise<UserThemes> {
@@ -85,8 +124,10 @@ export async function loadUserThemes(): Promise<UserThemes> {
 
   const themes: ThemeInfo[] = []
   const errors: string[] = []
+  try { await seedThemeExamples(dir) }
+  catch (error) { errors.push(`Could not install theme examples: ${error instanceof Error ? error.message : String(error)}`) }
   const chunks: string[] = []
-  const taken = new Set(BUILTIN_THEMES.map((t) => t.id))
+  const taken = new Set<string>()
 
   const entries = (await readDir(dir))
     .filter((e) => e.isFile && !e.isSymlink && e.name.toLowerCase().endsWith('.css'))
@@ -109,13 +150,15 @@ export async function loadUserThemes(): Promise<UserThemes> {
         throw new Error(`no [data-theme='${id}'] selector found`)
       }
       taken.add(id)
-      themes.push({ id, name: themeName(css, id), builtin: false })
+      const headerFooter = readThemeHeaderFooter(css)
+      themes.push({ id, name: themeName(css, id), builtin: false, ...(headerFooter && { headerFooter }) })
       chunks.push(css)
     } catch (e) {
       errors.push(`${entry.name}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
+  installBuiltinThemes(themes.map(theme => theme.id))
   applyStyle('grimoire-user-themes', chunks.join('\n'))
   return { dir, themes, errors }
 }

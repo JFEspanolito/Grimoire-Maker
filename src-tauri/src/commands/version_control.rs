@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 const OUTPUT_LIMIT: usize = 512 * 1024;
 static OPERATIONS: Mutex<()> = Mutex::new(());
@@ -60,6 +60,14 @@ fn drain(mut pipe: impl Read) -> std::io::Result<(Vec<u8>, bool)> {
         let keep = size.min(OUTPUT_LIMIT.saturating_sub(output.len()));
         output.extend_from_slice(&buffer[..keep]);
         truncated |= keep < size;
+    }
+}
+
+fn git_start_error(error: std::io::Error) -> String {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        "Source Control requires Git. Please download it from https://git-scm.com/install/.".into()
+    } else {
+        format!("Could not start Git: {error}")
     }
 }
 
@@ -114,9 +122,7 @@ fn execute(root: &Path, args: &[String], extra_config: &[String]) -> Result<Outp
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    let mut child = command.spawn().map_err(|error| {
-        format!("Could not start Git. Install Git and ensure it is on PATH: {error}")
-    })?;
+    let mut child = command.spawn().map_err(git_start_error)?;
     let stdout = child.stdout.take().ok_or("Git stdout unavailable")?;
     let stderr = child.stderr.take().ok_or("Git stderr unavailable")?;
     let out = std::thread::spawn(move || drain(stdout));
@@ -595,15 +601,70 @@ fn init_in(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AutoCommitResult {
+    Committed,
+    IndexUpdated,
+    Unchanged,
+    NoRepository,
+    GitUnavailable,
+}
+
+fn auto_commit_outcome(result: Result<AutoCommitResult, String>) -> Result<AutoCommitResult, String> {
+    match result {
+        Err(error) if error == git_start_error(std::io::Error::from(std::io::ErrorKind::NotFound)) => {
+            Ok(AutoCommitResult::GitUnavailable)
+        }
+        other => other,
+    }
+}
+
+fn auto_commit_in(root: &Path, message: &str) -> Result<AutoCommitResult, String> {
+    auto_commit_outcome((|| {
+        let status = status_in(root)?;
+        if !status.is_repository { return Ok(AutoCommitResult::NoRepository); }
+        if status.entries.is_empty() { return Ok(AutoCommitResult::Unchanged); }
+        // Reject predictable failures before changing the user's staged index.
+        if message.trim().is_empty() || message.len() > 4096 || message.contains('\0') {
+            return Err("Provide a commit message of 1–4096 bytes".into());
+        }
+        for marker in ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-apply", "rebase-merge", "sequencer"] {
+            if root.join(".git").join(marker).exists() {
+                return Err("Finish the in-progress Git operation in an external client before committing here.".into());
+            }
+        }
+        for entry in &status.entries {
+            if entry.index_status == "U" || entry.worktree_status == "U"
+                || (entry.index_status == "A" && entry.worktree_status == "A")
+                || (entry.index_status == "D" && entry.worktree_status == "D") {
+                return Err("Resolve Git conflicts before automatic commits can run.".into());
+            }
+            guard_path(root, &entry.path)?;
+            if let Some(original) = &entry.original_path { guard_path(root, original)?; }
+        }
+        checked(root, &["var", "GIT_AUTHOR_IDENT"])?;
+        checked(root, &["var", "GIT_COMMITTER_IDENT"])?;
+        if fingerprint(root)? != status.index_fingerprint {
+            return Err("The Git index changed before automatic staging. Try again later.".into());
+        }
+        checked(root, &["add", "--", "."])?;
+        let staged = status_in(root)?;
+        // A staged edit can cancel a worktree edit, leaving no commit to create.
+        if !staged.entries.iter().any(|entry| ![" ", "?", "!"].contains(&entry.index_status.as_str())) {
+            return Ok(AutoCommitResult::IndexUpdated);
+        }
+        commit_in(root, message, &staged.index_fingerprint)?;
+        Ok(AutoCommitResult::Committed)
+    })())
+}
+
 async fn in_project<T: Send + 'static>(
     app: AppHandle,
     workspace: String,
     work: impl FnOnce(&Path) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
-    let state = app
-        .path()
-        .app_config_dir()
-        .map_err(|e| e.to_string())?
+    let state = crate::config_root::path(&app)?
         .join(crate::config::STATE_FILE);
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = OPERATIONS
@@ -659,6 +720,11 @@ pub async fn git_init(app: AppHandle, workspace: String) -> Result<(), String> {
     in_project(app, workspace, init_in).await
 }
 
+#[tauri::command]
+pub async fn git_auto_commit(app: AppHandle, workspace: String, message: String) -> Result<AutoCommitResult, String> {
+    in_project(app, workspace, move |root| auto_commit_in(root, &message)).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -668,6 +734,74 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn auto_commit_missing_git_skips_but_other_failures_propagate() {
+        assert_eq!(auto_commit_outcome(Err(git_start_error(std::io::Error::from(std::io::ErrorKind::NotFound)))).unwrap(), AutoCommitResult::GitUnavailable);
+        assert!(auto_commit_outcome(Err(git_start_error(std::io::Error::from(std::io::ErrorKind::PermissionDenied)))).is_err());
+    }
+
+    #[test]
+    fn auto_commit_stages_saved_changes_and_skips_clean_or_non_repository() {
+        let root = repo("auto");
+        fs::write(root.join("keep.md"), "old\n").unwrap();
+        fs::write(root.join("delete.md"), "old\n").unwrap();
+        raw(&root, &["add", "."]);
+        raw(&root, &["commit", "-m", "Initial"]);
+        fs::write(root.join("keep.md"), "new\n").unwrap();
+        fs::remove_file(root.join("delete.md")).unwrap();
+        fs::write(root.join("new.md"), "new page\n").unwrap();
+        fs::write(root.join(".gitignore"), "ignored.txt\n").unwrap();
+        fs::write(root.join("ignored.txt"), "private\n").unwrap();
+        assert_eq!(auto_commit_in(&root, "Automatic update").unwrap(), AutoCommitResult::Committed);
+        assert_eq!(raw(&root, &["show", "HEAD:keep.md"]), "new\n");
+        assert_eq!(raw(&root, &["show", "HEAD:new.md"]), "new page\n");
+        let files = raw(&root, &["ls-tree", "--name-only", "HEAD"]);
+        assert!(!files.contains("delete.md"));
+        assert!(!files.contains("ignored.txt"));
+        assert_eq!(raw(&root, &["log", "-1", "--format=%s"]).trim(), "Automatic update");
+        assert_eq!(auto_commit_in(&root, "Again").unwrap(), AutoCommitResult::Unchanged);
+        fs::write(root.join("keep.md"), "staged edit\n").unwrap();
+        raw(&root, &["add", "."]);
+        fs::write(root.join("keep.md"), "new\n").unwrap();
+        assert_eq!(auto_commit_in(&root, "Cancelled edit").unwrap(), AutoCommitResult::IndexUpdated);
+        assert_eq!(raw(&root, &["log", "-1", "--format=%s"]).trim(), "Automatic update");
+        let empty = scratch("auto-no-repo");
+        assert_eq!(auto_commit_in(&empty, "Update").unwrap(), AutoCommitResult::NoRepository);
+        assert!(!empty.join(".git").exists());
+    }
+
+    #[test]
+    fn auto_commit_rejections_do_not_stage_files() {
+        let root = repo("auto-reject");
+        fs::write(root.join("a.md"), "first\n").unwrap();
+        raw(&root, &["add", "."]);
+        let index = fs::read(root.join(".git/index")).unwrap();
+        fs::write(root.join("a.md"), "later\n").unwrap();
+        assert!(auto_commit_in(&root, " ").is_err());
+        fs::write(root.join(".git/MERGE_HEAD"), "pending").unwrap();
+        assert!(auto_commit_in(&root, "Update").is_err());
+        fs::remove_file(root.join(".git/MERGE_HEAD")).unwrap();
+        raw(&root, &["config", "user.name", ""]);
+        raw(&root, &["config", "user.email", ""]);
+        assert!(auto_commit_in(&root, "Update").is_err());
+        assert_eq!(fs::read(root.join(".git/index")).unwrap(), index);
+        assert_eq!(raw(&root, &["show", ":a.md"]), "first\n");
+    }
+
+    #[test]
+    fn missing_git_explains_the_requirement_and_official_download() {
+        assert_eq!(
+            git_start_error(std::io::Error::from(std::io::ErrorKind::NotFound)),
+            "Source Control requires Git. Please download it from https://git-scm.com/install/."
+        );
+        let denied = git_start_error(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "Access denied",
+        ));
+        assert_eq!(denied, "Could not start Git: Access denied");
+        assert!(!denied.contains("download"));
+    }
 
     fn scratch(label: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
