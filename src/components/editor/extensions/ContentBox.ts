@@ -1,5 +1,6 @@
 import { Node, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react'
 import { DOMSerializer, type Node as PMNode } from '@tiptap/pm/model'
+import { TextSelection } from '@tiptap/pm/state'
 import { ContentBoxView } from './ContentBoxView'
 
 export const BOX_PLACEMENTS = ['flow', 'free'] as const
@@ -64,6 +65,39 @@ export const ContentBox = Node.create({
   parseHTML() { return [{ tag: 'div[data-type="standard-content-box"]' }] },
   renderHTML({ node, HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes, boxAttributes(node.attrs)), 0] },
   addNodeView() { return ReactNodeViewRenderer(ContentBoxView) },
+  addKeyboardShortcuts() {
+    const exitBoxAfter = () => {
+      const { state, view } = this.editor
+      const { selection, schema } = state
+      if (!selection.empty || !schema.nodes.paragraph) return false
+      const { $from } = selection
+      let boxDepth = 0
+      for (let d = $from.depth; d > 0; d--) {
+        if ($from.node(d).type.name === 'standardContentBox') { boxDepth = d; break }
+      }
+      if (!boxDepth) return false
+      const boxEnd = $from.end(boxDepth)
+      // Only exit when at the very end of the last block inside the box.
+      if ($from.pos < boxEnd - 1) return false
+      const afterBox = $from.after(boxDepth)
+      const $after = state.doc.resolve(afterBox)
+      if ($after.nodeAfter) {
+        const nextSelection = TextSelection.findFrom($after, 1)
+        if (nextSelection) {
+          view.dispatch(state.tr.setSelection(nextSelection).scrollIntoView())
+          return true
+        }
+      }
+      const tr = state.tr.insert(afterBox, schema.nodes.paragraph.create())
+      tr.setSelection(TextSelection.create(tr.doc, afterBox + 1)).scrollIntoView()
+      view.dispatch(tr)
+      return true
+    }
+    return {
+      ArrowDown: () => exitBoxAfter(),
+      'Mod-Enter': () => exitBoxAfter(),
+    }
+  },
   addStorage() {
     return { markdown: {
       serialize(state: MarkdownState, node: PMNode) {

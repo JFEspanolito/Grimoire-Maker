@@ -152,3 +152,18 @@ it('sizes a content box vertically and deletes its whole group in one undoable a
   await act(async () => editor.commands.undo())
   expect(editor.getJSON()).toEqual(before)
 })
+
+it('creates a trailing paragraph outside the box when clicking the page below a trailing content box', async () => {
+  const { container, editor } = await mount(boxHtml('flow'))
+  expect(editor.state.doc.firstChild!.childCount).toBe(1)
+  expect(editor.state.doc.firstChild!.firstChild?.type.name).toBe('standardContentBox')
+  const sheet = container.querySelector<HTMLElement>('.grimoire-page')!
+  await act(async () => {
+    sheet.dispatchEvent(new MouseEvent('click', { bubbles: true, button: 0 }))
+  })
+  expect(editor.state.doc.firstChild!.childCount).toBe(2)
+  expect(editor.state.doc.firstChild!.child(1).type.name).toBe('paragraph')
+  await act(async () => editor.commands.insertContent('After box'))
+  expect(editor.state.doc.firstChild!.child(1).textContent).toBe('After box')
+  expect(editor.state.doc.firstChild!.child(0).textContent).toBe('GroupEditable text')
+})

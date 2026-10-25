@@ -1,8 +1,34 @@
 import { createDocument, type Content, type Editor } from '@tiptap/react'
-import { Fragment, Slice } from '@tiptap/pm/model'
-import { NodeSelection } from '@tiptap/pm/state'
+import { Fragment, Slice, type Node as PMNode } from '@tiptap/pm/model'
+import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { closeHistory } from '@tiptap/pm/history'
 import { dropPoint } from '@tiptap/pm/transform'
+
+function isPlainTrailingBlock(node: PMNode | null | undefined): boolean {
+  return !!node && node.type.name === 'paragraph' && node.content.size === 0
+}
+
+/** Ensures the caret can land in a plain paragraph after a trailing non-paragraph block (like a content box or table). */
+export function focusDocumentEnd(editor: Editor): boolean {
+  const { state, view } = editor
+  const { doc, schema } = state
+  const paragraph = schema.nodes.paragraph
+  const lastTop = doc.lastChild
+  if (!lastTop || !paragraph) {
+    return editor.commands.focus('end', { scrollIntoView: false })
+  }
+  const container = lastTop.type.name === 'section' ? lastTop : doc
+  const lastBlock = container.lastChild
+  if (lastBlock && lastBlock.type.name !== 'paragraph' && !isPlainTrailingBlock(lastBlock)) {
+    const insertPos = lastTop.type.name === 'section' ? doc.content.size - 1 : doc.content.size
+    const tr = state.tr.insert(insertPos, paragraph.create())
+    tr.setSelection(TextSelection.create(tr.doc, insertPos + 1))
+    view.dispatch(tr)
+    view.focus()
+    return true
+  }
+  return editor.commands.focus('end', { scrollIntoView: false })
+}
 
 /** All document-producing plugins use this boundary; ordinary editor commands stay unchanged. */
 export function insertContentBox(editor: Editor, content: Content, position?: number, attrs: Record<string, unknown> = {}): boolean {
