@@ -203,7 +203,7 @@ describe('section columns', () => {
       const label = () => container.querySelector('label:has([aria-label="Section columns"])')!.textContent
       expect(label()).toContain('(1 of 1)')
       const click = (text: string) => act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text)!.click())
-      await click('New section here')
+      await click('New page')
       expect(label()).toContain('(2 of 2)')
       const select = container.querySelector<HTMLSelectElement>('[aria-label="Section columns"]')!
       await act(async () => {

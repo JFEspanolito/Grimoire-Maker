@@ -19,7 +19,7 @@ function SectionColumns({ editor }: { editor: Editor }) {
         <option value="">Default</option><option value="1">1 column</option><option value="2">2 columns</option>
       </select></label>
     <div className={styles.creditLinks}>
-      <button type="button" onClick={() => editor.chain().focus().insertSectionBreak().run()}>New section here</button>
+      <button type="button" onClick={() => editor.chain().focus().insertSectionBreak().run()}>New page</button>
       <button type="button" disabled={section.index === 1} onClick={() => editor.chain().focus().mergeSectionWithPrevious().run()}>Merge with previous</button>
     </div>
   </>
