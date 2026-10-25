@@ -2,9 +2,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import configSource from '../../../src-tauri/tauri.conf.json?raw'
+import packageSource from '../../../package.json?raw'
 import { AppInfoDialog, TUTORIAL_STEPS } from './AppInfoDialog'
 
-const config = JSON.parse(configSource) as { productName: string; version: string }
+const config = { ...(JSON.parse(configSource) as { productName: string }), ...(JSON.parse(packageSource) as { version: string }) }
 let root: Root
 let container: HTMLDivElement
 let trigger: HTMLButtonElement

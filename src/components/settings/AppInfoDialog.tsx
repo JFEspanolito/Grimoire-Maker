@@ -1,11 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import configSource from '../../../src-tauri/tauri.conf.json?raw'
+import packageSource from '../../../package.json?raw'
 import styles from './AppInfoDialog.module.css'
 
 const INFO_DIALOG = { ABOUT: 'about', TUTORIAL: 'tutorial' } as const
 export type InfoDialogKind = (typeof INFO_DIALOG)[keyof typeof INFO_DIALOG]
 interface Props { kind: InfoDialogKind; onClose: () => void }
-const { productName, version } = JSON.parse(configSource) as { productName: string; version: string }
+const { productName } = JSON.parse(configSource) as { productName: string }
+/** package.json is the one place the app version is set; Tauri and the crate follow it. */
+const { version } = JSON.parse(packageSource) as { version: string }
 const PROJECT_URL = 'https://github.com/JFEspanolito/Grimoire-Maker'
 const CONTRIBUTORS_URL = `${PROJECT_URL}/Contributors`
 
