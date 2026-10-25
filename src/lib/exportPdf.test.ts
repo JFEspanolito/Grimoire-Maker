@@ -102,6 +102,7 @@ describe('PDF lifecycle', () => {
 })
 
 it('renders project credits and page counts as safe text on every output page', async () => {
+  const { emptyHeaderFooter } = await import('./themeHeaderFooter')
   document.body.innerHTML = '<div class="grimoire-content"><div class="ProseMirror">Body</div></div>'
   const target = document.createElement('div')
   mocks.preview.mockImplementationOnce(async (_content, _styles, output: HTMLElement) => {
@@ -109,11 +110,12 @@ it('renders project credits and page counts as safe text on every output page', 
   })
   const { Previewer } = await import('pagedjs')
   await paginate(new Previewer(), { ...request,
-    headerFooter: { header: { left: '{author}', center: '', right: '{coAuthor}' }, footer: { left: '', center: '{page}/{pages}', right: '' } },
+    headerFooter: { ...emptyHeaderFooter(), header: { left: '{author}', center: '', right: '{coAuthor}' }, footer: { left: '', center: '{page}/{pages}', right: '' } },
     pageText: { author: '<b>Alice</b>', coAuthor: 'Bob' },
   }, target)
   expect(target.querySelectorAll('[data-theme-page-text]')).toHaveLength(2)
   expect(target.textContent).toContain('<b>Alice</b>Bob1/2')
+  for (const header of target.querySelectorAll<HTMLElement>('.grimoire-page-text-header')) expect(header.style.borderBottom).toBe('1px solid rgb(189, 166, 117)')
   expect(target.textContent).toContain('2/2')
   expect(target.querySelector('b')).toBeNull()
 })

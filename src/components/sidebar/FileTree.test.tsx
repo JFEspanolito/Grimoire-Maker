@@ -37,6 +37,33 @@ afterEach(async () => {
 })
 
 describe('project explorer', () => {
+  it('copies the containing directory and reports clipboard failures', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    try {
+      useDocumentStore.getState().setWorkspace('H:/My Book', [
+        { name: 'notes.md', path: 'H:/My Book/Chapter 1/notes.md', isDirectory: false },
+      ])
+      const container = document.createElement('div')
+      root = createRoot(container)
+      await act(async () => root?.render(<FileTree />))
+      const copy = async () => {
+        await act(async () => container.querySelector('li > div')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })))
+        const action = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(button => button.textContent === 'Copy file directory')!
+        await act(async () => action.click())
+      }
+      await copy()
+      expect(writeText).toHaveBeenCalledWith('H:/My Book/Chapter 1')
+      expect(container.querySelector('[role="menu"]')).toBeNull()
+      writeText.mockRejectedValueOnce(new Error('Clipboard unavailable'))
+      await copy()
+      expect(container.textContent).toContain('Clipboard unavailable')
+    } finally {
+      if (previous) Object.defineProperty(navigator, 'clipboard', previous)
+      else Reflect.deleteProperty(navigator, 'clipboard')
+    }
+  })
   it('hides Markdown extensions but retains disk paths and the extension when renaming', async () => {
     useDocumentStore.getState().setWorkspace('/book', [
       { name: 'Chapter.md', path: '/book/Chapter.md', isDirectory: false },

@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/react'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useTabStore } from '../../stores/tabStore'
 import { EditorCanvas } from '../editor/EditorCanvas'
@@ -8,10 +8,12 @@ import { DocumentIndex } from '../editor/DocumentIndex'
 import { DocumentTabs } from './DocumentTabs'
 import styles from './DocumentWorkspace.module.css'
 import { useExplorerStore } from '../../stores/explorerStore'
+import { MarkdownSourceView } from '../editor/MarkdownSourceView'
 
 const FilePreview = lazy(() => import('../viewers/FilePreview').then((module) => ({ default: module.FilePreview })))
 
 export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; onReady: (editor: Editor) => void }) {
+  const [markdownViews, setMarkdownViews] = useState<Record<string, boolean>>({})
   const { paths, panes, split, activePane, focusPane, active: activeTab } = useTabStore()
   const activePath = useDocumentStore((s) => s.document.path)
   const focus = (pane: 0 | 1) => {
@@ -25,8 +27,8 @@ export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; 
   const documents: (string | null)[] = paths.length ? paths : [null]
   const previewingFile = !!activeTab && !/\.md$/i.test(activeTab)
   return <>
-    <DocumentTabs />
-    {!previewingFile && <EditorToolbar editor={editor} />}
+    <DocumentTabs markdownViews={markdownViews} onChangeView={path => setMarkdownViews(current => ({ ...current, [path]: !current[path] }))} />
+    {!previewingFile && !(activeTab && markdownViews[activeTab]) && <EditorToolbar editor={editor} />}
     <div className={styles.workspace} data-split={split}>
       {documents.map((path) => {
         const pane = panes[1] === path && split ? 1 : 0
@@ -36,7 +38,12 @@ export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; 
         return <section key={path ?? '__untitled__'} className={styles.pane} hidden={!visible}
           style={{ gridColumn: pane + 1 }} data-active-editor={active} aria-label={`Editor ${pane + 1}`}
           onPointerDownCapture={() => focus(pane)} onFocusCapture={() => focus(pane)}>
-          {markdown ? <><DocumentIndex path={path} visible={visible} /><EditorCanvas path={path} active={active} onReady={onReady} /></>
+          {markdown ? <>
+            <div hidden={!!path && !!markdownViews[path]}>
+              <DocumentIndex path={path} visible={visible && (!path || !markdownViews[path])} /><EditorCanvas path={path} active={active} onReady={onReady} />
+            </div>
+            {path && markdownViews[path] && <MarkdownSourceView path={path} />}
+          </>
             : <Suspense fallback={<p role="status">Loading preview…</p>}><FilePreview path={path!} /></Suspense>}
         </section>
       })}

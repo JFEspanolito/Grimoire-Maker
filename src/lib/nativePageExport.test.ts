@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { renderNativePages } from './nativePageExport'
 import { PX_PER_MM } from './pageLayout'
+import { emptyHeaderFooter } from './themeHeaderFooter'
 
 const request = { pageSize: 'b5', columns: 2, theme: 'parchment', bleedMm: 3, marginMm: 15 } as const
 beforeEach(() => {
@@ -18,7 +19,7 @@ it('uses native wrapped column height, not H1 count, to create physical sheets i
   const target = document.createElement('div')
   document.body.append(target)
   await renderNativePages({ ...request,
-    headerFooter: { header: { left: '{author}', center: '', right: '' }, footer: { left: '', center: '{page}/{pages}', right: '' } },
+    headerFooter: { ...emptyHeaderFooter(), header: { left: '{author}', center: '', right: '' }, footer: { left: '', center: '{page}/{pages}', right: '' } },
     pageText: { author: '<b>Author</b>' },
   }, target, content)
   const pages = target.querySelectorAll<HTMLElement>('[data-print-sheet]')
@@ -30,6 +31,7 @@ it('uses native wrapped column height, not H1 count, to create physical sheets i
   expect(pages[0].querySelector('[data-paginated]')?.getAttribute('data-paginated')).toBe('true')
   expect(content.querySelectorAll('h1')).toHaveLength(7)
   expect(target.querySelectorAll('[data-theme-page-text]')).toHaveLength(2)
+  for (const header of target.querySelectorAll<HTMLElement>('.grimoire-page-text-header')) expect(header.style.borderBottom).toBe('1px solid rgb(189, 166, 117)')
   expect(pages[0].textContent).toContain('<b>Author</b>1/2')
   expect(pages[1].textContent).toContain('<b>Author</b>2/2')
   expect(target.querySelector('b')).toBeNull()

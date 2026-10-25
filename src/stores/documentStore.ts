@@ -9,6 +9,7 @@ interface DocumentState {
   activate: (path: string) => void
   deactivate: () => void
   setBodyForPath: (path: string | null, body: string) => void
+  setRawForPath: (path: string, raw: string) => void
   markSnapshotSaved: (path: string, snapshot: GrimoireDocument) => void
   remapDocuments: (from: string, to: string) => void
   forget: (path: string) => void
@@ -47,6 +48,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const current = state.document.path === path ? state.document : state.buffers[keyOf(path)]
     if (!current || current.body === body) return state
     return updateDocument(state, { ...current, body, dirty: true })
+  }),
+  setRawForPath: (path, raw) => set((state) => {
+    const current = state.document.path === path ? state.document : state.buffers[path]
+    if (!current || serializeDocument(current.frontmatter, current.body) === raw) return state
+    return updateDocument(state, { ...current, ...parseDocument(raw), dirty: true })
   }),
   markSnapshotSaved: (path, snapshot) => set((state) => {
     const current = state.document.path === snapshot.path ? state.document : state.buffers[keyOf(snapshot.path)]

@@ -4,6 +4,9 @@ import { useDocumentStore } from "../../stores/documentStore";
 import {
   bookName,
   emptyHeaderFooter,
+  emptyDivider,
+  dividerStyle,
+  DIVIDER_SIDES,
   readThemeHeaderFooter,
   resolvePageText,
   PAGE_TEXT_AREAS,
@@ -458,6 +461,32 @@ export function ThemeCustomizer({
                         ))}
                       </fieldset>
                     ))}
+                    <fieldset className={styles.pageText} disabled={busy}>
+                      <legend>Divider</legend>
+                      {PAGE_TEXT_AREAS.map(area => <fieldset key={area} className={styles.dividerRow}>
+                        <legend>{area === 'header' ? 'Header' : 'Footer'}</legend>
+                        {DIVIDER_SIDES.map(side => <label key={side}>
+                          <input type="checkbox" aria-label={`${area} divider ${side}`}
+                            checked={headerFooter.divider?.[area][side] ?? false}
+                            onChange={event => {
+                              const checked = event.target.checked;
+                              setHeaderFooter(current => {
+                                const divider = current.divider ?? emptyDivider();
+                                return { ...current, divider: { ...divider, [area]: { ...divider[area], [side]: checked } } };
+                              });
+                            }} />
+                          {side[0].toUpperCase() + side.slice(1)}
+                        </label>)}
+                      </fieldset>)}
+                      <label>Color
+                        <input type="color" aria-label="Header and footer divider color"
+                          value={headerFooter.divider?.color ?? emptyDivider().color}
+                          onChange={event => {
+                            const color = event.target.value;
+                            setHeaderFooter(current => ({ ...current, divider: { ...(current.divider ?? emptyDivider()), color } }));
+                          }} />
+                      </label>
+                    </fieldset>
                   </div>
                   <div
                     className={styles.headerFooterPreview}
@@ -492,6 +521,7 @@ export function ThemeCustomizer({
                         key={area}
                         className={styles.previewTextRow}
                         data-area={area}
+                        style={dividerStyle(headerFooter, area)}
                       >
                         {PAGE_TEXT_POSITIONS.map((position) => (
                           <span key={position} style={{ textAlign: position }}>

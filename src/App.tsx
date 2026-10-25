@@ -24,11 +24,15 @@ import { useDocumentStore } from './stores/documentStore'
 import { useAutoSave } from './hooks/useAutoSave'
 import { useAutoCommit } from './hooks/useAutoCommit'
 import { useRepositoryStatus } from './hooks/useRepositoryStatus'
+import { PanelResizeHandle } from './components/layout/PanelResizeHandle'
 
 export default function App() {
   useUnsavedClose()
   const [editor, setEditor] = useState<Editor | null>(null)
   const visiblePanels = useSettingsStore((s) => s.panels)
+  const [sidebarWidth, setSidebarWidth] = useState(224)
+  const [snippetsWidth, setSnippetsWidth] = useState(256)
+  const sidebarCollapsed = !visiblePanels.files && !visiblePanels.templates && !visiblePanels.git
   const [sessionReady, setSessionReady] = useState(false)
   useAutoSave(sessionReady)
   useAutoCommit(sessionReady)
@@ -86,7 +90,7 @@ export default function App() {
         <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} editor={activeEditor} />
         <Toolbar />
         <div className={styles.body}>
-            <aside data-tour="project-sidebar" className={`${styles.sidebar} ${!visiblePanels.files && !visiblePanels.templates && !visiblePanels.git ? styles.rail : ''}`}>
+            <aside id="project-sidebar" data-tour="project-sidebar" style={sidebarCollapsed ? undefined : { width: sidebarWidth }} className={`${styles.sidebar} ${sidebarCollapsed ? styles.rail : ''}`}>
               <div className={styles.explorer}>
               {visiblePanels.files && <FileTree />}
               {visiblePanels.templates && <TemplateCatalog />}
@@ -103,10 +107,14 @@ export default function App() {
                 </div>}
               </div>
             </aside>
+          {!sidebarCollapsed && <PanelResizeHandle label="Resize Files panel" controls="project-sidebar"
+            width={sidebarWidth} otherWidth={snippetsWidth} direction={1} onResize={setSidebarWidth} />}
           <main data-tour="editor-workspace" className={styles.main}>
             <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
           </main>
-          <aside data-tour="snippets-sidebar" className={styles.snippets}>
+          <PanelResizeHandle label="Resize Snippets and Properties panel" controls="snippets-sidebar"
+            width={snippetsWidth} otherWidth={sidebarCollapsed ? 40 : sidebarWidth} direction={-1} onResize={setSnippetsWidth} />
+          <aside id="snippets-sidebar" data-tour="snippets-sidebar" style={{ width: snippetsWidth }} className={styles.snippets}>
             <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
             <div className={styles.sourceControl}>
               <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"

@@ -9,6 +9,77 @@ import { useTabStore } from '../../stores/tabStore'
 
 vi.mock('../viewers/FilePreview', () => ({ FilePreview: ({ path }: { path: string }) => <div>Preview: {path}</div> }))
 
+it('toggles each tab between the live page and Markdown without changing its content', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const documents = useDocumentStore.getState()
+  documents.resetDocuments()
+  documents.loadFromRaw('/a.md', '# Alpha\n\n**Original**')
+  documents.loadFromRaw('/b.md', 'Beta')
+  const tabs = useTabStore.getState()
+  tabs.reset('/a.md')
+  tabs.open('/b.md', true)
+  tabs.toggleSplit()
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<DocumentWorkspace editor={null} onReady={() => {}} />))
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="Change view for a"]')
+    expect(button).not.toBeNull()
+    expect(button!.nextElementSibling?.textContent).toBe('a')
+    const originalEditors = [...container.querySelectorAll('.ProseMirror')]
+    const original = useDocumentStore.getState().buffers['/a.md']
+    await act(async () => button!.click())
+    expect(button!.getAttribute('aria-pressed')).toBe('true')
+    const source = container.querySelector<HTMLTextAreaElement>('[aria-label="Markdown source for a"]')!
+    expect(source.value).toContain('# Alpha\n\n**Original**')
+    expect(container.querySelector('[aria-label="Markdown source for b"]')).toBeNull()
+    expect(useDocumentStore.getState().buffers['/a.md']).toBe(original)
+    expect([...container.querySelectorAll('.ProseMirror')]).toEqual(originalEditors)
+    await act(async () => button!.click())
+    expect(container.querySelector('[aria-label="Markdown source for a"]')).toBeNull()
+    expect([...container.querySelectorAll('.ProseMirror')]).toEqual(originalEditors)
+    expect(useDocumentStore.getState().buffers['/a.md']).toBe(original)
+  } finally {
+    await act(async () => root.unmount())
+    tabs.reset(null)
+    documents.resetDocuments()
+  }
+})
+
+it('edits Markdown and metadata in its own buffer and updates the normal page', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const documents = useDocumentStore.getState()
+  documents.resetDocuments()
+  documents.loadFromRaw('/a.md', '# Alpha')
+  documents.loadFromRaw('/b.md', 'Beta')
+  const tabs = useTabStore.getState()
+  tabs.reset('/a.md'); tabs.open('/b.md', true); tabs.toggleSplit()
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<DocumentWorkspace editor={null} onReady={() => {}} />))
+    const toggle = container.querySelector<HTMLButtonElement>('[aria-label="Change view for a"]')!
+    await act(async () => toggle.click())
+    const source = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Markdown source for a"]')
+    expect(source).not.toBeNull()
+    const raw = '---\ntitle: New title\n---\n# Edited\n\n**Draft**\n'
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(source, raw)
+      source!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(source!.value).toBe(raw)
+    expect(useDocumentStore.getState().buffers['/a.md']).toMatchObject({ frontmatter: { title: 'New title' }, body: '# Edited\n\n**Draft**\n', dirty: true })
+    expect(useDocumentStore.getState().buffers['/b.md']).toMatchObject({ body: 'Beta', dirty: false })
+    await act(async () => toggle.click())
+    expect(container.querySelector('.ProseMirror')?.textContent).toContain('Edited')
+    expect(container.querySelector('.ProseMirror strong')?.textContent).toBe('Draft')
+    await act(async () => toggle.click())
+    expect(container.querySelector<HTMLTextAreaElement>('textarea')!.value).toBe(raw)
+  } finally {
+    await act(async () => root.unmount()); tabs.reset(null); documents.resetDocuments()
+  }
+})
+
 it('mounts a read-only preview beside Markdown without a binary editor buffer', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   const documents = useDocumentStore.getState()

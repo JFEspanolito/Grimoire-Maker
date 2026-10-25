@@ -23,6 +23,32 @@ let root: Root | null = null
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
 afterEach(async () => { if (root) await act(async () => root?.unmount()); root = null })
 
+it.each([
+  ['project-sidebar', 'Resize Files panel', 224, 1],
+  ['snippets-sidebar', 'Resize Snippets and Properties panel', 256, -1],
+] as const)('resizes %s independently with pointer and keyboard', async (panel, label, initial, direction) => {
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root?.render(<App />))
+  const aside = container.querySelector<HTMLElement>(`[data-tour="${panel}"]`)!
+  const handle = container.querySelector<HTMLElement>(`[aria-label="${label}"]`)
+  expect(handle).not.toBeNull()
+  const pointer = (type: string, x: number) => {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, button: 0 })
+    Object.defineProperty(event, 'pointerId', { value: 1 })
+    handle!.dispatchEvent(event)
+  }
+  await act(async () => pointer('pointerdown', 400))
+  await act(async () => pointer('pointermove', 400 + direction * 40))
+  await act(async () => pointer('pointerup', 400 + direction * 40))
+  expect(aside.style.width).toBe(`${initial + 40}px`)
+  await act(async () => handle!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: direction === 1 ? 'ArrowLeft' : 'ArrowRight' })))
+  expect(aside.style.width).toBe(`${initial + 30}px`)
+  await act(async () => handle!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Home' })))
+  expect(aside.style.width).toBe('160px')
+  expect(container.querySelector<HTMLElement>(`[data-tour="${direction === 1 ? 'snippets-sidebar' : 'project-sidebar'}"]`)!.style.width).toBe(`${direction === 1 ? 256 : 224}px`)
+})
+
 it('hides each horizontal panel independently and restores it', async () => {
   const container = document.createElement('div')
   root = createRoot(container)
