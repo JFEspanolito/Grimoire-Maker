@@ -1,18 +1,12 @@
 import { useEffect, type MouseEvent } from 'react'
 import { TextSelection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import TextAlign from '@tiptap/extension-text-align'
-import { Markdown } from 'tiptap-markdown'
 import { useDocumentStore } from '../../stores/documentStore'
 import { emitPluginEvent, setPluginHost } from '../../plugins/plugin-manager'
-import { CharacterSheet, ReadAloud, Statblock } from './extensions/blocks'
-import { GrimoireImageNode } from './extensions/imageNode'
-import { TableExtensions } from './extensions/tables'
 import { PageView } from './PageView'
+import { EDITOR_EXTENSIONS } from './editorExtensions'
 import { DocumentPathContext } from './DocumentPathContext'
 import { registerSnippetDropTarget } from '../../lib/snippetDrop'
-import { ContentBox } from './extensions/ContentBox'
 import { insertContentBox } from '../../lib/contentBoxes'
 
 function getMarkdown(editor: Editor): string {
@@ -31,17 +25,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
   const documentPath = path === undefined ? activePath : path
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      GrimoireImageNode,
-      ContentBox,
-      ...TableExtensions,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
-      Statblock,
-      ReadAloud,
-      CharacterSheet,
-      Markdown.configure({ html: true, tightLists: true, breaks: false }),
-    ],
+    extensions: EDITOR_EXTENSIONS,
     content: body,
     onUpdate: ({ editor: e }) => {
       const store = useDocumentStore.getState()

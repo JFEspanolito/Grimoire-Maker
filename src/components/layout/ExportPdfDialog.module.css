@@ -1,0 +1,20 @@
+.dialog { position: fixed; inset: 0; margin: auto; flex-direction: column; width: min(60rem, calc(100vw - 2rem)); height: calc(100vh - 3rem); padding: 1rem 1.25rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; }
+.dialog[open] { display: flex; }
+.dialog::backdrop { background: #0009; }
+.header { display: flex; align-items: center; gap: 1rem; }
+.header h2 { flex: 1; font-size: 1.15rem; font-weight: 600; margin: 0; }
+.zoom { display: flex; align-items: center; gap: .4rem; color: #bcb7ac; }
+.zoom select { padding: .15rem .3rem; border-radius: .25rem; background: #1f1e1c; color: #f0eee9; color-scheme: dark; }
+.dialog button { padding: .35rem .7rem; border-radius: .25rem; background: #ffffff10; color: #f0eee9; cursor: pointer; }
+.dialog button:hover:not(:disabled) { background: #ffffff20; }
+.dialog button:disabled { opacity: .35; cursor: default; }
+.dialog .dismiss { font-size: 1.3rem; line-height: 1; padding: .2rem .5rem; }
+.dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.preview { flex: 1; min-height: 0; margin: .85rem 0; overflow: auto; border-radius: .3rem; background: #302f2c; padding: 1rem; }
+.sheets { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; align-items: flex-start; }
+.sheets[hidden] { display: none; }
+.sheets :global(.native-print-sheet) { box-shadow: 0 .2rem .8rem #0008; flex: none; }
+.footer { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
+.footer [role="status"] { margin-right: auto; color: #bcb7ac; }
+.footer .primary { background: #cfb37c; color: #1c1b19; font-weight: 600; }
+.footer .primary:hover:not(:disabled) { background: #dcc48f; }

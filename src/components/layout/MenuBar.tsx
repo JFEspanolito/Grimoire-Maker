@@ -14,6 +14,9 @@ import { fileShortcut } from '../../lib/shortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
 import { AppInfoDialog, type InfoDialogKind } from '../settings/AppInfoDialog'
 import { StatisticsDialog } from './StatisticsDialog'
+import { ExportPdfDialog, type Book } from './ExportPdfDialog'
+import { DocumentOrderDialog } from '../settings/DocumentOrderDialog'
+import { PropertiesDialog } from '../settings/PropertiesDialog'
 import type { Editor } from '@tiptap/react'
 import { insertDivider, insertImage, insertQuote, insertTable } from '../../lib/insertActions'
 
@@ -40,6 +43,9 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [statisticsOpen, setStatisticsOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [orderOpen, setOrderOpen] = useState(false)
+  const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [infoDialog, setInfoDialog] = useState<InfoDialogKind | null>(null)
   const settingsSummary = useRef<HTMLElement>(null)
   const bar = useRef<HTMLElement>(null)
@@ -99,7 +105,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <hr />
         <button disabled={!workspace || !importSection} title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'} onClick={() => void run(() => actions.importInto())}>Import…</button>
         <hr />
-        <button disabled={readOnly} onClick={() => void run(print)}>Export PDF…</button>
+        <button disabled={readOnly} onClick={() => { closeMenus(); setExportOpen(true) }}>Export PDF…</button>
         <hr />
       </div>
     </details>
@@ -144,6 +150,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
           </select>
         </label>
         <hr />
+        <button type="button" onClick={() => { closeMenus(); setPropertiesOpen(true) }}>Properties…</button>
+        <button type="button" disabled={!workspace} onClick={() => { closeMenus(); setOrderOpen(true) }}>Document Order…</button>
         <button type="button" onClick={() => { closeMenus(); setStatisticsOpen(true) }}>Statistics…</button>
       </div>
     </details>}
@@ -161,6 +169,10 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
     {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog onClose={() => setPreferencesOpen(false)} /></Suspense>}
     {statisticsOpen && <StatisticsDialog onClose={() => setStatisticsOpen(false)} />}
+    {propertiesOpen && <PropertiesDialog onClose={() => setPropertiesOpen(false)} />}
+    {orderOpen && workspace && <DocumentOrderDialog root={workspace} onClose={() => setOrderOpen(false)} />}
+    {exportOpen && <ExportPdfDialog onClose={() => setExportOpen(false)}
+      onExport={(book?: Book) => { setExportOpen(false); void run(() => print(book)) }} />}
     {infoDialog && <AppInfoDialog kind={infoDialog} onClose={() => setInfoDialog(null)} />}
   </>
 }

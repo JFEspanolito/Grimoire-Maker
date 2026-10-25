@@ -3,14 +3,14 @@ import { useTabStore } from '../../stores/tabStore'
 import { ProjectSettings } from './ProjectSettings'
 import styles from './ProjectSettings.module.css'
 
-export function PropertiesPanel() {
+export function PropertiesPanel({ expanded = false }: { expanded?: boolean }) {
   const document = useDocumentStore(state => state.document)
   const setFrontmatter = useDocumentStore(state => state.setFrontmatter)
   const active = useTabStore(state => state.active)
   const markdown = !active || /\.md$/i.test(active)
   return <div className={styles.panel}>
-    <details><summary>Project properties</summary><ProjectSettings /></details>
-    <details><summary>Page properties</summary>
+    <details open={expanded || undefined}><summary>Project properties</summary><ProjectSettings /></details>
+    <details open={expanded || undefined}><summary>Page properties</summary>
       {markdown ? <div className={styles.form}>
         <p>{document.path?.split(/[\\/]/).at(-1) ?? 'Unsaved page'} — applies to this Markdown file only.</p>
         <label>Page columns<select aria-label="Page columns" value={document.frontmatter.columns === 1 || document.frontmatter.columns === 2 ? document.frontmatter.columns : ''}
