@@ -28,9 +28,7 @@ import { useRepositoryStatus } from './hooks/useRepositoryStatus'
 export default function App() {
   useUnsavedClose()
   const [editor, setEditor] = useState<Editor | null>(null)
-  const [visiblePanels, setVisiblePanels] = useState({ files: true, templates: true, snippets: true })
-  const [propertiesOpen, setPropertiesOpen] = useState(true)
-  const [gitOpen, setGitOpen] = useState(true)
+  const [visiblePanels, setVisiblePanels] = useState({ files: true, templates: true, snippets: true, git: true, properties: true })
   const [sessionReady, setSessionReady] = useState(false)
   useAutoSave(sessionReady)
   useAutoCommit(sessionReady)
@@ -86,22 +84,22 @@ export default function App() {
   return (
     <PluginProvider>
       <div data-theme={resolveTheme(theme, themes)} className={styles.shell}>
-        <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} />
+        <MenuBar visiblePanels={visiblePanels} onTogglePanel={togglePanel} editor={activeEditor} />
         <Toolbar />
         <div className={styles.body}>
-            <aside data-tour="project-sidebar" className={`${styles.sidebar} ${!visiblePanels.files && !visiblePanels.templates && !gitOpen ? styles.rail : ''}`}>
+            <aside data-tour="project-sidebar" className={`${styles.sidebar} ${!visiblePanels.files && !visiblePanels.templates && !visiblePanels.git ? styles.rail : ''}`}>
               <div className={styles.explorer}>
               {visiblePanels.files && <FileTree />}
               {visiblePanels.templates && <TemplateCatalog />}
               </div>
               <div className={styles.sourceControl}>
-                <button type="button" className={styles.gitToggle} aria-expanded={gitOpen} aria-controls="source-control-panel"
-                  onClick={() => setGitOpen((open) => !open)} title={repository.error ? `Git status unavailable: ${repository.error}` : 'Source control'}>
-                  Git{(visiblePanels.files || visiblePanels.templates || gitOpen) && ' · Source control'}
+                <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.git} aria-controls="source-control-panel"
+                  onClick={() => togglePanel('git')} title={repository.error ? `Git status unavailable: ${repository.error}` : 'Source control'}>
+                  Git{(visiblePanels.files || visiblePanels.templates || visiblePanels.git) && ' · Source control'}
                   {uncommitted > 0 && <span className={styles.gitMarker} aria-label={`${uncommitted} uncommitted changes`} title={`${uncommitted} uncommitted changes`}>●</span>}
                   {repository.error && <span className={styles.gitMarker} aria-label="Git status unavailable">?</span>}
                 </button>
-                {gitOpen && <div id="source-control-panel" className={styles.gitPanel}>
+                {visiblePanels.git && <div id="source-control-panel" className={styles.gitPanel}>
                   <VersionControlPanel workspace={workspace} hasUnsavedChanges={hasUnsavedChanges} />
                 </div>}
               </div>
@@ -112,9 +110,9 @@ export default function App() {
           <aside data-tour="snippets-sidebar" className={styles.snippets}>
             <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
             <div className={styles.sourceControl}>
-              <button type="button" className={styles.gitToggle} aria-expanded={propertiesOpen} aria-controls="properties-panel"
-                onClick={() => setPropertiesOpen(open => !open)}>Properties</button>
-              {propertiesOpen && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel /></div>}
+              <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
+                onClick={() => togglePanel('properties')}>Properties</button>
+              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel /></div>}
             </div>
           </aside>
         </div>

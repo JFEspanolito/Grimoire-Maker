@@ -7,6 +7,7 @@ import { encodeHeaderFooter, readThemeHeaderFooter, stripHeaderFooter, type Them
 export const COLOR_FIELDS = {
   background: 'Background', text: 'Text', h1: 'H1', h2: 'H2', h3: 'H3', divider: 'Divider',
   accent: 'Accent', statblock: 'Stat block', readaloud: 'Read aloud',
+  indexBackground: 'Index background', indexText: 'Index text',
 } as const
 export type ThemeColors = Record<keyof typeof COLOR_FIELDS, string>
 export interface ThemeDraft { theme: ThemeInfo; css: string; path: string | null; directory: string }
@@ -27,6 +28,7 @@ export function themeColors(css: string): ThemeColors {
     h1: value('h1-color', heading), h2: value('h2-color', heading), h3: value('h3-color', heading),
     divider: value('divider-color', accent), accent,
     statblock: value('statblock-bg', '#fdf1dc'), readaloud: value('readaloud-bg', '#e9dcb8'),
+    indexBackground: value('index-bg', '#6b7078'), indexText: value('index-fg', '#ffffff'),
   }
 }
 
@@ -56,6 +58,7 @@ ${selector} {
   --h1-color: ${colors.h1}; --h2-color: ${colors.h2}; --h3-color: ${colors.h3};
   --divider-color: ${colors.divider}; --accent: ${colors.accent};
   --statblock-bg: ${colors.statblock}; --readaloud-bg: ${colors.readaloud};
+  --index-bg: ${colors.indexBackground}; --index-fg: ${colors.indexText};
 }
 ${[1, 2, 3].map((level) => `${selector} .grimoire-content h${level} { color: ${colors[`h${level}` as keyof ThemeColors]}; }`).join('\n')}
 ${selector} .grimoire-content hr { border-color: ${colors.divider}; }

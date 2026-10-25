@@ -1,0 +1,13 @@
+/* Zero-height sticky anchor: the panel floats over the pane without taking layout space. */
+.anchor { position: sticky; top: 0; height: 0; z-index: 20; }
+.panel { position: absolute; top: .5rem; right: 1.25rem; width: 13rem; max-height: min(24rem, 60vh); overflow: auto; padding: .6rem .7rem; border-radius: .3rem; background: var(--index-bg, #6b7078); color: var(--index-fg, #fff); font-size: .72rem; box-shadow: 0 .25rem 1rem #0006; }
+.panel h2 { margin: 0 0 .5rem; font-size: .75rem; font-weight: 700; overflow-wrap: anywhere; }
+.panel ol { margin: 0; padding: 0; list-style: none; display: grid; gap: .1rem; }
+.panel li[data-level='2'] { padding-left: .6rem; }
+.panel li[data-level='3'] { padding-left: 1.2rem; }
+.panel li[data-level='1'] { font-weight: 700; }
+.panel button { display: flex; justify-content: space-between; gap: .5rem; width: 100%; padding: .1rem .2rem; border: 0; border-radius: .2rem; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.panel button:hover { background: #ffffff25; }
+.panel button:focus-visible { outline: 2px solid #cfb37c; outline-offset: 1px; }
+.text { overflow-wrap: anywhere; }
+.page { flex: none; font-variant-numeric: tabular-nums; opacity: .85; }

@@ -13,16 +13,20 @@ import { NewProjectDialog } from '../project/NewProjectDialog'
 import { fileShortcut } from '../../lib/shortcuts'
 import { useSessionStore } from '../../stores/sessionStore'
 import { AppInfoDialog, type InfoDialogKind } from '../settings/AppInfoDialog'
+import { StatisticsDialog } from './StatisticsDialog'
+import type { Editor } from '@tiptap/react'
+import { insertDivider, insertImage, insertQuote, insertTable } from '../../lib/insertActions'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
-type Panel = 'files' | 'templates' | 'snippets'
+type Panel = 'files' | 'templates' | 'snippets' | 'git' | 'properties'
 interface Props {
   visiblePanels: Record<Panel, boolean>
   onTogglePanel: (panel: Panel) => void
+  editor?: Editor | null
 }
 
-export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
+export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) {
   const actions = useFileSystem()
   const print = usePrint()
   const workspace = useDocumentStore((s) => s.workspaceRoot)
@@ -30,11 +34,12 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const split = useTabStore((s) => s.split)
-  const { pageSize, columns, setPageSize, setColumns } = useSettingsStore()
+  const { pageSize, columns, setPageSize, setColumns, showDocumentIndex, setShowDocumentIndex } = useSettingsStore()
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [statisticsOpen, setStatisticsOpen] = useState(false)
   const [infoDialog, setInfoDialog] = useState<InfoDialogKind | null>(null)
   const settingsSummary = useRef<HTMLElement>(null)
   const bar = useRef<HTMLElement>(null)
@@ -101,7 +106,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
     <details name="application-menu">
       <summary>View</summary>
       <div className={styles.menu}>
-        {(['files', 'templates', 'snippets'] as const).map((panel) => <button key={panel}
+        {(['files', 'templates', 'snippets', 'git', 'properties'] as const).map((panel) => <button key={panel}
           aria-label={`${visiblePanels[panel] ? 'Hide' : 'Show'} ${panel} panel`}
           aria-pressed={visiblePanels[panel]} onClick={() => onTogglePanel(panel)}>
           <span className={styles.check} aria-hidden="true">{visiblePanels[panel] ? '✓' : ''}</span>{panel[0].toUpperCase() + panel.slice(1)}
@@ -110,8 +115,24 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
         <button aria-label="Split View" aria-pressed={split} onClick={() => void run(() => useTabStore.getState().toggleSplit())}>
           <span className={styles.check} aria-hidden="true">{split ? '✓' : ''}</span>Split View
         </button>
-        <hr />
-        {!readOnly && <><label className={styles.layout}>Page size
+        <button aria-label="Document Index" aria-pressed={showDocumentIndex} onClick={() => setShowDocumentIndex(!showDocumentIndex)}>
+          <span className={styles.check} aria-hidden="true">{showDocumentIndex ? '✓' : ''}</span>Document Index
+        </button>
+      </div>
+    </details>
+    {!readOnly && <details name="application-menu">
+      <summary>Insert</summary>
+      <div className={styles.menu}>
+        <button disabled={!editor} onClick={() => void run(() => insertTable(editor!))}>Table</button>
+        <button disabled={!editor} onClick={() => void run(async () => { await insertImage(editor!); await actions.refreshTree() })}>Image…</button>
+        <button disabled={!editor} onClick={() => void run(() => insertDivider(editor!))}>Horizontal Rule</button>
+        <button disabled={!editor} onClick={() => void run(() => insertQuote(editor!))}>Quote</button>
+      </div>
+    </details>}
+    {!readOnly && <details name="application-menu">
+      <summary>Document</summary>
+      <div className={styles.menu}>
+        <label className={styles.layout}>Page size
           <select aria-label="Page size" value={pageSize} onChange={(event) => setPageSize(event.target.value as PageSizeId)}>
             {Object.values(PAGE_SIZES).map((size) => <option key={size.id} value={size.id}>{size.label}</option>)}
           </select>
@@ -121,9 +142,11 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
             <option value={1}>1</option>
             <option value={2}>2</option>
           </select>
-        </label></>}
+        </label>
+        <hr />
+        <button type="button" onClick={() => { closeMenus(); setStatisticsOpen(true) }}>Statistics…</button>
       </div>
-    </details>
+    </details>}
     <details name="application-menu">
       <summary ref={settingsSummary}>Settings</summary>
       <div className={styles.menu}>
@@ -137,6 +160,7 @@ export function MenuBar({ visiblePanels, onTogglePanel }: Props) {
   </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} />}
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
     {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog onClose={() => setPreferencesOpen(false)} /></Suspense>}
+    {statisticsOpen && <StatisticsDialog onClose={() => setStatisticsOpen(false)} />}
     {infoDialog && <AppInfoDialog kind={infoDialog} onClose={() => setInfoDialog(null)} />}
   </>
 }

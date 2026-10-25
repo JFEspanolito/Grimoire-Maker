@@ -1,0 +1,21 @@
+.dialog { position: fixed; inset: 0; margin: auto; width: min(26rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; padding: 1.25rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; }
+.dialog::backdrop { background: #0009; }
+.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.header h2 { font-size: 1.15rem; font-weight: 600; margin: 0; }
+.dialog button { padding: .4rem .65rem; border-radius: .25rem; background: #ffffff10; color: #f0eee9; cursor: pointer; }
+.dialog button:hover { background: #ffffff20; }
+.dialog .dismiss { font-size: 1.3rem; line-height: 1; padding: .2rem .5rem; }
+.dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.groups { display: grid; gap: 1rem; padding-top: .85rem; }
+.groups dl { display: grid; gap: .3rem; margin: 0; }
+.groups dl > div { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.groups dt { text-align: right; color: #bcb7ac; }
+.groups dd { margin: 0; font-variant-numeric: tabular-nums; }
+.frequency { margin-top: 1rem; }
+.frequency summary { cursor: pointer; padding: .25rem 0; }
+.frequency table { width: 100%; margin-top: .5rem; border-collapse: collapse; }
+.frequency th { text-align: left; padding: .25rem .5rem; background: #ffffff10; font-weight: 500; }
+.frequency td { padding: .25rem .5rem; border-bottom: 1px solid #ffffff10; }
+.frequency td:nth-child(2), .frequency th:nth-child(2) { text-align: right; width: 4rem; }
+.bar { display: block; min-width: 2.75rem; padding: 0 .35rem; background: #4a8fe0; color: #fff; font-size: .75rem; box-sizing: border-box; }
+.footer { display: flex; justify-content: flex-end; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #ffffff20; }

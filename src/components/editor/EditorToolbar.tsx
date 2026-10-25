@@ -1,8 +1,4 @@
-import { reportError } from '../../lib/errorLogging'
-import { useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
-import { useDocumentStore } from '../../stores/documentStore'
-import { importImage } from '../../lib/images'
 import { ImageControls, type ImageAttrs } from './ImageControls'
 import { TableControls } from './TableControls'
 import { GuidesMenu } from '../../plugins/builtins/pixel-ruler/GuidesMenu'
@@ -108,19 +104,6 @@ const ACTIONS: Action[][] = [
       run: (e) => e.chain().focus().toggleOrderedList().run(),
       isActive: (e) => e.isActive('orderedList'),
     },
-    {
-      id: 'quote',
-      label: '❝',
-      title: 'Quote',
-      run: (e) => e.chain().focus().toggleBlockquote().run(),
-      isActive: (e) => e.isActive('blockquote'),
-    },
-    {
-      id: 'rule',
-      label: '―',
-      title: 'Divider',
-      run: (e) => e.chain().focus().setHorizontalRule().run(),
-    },
   ],
 ]
 
@@ -128,8 +111,6 @@ const btn = 'min-w-8 rounded px-2 py-1 text-sm hover:bg-white/10 disabled:opacit
 
 /** Formatting controls for the active editor; each button reflects the current selection. */
 export function EditorToolbar({ editor }: { editor: Editor | null }) {
-  const [error, setError] = useState<string | null>(null)
-
   // Re-evaluates the per-button state on every transaction, so active styling follows the caret.
   const state = useEditorState({
     editor,
@@ -147,23 +128,6 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
           }
         : null,
   })
-
-  const insertImage = async () => {
-    if (!editor) return
-    try {
-      setError(null)
-      const documentPath = useDocumentStore.getState().document.path
-      if (!documentPath) {
-        setError('Save this document as Markdown before importing an image. Then click Image again to choose a PNG, JPG, GIF, WebP, or SVG file.')
-        return
-      }
-      const src = await importImage(documentPath)
-      if (src && !editor.isDestroyed) editor.chain().focus().setImage({ src, alt: '' }).run()
-    } catch (e) {
-      reportError('editor.image.import', e)
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
 
   return (
     <>
@@ -197,18 +161,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
             })}
           </div>
         ))}
-        <button
-          type="button"
-          className={btn}
-          disabled={!editor}
-          title="Insert image (copied to the assets folder next to the document)"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => void insertImage()}
-        >
-          🖼 Image
-        </button>
         <GuidesMenu />
-        {error && <span className="text-xs text-red-400">{error}</span>}
       </div>
       <ImageControls editor={editor} attrs={state?.image ?? null} />
       {editor && state?.inTable && <TableControls editor={editor} />}

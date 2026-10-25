@@ -4,6 +4,7 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { useTabStore } from '../../stores/tabStore'
 import { EditorCanvas } from '../editor/EditorCanvas'
 import { EditorToolbar } from '../editor/EditorToolbar'
+import { DocumentIndex } from '../editor/DocumentIndex'
 import { DocumentTabs } from './DocumentTabs'
 import styles from './DocumentWorkspace.module.css'
 import { useExplorerStore } from '../../stores/explorerStore'
@@ -35,7 +36,7 @@ export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; 
         return <section key={path ?? '__untitled__'} className={styles.pane} hidden={!visible}
           style={{ gridColumn: pane + 1 }} data-active-editor={active} aria-label={`Editor ${pane + 1}`}
           onPointerDownCapture={() => focus(pane)} onFocusCapture={() => focus(pane)}>
-          {markdown ? <EditorCanvas path={path} active={active} onReady={onReady} />
+          {markdown ? <><DocumentIndex path={path} visible={visible} /><EditorCanvas path={path} active={active} onReady={onReady} /></>
             : <Suspense fallback={<p role="status">Loading preview…</p>}><FilePreview path={path!} /></Suspense>}
         </section>
       })}

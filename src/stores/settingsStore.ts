@@ -8,6 +8,8 @@ interface SettingsState {
   theme: ThemeId
   viewMode: ViewMode
   zoom: number
+  showDocumentIndex: boolean
+  setShowDocumentIndex: (show: boolean) => void
   autoCommitEnabled: boolean
   autoCommitMinutes: number
   autoCommitMessage: string
@@ -32,6 +34,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   theme: 'parchment',
   viewMode: 'edit',
   zoom: 1,
+  showDocumentIndex: true,
+  setShowDocumentIndex: (showDocumentIndex) => set({ showDocumentIndex }),
   autoCommitEnabled: true,
   autoCommitMinutes: 20,
   autoCommitMessage: 'update content automatically',

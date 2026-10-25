@@ -1,6 +1,12 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { expect, it, vi } from 'vitest'
+import { Editor } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { Markdown } from 'tiptap-markdown'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TableExtensions } from '../editor/extensions/tables'
+import { importImage } from '../../lib/images'
+import { useDocumentStore } from '../../stores/documentStore'
 import { MenuBar } from './MenuBar'
 import { Toolbar } from './Toolbar'
 import { useSessionStore } from '../../stores/sessionStore'
@@ -14,7 +20,9 @@ const saveAll = vi.hoisted(() => vi.fn())
 const openFile = vi.hoisted(() => vi.fn())
 const createNewFile = vi.hoisted(() => vi.fn())
 const createProject = vi.hoisted(() => vi.fn())
-vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openWorkspace, openRecent, saveFile, saveAll, openFile, createNewFile, createProject }), isTauri: () => false }))
+const refreshTree = vi.hoisted(() => vi.fn())
+vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openWorkspace, openRecent, saveFile, saveAll, openFile, createNewFile, createProject, refreshTree }), isTauri: () => false }))
+vi.mock('../../lib/images', () => ({ importImage: vi.fn() }))
 vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
 
 it('groups application actions in keyboard-accessible menus', async () => {
@@ -22,8 +30,8 @@ it('groups application actions in keyboard-accessible menus', async () => {
   const container = document.createElement('div')
   const root = createRoot(container)
   const toggle = vi.fn()
-  await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={toggle} />))
-  expect(Array.from(container.querySelectorAll('nav > details > summary')).map((item) => item.textContent)).toEqual(['File', 'View', 'Settings'])
+  await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={toggle} />))
+  expect(Array.from(container.querySelectorAll('nav > details > summary')).map((item) => item.textContent)).toEqual(['File', 'View', 'Insert', 'Document', 'Settings'])
   await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Open Folder…')?.click())
   expect(openWorkspace).toHaveBeenCalledOnce()
   expect(container.textContent).not.toContain('Pack ZIP')
@@ -41,7 +49,7 @@ it('has reversible marked view actions and no duplicated toolbar commands', asyn
   const container = document.createElement('div')
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><Toolbar /></>))
+    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} /><Toolbar /></>))
     const view = Array.from(container.querySelectorAll('details')).find((menu) => menu.querySelector('summary')?.textContent === 'View')!
     const split = view.querySelector<HTMLButtonElement>('[aria-label="Split View"]')!
     expect(split?.getAttribute('aria-pressed')).toBe('false')
@@ -78,7 +86,7 @@ it('has reversible marked view actions and no duplicated toolbar commands', asyn
 it('makes file creation and opening folders discoverable in File', async () => {
   const container = document.createElement('div')
   const root = createRoot(container)
-  await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
+  await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
   const buttons = Array.from(container.querySelector('details')!.querySelectorAll('button'))
   expect(buttons.slice(0, 4).map((button) => button.textContent)).toEqual(['New File…', 'New Project…', 'Open File…', 'Open Folder…'])
   await act(async () => buttons[0].click())
@@ -89,16 +97,20 @@ it('makes file creation and opening folders discoverable in File', async () => {
   await act(async () => root.unmount())
 })
 
-it('keeps page setup only in View and omits repeated application branding', async () => {
+it('keeps page setup only in Document and omits repeated application branding', async () => {
   const initial = useSettingsStore.getState()
   const container = document.createElement('div')
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} /><Toolbar /></>))
+    await act(async () => root.render(<><MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} /><Toolbar /></>))
     const nav = container.querySelector('nav')!
-    const view = Array.from(nav.querySelectorAll('details')).find((menu) => menu.querySelector('summary')?.textContent === 'View')!
-    const size = view.querySelector<HTMLSelectElement>('[aria-label="Page size"]')
-    const columns = view.querySelector<HTMLSelectElement>('[aria-label="Columns"]')
+    const menus = Array.from(nav.querySelectorAll('details'))
+    const view = menus.find((menu) => menu.querySelector('summary')?.textContent === 'View')!
+    const documentMenu = menus.find((menu) => menu.querySelector('summary')?.textContent === 'Document')!
+    expect(view.querySelector('[aria-label="Page size"]')).toBeNull()
+    expect(view.querySelector('[aria-label="Columns"]')).toBeNull()
+    const size = documentMenu.querySelector<HTMLSelectElement>('[aria-label="Page size"]')
+    const columns = documentMenu.querySelector<HTMLSelectElement>('[aria-label="Columns"]')
     expect(size).not.toBeNull()
     expect(columns).not.toBeNull()
     expect(container.querySelector('header [aria-label="Page size"]')).toBeNull()
@@ -108,6 +120,7 @@ it('keeps page setup only in View and omits repeated application branding', asyn
     await act(async () => { size!.value = 'letter'; size!.dispatchEvent(new Event('change', { bubbles: true })) })
     await act(async () => { columns!.value = '1'; columns!.dispatchEvent(new Event('change', { bubbles: true })) })
     expect(useSettingsStore.getState()).toMatchObject({ pageSize: 'letter', columns: 1 })
+    expect(documentMenu.textContent).toContain('Statistics…')
   } finally {
     await act(async () => root.unmount())
     useSettingsStore.setState({ pageSize: initial.pageSize, columns: initial.columns })
@@ -123,7 +136,7 @@ it('keeps the new project dialog open on picker cancellation or error and closes
   const container = document.createElement('div')
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
     await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'New Project…')?.click())
     expect(showModal).toHaveBeenCalledOnce()
     expect(container.querySelector('dialog')?.textContent).toContain('Choose Location & Create')
@@ -158,7 +171,7 @@ it('runs basic file shortcuts through the existing actions without stealing moda
   }
   try {
     saveAll.mockClear(); openFile.mockClear(); createNewFile.mockClear()
-    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
     expect((await press('s')).defaultPrevented).toBe(true)
     expect(saveAll).toHaveBeenCalledOnce()
     await press('s', { ctrlKey: true, repeat: true })
@@ -190,7 +203,7 @@ it('keeps recent folders inside File and reopens the selected path', async () =>
   const container = document.createElement('div')
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
     const file = container.querySelector('details')!
     const recent = file.querySelector<HTMLElement>('[aria-label="Recent folders"]')!
     expect(recent).not.toBeNull()
@@ -216,7 +229,7 @@ it('opens About and Tutorial from Settings, closes menus, and restores Settings 
   document.body.append(container)
   const root = createRoot(container)
   try {
-    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true }} onTogglePanel={() => {}} />))
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
     const settings = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Settings')! as HTMLDetailsElement
     for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'Step 1 of 6']]) {
       settings.open = true
@@ -237,4 +250,62 @@ it('opens About and Tutorial from Settings, closes menus, and restores Settings 
     if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose)
     else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
   }
+})
+
+describe('Insert menu', () => {
+  const panels = { files: true, templates: true, snippets: true, git: true, properties: true }
+  let editor: Editor | null = null
+  afterEach(() => { editor?.destroy(); editor = null })
+  const mount = async (value: Editor | null) => {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => root.render(<MenuBar visiblePanels={panels} onTogglePanel={() => {}} editor={value} />))
+    const menu = Array.from(container.querySelectorAll('details')).find((item) => item.querySelector('summary')?.textContent === 'Insert')!
+    const item = (label: string) => Array.from(menu.querySelectorAll('button')).find((button) => button.textContent === label)!
+    return { container, menu, item, unmount: () => act(async () => root.unmount()) }
+  }
+  const markdown = (value: Editor) => (value.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown()
+
+  it('lists Table, Image, Horizontal Rule and Quote, disabled without an editor', async () => {
+    const { menu, unmount } = await mount(null)
+    const buttons = Array.from(menu.querySelectorAll('button'))
+    expect(buttons.map((button) => button.textContent)).toEqual(['Table', 'Image…', 'Horizontal Rule', 'Quote'])
+    expect(buttons.every((button) => button.disabled)).toBe(true)
+    await unmount()
+  })
+
+  it('inserts a table, a rule and a quote into the active editor', async () => {
+    editor = new Editor({ extensions: [StarterKit, Markdown, ...TableExtensions], content: 'Sample' })
+    const { item, unmount } = await mount(editor)
+    await act(async () => item('Table').click())
+    expect(editor.getJSON().content?.some((node) => node.type === 'table')).toBe(true)
+    await act(async () => { editor!.commands.setContent('Sample'); editor!.commands.setTextSelection(3) })
+    await act(async () => item('Horizontal Rule').click())
+    expect(markdown(editor)).toContain('---')
+    await act(async () => { editor!.commands.setContent('Sample'); editor!.commands.setTextSelection(3) })
+    await act(async () => item('Quote').click())
+    expect(markdown(editor)).toContain('>')
+    await unmount()
+  })
+
+  it('asks to save an unsaved document before importing an image', async () => {
+    useDocumentStore.getState().loadFromRaw(null, '')
+    editor = new Editor({ extensions: [StarterKit] })
+    const { container, item, unmount } = await mount(editor)
+    await act(async () => item('Image…').click())
+    expect(container.textContent).toContain('Save this document as Markdown before importing an image.')
+    expect(importImage).not.toHaveBeenCalled()
+    await unmount()
+  })
+
+  it('opens the image picker for a saved document', async () => {
+    useDocumentStore.getState().loadFromRaw('/workspace/Draft/Chapter.md', '')
+    vi.mocked(importImage).mockResolvedValue(null)
+    editor = new Editor({ extensions: [StarterKit] })
+    const { item, unmount } = await mount(editor)
+    await act(async () => item('Image…').click())
+    expect(importImage).toHaveBeenCalledWith('/workspace/Draft/Chapter.md', null)
+    expect(refreshTree).toHaveBeenCalledOnce()
+    await unmount()
+  })
 })
