@@ -246,10 +246,11 @@ it('explains that an edited local copy is used instead of the bundled plugin', a
   useModStore.setState({ localWins: [] })
 })
 
-it('marks a replaced trusted folder and does not let it be switched on', async () => {
-  const replaced: ModEntry = { id: 'Plugins/zoom', kind: 'Plugins', label: 'zoom', folder: '/p/zoom', enabled: false, errors: [], replacedBy: 'builtin.zoom' }
-  const { container, close } = await openExternal({ current: null, state: 'installed' }, false, externalVersion, [replaced])
-  expect(container.textContent).toContain('Replaced by the bundled isolated plugin (builtin.zoom)')
-  expect(container.querySelector<HTMLInputElement>('input[aria-label="Enable zoom"]')!.disabled).toBe(true)
+it('lists a replaced trusted folder once, on the bundled card, instead of as a second row', async () => {
+  const replaced: ModEntry = { id: 'Plugins/zoom', kind: 'Plugins', label: 'zoom', folder: '/mods/Plugins/zoom', enabled: false, errors: [], replacedBy: 'community.zoom' }
+  const { container, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, false, bundledVersion, [replaced])
+  expect(container.textContent).toContain('Your older copy in Plugins/zoom is kept on disk but not loaded')
+  expect(container.querySelector('input[aria-label="Enable zoom"]')).toBeNull()
+  expect(container.textContent).not.toContain('/mods/Plugins/zoom')
   await close()
 })

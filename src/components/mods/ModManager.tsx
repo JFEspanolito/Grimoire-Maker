@@ -110,7 +110,8 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
     }
   }
 
-  const visibleMods = mods.filter((mod) => mod.kind === activeKind)
+  const listed = mods.filter((mod) => !mod.replacedBy)
+  const visibleMods = listed.filter((mod) => mod.kind === activeKind)
 
   return (
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="mod-manager-title" onCancel={onClose}>
@@ -147,7 +148,7 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
               onClick={() => setActiveKind(kind)}
             >
               <span>{kind}</span>
-              <span className={styles.badge}>{mods.filter((mod) => mod.kind === kind).length}</span>
+              <span className={styles.badge}>{listed.filter((mod) => mod.kind === kind).length}</span>
             </button>
           ))}
         </nav>
@@ -185,7 +186,8 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
               </button>
             </div>
             {external.map((plugin) => <ExternalPluginCard key={plugin.id} plugin={plugin} running={running.includes(plugin.id)}
-              busy={busy} switchedOff={switchedOff} localCopyInUse={localWins.includes(plugin.id)} run={run} refresh={loadExternal} />)}
+              busy={busy} switchedOff={switchedOff} localCopyInUse={localWins.includes(plugin.id)}
+              keptFolder={mods.find((mod) => mod.replacedBy === plugin.id)?.folder} run={run} refresh={loadExternal} />)}
           </div>}
           {visibleMods.length === 0 ? (
             <p className={styles.description}>
@@ -200,16 +202,13 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
                   <input
                     type="checkbox"
                     checked={mod.enabled}
-                    disabled={busy || !!mod.replacedBy}
+                    disabled={busy}
                     aria-label={`Enable ${mod.label}`}
                     onChange={(event) => void run(() => setEnabled(mod.id, event.target.checked))}
                   />
                   <span>
                     <strong>{mod.label}</strong>
                     <small>{mod.folder}</small>
-                    {mod.replacedBy && (
-                      <small className={styles.notice}>Replaced by the bundled isolated plugin ({mod.replacedBy}). Your files are kept; edit them and they run instead.</small>
-                    )}
                     {mod.errors.length > 0 && (
                       <small className={styles.notice}>Contains invalid files; see errors above.</small>
                     )}

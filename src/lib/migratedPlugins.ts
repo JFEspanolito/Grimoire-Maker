@@ -18,7 +18,12 @@ const MAX_FILES = 64
 /** Line endings differ between editors; a copy that only changed them is still untouched. */
 const normalize = (text: string) => text.replace(/\r\n/g, '\n')
 
-/** True when the folder holds exactly the shipped files with the shipped contents. */
+const isDocumentation = (path: string) => /\.md$/i.test(path)
+
+/**
+ * True when the folder holds exactly the shipped code and style files with the shipped contents.
+ * Markdown files are documentation (older releases shipped different text), so they never count as edits.
+ */
 export async function isPristineCopy(io: ModFs, folder: string, baseline: Record<string, string>): Promise<boolean> {
   const found: string[] = []
   const walk = async (dir: string, relative: string): Promise<boolean> => {
@@ -33,8 +38,9 @@ export async function isPristineCopy(io: ModFs, folder: string, baseline: Record
   }
   try {
     if (!(await walk(folder, ''))) return false
-    const expected = Object.keys(baseline).sort()
-    if (found.length !== expected.length || [...found].sort().some((path, index) => path !== expected[index])) return false
+    const expected = Object.keys(baseline).filter((path) => !isDocumentation(path)).sort()
+    const present = found.filter((path) => !isDocumentation(path)).sort()
+    if (present.length !== expected.length || present.some((path, index) => path !== expected[index])) return false
     for (const path of expected) {
       if (normalize(await io.readTextFile(`${folder}/${path}`)) !== normalize(baseline[path])) return false
     }

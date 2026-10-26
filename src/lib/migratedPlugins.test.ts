@@ -41,6 +41,12 @@ describe('isPristineCopy', () => {
     expect(await isPristineCopy(memoryFs(shipped({ 'zoom.tsx': 'export default {}\r\n' })), folder, baseline)).toBe(true)
   })
 
+  it('ignores documentation: an older or edited Markdown file is not a code edit', async () => {
+    expect(await isPristineCopy(memoryFs(shipped({ 'index.md': '# An older description' })), folder, baseline)).toBe(true)
+    expect(await isPristineCopy(memoryFs(shipped({ 'index.md': null })), folder, baseline)).toBe(true)
+    expect(await isPristineCopy(memoryFs({ ...shipped(), [`${folder}/NOTES.md`]: 'mine' }), folder, baseline)).toBe(true)
+  })
+
   it('rejects an edited, missing, extra or linked file', async () => {
     expect(await isPristineCopy(memoryFs(shipped({ 'zoom.tsx': '// my change' })), folder, baseline)).toBe(false)
     expect(await isPristineCopy(memoryFs(shipped({ 'script.ts': null })), folder, baseline)).toBe(false)

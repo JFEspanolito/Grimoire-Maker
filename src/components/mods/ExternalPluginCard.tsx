@@ -12,6 +12,8 @@ interface Props {
   switchedOff: boolean
   /** An edited local copy of the same plugin is running instead of this bundled one. */
   localCopyInUse: boolean
+  /** An untouched older trusted copy that this bundled plugin replaced; its files are kept, not loaded. */
+  keptFolder?: string
   run(operation: () => Promise<unknown>): Promise<void>
   refresh(): Promise<void>
 }
@@ -32,7 +34,7 @@ function statusText(plugin: ExternalPluginSummary, running: boolean, switchedOff
   return `${mode} · Off`
 }
 
-export function ExternalPluginCard({ plugin, running, busy, switchedOff, localCopyInUse, run, refresh }: Props) {
+export function ExternalPluginCard({ plugin, running, busy, switchedOff, localCopyInUse, keptFolder, run, refresh }: Props) {
   const [reviewing, setReviewing] = useState(false)
   const bundled = plugin.source === 'bundled'
   const blocked = (switchedOff && !bundled) || (bundled && localCopyInUse)
@@ -62,6 +64,7 @@ export function ExternalPluginCard({ plugin, running, busy, switchedOff, localCo
         <small>Permissions requested: {plugin.permissions.length ? plugin.permissions.join(', ') : 'none'}</small>
         <small>Fingerprint {plugin.fingerprint.slice(0, 12)}</small>
         <small className={styles.notice}>{statusText(plugin, running, switchedOff, localCopyInUse)}</small>
+        {keptFolder && <small>Your older copy in {keptFolder.split('/').slice(-2).join('/')} is kept on disk but not loaded. Edit it to use your version instead.</small>}
       </span>
       {!altered && !plugin.approved && (
         <button type="button" disabled={busy || blocked} aria-label={`Review and approve ${plugin.name}`} onClick={() => setReviewing(true)}>Review…</button>
