@@ -1,14 +1,14 @@
-.card { display: flex; flex-direction: column; align-items: flex-start; gap: .25rem; padding: .6rem .35rem; border-bottom: 1px solid #ffffff12; }
-.head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; width: 100%; }
-.title { display: flex; align-items: baseline; flex-wrap: wrap; gap: .1rem .5rem; min-width: 0; }
+.card { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "title actions" "description link"; align-items: center; column-gap: .75rem; row-gap: .15rem; padding: .6rem .35rem; border-bottom: 1px solid #ffffff12; }
+.title { grid-area: title; display: flex; align-items: baseline; flex-wrap: wrap; gap: .1rem .5rem; min-width: 0; }
 .title strong { font-size: .85rem; font-weight: 700; }
 .title small { font-size: .7rem; color: #a9a398; }
-.chip { padding: .05rem .4rem; border-radius: 999px; background: #ffffff12; color: #bcb7ac; font-size: .68rem; }
 .status { font-size: .75rem; color: #e1bd78; }
-.actions { display: inline-flex; flex-shrink: 0; gap: .4rem; }
-.description { margin: 0; font-size: .78rem; line-height: 1.4; color: #bcb7ac; overflow-wrap: anywhere; }
-.toggle { padding: .1rem .5rem; font-size: .7rem; color: #a9a398; }
-.panel { display: flex; flex-direction: column; gap: .3rem; width: 100%; margin-top: .25rem; padding: .5rem .65rem; border-left: 2px solid #cfb37c60; background: #ffffff08; font-size: .75rem; color: #d1c5ad; overflow-wrap: anywhere; }
+.actions { grid-area: actions; display: inline-flex; justify-self: end; gap: .4rem; }
+.description { grid-area: description; margin: 0; font-size: .78rem; line-height: 1.4; color: #bcb7ac; overflow-wrap: anywhere; }
+.link { grid-area: link; justify-self: end; padding: 0; border: 0; background: none; color: #cfb37c; font-size: .72rem; text-decoration: underline; cursor: pointer; }
+.link:hover { color: #f0eee9; }
+.link:focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.panel { grid-column: 1 / -1; display: flex; flex-direction: column; gap: .3rem; margin-top: .25rem; padding: .5rem .65rem; border-left: 2px solid #cfb37c60; background: #ffffff08; font-size: .75rem; color: #d1c5ad; overflow-wrap: anywhere; }
 .panel p { margin: 0; }
 .panel ul { margin: 0; padding-left: 1.1rem; }
 .line span { color: #a9a398; }

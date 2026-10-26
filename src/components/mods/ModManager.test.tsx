@@ -160,7 +160,7 @@ it('lists imported external plugins as unverified and waiting for approval, with
   const { container, button, details, close } = await openExternal({ current: null, state: 'installed' })
   const list = container.querySelector('[aria-label="External plugins"]')!
   expect(list.textContent).toContain('Community Zoom')
-  expect(list.textContent).toContain('Imported')
+  expect(list.textContent).not.toContain('Imported')
   expect(list.textContent).toContain('Needs approval')
   expect(list.querySelector('input[type="checkbox"]')).toBeNull()
   expect(button('Activate external plugin Community Zoom')).toBeNull()
@@ -243,8 +243,9 @@ const bundledVersion = { ...externalVersion, source: 'bundled', author: 'Grimoir
 
 it('shows a bundled plugin as part of the app: no approval, no removal, spared by the emergency switch', async () => {
   const { container, button, details, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, true, bundledVersion)
-  expect(container.textContent).toContain('Built in')
+  expect(container.textContent).not.toContain('Built in')
   await details('Zoom')
+  expect(container.textContent).toContain('Source Built in')
   expect(container.textContent).not.toContain('declared, not verified')
   expect(button('Remove external plugin Zoom')).toBeNull()
   expect(button('Review and approve Zoom')).toBeNull()
@@ -290,7 +291,7 @@ it('keeps the plugin rows free of jargon and shows only one short intro line', a
   expect(text).not.toContain('Trusted local code')
   expect(container.querySelectorAll('[data-plugin-card]')).toHaveLength(1)
   const card = container.querySelector('[data-plugin-card]')!
-  expect([...card.children].filter((child) => child.hasAttribute('data-row')).map((child) => child.getAttribute('data-row'))).toEqual(['1', '2', '3'])
+  expect([...card.children].filter((child) => child.hasAttribute('data-row')).map((child) => child.getAttribute('data-row'))).toEqual(['1', '2'])
   await close()
 })
 
@@ -342,9 +343,11 @@ it('draws folder plugins with the same card: Bookmarks gets its official name an
 
   const cards = [...container.querySelectorAll('[data-plugin-card]')]
   expect(cards.map((card) => card.getAttribute('data-plugin-card'))).toEqual(['Bookmarks', 'mine'])
-  expect(cards[0].textContent).toContain('Built in')
+  expect(cards[0].textContent).not.toContain('Built in')
   expect(cards[0].textContent).toContain('Mark places in your book and jump back to them from anywhere in the project.')
-  expect(cards[1].textContent).toContain('Local')
+  expect(cards[1].textContent).not.toContain('Local')
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details of Bookmarks"]')!.click())
+  expect(cards[0].textContent).toContain('Source Built in')
   expect(cards[1].textContent).toContain('Plugin from your Plugins folder.')
   expect(outsideDetails(container)).not.toContain('/mods/Plugins/bookmarks')
   expect(container.querySelector('input[type="checkbox"]')).toBeNull()
@@ -355,6 +358,7 @@ it('draws folder plugins with the same card: Bookmarks gets its official name an
   expect(setEnabled).toHaveBeenCalledWith('Plugins/mine', true)
 
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details of mine"]')!.click())
+  expect(cards[1].textContent).toContain('Source Local')
   expect(cards[1].textContent).toContain('/mods/Plugins/mine')
   expect(cards[1].textContent).toContain('Runs with the same access as the app. Only keep plugins you trust.')
   expect(cards[1].textContent).toContain('mine/bad.tsx: broken')

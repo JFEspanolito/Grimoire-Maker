@@ -19,25 +19,27 @@ interface Props {
   children?: ReactNode
 }
 
-/** One plugin as at most three rows: name, status and actions; a one-line description; a Details toggle. */
+/** One plugin as two rows: name and status, then a one-line description. Actions and a Details link sit in a right column. */
 export function PluginCard({ name, version, origin, status, description, actions, details, children }: Props) {
   const [open, setOpen] = useState(false)
   const panelId = useId()
   return (
     <div className={styles.card} data-plugin-card={name}>
-      <div className={styles.head} data-row="1">
-        <span className={styles.title}>
-          <strong>{name}</strong>
-          {version && <small>v{version}</small>}
-          <span className={styles.chip}>{origin}</span>
-          <span className={styles.status}>{status}</span>
-        </span>
-        {actions && <span className={styles.actions}>{actions}</span>}
-      </div>
+      <span className={styles.title} data-row="1">
+        <strong>{name}</strong>
+        {version && <small>v{version}</small>}
+        <span className={styles.status}>{status}</span>
+      </span>
       <p className={styles.description} data-row="2">{description}</p>
-      <button type="button" className={styles.toggle} data-row="3" aria-expanded={open} aria-controls={panelId}
+      {actions && <span className={styles.actions}>{actions}</span>}
+      <button type="button" className={styles.link} aria-expanded={open} aria-controls={panelId}
         aria-label={`Details of ${name}`} onClick={() => setOpen((value) => !value)}>Details</button>
-      {open && <div id={panelId} className={styles.panel} role="group" aria-label={`${name} details`}>{details}</div>}
+      {open && (
+        <div id={panelId} className={styles.panel} role="group" aria-label={`${name} details`}>
+          <DetailLine label="Source">{origin}</DetailLine>
+          {details}
+        </div>
+      )}
       {children}
     </div>
   )
