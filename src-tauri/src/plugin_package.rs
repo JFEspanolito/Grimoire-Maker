@@ -36,6 +36,7 @@ fn is_reserved(component: &str) -> bool {
 }
 
 /// `^[a-z0-9][a-z0-9._-]{0,63}$` plus the Windows-safety and namespace rules of the spec.
+#[cfg(test)]
 pub fn validate_id(id: &str) -> Result<(), String> {
     validate_id_for(id, false)
 }

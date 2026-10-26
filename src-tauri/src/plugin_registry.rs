@@ -21,7 +21,7 @@ use std::{
 const REGISTRY: &str = "registry.json";
 const REGISTRY_TMP: &str = "registry.json.tmp";
 const LOCK_FILE: &str = ".lock";
-const STAGING_PREFIX: &str = ".staging-";
+pub(crate) const STAGING_PREFIX: &str = ".staging-";
 const MAX_REGISTRY_BYTES: u64 = 4 * 1024 * 1024;
 static INSTALL_LOCK: Mutex<()> = Mutex::new(());
 
@@ -96,7 +96,7 @@ pub struct InstallResult {
 
 /// Serializes registry changes inside this process and, through an OS file lock, across several
 /// running instances of the application.
-struct Guard {
+pub(crate) struct Guard {
     _file: Option<File>,
     _process: std::sync::MutexGuard<'static, ()>,
 }
@@ -107,7 +107,7 @@ fn lock() -> Result<Guard, String> {
 }
 
 /// Process lock, then the prepared root, then the cross-instance lock.
-fn locked(root: &Path) -> Result<Guard, String> {
+pub(crate) fn locked(root: &Path) -> Result<Guard, String> {
     let mut guard = lock()?;
     prepare_root(root)?;
     lock_root(&mut guard, root)?;
@@ -160,7 +160,7 @@ pub fn load_registry(root: &Path) -> Result<Registry, String> {
 }
 
 /// Writes to a temp file and renames over the registry; a failure leaves the old file intact.
-fn save_registry(root: &Path, registry: &Registry) -> Result<(), String> {
+pub(crate) fn save_registry(root: &Path, registry: &Registry) -> Result<(), String> {
     let temp = root.join(REGISTRY_TMP);
     let bytes = serde_json::to_vec_pretty(registry).map_err(|error| error.to_string())?;
     let mut file = File::create(&temp).map_err(|error| format!("Could not write the plugin registry: {error}"))?;
@@ -176,14 +176,14 @@ fn save_registry(root: &Path, registry: &Registry) -> Result<(), String> {
     })
 }
 
-fn plain_dir(path: &Path) -> bool {
+pub(crate) fn plain_dir(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|info| info.is_dir() && crate::safe_copy::reject_special(&info).is_ok())
 }
 
 /// Removes only in-progress leftovers: staging directories and the temp registry. Version
 /// directories are never deleted here, even when the registry does not mention them: a lost or
 /// restored registry must not destroy installed files (a matching reinstall reuses them).
-fn recover_locked(root: &Path) -> Result<(), String> {
+pub(crate) fn recover_locked(root: &Path) -> Result<(), String> {
     let entries = fs::read_dir(root).map_err(|error| error.to_string())?;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -202,11 +202,11 @@ pub fn recover(root: &Path) -> Result<(), String> {
     recover_locked(root)
 }
 
-fn now() -> u64 {
+pub(crate) fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-fn nonce() -> u128 {
+pub(crate) fn nonce() -> u128 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0)
 }
 
@@ -294,7 +294,7 @@ fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallRes
 }
 
 /// Moves the validated staging directory to its final immutable location, never overwriting.
-fn publish(staging: &Path, plugin_dir: &Path, dir: &str, fingerprint: &str) -> Result<bool, String> {
+pub(crate) fn publish(staging: &Path, plugin_dir: &Path, dir: &str, fingerprint: &str) -> Result<bool, String> {
     fs::create_dir_all(plugin_dir).map_err(|error| error.to_string())?;
     let info = fs::symlink_metadata(plugin_dir).map_err(|error| error.to_string())?;
     crate::safe_copy::reject_special(&info)?;
@@ -357,7 +357,7 @@ pub fn verify_integrity(root: &Path, registry: &mut Registry) -> Vec<String> {
 
 /// Best-effort local audit trail (one JSON object per line, rotated at 1 MiB). It never fails
 /// or blocks the operation it describes.
-fn audit(root: &Path, event: &str, id: &str, detail: &str) {
+pub(crate) fn audit(root: &Path, event: &str, id: &str, detail: &str) {
     const LIMIT: u64 = 1024 * 1024;
     let path = root.join("audit.log");
     match fs::symlink_metadata(&path) {
@@ -374,15 +374,30 @@ fn audit(root: &Path, event: &str, id: &str, detail: &str) {
     }
 }
 
+/// First-party packages embedded in the binary are recorded with `source = "bundled"`.
+pub(crate) const BUNDLED_SOURCE: &str = "bundled";
+
+/// True when the newest version of the plugin is a first-party embedded package.
+fn is_bundled(record: &PluginRecord) -> bool {
+    record.versions.iter().any(|v| v.dir == record.latest && v.source == BUNDLED_SOURCE)
+}
+
 /// Updates the registry first, then deletes the plugin's own folder; a failed delete leaves an
 /// unreferenced folder that a later install of identical bytes reuses.
 pub fn remove(root: &Path, id: &str) -> Result<(), String> {
-    plugin_package::validate_id(id)?;
+    // Reserved builtin.* ids pass only to be looked up: they exist in the registry solely when
+    // the application itself installed them, so an import can never reach them this way.
+    plugin_package::validate_id_for(id, true)?;
     let _guard = locked(root)?;
     let mut registry = load_registry(root)?;
-    if registry.plugins.remove(id).is_none() {
-        return Err("That plugin is not installed".into());
+    match registry.plugins.get(id) {
+        None => return Err("That plugin is not installed".into()),
+        Some(record) if is_bundled(record) => {
+            return Err("Bundled plugins cannot be removed; deactivate them instead".into());
+        }
+        Some(_) => {}
     }
+    registry.plugins.remove(id);
     save_registry(root, &registry)?;
     audit(root, "removed", id, "");
     let folder: PathBuf = root.join(id);
@@ -403,6 +418,11 @@ pub struct EntryPayload {
     /// Exactly what the user approved for this version.
     pub permissions: Vec<String>,
     pub toolbar: Vec<plugin_package::ToolbarContribution>,
+    pub behaviors: Vec<plugin_package::BehaviorContribution>,
+    pub overlays: Vec<plugin_package::OverlayContribution>,
+    pub tools: Vec<plugin_package::ToolContribution>,
+    /// `import` or `bundled`: where the approved version came from.
+    pub origin: String,
     pub source: String,
 }
 
@@ -424,7 +444,9 @@ fn mutate(
     event: &str,
     change: impl FnOnce(&mut Registry) -> Result<String, String>,
 ) -> Result<(), String> {
-    plugin_package::validate_id(id)?;
+    // Reserved builtin.* ids pass only to be looked up: they exist in the registry solely when
+    // the application itself installed them, so an import can never reach them this way.
+    plugin_package::validate_id_for(id, true)?;
     let _guard = locked(root)?;
     let mut registry = load_registry(root)?;
     let altered = verify_integrity(root, &mut registry);
@@ -503,10 +525,12 @@ pub fn revoke_consent(root: &Path, id: &str) -> Result<(), String> {
 /// Activation requires a current, complete approval and intact files; deactivation always works.
 pub fn set_active(root: &Path, id: &str, active: bool) -> Result<(), String> {
     mutate(root, id, if active { "activated" } else { "deactivated" }, |registry| {
-        if active && registry.disabled_all {
+        let disabled_all = registry.disabled_all;
+        let record = record_mut(registry, id)?;
+        // The emergency switch covers external plugins only; first-party packages are exempt.
+        if active && disabled_all && !is_bundled(record) {
             return Err("External plugins are switched off".into());
         }
-        let record = record_mut(registry, id)?;
         if !active {
             if matches!(record.state.as_str(), "active" | "stopped") {
                 record.state = "installed".into();
@@ -544,7 +568,7 @@ pub fn set_disabled_all(root: &Path, disabled: bool) -> Result<(), String> {
     let mut registry = load_registry(root)?;
     registry.disabled_all = disabled;
     if disabled {
-        for record in registry.plugins.values_mut() {
+        for record in registry.plugins.values_mut().filter(|record| !is_bundled(record)) {
             if record.state == "active" {
                 record.state = "installed".into();
             }
@@ -558,7 +582,9 @@ pub fn set_disabled_all(root: &Path, disabled: bool) -> Result<(), String> {
 /// Returns the bytes to execute, only for an active plugin whose installed files still match the
 /// fingerprint the user approved. Called at every start, so tampering is caught before running.
 pub fn read_entry(root: &Path, id: &str) -> Result<EntryPayload, String> {
-    plugin_package::validate_id(id)?;
+    // Reserved builtin.* ids pass only to be looked up: they exist in the registry solely when
+    // the application itself installed them, so an import can never reach them this way.
+    plugin_package::validate_id_for(id, true)?;
     let _guard = locked(root)?;
     let mut registry = load_registry(root)?;
     let altered = verify_integrity(root, &mut registry);
@@ -567,9 +593,6 @@ pub fn read_entry(root: &Path, id: &str) -> Result<EntryPayload, String> {
         for found in &altered {
             audit(root, "integrity_failed", found, "installed files differ from the recorded fingerprint");
         }
-    }
-    if registry.disabled_all {
-        return Err("External plugins are switched off".into());
     }
     let record = registry.plugins.get(id).ok_or("That plugin is not installed")?;
     if record.state != "active" {
@@ -580,8 +603,12 @@ pub fn read_entry(root: &Path, id: &str) -> Result<EntryPayload, String> {
     if entry.consent_at.is_none() || sorted(&entry.granted) != sorted(&entry.permissions) {
         return Err("The approval is incomplete; approve the plugin again".into());
     }
+    let bundled = entry.source == BUNDLED_SOURCE;
+    if registry.disabled_all && !bundled {
+        return Err("External plugins are switched off".into());
+    }
     let folder = root.join(id).join(&entry.dir);
-    let manifest = plugin_package::parse_manifest(&read_plain(&folder.join(plugin_package::MANIFEST_ENTRY), plugin_package::MAX_MANIFEST_BYTES)?)?;
+    let manifest = plugin_package::parse_manifest_for(&read_plain(&folder.join(plugin_package::MANIFEST_ENTRY), plugin_package::MAX_MANIFEST_BYTES)?, bundled)?;
     if manifest.id != id || manifest.version != entry.version || manifest.sdk_version != entry.sdk_version {
         return Err("The installed manifest does not match the approved version".into());
     }
@@ -594,6 +621,10 @@ pub fn read_entry(root: &Path, id: &str) -> Result<EntryPayload, String> {
         sdk_version: entry.sdk_version,
         permissions: sorted(&entry.granted),
         toolbar: manifest.contributions.toolbar,
+        behaviors: manifest.contributions.behaviors,
+        overlays: manifest.contributions.overlays,
+        tools: manifest.contributions.tools,
+        origin: if bundled { "bundled" } else { "import" }.to_string(),
         source,
     })
 }
@@ -610,7 +641,9 @@ fn read_plain(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
 /// Lets the renderer add allow-listed events (denied permission, forced termination) to the
 /// audit trail for a plugin that exists. Details are truncated by `audit`.
 pub fn log_event(root: &Path, id: &str, event: &str, detail: &str) -> Result<(), String> {
-    plugin_package::validate_id(id)?;
+    // Reserved builtin.* ids pass only to be looked up: they exist in the registry solely when
+    // the application itself installed them, so an import can never reach them this way.
+    plugin_package::validate_id_for(id, true)?;
     if !RENDERER_EVENTS.contains(&event) {
         return Err("Unknown audit event".into());
     }

@@ -1,4 +1,4 @@
-use crate::plugin_registry::{self, InstallResult, Registry};
+use crate::{plugin_bundled, plugin_registry::{self, InstallResult, Registry}};
 use std::{path::PathBuf, time::Duration};
 use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
@@ -98,4 +98,13 @@ pub fn protect_managed_root(app: &AppHandle) -> Result<(), String> {
     let root = managed_root(app)?;
     plugin_registry::recover(&root)?;
     app.fs_scope().forbid_directory(&root, true).map_err(|error| error.to_string())
+}
+
+/// Installs or repairs the first-party packages embedded in the binary. A failure is logged and
+/// never aborts startup: the plugins simply stay as they were.
+pub fn ensure_bundled(app: &AppHandle) {
+    if let Err(error) = managed_root(app).and_then(|root| plugin_bundled::ensure(&root)) {
+        eprintln!("could not install the bundled plugins: {error}");
+        super::error_logs::best_effort("native.plugins.bundled", &error);
+    }
 }
