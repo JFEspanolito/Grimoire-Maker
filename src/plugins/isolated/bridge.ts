@@ -20,8 +20,8 @@ export interface HostCapabilities {
 export interface BridgeHooks {
   /** Events worth keeping in the audit trail. */
   audit(event: 'permission_denied' | 'protocol_violation', detail: string): void
-  /** The plugin misbehaved enough that the host should stop it. */
-  fault(reason: string): void
+  /** The plugin misbehaved. A fatal fault means the host must stop it now; others are counted. */
+  fault(reason: string, fatal: boolean): void
   ready(): void
   pong(n: number): void
 }
@@ -72,7 +72,7 @@ export function createBridge(options: BridgeOptions): Bridge {
     violations += 1
     if (violations === 1 || violations % 10 === 0) options.hooks.audit('protocol_violation', detail)
     if (violations >= LIMITS.violations && !closed) {
-      options.hooks.fault('too many rejected messages')
+      options.hooks.fault('too many rejected messages', true)
       close()
     }
   }
@@ -151,7 +151,7 @@ export function createBridge(options: BridgeOptions): Bridge {
     if (message.kind === 'ready') return options.hooks.ready()
     if (message.kind === 'fault') {
       options.hooks.audit('protocol_violation', `plugin fault: ${message.message}`)
-      options.hooks.fault('plugin reported an unhandled error')
+      options.hooks.fault('plugin reported an unhandled error', false)
       return
     }
     if (pending >= LIMITS.pending) {
