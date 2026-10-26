@@ -3,6 +3,7 @@ mod config;
 mod config_root;
 mod plugin_install;
 mod plugin_package;
+mod plugin_registry;
 mod safe_copy;
 mod ipc;
 mod pdf;
@@ -44,6 +45,9 @@ pub fn run() {
             commands::workspace::open_folder,
             commands::workspace::delete_from_trash,
             commands::mods::open_mods_folder,
+            commands::plugins::install_plugin_package,
+            commands::plugins::list_external_plugins,
+            commands::plugins::remove_external_plugin,
             commands::preferences::load_library_paths,
             commands::preferences::change_library_path,
             commands::preferences::delete_user_theme,
