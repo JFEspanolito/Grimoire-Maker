@@ -88,3 +88,25 @@ grimoire-maker/
 ### Executable local plugins
 
 Zoom and Ruler are complete copyable source packages in `src/assets/mods/Plugins/`, seeded into the default Plugins content folder without overwriting edits. Active packages are transpiled from disk and render through generic host slots. They are trusted code with the app's permissions, **not sandboxed**. See [Local plugin development](PLUGINS.md) for package layout, supported imports, activation and cleanup.
+
+### Renaming files and Markdown references
+
+Renaming a file from Files updates local Markdown links/images, reference definitions,
+and HTML `src`/`href` attributes in the active project's saved `.md` files (including
+closed documents). References are resolved relative to each document, not matched by
+filename alone. URL fragments, queries and unrelated formatting are retained.
+
+Open buffers receive the same reference update without saving unrelated unsaved edits.
+The operation checks saved content again before publication and aborts on detected disk
+conflicts. Ordinary publication failures attempt rollback; recovery backups are retained
+if rollback cannot safely finish. This is not a crash-atomic multi-file filesystem
+transaction. A remaining `.grimoire-rename-transaction` directory blocks further reference
+renames: preserve its `journal.jsonl`, backups and committed marker for reconciliation;
+do not delete it blindly or retry by overwriting files.
+
+This applies to same-folder **file renames**, not directory renames, drag moves or Trash.
+It leaves external URLs, prose, code examples, comments, frontmatter, CSS URLs and `srcset`
+unchanged. The native scan is bounded (5,000 entries, 32 levels, 4 MiB per Markdown file,
+32 MiB total); unsupported links/reparse points, invalid text or exceeded limits stop the
+rename rather than silently skip references. Rebuild/restart the Tauri application after
+updating, because this feature adds native commands; frontend hot reload alone is not enough.

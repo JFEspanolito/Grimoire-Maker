@@ -14,7 +14,10 @@ const overlaps = (a: DOMRect, b: DOMRect) => a.bottom > b.top + 1 && a.top < b.b
 
 /** The sheet under the caret. Cheap enough to ask on every selection change. */
 export function currentSheet(editor: Editor): { element: HTMLElement; number: number } | null {
-  const stack = editor.view.dom.closest('[data-editor-stack]')
+  // `editor.view` throws until the editor is mounted, and selectors run during the first render.
+  let dom: HTMLElement
+  try { dom = editor.view.dom } catch { return null }
+  const stack = dom.closest('[data-editor-stack]')
   const sheets = Array.from(stack?.querySelectorAll<HTMLElement>(SHEET) ?? [])
   if (!sheets.length) return null
   let caret: { left: number; top: number; bottom: number }

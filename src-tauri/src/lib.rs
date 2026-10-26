@@ -37,6 +37,8 @@ pub fn run() {
             commands::version_control::git_init,
             commands::workspace::restore_workspace,
             commands::workspace::rename_workspace,
+            commands::rename_references::snapshot_rename_references,
+            commands::rename_references::commit_rename_references,
             commands::workspace::open_folder,
             commands::workspace::delete_from_trash,
             commands::mods::open_mods_folder,

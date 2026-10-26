@@ -8,7 +8,7 @@ import { resolveTheme, type ThemeInfo } from '../../lib/themes'
 import { deleteUserTheme, exportUserTheme } from '../../lib/themeEditor'
 import styles from './PreferencesDialog.module.css'
 import { ThemeCustomizer } from './ThemeCustomizer'
-import { EDITOR_SHORTCUTS, FILE_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
+import { EDITOR_SHORTCUTS, EXPLORER_SHORTCUTS, FILE_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
 import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { ProjectSettings } from './ProjectSettings'
 import { AutoSaveSettings } from './AutoSaveSettings'
@@ -197,6 +197,7 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance' }: { 
         <tbody>{[
           ...Object.values(FILE_SHORTCUTS).map(({ label, key }) => ({ label, keys: ['Ctrl', key.toUpperCase()] })),
           ...EDITOR_SHORTCUTS,
+          ...EXPLORER_SHORTCUTS,
           ...ZOOM_SHORTCUTS,
         ].map(({ label, keys }) => <tr key={label}><td>{label}</td><td>{keys.map((key, index) => <span key={key}>{index > 0 && <span aria-hidden="true"> + </span>}<kbd>{key}</kbd></span>)}</td></tr>)}</tbody>
       </table>

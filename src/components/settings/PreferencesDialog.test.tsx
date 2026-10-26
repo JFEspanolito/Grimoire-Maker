@@ -172,6 +172,8 @@ it('organizes preferences with a section index and a basic shortcut reference', 
     await act(async () => tabs[2].click())
     const panel = container.querySelector<HTMLElement>('#preferences-shortcuts')!
     expect(panel.hidden).toBe(false)
+    const rename = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Rename selected file (Files)'))!
+    expect(rename.querySelector('kbd')?.textContent).toBe('F2')
     expect(container.querySelector<HTMLElement>('#preferences-appearance')!.hidden).toBe(true)
     const save = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Save All'))!
     expect(Array.from(save.querySelectorAll('kbd')).map(key => key.textContent)).toEqual(['Ctrl', 'S'])

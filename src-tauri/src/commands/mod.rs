@@ -6,3 +6,4 @@ pub mod archive;
 pub mod mods;
 pub mod preferences;
 pub mod error_logs;
+pub mod rename_references;

@@ -37,6 +37,66 @@ afterEach(async () => {
 })
 
 describe('project explorer', () => {
+  it('renames the selected image with F2 and commits its hidden extension on blur', async () => {
+    renameEntryMock.mockClear()
+    useDocumentStore.getState().setWorkspace('/book', [{ name: 'cover.JPG', path: '/book/cover.JPG', isDirectory: false }])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true })))
+    expect(container.querySelector('input')).toBeNull()
+    await act(async () => container.querySelector<HTMLElement>('[data-tree-path]')!.click())
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', ctrlKey: true })))
+    expect(container.querySelector('input')).toBeNull()
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2', bubbles: true })))
+    const input = container.querySelector('input')!
+    expect(input?.value).toBe('cover')
+    input.value = 'new.cover'
+    await act(async () => input.dispatchEvent(new FocusEvent('focusout', { bubbles: true })))
+    expect(renameEntryMock).toHaveBeenCalledExactlyOnceWith('/book/cover.JPG', 'new.cover.JPG')
+  })
+  it('pencil rename hides extensions, Escape cancels and Enter plus blur submits once', async () => {
+    renameEntryMock.mockClear()
+    useDocumentStore.getState().setWorkspace('/book', [{ name: 'cover.jpg', path: '/book/cover.jpg', isDirectory: false }])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    const edit = async () => {
+      await act(async () => container.querySelector<HTMLButtonElement>('[title="Rename"]')!.click())
+      return container.querySelector('input')!
+    }
+    const cancelled = await edit()
+    expect(cancelled.value).toBe('cover')
+    cancelled.value = 'discard'
+    await act(async () => {
+      cancelled.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      cancelled.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    })
+    expect(renameEntryMock).not.toHaveBeenCalled()
+    const input = await edit()
+    input.value = 'saved'
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    })
+    expect(renameEntryMock).toHaveBeenCalledExactlyOnceWith('/book/cover.jpg', 'saved.jpg')
+  })
+  it('does not use F2 for a selected folder or a file no longer in the tree', async () => {
+    useDocumentStore.getState().setWorkspace('/book', [
+      { name: 'folder', path: '/book/folder', isDirectory: true, children: [] },
+      { name: 'cover.jpg', path: '/book/cover.jpg', isDirectory: false },
+    ])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+    await act(async () => container.querySelector<HTMLElement>('[data-tree-path="/book/folder"]')!.click())
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' })))
+    expect(container.querySelector('input')).toBeNull()
+    await act(async () => container.querySelector<HTMLElement>('[data-tree-path="/book/cover.jpg"]')!.click())
+    await act(async () => useDocumentStore.getState().setWorkspace('/other', []))
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' })))
+    expect(container.querySelector('input')).toBeNull()
+  })
   it('hides file extensions without changing paths or directory names', async () => {
     useDocumentStore.getState().setWorkspace('/book', [
       { name: 'cover.jpg', path: '/book/cover.jpg', isDirectory: false },
@@ -92,7 +152,8 @@ describe('project explorer', () => {
     await act(async () => root?.render(<FileTree />))
     expect(container.textContent).toContain('Chapter')
     expect(container.textContent).not.toContain('Chapter.md')
-    expect(container.textContent).toContain('reference.pdf')
+    expect(container.textContent).toContain('reference')
+    expect(container.textContent).not.toContain('reference.pdf')
     expect(container.textContent).toContain('folder.md')
     const row = container.querySelector<HTMLElement>('[data-tree-path="/book/Chapter.md"]')!
     await act(async () => row.click())

@@ -13,6 +13,10 @@ export const EDITOR_SHORTCUTS = [
   { label: 'Underline', keys: ['Ctrl', 'U'] },
 ] as const
 
+export const EXPLORER_SHORTCUTS = [
+  { label: 'Rename selected file (Files)', keys: ['F2'] },
+] as const
+
 export const ZOOM_SHORTCUTS = [
   { label: 'Zoom In', keys: ['Ctrl', 'Scroll Up'] },
   { label: 'Zoom Out', keys: ['Ctrl', 'Scroll Down'] },
