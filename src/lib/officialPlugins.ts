@@ -5,6 +5,8 @@ import { ensureModDirectory, modKey, MOD_KIND, type ModEntry, type ModFs } from 
 export interface OfficialPlugin {
   folder: string
   label: string
+  /** One plain sentence from the `pluginDescription` frontmatter key, when the plugin declares one. */
+  description?: string
   /** Contents by path relative to the plugin folder. */
   files: Record<string, string>
 }
@@ -18,8 +20,12 @@ export function listOfficialPlugins(examples: Record<string, string>): OfficialP
     folders.set(folder, { ...folders.get(folder), [rest.join('/')]: contents })
   }
   return [...folders].sort(([a], [b]) => a.localeCompare(b)).map(([folder, files]) => {
-    const name = files['index.md'] ? parseDocument(files['index.md']).frontmatter.pluginName : undefined
-    return { folder, label: typeof name === 'string' && name ? name : folder, files }
+    const meta = files['index.md'] ? parseDocument(files['index.md']).frontmatter : {}
+    const { pluginName: name, pluginDescription: description } = meta
+    return {
+      folder, label: typeof name === 'string' && name ? name : folder,
+      ...(typeof description === 'string' && description ? { description } : {}), files,
+    }
   })
 }
 

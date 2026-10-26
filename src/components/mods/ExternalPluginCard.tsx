@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { grantPluginConsent, removeExternalPlugin, type ExternalPluginSummary } from '../../lib/externalPlugins'
 import { activateExternalPlugin, stopExternalPluginNow } from '../../plugins/isolated/externalHost'
 import { PERMISSIONS, isPermission } from '../../plugins/isolated/permissions'
+import { DetailLine, PluginCard } from './PluginCard'
 import styles from './ModManager.module.css'
 
 interface Props {
@@ -18,20 +19,23 @@ interface Props {
   refresh(): Promise<void>
 }
 
-function statusText(plugin: ExternalPluginSummary, running: boolean, switchedOff: boolean, localCopyInUse: boolean): string {
+/** The plain status word for the first row and, when it is not obvious, the sentence that explains it. */
+function describeStatus(plugin: ExternalPluginSummary, running: boolean, switchedOff: boolean, localCopyInUse: boolean): { word: string; why?: string } {
   const bundled = plugin.source === 'bundled'
-  const mode = bundled ? 'Bundled with the app · Isolated plugin' : 'Unverified · Isolated plugin'
-  if (bundled && localCopyInUse) return `${mode} · Off: your edited local copy is in use instead`
+  if (bundled && localCopyInUse) return { word: 'Off', why: 'Your edited copy in your Plugins folder is being used instead.' }
   if (plugin.state === 'altered') {
-    return bundled
-      ? 'Its files changed on disk. The application restores them the next time it starts.'
-      : 'Files changed after installation. Remove this plugin, then import the package again.'
+    return {
+      word: 'Changed',
+      why: bundled
+        ? 'Its files changed on disk. The application restores them the next time it starts.'
+        : 'Files changed after installation. Remove this plugin, then import the package again.',
+    }
   }
-  if (switchedOff && !bundled) return `${mode} · All external plugins are switched off`
-  if (!plugin.approved) return `${mode} · Needs your approval`
-  if (plugin.state === 'active') return `${mode} · ${running ? 'Running' : 'Active, not running'}`
-  if (plugin.state === 'stopped') return `${mode} · Stopped because it failed or stopped responding`
-  return `${mode} · Off`
+  if (switchedOff && !bundled) return { word: 'Off', why: 'All imported plugins are turned off.' }
+  if (!plugin.approved) return { word: 'Needs approval', why: 'Review what it can do, then approve it to turn it on.' }
+  if (plugin.state === 'active') return { word: 'On', why: running ? undefined : 'It is on but has not started yet.' }
+  if (plugin.state === 'stopped') return { word: 'Stopped', why: 'It stopped because it failed or stopped responding.' }
+  return { word: 'Off' }
 }
 
 export function ExternalPluginCard({ plugin, running, busy, switchedOff, localCopyInUse, keptFolder, run, refresh }: Props) {
@@ -55,34 +59,47 @@ export function ExternalPluginCard({ plugin, running, busy, switchedOff, localCo
   })
   const altered = plugin.state === 'altered'
 
-  return (
-    <div className={styles.row}>
-      <span>
-        <strong>{plugin.name} <small>v{plugin.version}</small></strong>
-        <small>{plugin.id} · by {plugin.author}{bundled ? '' : ' (declared, not verified)'}</small>
-        <small>{plugin.description}</small>
-        <small>Permissions requested: {plugin.permissions.length ? plugin.permissions.join(', ') : 'none'}</small>
-        <small>Fingerprint {plugin.fingerprint.slice(0, 12)}</small>
-        <small className={styles.notice}>{statusText(plugin, running, switchedOff, localCopyInUse)}</small>
-        {keptFolder && <small>Your older copy in {keptFolder.split('/').slice(-2).join('/')} is kept on disk but not loaded. Edit it to use your version instead.</small>}
-      </span>
+  const status = describeStatus(plugin, running, switchedOff, localCopyInUse)
+  const actions = (
+    <>
       {!altered && !plugin.approved && (
         <button type="button" disabled={busy || blocked} aria-label={`Review and approve ${plugin.name}`} onClick={() => setReviewing(true)}>Review…</button>
       )}
       {!altered && plugin.approved && (
         <button type="button" disabled={busy || (blocked && plugin.state !== 'active')} aria-label={`${plugin.state === 'active' ? 'Deactivate' : 'Activate'} external plugin ${plugin.name}`} onClick={() => void toggle()}>
-          {plugin.state === 'active' ? 'Deactivate' : 'Activate'}
+          {plugin.state === 'active' ? 'Turn off' : 'Turn on'}
         </button>
       )}
       {!altered && !plugin.approved && running && (
         <button type="button" disabled={busy} aria-label={`Deactivate external plugin ${plugin.name}`}
-          onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id); await refresh() })}>Deactivate</button>
+          onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id); await refresh() })}>Turn off</button>
       )}
+    </>
+  )
+  const details = (
+    <>
+      {status.why && <p>{status.why}</p>}
+      <DetailLine label="Id">{plugin.id}</DetailLine>
+      <DetailLine label="Made by">{plugin.author}{bundled ? '' : ' (declared by the package, not verified)'}</DetailLine>
+      <DetailLine label="What it can do">
+        {plugin.permissions.length === 0 ? 'Nothing special' : (
+          <ul>{plugin.permissions.map((permission) => <li key={permission}>{isPermission(permission) ? PERMISSIONS[permission].label : permission}</li>)}</ul>
+        )}
+      </DetailLine>
+      <DetailLine label="Version fingerprint">{plugin.fingerprint.slice(0, 12)}</DetailLine>
+      {keptFolder && <p>Your older copy in {keptFolder.split('/').slice(-2).join('/')} is kept on disk but not loaded. Edit it to use your version instead.</p>}
       {!bundled && (
-        <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}
-          onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id).catch(() => undefined); await removeExternalPlugin(plugin.id); await refresh() })}>Remove</button>
+        <p>
+          <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}
+            onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id).catch(() => undefined); await removeExternalPlugin(plugin.id); await refresh() })}>Remove</button>
+        </p>
       )}
+    </>
+  )
 
+  return (
+    <PluginCard name={plugin.name} version={plugin.version} origin={bundled ? 'Built in' : 'Imported'} status={status.word}
+      description={plugin.description} actions={actions} details={details}>
       {reviewing && (
         <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby={`consent-${plugin.id}`}>
           <div className={styles.modalCard}>
@@ -110,6 +127,6 @@ export function ExternalPluginCard({ plugin, running, busy, switchedOff, localCo
           </div>
         </div>
       )}
-    </div>
+    </PluginCard>
   )
 }

@@ -1,5 +1,6 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExternalPluginEntry } from '../../lib/externalPlugins'
 import { useRulerStore } from '../../stores/rulerStore'
@@ -338,5 +339,37 @@ describe('registration rules', () => {
     const after = usePluginRegistry.getState()
     for (const key of ['toolbar', 'previewToolbar', 'pageBehaviors', 'overlays', 'editorTools'] as const) expect(after[key]).toHaveLength(0)
     expect(useRulerStore.getState().visible).toBe(false)
+  })
+})
+
+describe('readable toolbar styling', () => {
+  const css = readFileSync('src/plugins/isolated/ExternalToolbar.module.css', 'utf8')
+
+  it('gives host-rendered selects, toggles and plugin buttons their styled class names', async () => {
+    const parts = {
+      toolbar: [
+        ...zoomParts.toolbar.slice(0, 1), ...rulerParts.toolbar,
+        { id: 'pick', type: 'select' as const, label: 'Pick', command: 'pick', options: [{ value: 'a', label: 'A' }] },
+        { id: 'go', type: 'button' as const, label: 'Go', command: 'go', options: [] },
+      ],
+    }
+    const { registry } = begin(entry([...ZOOM, ...RULER], parts))
+    const Toolbar = find(registry.toolbar, '.toolbar').component
+    await render(<Toolbar />)
+    const labels = [...host.querySelectorAll('label')]
+    expect(labels).toHaveLength(2)
+    for (const label of labels) expect(label.className).toMatch(/control/)
+    expect(host.querySelector('[aria-label="Ruler"]')!.className).toMatch(/toggle/)
+    expect([...host.querySelectorAll('button')].find((b) => b.textContent === 'Go')!.className).toMatch(/button/)
+  })
+
+  it('declares the dark select look: light text on a dark background, readable options and a visible focus ring', () => {
+    expect(css).toMatch(/\.control select \{[^}]*background: #302f2c[^}]*color: #f0eee9[^}]*color-scheme: dark/)
+    expect(css).toMatch(/\.control select option \{[^}]*background: #302f2c[^}]*color: #f0eee9/)
+    expect(css).toMatch(/\.control select \{[^}]*border: 1px solid #ffffff20/)
+    expect(css).toMatch(/\.control \{[^}]*color: #d1c5ad/)
+    expect(css).toContain('.control select:disabled { opacity: .4')
+    expect(css).toContain('outline: 2px solid #cfb37c')
+    expect(css).toMatch(/\.toggle, \.button \{[^}]*color: #d1c5ad/)
   })
 })

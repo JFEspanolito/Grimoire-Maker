@@ -81,7 +81,7 @@ export function createExternalToolbar(
               </select>
             </label>
           ) : item.type === 'button' ? (
-            <button key={item.id} type="button" className={styles.control} onClick={() => send(command, null)}>{item.label}</button>
+            <button key={item.id} type="button" className={styles.button} onClick={() => send(command, null)}>{item.label}</button>
           ) : null
         })}
       </>

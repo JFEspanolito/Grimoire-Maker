@@ -6,7 +6,7 @@ import type { ModEntry } from '../../lib/modCatalog'
 import { useModStore } from '../../stores/modStore'
 import { importModFromPath, pickModSource } from '../../lib/modImport'
 import { grantPluginConsent, listExternalPlugins, removeExternalPlugin } from '../../lib/externalPlugins'
-import { activateExternalPlugin, setExternalKillSwitch, stopExternalPluginNow } from '../../plugins/isolated/externalHost'
+import { activateExternalPlugin, setExternalKillSwitch, stopExternalPluginNow, useExternalRuntime, verifyIsolation } from '../../plugins/isolated/externalHost'
 
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true }))
 vi.mock('../../lib/modImport', () => ({
@@ -124,7 +124,7 @@ it('offers to install official plugins that are missing and restores the chosen 
   expect(container.querySelector('[aria-label="Install official plugin Bookmarks"]')).toBeNull()
   await act(async () => container.querySelector<HTMLButtonElement>('[role="tab"]:last-of-type')!.click())
   const install = container.querySelector<HTMLButtonElement>('[aria-label="Install official plugin Bookmarks"]')!
-  expect(install.textContent).toBe('Install official plugin')
+  expect(install.textContent).toBe('Install')
   await act(async () => install.click())
   expect(installOfficial).toHaveBeenCalledWith('bookmarks')
   await act(async () => root.unmount())
@@ -148,19 +148,30 @@ async function openExternal(record: { current: string | null; state: string }, d
   const root = createRoot(container)
   await act(async () => root.render(<ModManager onClose={() => {}} />))
   await act(async () => container.querySelector<HTMLButtonElement>('[role="tab"]:last-of-type')!.click())
+  const details = async (name: string) => {
+    const toggle = container.querySelector<HTMLButtonElement>(`[aria-label="Details of ${name}"]`)!
+    if (toggle.getAttribute('aria-expanded') !== 'true') await act(async () => toggle.click())
+  }
   const button = (label: string) => container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`) ?? [...container.querySelectorAll('button')].find((item) => item.textContent === label) ?? null
-  return { container, button, close: () => act(async () => root.unmount()) }
+  return { container, button, details, close: () => act(async () => root.unmount()) }
 }
 
 it('lists imported external plugins as unverified and waiting for approval, with no checkbox to enable them', async () => {
-  const { container, button, close } = await openExternal({ current: null, state: 'installed' })
+  const { container, button, details, close } = await openExternal({ current: null, state: 'installed' })
   const list = container.querySelector('[aria-label="External plugins"]')!
   expect(list.textContent).toContain('Community Zoom')
-  expect(list.textContent).toContain('by Someone (declared, not verified)')
-  expect(list.textContent).toContain('Permissions requested: editor:zoom:read, editor:zoom:write')
-  expect(list.textContent).toContain('Unverified · Isolated plugin · Needs your approval')
+  expect(list.textContent).toContain('Imported')
+  expect(list.textContent).toContain('Needs approval')
   expect(list.querySelector('input[type="checkbox"]')).toBeNull()
   expect(button('Activate external plugin Community Zoom')).toBeNull()
+  // The removal lives inside Details, together with the technical facts.
+  expect(button('Remove external plugin Community Zoom')).toBeNull()
+  expect(list.textContent).not.toContain('ingerprint')
+  await details('Community Zoom')
+  expect(list.textContent).toContain('Someone (declared by the package, not verified)')
+  expect(list.textContent).toContain('Read the zoom levelChange the zoom level')
+  expect(list.textContent).not.toContain('editor:zoom:read')
+  expect(list.textContent).toContain('Version fingerprint 0123456789ab')
 
   vi.mocked(listExternalPlugins).mockResolvedValue({ version: 1, disabledAll: false, plugins: {} })
   await act(async () => button('Remove external plugin Community Zoom')!.click())
@@ -205,6 +216,8 @@ it('activates an approved plugin, deactivates a running one, and offers nothing 
   await active.close()
 
   const altered = await openExternal({ current: null, state: 'altered' })
+  expect(altered.container.textContent).toContain('Changed')
+  await altered.details('Community Zoom')
   expect(altered.container.textContent).toContain('Files changed after installation')
   expect(altered.button('Review and approve Community Zoom')).toBeNull()
   expect(altered.button('Activate external plugin Community Zoom')).toBeNull()
@@ -213,14 +226,15 @@ it('activates an approved plugin, deactivates a running one, and offers nothing 
 
 it('the emergency switch disables every external plugin and blocks activation while on', async () => {
   const on = await openExternal({ current: externalVersion.dir, state: 'active' })
-  await act(async () => on.button('Disable all external plugins')!.click())
+  await act(async () => on.button('Turn off all imported plugins')!.click())
   expect(setExternalKillSwitch).toHaveBeenCalledWith(true)
   await on.close()
 
   const off = await openExternal({ current: externalVersion.dir, state: 'installed' }, true)
-  expect(off.container.textContent).toContain('All external plugins are switched off')
+  await off.details('Community Zoom')
+  expect(off.container.textContent).toContain('All imported plugins are turned off.')
   expect(off.button('Activate external plugin Community Zoom')!.disabled).toBe(true)
-  await act(async () => off.button('Allow external plugins')!.click())
+  await act(async () => off.button('Allow imported plugins')!.click())
   expect(setExternalKillSwitch).toHaveBeenCalledWith(false)
   await off.close()
 })
@@ -228,8 +242,9 @@ it('the emergency switch disables every external plugin and blocks activation wh
 const bundledVersion = { ...externalVersion, source: 'bundled', author: 'Grimoire Maker', name: 'Zoom', dir: '2.0.0-aaaaaaaaaaaa', version: '2.0.0' }
 
 it('shows a bundled plugin as part of the app: no approval, no removal, spared by the emergency switch', async () => {
-  const { container, button, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, true, bundledVersion)
-  expect(container.textContent).toContain('Bundled with the app · Isolated plugin')
+  const { container, button, details, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, true, bundledVersion)
+  expect(container.textContent).toContain('Built in')
+  await details('Zoom')
   expect(container.textContent).not.toContain('declared, not verified')
   expect(button('Remove external plugin Zoom')).toBeNull()
   expect(button('Review and approve Zoom')).toBeNull()
@@ -239,8 +254,10 @@ it('shows a bundled plugin as part of the app: no approval, no removal, spared b
 
 it('explains that an edited local copy is used instead of the bundled plugin', async () => {
   useModStore.setState({ localWins: ['community.zoom'] })
-  const { container, button, close } = await openExternal({ current: bundledVersion.dir, state: 'installed' }, false, bundledVersion)
-  expect(container.textContent).toContain('Off: your edited local copy is in use instead')
+  const { container, button, details, close } = await openExternal({ current: bundledVersion.dir, state: 'installed' }, false, bundledVersion)
+  expect(container.textContent).toContain('Off')
+  await details('Zoom')
+  expect(container.textContent).toContain('Your edited copy in your Plugins folder is being used instead.')
   expect(button('Activate external plugin Zoom')!.disabled).toBe(true)
   await close()
   useModStore.setState({ localWins: [] })
@@ -248,9 +265,99 @@ it('explains that an edited local copy is used instead of the bundled plugin', a
 
 it('lists a replaced trusted folder once, on the bundled card, instead of as a second row', async () => {
   const replaced: ModEntry = { id: 'Plugins/zoom', kind: 'Plugins', label: 'zoom', folder: '/mods/Plugins/zoom', enabled: false, errors: [], replacedBy: 'community.zoom' }
-  const { container, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, false, bundledVersion, [replaced])
+  const { container, details, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, false, bundledVersion, [replaced])
+  expect(container.textContent).not.toContain('Your older copy')
+  await details('Zoom')
   expect(container.textContent).toContain('Your older copy in Plugins/zoom is kept on disk but not loaded')
   expect(container.querySelector('input[aria-label="Enable zoom"]')).toBeNull()
   expect(container.textContent).not.toContain('/mods/Plugins/zoom')
   await close()
+})
+
+const JARGON = /isolat|unverified|fingerprint|permissions requested/i
+/** The text outside every opened Details panel: rows one to three of each card plus the tab chrome. */
+const outsideDetails = (container: HTMLElement) => {
+  const clone = container.cloneNode(true) as HTMLElement
+  clone.querySelectorAll('[role="group"]').forEach((panel) => panel.remove())
+  return clone.textContent ?? ''
+}
+
+it('keeps the plugin rows free of jargon and shows only one short intro line', async () => {
+  const { container, close } = await openExternal({ current: null, state: 'installed' })
+  const text = outsideDetails(container)
+  expect(text).toContain('Plugins add extra tools to the editor.')
+  expect(text).not.toMatch(JARGON)
+  expect(text).not.toContain('Trusted local code')
+  expect(container.querySelectorAll('[data-plugin-card]')).toHaveLength(1)
+  const card = container.querySelector('[data-plugin-card]')!
+  expect([...card.children].filter((child) => child.hasAttribute('data-row')).map((child) => child.getAttribute('data-row'))).toEqual(['1', '2', '3'])
+  await close()
+})
+
+it('shows the switch only when an imported plugin exists', async () => {
+  const withImported = await openExternal({ current: externalVersion.dir, state: 'installed' })
+  expect(withImported.button('Turn off all imported plugins')).toBeTruthy()
+  await withImported.close()
+
+  const onlyBundled = await openExternal({ current: bundledVersion.dir, state: 'active' }, false, bundledVersion)
+  expect(onlyBundled.button('Turn off all imported plugins')).toBeNull()
+  expect(onlyBundled.button('Allow imported plugins')).toBeNull()
+  await onlyBundled.close()
+})
+
+it('shows the safety banner only when the isolation check failed, and keeps the details behind a toggle', async () => {
+  const quiet = await openExternal({ current: null, state: 'installed' })
+  expect(quiet.container.querySelector('[role="alert"]')).toBeNull()
+  await quiet.close()
+
+  useExternalRuntime.setState({ isolation: { ok: false, summary: 'Frames could not be sandboxed.' } as never })
+  const { container, close } = await openExternal({ current: null, state: 'installed' })
+  const banner = container.querySelector('[role="alert"]')!
+  expect(banner.textContent).toContain('Extra tools are switched off because the safety check did not pass on this computer.')
+  expect(banner.textContent).not.toContain('Frames could not be sandboxed.')
+  await act(async () => [...banner.querySelectorAll('button')].find((item) => item.textContent === 'Details')!.click())
+  expect(banner.textContent).toContain('Frames could not be sandboxed.')
+  await act(async () => [...banner.querySelectorAll('button')].find((item) => item.textContent === 'Run check again')!.click())
+  expect(verifyIsolation).toHaveBeenCalledWith(true)
+  await close()
+  useExternalRuntime.setState({ isolation: null })
+})
+
+it('draws folder plugins with the same card: Bookmarks gets its official name and description, other folders the generic one', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const setEnabled = vi.fn(async () => {})
+  useModStore.setState({
+    busy: false, ready: true, errors: [], reload: vi.fn(async () => {}), setEnabled, missingOfficial: [],
+    mods: [
+      { id: 'Plugins/bookmarks', kind: 'Plugins', folder: '/mods/Plugins/bookmarks', label: 'bookmarks', enabled: true, errors: [] },
+      { id: 'Plugins/mine', kind: 'Plugins', folder: '/mods/Plugins/mine', label: 'mine', enabled: false, errors: ['mine/bad.tsx: broken'] },
+    ],
+  })
+  vi.mocked(listExternalPlugins).mockResolvedValue({ version: 1, disabledAll: false, plugins: {} })
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => root.render(<ModManager onClose={() => {}} />))
+  await act(async () => container.querySelector<HTMLButtonElement>('[role="tab"]:last-of-type')!.click())
+
+  const cards = [...container.querySelectorAll('[data-plugin-card]')]
+  expect(cards.map((card) => card.getAttribute('data-plugin-card'))).toEqual(['Bookmarks', 'mine'])
+  expect(cards[0].textContent).toContain('Built in')
+  expect(cards[0].textContent).toContain('Mark places in your book and jump back to them from anywhere in the project.')
+  expect(cards[1].textContent).toContain('Local')
+  expect(cards[1].textContent).toContain('Plugin from your Plugins folder.')
+  expect(outsideDetails(container)).not.toContain('/mods/Plugins/bookmarks')
+  expect(container.querySelector('input[type="checkbox"]')).toBeNull()
+
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Enable bookmarks"]')!.click())
+  expect(setEnabled).toHaveBeenCalledWith('Plugins/bookmarks', false)
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Enable mine"]')!.click())
+  expect(setEnabled).toHaveBeenCalledWith('Plugins/mine', true)
+
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Details of mine"]')!.click())
+  expect(cards[1].textContent).toContain('/mods/Plugins/mine')
+  expect(cards[1].textContent).toContain('Runs with the same access as the app. Only keep plugins you trust.')
+  expect(cards[1].textContent).toContain('mine/bad.tsx: broken')
+  await act(async () => root.unmount())
+  container.remove()
 })

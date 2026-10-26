@@ -1,11 +1,25 @@
+/* Host-rendered plugin controls: same dark look the old trusted Zoom plugin had, so nothing is unreadable. */
 .control {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font: inherit;
+  color: #d1c5ad;
+  font: 12px/1.4 system-ui, sans-serif;
 }
-.toggle { padding: 3px 8px; border: 1px solid #ffffff20; border-radius: 4px; background: transparent; color: #d1c5ad; font-size: 12px; cursor: pointer; }
-.toggle:hover:not(:disabled), .toggle[aria-pressed='true'] { background: #ffffff15; color: #f0eee9; }
-.toggle:disabled { opacity: .4; cursor: default; }
-.toggle:focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.control select {
+  border: 1px solid #ffffff20;
+  border-radius: 4px;
+  padding: 2px 4px;
+  background: #302f2c;
+  color: #f0eee9;
+  color-scheme: dark;
+  font: inherit;
+  cursor: pointer;
+}
+.control select option { background: #302f2c; color: #f0eee9; }
 .control select:disabled { opacity: .4; cursor: default; }
+.control select:focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+.toggle, .button { padding: 3px 8px; border: 1px solid #ffffff20; border-radius: 4px; background: transparent; color: #d1c5ad; font: 12px/1.4 system-ui, sans-serif; cursor: pointer; }
+.toggle:hover:not(:disabled), .toggle[aria-pressed='true'], .button:hover:not(:disabled) { background: #ffffff15; color: #f0eee9; }
+.toggle:disabled, .button:disabled { opacity: .4; cursor: default; }
+.toggle:focus-visible, .button:focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }

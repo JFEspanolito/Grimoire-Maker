@@ -7,6 +7,8 @@ import { isTauri } from '../../hooks/useFileSystem'
 import { listExternalPlugins, summarizeExternalPlugins, type ExternalPluginSummary } from '../../lib/externalPlugins'
 import { setExternalKillSwitch, useExternalRuntime, verifyIsolation } from '../../plugins/isolated/externalHost'
 import { ExternalPluginCard } from './ExternalPluginCard'
+import { LocalPluginCard } from './LocalPluginCard'
+import { PluginCard } from './PluginCard'
 import styles from './ModManager.module.css'
 
 export interface ModManagerProps {
@@ -20,6 +22,23 @@ const CATEGORIES: ModKind[] = [
   MOD_KIND.THEMES,
   MOD_KIND.PLUGINS,
 ]
+
+/** One plain notice shown only when the start-up safety check failed; the technical summary stays behind Details. */
+function SafetyBanner({ summary, checking, busy, onRecheck }: { summary: string; checking: boolean; busy: boolean; onRecheck(): void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div role="alert" className={styles.banner}>
+      <p>Extra tools are switched off because the safety check did not pass on this computer.</p>
+      <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>Details</button>
+      {open && (
+        <div className={styles.bannerDetails}>
+          <p>{summary}</p>
+          <button type="button" disabled={busy || checking} onClick={onRecheck}>Run check again</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
   const dialog = useRef<HTMLDialogElement>(null)
@@ -112,6 +131,8 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
 
   const listed = mods.filter((mod) => !mod.replacedBy)
   const visibleMods = listed.filter((mod) => mod.kind === activeKind)
+  // The emergency switch only governs imported packages; bundled ones are exempt by design.
+  const hasImported = external.some((plugin) => plugin.source !== 'bundled')
 
   return (
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="mod-manager-title" onCancel={onClose}>
@@ -155,46 +176,49 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
 
         <section className={styles.viewer} role="tabpanel" aria-label={`${activeKind} mods`}>
           <h3 className={styles.viewerTitle}>{activeKind}</h3>
-          {activeKind === MOD_KIND.PLUGINS && <p className={styles.description}>
-            Trusted local code only. Enabled plugins execute TSX, TS or JS with the app's permissions; they are not sandboxed.
-            Copy the complete plugin folder here and refresh. Disable a plugin to unload its controls and registered resources.
-          </p>}
+          {activeKind === MOD_KIND.PLUGINS && (
+            <div className={styles.intro}>
+              <p className={styles.description}>Plugins add extra tools to the editor.</p>
+              {hasImported && (
+                <button type="button" disabled={busy} aria-pressed={switchedOff}
+                  onClick={() => void run(async () => { await setExternalKillSwitch(!switchedOff); await loadExternal() })}>
+                  {switchedOff ? 'Allow imported plugins' : 'Turn off all imported plugins'}
+                </button>
+              )}
+            </div>
+          )}
+          {activeKind === MOD_KIND.PLUGINS && isolation && !isolation.ok && (
+            <SafetyBanner summary={isolation.summary} checking={checking} busy={busy}
+              onRecheck={() => void run(async () => { await verifyIsolation(true) })} />
+          )}
           {activeKind === MOD_KIND.PLUGINS && missingOfficial.length > 0 && <div className={styles.list} aria-label="Official plugins not installed">
-            {missingOfficial.map((plugin) => <div className={styles.row} key={plugin.folder}>
-              <span>
-                <strong>{plugin.label}</strong>
-                <small>Official plugin, not installed</small>
-              </span>
-              <button type="button" className={styles.install} disabled={busy} aria-label={`Install official plugin ${plugin.label}`}
-                onClick={() => void run(() => installOfficial(plugin.folder))}>Install official plugin</button>
-            </div>)}
+            {missingOfficial.map((plugin) => (
+              <PluginCard key={plugin.folder} name={plugin.label} origin="Built in" status="Not installed"
+                description={plugin.description ?? 'Plugin that comes with the app.'}
+                actions={(
+                  <button type="button" className={styles.install} disabled={busy} aria-label={`Install official plugin ${plugin.label}`}
+                    onClick={() => void run(() => installOfficial(plugin.folder))}>Install</button>
+                )}
+                details={<p>It is not in your Plugins folder. Install it to put a fresh copy there.</p>} />
+            ))}
           </div>}
           {activeKind === MOD_KIND.PLUGINS && external.length > 0 && <div className={styles.list} aria-label="External plugins">
-            <p className={styles.description}>
-              Imported packages are stored apart from your local plugins and stay off until you approve them. They run isolated,
-              with only the permissions you approve; installing one never executes its code.
-            </p>
-            <div className={styles.row}>
-              <span>
-                <strong>Isolation check</strong>
-                <small role="status">{checking ? 'Running…' : isolation ? isolation.summary : 'Not run yet. It runs before the first external plugin starts.'}</small>
-              </span>
-              <button type="button" disabled={busy || checking} onClick={() => void run(async () => { await verifyIsolation(true) })}>Run check</button>
-              <button type="button" disabled={busy} aria-pressed={switchedOff}
-                onClick={() => void run(async () => { await setExternalKillSwitch(!switchedOff); await loadExternal() })}>
-                {switchedOff ? 'Allow external plugins' : 'Disable all external plugins'}
-              </button>
-            </div>
             {external.map((plugin) => <ExternalPluginCard key={plugin.id} plugin={plugin} running={running.includes(plugin.id)}
               busy={busy} switchedOff={switchedOff} localCopyInUse={localWins.includes(plugin.id)}
               keptFolder={mods.find((mod) => mod.replacedBy === plugin.id)?.folder} run={run} refresh={loadExternal} />)}
           </div>}
           {visibleMods.length === 0 ? (
-            <p className={styles.description}>
-              {activeKind === MOD_KIND.PLUGINS
-                ? 'No plugins found. Add a folder with a TSX, TS or JS plugin entry.'
-                : `No ${activeKind.toLowerCase()} mods found.`}
-            </p>
+            activeKind === MOD_KIND.PLUGINS && (external.length > 0 || missingOfficial.length > 0) ? null : (
+              <p className={styles.description}>
+                {activeKind === MOD_KIND.PLUGINS
+                  ? 'No plugins found. Add a folder with a TSX, TS or JS plugin entry.'
+                  : `No ${activeKind.toLowerCase()} mods found.`}
+              </p>
+            )
+          ) : activeKind === MOD_KIND.PLUGINS ? (
+            <div className={styles.list} aria-label="Local plugins">
+              {visibleMods.map((mod) => <LocalPluginCard key={mod.id} mod={mod} busy={busy} setEnabled={setEnabled} run={run} />)}
+            </div>
           ) : (
             <div className={styles.list}>
               {visibleMods.map((mod) => (

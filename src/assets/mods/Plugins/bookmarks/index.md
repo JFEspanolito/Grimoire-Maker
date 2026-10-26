@@ -1,6 +1,7 @@
 ---
 pluginName: Bookmarks
 pluginId: builtin.bookmarks
+pluginDescription: Mark places in your book and jump back to them from anywhere in the project.
 ---
 # Bookmarks plugin
 
