@@ -1,44 +1,51 @@
 ---
-pluginName: Ruler
+pluginName: Pixel Ruler
 pluginId: builtin.pixel-ruler
+pluginDescription: Page ruler with margin and bleed boxes and draggable guides.
 ---
-# Pixel & Print Ruler
+# Pixel Ruler: an example plugin package
 
-This folder contains the complete Ruler implementation. `pixel-ruler.tsx`
-exports the plugin, toolbar toggle and registrations. The remaining files own
-the overlay, guide menu, guide updates, measurement visibility and styles.
-This Markdown file is documentation, not the implementation.
+This folder is a complete plugin package. Use it as a starting point for your own mods.
+Everything the application needs is in two files; this `index.md` is only documentation.
 
-## Install and share
+## What is in the folder
 
-Copy this entire `pixel-ruler` folder into the configured **Plugins** content
-folder on another Grimoire Maker installation with the v1 plugin API. Refresh
-the mod catalog and enable **Ruler**. No build step or npm installation is
-needed. Keep the source files and `Ruler.module.css` together. Do not install a
-second copy with the same ID: `builtin.pixel-ruler`.
+- `manifest.json` describes the plugin. The application reads it and draws the controls for you.
+- `dist/index.js` is the plugin's code. For Pixel Ruler it is empty on purpose: the ruler, the
+  margin and bleed boxes and the guides are drawn by the application, so no code is needed.
+- Any other file here (this page, notes, a `legacy/` folder) is ignored.
 
-## Controls
+## manifest.json, field by field
 
-- **Ruler** shows or hides page dimensions, margins and bleed measurements.
-- **Guides** adds row/column guides, edits positions in millimetres, removes
-  individual guides or clears them all.
-- Drag a guide handle to position it. Changes commit on release; cancellation
-  discards the draft. Arrow keys move by 1 mm, Shift+arrow by 10 mm, and Delete
-  removes the selected guide.
-- Guides remain visible when measurements are hidden. Guides outside a smaller
-  paper size are retained and marked in the menu, not silently deleted.
-- Guides are visual only and do not appear in printed/exported pages.
+- `id`, `name`, `version`, `author`, `description`: who the plugin is. `id` must be unique.
+  Local packages may use a `builtin.` id, like this one; imported packages cannot.
+- `main`: the entry file, always `dist/index.js`.
+- `schemaVersion` and `sdkVersion`: format versions. Leave them as they are.
+- `permissions`: what the plugin may do. Pixel Ruler asks for three:
+  `editor:geometry:read` (page size and zoom, never text), `editor:guides:read` (see guides) and
+  `editor:guides:write` (add and remove guides).
+  A local package is approved for exactly the permissions listed here, so remove any it does not use.
+- `contributions`: the controls the application draws.
+  - `toolbar` has `ruler-toggle`, a toggle bound to ruler visibility (`"bind": "rulerVisible"`)
+    that shows only for Markdown files.
+  - `overlays` has `ruler`, the ruler drawn over the page with its margin and bleed boxes.
+  - `tools` has `guides`, a **Guides** menu to add, clear and remove guides.
 
-## Lifecycle and host API
+## Edit it
 
-Activation registers generic toolbar, editor-tool and overlay slots. The host
-owns persisted guide coordinates and page geometry through
-`@grimoire/plugin-api`; this package owns their interaction and rendering.
-`GuidesMenu` removes its outside-click listener on unmount. The registry removes
-registered UI/styles on disable, and cleanup resets transient measurement
-visibility without deleting saved guide positions. Re-enable restores the
-saved guides.
+1. Change `manifest.json`, for example rename the toggle label or the menu label.
+2. Open **Mod Manager** and choose **Refresh**. A running plugin whose files changed is restarted.
+3. Use **Turn off** or **Turn on** on the card to switch it. Your edits are never overwritten.
 
-These are trusted same-WebView plugins, **not sandboxed extensions**. Their
-code has application authority. Only enable reviewed code; protection for
-external plugins belongs to a later phase.
+If you delete the folder, the plugin disappears. **Install** on the Plugins tab puts a fresh copy back.
+
+## Share it
+
+Copy the whole `pixel-ruler` folder into another installation's **Plugins** folder, or pack it:
+
+```
+pnpm pack:plugin <path to this folder>
+```
+
+This writes a `.gmp` file that others can add with **Mod Manager > Import Mod**. Imported packages
+are approved by the person who imports them, so they start off until reviewed.

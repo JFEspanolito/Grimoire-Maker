@@ -3,18 +3,26 @@ import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } fro
 import { ensureModDirectory, seedExamples, type ModFs } from './modCatalog'
 import { loadLibraryPaths, type LibraryPaths } from './preferences'
 import { installOfficialPlugin, listOfficialPlugins } from './officialPlugins'
-import { MIGRATED_FOLDERS } from './migratedPlugins'
+import type { MigrationFs } from './migratedPlugins'
 
-const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/Plugins/**/*.{ts,tsx,js,css}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
-export const MOD_EXAMPLES = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
-/** Everything the application ever shipped as a trusted plugin; the baseline for untouched-copy checks. */
-export const BASELINE_PLUGINS = listOfficialPlugins(MOD_EXAMPLES)
-/** What is still seeded and offered for restore: plugins that moved to isolated packages are not. */
-export const OFFICIAL_PLUGINS = BASELINE_PLUGINS.filter((plugin) => !MIGRATED_FOLDERS.includes(plugin.folder))
+const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/{Plugins,Legacy}/**/*.{ts,tsx,js,css,json}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+const allExamples = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
+/** Everything that is seeded or restorable. Legacy sources are never part of it. */
+export const MOD_EXAMPLES = Object.fromEntries(Object.entries(allExamples).filter(([path]) => !path.startsWith('Legacy/')))
+/** Plugins that are seeded and offered for restore, including the Zoom and Pixel Ruler packages. */
+export const OFFICIAL_PLUGINS = listOfficialPlugins(MOD_EXAMPLES)
+/** The old trusted sources of plugins that became packages; never seeded, only the baseline for untouched-copy checks. */
+export const LEGACY_PLUGINS = listOfficialPlugins(allExamples, 'Legacy')
 export const modFs: ModFs = {
   exists, readDir, readTextFile, stat,
   mkdir: (path) => mkdir(path, { recursive: true }),
   writeTextFile: (path, text) => writeTextFile(path, text, { createNew: true }),
+}
+/** The file system the migration needs: moving files (never deleting) and replacing documentation. */
+export const migrationFs: MigrationFs = {
+  ...modFs,
+  rename: (from, to) => rename(from, to),
+  overwriteTextFile: (path, text) => writeTextFile(path, text),
 }
 
 export interface ModLibraryPaths extends LibraryPaths { root: string; preferences: string }
@@ -36,7 +44,7 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
   const examples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => {
     if (path.startsWith('Templates/')) return paths.templates === `${root}/Templates`
     if (path.startsWith('Snippets/')) return paths.snippets === `${root}/Snippets`
-    if (path.startsWith('Plugins/')) return paths.plugins === `${root}/Plugins` && !MIGRATED_FOLDERS.includes(path.split('/')[1])
+    if (path.startsWith('Plugins/')) return paths.plugins === `${root}/Plugins`
     return false
   }))
   await seedExamples(modFs, root, examples)
@@ -52,7 +60,7 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
     await modFs.writeTextFile(`${root}/Templates/.complete-templates-v1-seeded`, '1\n')
   }
   if (paths.plugins === `${root}/Plugins` && !(await exists(`${root}/Plugins/.executable-plugins-v1-seeded`))) {
-    const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/') && !MIGRATED_FOLDERS.includes(path.split('/')[1])))
+    const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/')))
     for (const [relative, contents] of Object.entries(pluginExamples)) {
       const segments = relative.split('/')
       let parent = root

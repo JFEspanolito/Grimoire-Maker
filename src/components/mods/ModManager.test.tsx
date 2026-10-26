@@ -239,40 +239,49 @@ it('the emergency switch disables every external plugin and blocks activation wh
   await off.close()
 })
 
-const bundledVersion = { ...externalVersion, source: 'bundled', author: 'Grimoire Maker', name: 'Zoom', dir: '2.0.0-aaaaaaaaaaaa', version: '2.0.0' }
+const localVersion = {
+  ...externalVersion, source: 'local', localFolder: 'zoom', author: 'Grimoire Maker', name: 'Zoom', dir: '2.0.0-aaaaaaaaaaaa', version: '2.0.0',
+}
+const packageMod = (overrides: Partial<ModEntry> = {}): ModEntry => ({
+  id: 'Plugins/zoom', kind: 'Plugins', label: 'zoom', folder: '/mods/Plugins/zoom', enabled: true, errors: [], package: true, ...overrides,
+})
 
-it('shows a bundled plugin as part of the app: no approval, no removal, spared by the emergency switch', async () => {
-  const { container, button, details, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, true, bundledVersion)
-  expect(container.textContent).not.toContain('Built in')
+it('lists a package folder once, as a local card with its permissions and folder inside Details', async () => {
+  const setEnabled = vi.fn(async () => {})
+  const { container, button, details, close } = await openExternal({ current: localVersion.dir, state: 'active' }, false, localVersion, [packageMod()])
+  useModStore.setState({ setEnabled })
+  expect(container.querySelectorAll('[data-plugin-card]')).toHaveLength(1)
+  expect(container.querySelector('[aria-label="External plugins"]')).toBeNull()
+  expect(container.textContent).toContain('On')
+  expect(outsideDetails(container)).not.toContain('/mods/Plugins/zoom')
   await details('Zoom')
-  expect(container.textContent).toContain('Source Built in')
-  expect(container.textContent).not.toContain('declared, not verified')
+  expect(container.textContent).toContain('Source Local package')
+  expect(container.textContent).toContain('/mods/Plugins/zoom')
+  expect(container.textContent).toContain('Read the zoom levelChange the zoom level')
+  expect(container.textContent).not.toContain('editor:zoom:read')
   expect(button('Remove external plugin Zoom')).toBeNull()
   expect(button('Review and approve Zoom')).toBeNull()
-  expect(button('Deactivate external plugin Zoom')!.disabled).toBe(false)
+  await act(async () => button('Enable zoom')!.click())
+  expect(setEnabled).toHaveBeenCalledWith('Plugins/zoom', false)
   await close()
 })
 
-it('explains that an edited local copy is used instead of the bundled plugin', async () => {
-  useModStore.setState({ localWins: ['community.zoom'] })
-  const { container, button, details, close } = await openExternal({ current: bundledVersion.dir, state: 'installed' }, false, bundledVersion)
-  expect(container.textContent).toContain('Off')
-  await details('Zoom')
-  expect(container.textContent).toContain('Your edited copy in your Plugins folder is being used instead.')
-  expect(button('Activate external plugin Zoom')!.disabled).toBe(true)
-  await close()
-  useModStore.setState({ localWins: [] })
-})
+it('shows Off, Stopped and Error with the reason for a package folder', async () => {
+  const off = await openExternal({ current: localVersion.dir, state: 'installed' }, false, localVersion, [packageMod({ enabled: false })])
+  expect(off.container.querySelector('[data-plugin-card] [class*="status"]')?.textContent).toBe('Off')
+  await off.close()
 
-it('lists a replaced trusted folder once, on the bundled card, instead of as a second row', async () => {
-  const replaced: ModEntry = { id: 'Plugins/zoom', kind: 'Plugins', label: 'zoom', folder: '/mods/Plugins/zoom', enabled: false, errors: [], replacedBy: 'community.zoom' }
-  const { container, details, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, false, bundledVersion, [replaced])
-  expect(container.textContent).not.toContain('Your older copy')
-  await details('Zoom')
-  expect(container.textContent).toContain('Your older copy in Plugins/zoom is kept on disk but not loaded')
-  expect(container.querySelector('input[aria-label="Enable zoom"]')).toBeNull()
-  expect(container.textContent).not.toContain('/mods/Plugins/zoom')
-  await close()
+  const stopped = await openExternal({ current: localVersion.dir, state: 'stopped' }, false, localVersion, [packageMod()])
+  expect(stopped.container.querySelector('[data-plugin-card] [class*="status"]')?.textContent).toBe('Stopped')
+  await stopped.details('Zoom')
+  expect(stopped.container.textContent).toContain('Turn it off and on to try again.')
+  await stopped.close()
+
+  const broken = await openExternal({ current: localVersion.dir, state: 'active' }, false, localVersion, [packageMod({ errors: ['manifest.json is not valid JSON'] })])
+  expect(broken.container.querySelector('[data-plugin-card] [class*="status"]')?.textContent).toBe('Error')
+  await broken.details('Zoom')
+  expect(broken.container.textContent).toContain('manifest.json is not valid JSON')
+  await broken.close()
 })
 
 const JARGON = /isolat|unverified|fingerprint|permissions requested/i
@@ -300,10 +309,10 @@ it('shows the switch only when an imported plugin exists', async () => {
   expect(withImported.button('Turn off all imported plugins')).toBeTruthy()
   await withImported.close()
 
-  const onlyBundled = await openExternal({ current: bundledVersion.dir, state: 'active' }, false, bundledVersion)
-  expect(onlyBundled.button('Turn off all imported plugins')).toBeNull()
-  expect(onlyBundled.button('Allow imported plugins')).toBeNull()
-  await onlyBundled.close()
+  const onlyLocal = await openExternal({ current: localVersion.dir, state: 'active' }, false, localVersion, [packageMod()])
+  expect(onlyLocal.button('Turn off all imported plugins')).toBeNull()
+  expect(onlyLocal.button('Allow imported plugins')).toBeNull()
+  await onlyLocal.close()
 })
 
 it('shows the safety banner only when the isolation check failed, and keeps the details behind a toggle', async () => {

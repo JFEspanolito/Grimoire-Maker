@@ -4,6 +4,8 @@ import {
   setExternalPluginsDisabled, stopExternalPlugin,
 } from '../../lib/externalPlugins'
 import { reportError } from '../../lib/errorLogging'
+import { folderName, sameFolder, type LocalPackageSync } from '../../lib/localPackages'
+import type { ModEntry } from '../../lib/modCatalog'
 import { useModStore } from '../../stores/modStore'
 import { registerPlugin, usePluginRegistry } from '../plugin-manager'
 import { hostCapabilities, watchHost } from './capabilities'
@@ -19,7 +21,7 @@ interface ExternalRuntimeState {
 }
 export const useExternalRuntime = create<ExternalRuntimeState>(() => ({ running: [], isolation: null, checking: false }))
 
-interface Live { instance: PluginInstance; cleanup: () => void; bundled: boolean }
+interface Live { instance: PluginInstance; cleanup: () => void; origin: string; fingerprint: string }
 const live = new Map<string, Live>()
 /** One token per start attempt; removing it cancels that attempt wherever it is awaiting. */
 const starts = new Map<string, symbol>()
@@ -61,9 +63,6 @@ function finished(id: string, reason: StopReason, detail: string) {
 /** Starts an already active plugin: re-verifies the files natively, then runs it isolated. */
 export async function startExternalPlugin(id: string): Promise<void> {
   if (live.has(id) || starts.has(id)) return
-  if (useModStore.getState().localWins.includes(id)) {
-    throw new Error('A locally edited copy of this plugin is in use. Reset or remove it to use the bundled version.')
-  }
   const token = Symbol(id)
   starts.set(id, token)
   const cancelled = () => starts.get(id) !== token
@@ -76,8 +75,8 @@ export async function startExternalPlugin(id: string): Promise<void> {
     }
     const entry = await readExternalPluginEntry(id)
     if (cancelled()) return
-    // The bundled version keeps the trusted plugin's id, so a loaded trusted copy can never run beside it.
-    if (entry.origin === 'bundled' && usePluginRegistry.getState().plugins.some((plugin) => plugin.id === id)) {
+    // Defensive: package folders are never loaded as trusted code, but a trusted plugin with this id must never run beside it.
+    if (usePluginRegistry.getState().plugins.some((plugin) => plugin.id === id)) {
       throw new Error('A trusted plugin with this id is already loaded')
     }
     let instance: PluginInstance | null = null
@@ -103,12 +102,12 @@ export async function startExternalPlugin(id: string): Promise<void> {
     if (declares) {
       const send = (command: string, value: string | null) => instance?.command(command, value)
       cleanups.push(registerPlugin({
-        id: entry.origin === 'bundled' ? id : `external.${id}`, name: id, version: entry.version,
+        id: `external.${id}`, name: id, version: entry.version,
         activate: (api) => registerHostContributions(api, entry, send),
       }))
     }
     cleanups.push(watchHost((topic) => instance?.emit(topic)))
-    live.set(id, { instance, bundled: entry.origin === 'bundled', cleanup: () => cleanups.reverse().forEach((cleanup) => { try { cleanup() } catch (error) { reportError('plugin.external.cleanup', error) } }) })
+    live.set(id, { instance, origin: entry.origin, fingerprint: entry.fingerprint, cleanup: () => cleanups.reverse().forEach((cleanup) => { try { cleanup() } catch (error) { reportError('plugin.external.cleanup', error) } }) })
     setRunning()
   } finally {
     if (starts.get(id) === token) starts.delete(id)
@@ -135,23 +134,82 @@ export async function activateExternalPlugin(id: string): Promise<void> {
 export async function setExternalKillSwitch(disabled: boolean): Promise<void> {
   if (disabled) {
     starts.clear()
-    for (const { instance, bundled } of [...live.values()]) if (!bundled) instance.stop('killed')
+    for (const { instance, origin } of [...live.values()]) if (origin === 'import') instance.stop('killed')
   }
   await setExternalPluginsDisabled(disabled)
-  // Clearing the pending starts above may have cancelled a first-party plugin that the switch spares.
+  // Clearing the pending starts above may have cancelled a local plugin that the switch spares.
   if (disabled) await startActiveExternalPlugins().catch((error) => reportError('plugin.external.start', error))
+}
+
+const sourceOf = (record: { current: string | null; latest: string; versions: { dir: string; source: string; localFolder?: string }[] }) =>
+  record.versions.find((version) => version.dir === record.current) ?? record.versions.find((version) => version.dir === record.latest)
+
+/** Drops a live instance now, without waiting for its stop notification. */
+function dropLive(id: string, reason: StopReason) {
+  const entry = live.get(id)
+  starts.delete(id)
+  if (!entry) return
+  live.delete(id)
+  entry.instance.stop(reason)
+  entry.cleanup()
+  setRunning()
+}
+
+/**
+ * Brings the isolated runtime in line with the Plugins folders after a scan: an enabled folder is
+ * activated and started, a disabled one stopped, and a running one whose bytes changed restarted.
+ * Local packages are not affected by the emergency switch, which only governs imported packages.
+ */
+export async function applyLocalPackages(mods: ModEntry[], sync: LocalPackageSync): Promise<void> {
+  const registry = await listExternalPlugins()
+  for (const mod of mods) {
+    if (!mod.package) continue
+    const folder = folderName(mod.folder)
+    const info = sync.packages.find((item) => sameFolder(item.folder, folder))
+    if (!info) {
+      // The folder no longer validates: whatever ran from it must not keep running.
+      for (const [id, record] of Object.entries(registry.plugins)) {
+        const version = sourceOf(record)
+        if (version?.source === 'local' && version.localFolder && sameFolder(version.localFolder, folder)) dropLive(id, 'deactivated')
+      }
+      continue
+    }
+    const id = info.id
+    const state = registry.plugins[id]?.state
+    try {
+      if (!mod.enabled) {
+        dropLive(id, 'deactivated')
+        if (state === 'active' || state === 'stopped') await setExternalPluginActive(id, false)
+        continue
+      }
+      if (state === 'altered') continue
+      // A plugin that stopped itself stays stopped until its files change or the user switches it off and on.
+      if (state === 'stopped' && !info.changed) { dropLive(id, 'deactivated'); continue }
+      if (state !== 'active') await setExternalPluginActive(id, true)
+      const running = live.get(id)
+      if (running && running.fingerprint !== info.fingerprint) dropLive(id, 'deactivated')
+      await startExternalPlugin(id)
+    } catch (error) {
+      reportError('plugin.external.local', error)
+    }
+  }
 }
 
 /** App start: native integrity checks run inside the registry listing and again per plugin read. */
 export async function startActiveExternalPlugins(): Promise<void> {
-  // Trusted plugins are reconciled first, so a migrated plugin has exactly one implementation running.
+  // Trusted plugins are reconciled first, so every plugin has exactly one implementation running.
   const mods = useModStore.getState()
   if (!mods.ready) await mods.reload().catch((error) => reportError('plugin.external.mods', error))
   const registry = await listExternalPlugins()
   for (const [id, record] of Object.entries(registry.plugins)) {
-    if (record.state !== 'active' || useModStore.getState().localWins.includes(id)) continue
-    // The emergency switch stops imported packages; first-party bundled ones keep running.
-    if (registry.disabledAll && record.versions.find((version) => version.dir === record.current)?.source !== 'bundled') continue
+    if (record.state !== 'active') continue
+    const version = sourceOf(record)
+    if (version?.source === 'local') {
+      // A local plugin runs only while its folder is present and switched on in the Mod Manager.
+      const folder = version.localFolder
+      const mod = folder ? useModStore.getState().mods.find((item) => item.package && sameFolder(folderName(item.folder), folder)) : undefined
+      if (!mod?.enabled) continue
+    } else if (registry.disabledAll) continue
     try { await startExternalPlugin(id) } catch (error) { reportError('plugin.external.start', error) }
   }
 }

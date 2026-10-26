@@ -1,17 +1,14 @@
-import type { ModEntry, ModFs } from './modCatalog'
-import { MOD_KIND, modKey } from './modCatalog'
+import { ensureModDirectory, type ModFs } from './modCatalog'
 import type { OfficialPlugin } from './officialPlugins'
 
-/**
- * Official plugins that now ship as isolated bundled packages. Their old trusted sources stay in
- * the application only as the baseline used to tell an untouched local copy from an edited one.
- */
-export const MIGRATED_PLUGINS = [
-  { folder: 'zoom', id: 'builtin.zoom' },
-  { folder: 'pixel-ruler', id: 'builtin.pixel-ruler' },
-] as const
+/** The folders whose old trusted sources became example packages. */
+export const MIGRATED_FOLDERS: readonly string[] = ['zoom', 'pixel-ruler']
 
-export const MIGRATED_FOLDERS: readonly string[] = MIGRATED_PLUGINS.map((plugin) => plugin.folder)
+/** What the migration needs beyond reading: moving files (never deleting) and replacing a document. */
+export interface MigrationFs extends ModFs {
+  rename(from: string, to: string): Promise<void>
+  overwriteTextFile(path: string, text: string): Promise<void>
+}
 
 const MAX_FILES = 64
 
@@ -50,26 +47,65 @@ export async function isPristineCopy(io: ModFs, folder: string, baseline: Record
   }
 }
 
-export interface MigrationOutcome {
-  /** Trusted folders left unloaded because the bundled isolated version replaces them. */
-  replaced: string[]
-  /** Isolated plugin ids that must not run because an edited local copy is in use. */
-  localWins: string[]
+export interface MigrationResult {
+  /** Folder names converted into packages during this run. */
+  converted: string[]
+  /** Human-readable problems, already prefixed with `Plugins/<folder>`. */
+  errors: string[]
 }
 
+const message = (error: unknown) => error instanceof Error ? error.message : String(error)
+
 /**
- * Decides, per migrated plugin, which implementation runs; never both. An untouched trusted copy
- * is replaced (its files stay on disk); an edited or extended one keeps running and the bundled
- * version stays off, so a user's own changes are never overridden.
+ * Converts an UNTOUCHED old trusted copy of Zoom or Pixel Ruler into the example package, in place.
+ * The old code and style files are moved (never deleted) into `<folder>/legacy/`. An edited or
+ * extended copy, a folder that already has `manifest.json` and a missing folder are left exactly as
+ * they are. The package files are written before anything moves and `manifest.json` last, so a
+ * failure at any point leaves a folder that still works; running again is a no-op.
  */
-export async function resolveMigrations(io: ModFs, mods: ModEntry[], baseline: OfficialPlugin[]): Promise<MigrationOutcome> {
-  const outcome: MigrationOutcome = { replaced: [], localWins: [] }
-  for (const { folder, id } of MIGRATED_PLUGINS) {
-    const mod = mods.find((item) => item.id === modKey(MOD_KIND.PLUGINS, folder))
-    const shipped = baseline.find((plugin) => plugin.folder === folder)
-    if (!mod || !mod.enabled || !shipped) continue
-    if (await isPristineCopy(io, mod.folder, shipped.files)) outcome.replaced.push(mod.id)
-    else outcome.localWins.push(id)
+export async function migrateLegacyFolders(
+  io: MigrationFs, pluginsDir: string, legacy: OfficialPlugin[], packages: OfficialPlugin[],
+): Promise<MigrationResult> {
+  const result: MigrationResult = { converted: [], errors: [] }
+  let entries
+  try { entries = await io.readDir(pluginsDir) } catch (error) {
+    result.errors.push(`Plugins: ${message(error)}`)
+    return result
   }
-  return outcome
+  for (const folder of MIGRATED_FOLDERS) {
+    const entry = entries.find((item) => item.name.toLowerCase() === folder)
+    if (!entry || !entry.isDirectory || entry.isSymlink) continue
+    const path = `${pluginsDir}/${entry.name}`
+    const baseline = legacy.find((plugin) => plugin.folder === folder)
+    const next = packages.find((plugin) => plugin.folder === folder)
+    try {
+      if (!baseline || !next?.files['manifest.json']) continue
+      const present = await io.readDir(path)
+      if (present.some((file) => file.name.toLowerCase() === 'manifest.json')) continue
+      if (!(await isPristineCopy(io, path, baseline.files))) continue
+      for (const relative of Object.keys(next.files)) {
+        if (relative === 'manifest.json') continue
+        const segments = relative.split('/')
+        let parent = path
+        for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(io, parent, name)
+        await io.overwriteTextFile(`${parent}/${segments.at(-1)}`, next.files[relative])
+      }
+      await io.overwriteTextFile(`${path}/manifest.json`, next.files['manifest.json'])
+      result.converted.push(folder)
+    } catch (error) {
+      result.errors.push(`Plugins/${entry.name}: ${message(error)}`)
+      continue
+    }
+    try {
+      for (const relative of Object.keys(baseline.files).filter((file) => !isDocumentation(file)).sort()) {
+        const segments = relative.split('/')
+        let parent = await ensureModDirectory(io, path, 'legacy')
+        for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(io, parent, name)
+        await io.rename(`${path}/${relative}`, `${parent}/${segments.at(-1)}`)
+      }
+    } catch (error) {
+      result.errors.push(`Plugins/${entry.name}: the package was written but moving the old files to legacy/ failed: ${message(error)}`)
+    }
+  }
+  return result
 }

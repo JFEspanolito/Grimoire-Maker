@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readExternalPluginEntry, setExternalPluginActive } from '../../lib/externalPlugins'
-import { setExternalKillSwitch, startExternalPlugin, stopExternalPluginNow, useExternalRuntime } from './externalHost'
+import { listExternalPlugins, readExternalPluginEntry, setExternalPluginActive } from '../../lib/externalPlugins'
+import type { ModEntry } from '../../lib/modCatalog'
+import { registerPlugin, unregisterPlugin } from '../plugin-manager'
+import { useModStore } from '../../stores/modStore'
+import { applyLocalPackages, setExternalKillSwitch, startActiveExternalPlugins, startExternalPlugin, stopExternalPluginNow, useExternalRuntime } from './externalHost'
 import { startPlugin } from './runtime'
 
 vi.mock('../../lib/externalPlugins', () => ({
@@ -24,7 +27,7 @@ vi.mock('./runtime', () => ({
   }),
 }))
 
-const entry = (id: string) => ({ id, version: '1.0.0', fingerprint: 'f', sdkVersion: 1, permissions: [], toolbar: [], behaviors: [], overlays: [], tools: [], origin: 'import' as const, source: '' })
+const entry = (id: string, origin: 'import' | 'local' = 'import', fingerprint = 'f') => ({ id, version: '1.0.0', fingerprint, sdkVersion: 1, permissions: [], toolbar: [], behaviors: [], overlays: [], tools: [], origin, source: '' })
 const deferred = <T,>() => {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => { resolve = done })
@@ -106,5 +109,118 @@ describe('starting and stopping external plugins', () => {
     first.resolve(entry('community.e'))
     await stale
     expect(running()).toEqual(['community.e'])
+  })
+})
+
+describe('local package folders', () => {
+  const mod = (folder: string, overrides: Partial<ModEntry> = {}): ModEntry =>
+    ({ id: `Plugins/${folder}`, kind: 'Plugins', label: folder, folder: `/mods/Plugins/${folder}`, enabled: true, errors: [], package: true, ...overrides })
+  const sync = (folder: string, id: string, fingerprint = 'f', changed = false) => ({ packages: [{ folder, id, version: '2.0.0', fingerprint, changed }], errors: [] })
+  const registry = (id: string, state: string, folder: string, source = 'local') => vi.mocked(listExternalPlugins).mockResolvedValue({
+    version: 1, disabledAll: false,
+    plugins: { [id]: { latest: 'd', current: 'd', state, versions: [{ dir: 'd', source, localFolder: folder } as never] } },
+  })
+
+  it('activates and starts an enabled folder', async () => {
+    registry('builtin.zoom', 'installed', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('builtin.zoom', 'local'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom'))
+    expect(setExternalPluginActive).toHaveBeenCalledWith('builtin.zoom', true)
+    expect(running()).toEqual(['builtin.zoom'])
+  })
+
+  it('does nothing for a folder that is already active and running with the same bytes', async () => {
+    registry('builtin.zoom', 'active', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('builtin.zoom', 'local'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom'))
+    expect(setExternalPluginActive).not.toHaveBeenCalled()
+    expect(startPlugin).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops a running plugin whose folder was switched off and records it as inactive', async () => {
+    registry('builtin.zoom', 'active', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('builtin.zoom', 'local'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom'))
+    await applyLocalPackages([mod('zoom', { enabled: false })], sync('zoom', 'builtin.zoom'))
+    expect(running()).toEqual([])
+    expect(setExternalPluginActive).toHaveBeenCalledWith('builtin.zoom', false)
+  })
+
+  it('never starts a disabled folder', async () => {
+    registry('builtin.zoom', 'installed', 'zoom')
+    await applyLocalPackages([mod('zoom', { enabled: false })], sync('zoom', 'builtin.zoom'))
+    expect(startPlugin).not.toHaveBeenCalled()
+    expect(setExternalPluginActive).not.toHaveBeenCalled()
+  })
+
+  it('restarts a running plugin whose fingerprint changed', async () => {
+    registry('builtin.zoom', 'active', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockResolvedValueOnce(entry('builtin.zoom', 'local', 'f')).mockResolvedValue(entry('builtin.zoom', 'local', 'g'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom', 'f'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom', 'g', true))
+    expect(startPlugin).toHaveBeenCalledTimes(2)
+    expect(running()).toEqual(['builtin.zoom'])
+  })
+
+  it('leaves a stopped plugin stopped until its files change', async () => {
+    registry('builtin.zoom', 'stopped', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('builtin.zoom', 'local'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom'))
+    expect(startPlugin).not.toHaveBeenCalled()
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom', 'g', true))
+    expect(setExternalPluginActive).toHaveBeenCalledWith('builtin.zoom', true)
+    expect(startPlugin).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops what ran from a folder that no longer validates', async () => {
+    registry('builtin.zoom', 'active', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('builtin.zoom', 'local'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom'))
+    await applyLocalPackages([mod('zoom')], { packages: [], errors: [{ folder: 'zoom', message: 'bad manifest' }] })
+    expect(running()).toEqual([])
+  })
+
+  it('ignores trusted folders and survives a failing start', async () => {
+    registry('builtin.zoom', 'installed', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockRejectedValue(new Error('integrity check failed'))
+    await expect(applyLocalPackages([mod('mine', { package: undefined }), mod('zoom')], sync('zoom', 'builtin.zoom'))).resolves.toBeUndefined()
+    expect(running()).toEqual([])
+  })
+
+  it('the emergency switch stops imported plugins but spares local ones', async () => {
+    registry('builtin.zoom', 'active', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockImplementation(async (id) => entry(id, id === 'community.a' ? 'import' : 'local'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom'))
+    await startExternalPlugin('community.a')
+    expect(running().sort()).toEqual(['builtin.zoom', 'community.a'])
+    vi.mocked(listExternalPlugins).mockResolvedValue({
+      version: 1, disabledAll: true,
+      plugins: { 'builtin.zoom': { latest: 'd', current: 'd', state: 'active', versions: [{ dir: 'd', source: 'local', localFolder: 'zoom' } as never] } },
+    })
+    useModStore.setState({ ready: true, mods: [mod('zoom')] })
+    await setExternalKillSwitch(true)
+    expect(running()).toEqual(['builtin.zoom'])
+  })
+
+  it('startup skips a local plugin whose folder is switched off or gone', async () => {
+    registry('builtin.zoom', 'active', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('builtin.zoom', 'local'))
+    useModStore.setState({ ready: true, mods: [mod('zoom', { enabled: false })] })
+    await startActiveExternalPlugins()
+    useModStore.setState({ mods: [] })
+    await startActiveExternalPlugins()
+    expect(startPlugin).not.toHaveBeenCalled()
+    useModStore.setState({ mods: [mod('zoom')] })
+    await startActiveExternalPlugins()
+    expect(running()).toEqual(['builtin.zoom'])
+  })
+
+  it('refuses to start beside a trusted plugin that already holds the id', async () => {
+    registerPlugin({ id: 'builtin.zoom', name: 'Trusted', version: '1.0.0', activate: () => {} })
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('builtin.zoom', 'local'))
+    await expect(startExternalPlugin('builtin.zoom')).rejects.toThrow('A trusted plugin with this id is already loaded')
+    expect(running()).toEqual([])
+    unregisterPlugin('builtin.zoom')
   })
 })

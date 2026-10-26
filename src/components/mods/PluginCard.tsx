@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react'
 import styles from './PluginCard.module.css'
 
-export type PluginOrigin = 'Built in' | 'Imported' | 'Local'
+export type PluginOrigin = 'Built in' | 'Imported' | 'Local' | 'Local package'
 
 interface Props {
   name: string

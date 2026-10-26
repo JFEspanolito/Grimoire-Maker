@@ -4,6 +4,7 @@ import { useModStore } from '../../stores/modStore'
 import { MOD_KIND, type ModKind } from '../../lib/modCatalog'
 import { importModFromPath, pickModSource, type ModImportSource } from '../../lib/modImport'
 import { isTauri } from '../../hooks/useFileSystem'
+import { folderName } from '../../lib/localPackages'
 import { listExternalPlugins, summarizeExternalPlugins, type ExternalPluginSummary } from '../../lib/externalPlugins'
 import { setExternalKillSwitch, useExternalRuntime, verifyIsolation } from '../../plugins/isolated/externalHost'
 import { ExternalPluginCard } from './ExternalPluginCard'
@@ -42,7 +43,7 @@ function SafetyBanner({ summary, checking, busy, onRecheck }: { summary: string;
 
 export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial, localWins } = useModStore()
+  const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial } = useModStore()
   const [activeKind, setActiveKind] = useState<ModKind>(MOD_KIND.SNIPPETS)
   const [actionError, setActionError] = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -129,10 +130,11 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
     }
   }
 
-  const listed = mods.filter((mod) => !mod.replacedBy)
+  const listed = mods
   const visibleMods = listed.filter((mod) => mod.kind === activeKind)
-  // The emergency switch only governs imported packages; bundled ones are exempt by design.
-  const hasImported = external.some((plugin) => plugin.source !== 'bundled')
+  // Local packages are listed with the folder plugins; only imported ZIP packages get the imported card.
+  const imported = external.filter((plugin) => plugin.source === 'import')
+  const hasImported = imported.length > 0
 
   return (
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="mod-manager-title" onCancel={onClose}>
@@ -202,13 +204,12 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
                 details={<p>It is not in your Plugins folder. Install it to put a fresh copy there.</p>} />
             ))}
           </div>}
-          {activeKind === MOD_KIND.PLUGINS && external.length > 0 && <div className={styles.list} aria-label="External plugins">
-            {external.map((plugin) => <ExternalPluginCard key={plugin.id} plugin={plugin} running={running.includes(plugin.id)}
-              busy={busy} switchedOff={switchedOff} localCopyInUse={localWins.includes(plugin.id)}
-              keptFolder={mods.find((mod) => mod.replacedBy === plugin.id)?.folder} run={run} refresh={loadExternal} />)}
+          {activeKind === MOD_KIND.PLUGINS && imported.length > 0 && <div className={styles.list} aria-label="External plugins">
+            {imported.map((plugin) => <ExternalPluginCard key={plugin.id} plugin={plugin} running={running.includes(plugin.id)}
+              busy={busy} switchedOff={switchedOff} run={run} refresh={loadExternal} />)}
           </div>}
           {visibleMods.length === 0 ? (
-            activeKind === MOD_KIND.PLUGINS && (external.length > 0 || missingOfficial.length > 0) ? null : (
+            activeKind === MOD_KIND.PLUGINS && (imported.length > 0 || missingOfficial.length > 0) ? null : (
               <p className={styles.description}>
                 {activeKind === MOD_KIND.PLUGINS
                   ? 'No plugins found. Add a folder with a TSX, TS or JS plugin entry.'
@@ -217,7 +218,8 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
             )
           ) : activeKind === MOD_KIND.PLUGINS ? (
             <div className={styles.list} aria-label="Local plugins">
-              {visibleMods.map((mod) => <LocalPluginCard key={mod.id} mod={mod} busy={busy} setEnabled={setEnabled} run={run} />)}
+              {visibleMods.map((mod) => <LocalPluginCard key={mod.id} mod={mod} busy={busy} setEnabled={setEnabled} run={run}
+                record={mod.package ? external.find((plugin) => plugin.source === 'local' && plugin.localFolder?.toLowerCase() === folderName(mod.folder).toLowerCase()) : undefined} />)}
             </div>
           ) : (
             <div className={styles.list}>

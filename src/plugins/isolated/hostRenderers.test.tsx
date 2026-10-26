@@ -19,7 +19,7 @@ const PREVIEW_OPTIONS = [0.4, 0.5, 0.6, 0.75, 1].map((v) => ({ value: String(v),
 
 const entry = (permissions: string[], extra: Partial<ExternalPluginEntry> = {}): ExternalPluginEntry => ({
   id: 'builtin.test', version: '1.0.0', fingerprint: 'f', sdkVersion: 2, permissions, toolbar: [], behaviors: [], overlays: [], tools: [],
-  origin: 'bundled', source: '', ...extra,
+  origin: 'local', source: '', ...extra,
 })
 const zoomParts = {
   toolbar: [

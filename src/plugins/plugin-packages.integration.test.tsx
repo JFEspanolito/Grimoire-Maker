@@ -1,7 +1,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it } from 'vitest'
-import { MOD_EXAMPLES } from '../lib/modLibrary'
+import { LEGACY_PLUGINS, MOD_EXAMPLES } from '../lib/modLibrary'
 import type { ModEntry, ModFs } from '../lib/modCatalog'
 import { reconcilePlugins } from './plugin-loader'
 import { usePluginRegistry } from './plugin-manager'
@@ -9,7 +9,10 @@ import { PluginSlot } from './PluginSlot'
 import { PageView } from '../components/editor/PageView'
 import { useSettingsStore } from '../stores/settingsStore'
 
-const files = Object.fromEntries(Object.entries(MOD_EXAMPLES).map(([path, text]) => [`/Mods/${path}`, text]))
+// The old trusted Zoom and Pixel Ruler sources are kept as the legacy baseline; this test still loads them as trusted plugins.
+const legacy = LEGACY_PLUGINS.flatMap((plugin) => Object.entries(plugin.files).map(([file, text]) => [`/Mods/Plugins/${plugin.folder}/${file}`, text] as const))
+const shipped = Object.entries(MOD_EXAMPLES).filter(([path]) => !/^Plugins\/(zoom|pixel-ruler)\/(manifest\.json|dist\/|index\.md)/.test(path))
+const files = { ...Object.fromEntries(shipped.map(([path, text]) => [`/Mods/${path}`, text])), ...Object.fromEntries(legacy) }
 const io: ModFs = {
   exists: async path => path in files, mkdir: async () => {}, writeTextFile: async () => {},
   readTextFile: async path => files[path], stat: async path => ({ size: files[path].length }),

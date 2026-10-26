@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isPristineCopy, resolveMigrations } from './migratedPlugins'
-import type { ModEntry, ModFs } from './modCatalog'
+import { isPristineCopy, migrateLegacyFolders, type MigrationFs } from './migratedPlugins'
+import type { ModFs } from './modCatalog'
 
 /** A tiny in-memory file system: directories are implied by file paths. */
 function memoryFs(files: Record<string, string>, links: string[] = []): ModFs {
@@ -61,25 +61,100 @@ describe('isPristineCopy', () => {
   })
 })
 
-describe('resolveMigrations', () => {
-  const mod = (overrides: Partial<ModEntry> = {}): ModEntry => ({
-    id: 'Plugins/zoom', kind: 'Plugins', label: 'zoom', folder, enabled: true, errors: [], ...overrides,
-  })
-  const official = [{ folder: 'zoom', label: 'Zoom', files: baseline }]
+/** A mutable in-memory file system with rename; directories are implied by paths plus explicit mkdir. */
+function writableFs(initial: Record<string, string>, options: { failRename?: boolean; failWrite?: (path: string) => boolean } = {}) {
+  const files = new Map(Object.entries(initial))
+  const dirs = new Set<string>()
+  const view = (dir: string) => {
+    const prefix = `${dir}/`
+    const children = new Map<string, boolean>()
+    for (const path of [...files.keys(), ...dirs]) {
+      if (!path.startsWith(prefix)) continue
+      const [first, ...rest] = path.slice(prefix.length).split('/')
+      children.set(first, rest.length > 0 || dirs.has(path))
+    }
+    return [...children].map(([name, isDirectory]) => ({ name, isDirectory, isSymlink: false }))
+  }
+  const write = async (path: string, text: string) => {
+    if (options.failWrite?.(path)) throw new Error('disk full')
+    files.set(path, text)
+  }
+  const io: MigrationFs = {
+    exists: async (path) => files.has(path) || dirs.has(path) || view(path).length > 0,
+    mkdir: async (path) => { dirs.add(path) },
+    readDir: async (dir) => view(dir),
+    readTextFile: async (path) => {
+      if (!files.has(path)) throw new Error('missing')
+      return files.get(path)!
+    },
+    writeTextFile: async (path, text) => { if (files.has(path)) throw new Error('exists'); await write(path, text) },
+    overwriteTextFile: write,
+    stat: async () => ({ size: 0 }),
+    rename: async (from, to) => {
+      if (options.failRename) throw new Error('locked')
+      files.set(to, files.get(from)!)
+      files.delete(from)
+    },
+  }
+  return { io, files }
+}
 
-  it('replaces an untouched enabled trusted copy and keeps its files', async () => {
-    const outcome = await resolveMigrations(memoryFs(shipped()), [mod()], official)
-    expect(outcome).toEqual({ replaced: ['Plugins/zoom'], localWins: [] })
+describe('migrateLegacyFolders', () => {
+  const pluginsDir = '/mods/Plugins'
+  const legacy = [{ folder: 'zoom', label: 'Zoom', files: baseline }]
+  const packageFiles = { 'manifest.json': '{"id":"builtin.zoom"}', 'dist/index.js': '', 'index.md': '# New docs' }
+  const packages = [{ folder: 'zoom', label: 'Zoom', files: packageFiles }]
+  const run = (io: MigrationFs) => migrateLegacyFolders(io, pluginsDir, legacy, packages)
+
+  it('converts an untouched copy: package files written, old code moved to legacy/, documentation replaced', async () => {
+    const { io, files } = writableFs(shipped())
+    expect(await run(io)).toEqual({ converted: ['zoom'], errors: [] })
+    expect(files.get(`${folder}/manifest.json`)).toBe(packageFiles['manifest.json'])
+    expect(files.get(`${folder}/dist/index.js`)).toBe('')
+    expect(files.get(`${folder}/index.md`)).toBe('# New docs')
+    expect(files.get(`${folder}/legacy/zoom.tsx`)).toBe(baseline['zoom.tsx'])
+    expect(files.get(`${folder}/legacy/script.ts`)).toBe(baseline['script.ts'])
+    expect(files.has(`${folder}/zoom.tsx`)).toBe(false)
+    expect(files.has(`${folder}/script.ts`)).toBe(false)
   })
 
-  it('lets an edited local copy win so the bundled version never overrides it', async () => {
-    const outcome = await resolveMigrations(memoryFs(shipped({ 'zoom.tsx': '// edit' })), [mod()], official)
-    expect(outcome).toEqual({ replaced: [], localWins: ['builtin.zoom'] })
+  it('is a no-op the second time', async () => {
+    const { io, files } = writableFs(shipped())
+    await run(io)
+    const after = new Map(files)
+    expect(await run(io)).toEqual({ converted: [], errors: [] })
+    expect(files).toEqual(after)
   })
 
-  it('does nothing when the trusted copy is absent or disabled', async () => {
-    expect(await resolveMigrations(memoryFs({}), [], official)).toEqual({ replaced: [], localWins: [] })
-    expect(await resolveMigrations(memoryFs(shipped({ 'zoom.tsx': '// edit' })), [mod({ enabled: false })], official))
-      .toEqual({ replaced: [], localWins: [] })
+  it('leaves an edited, extended or already packaged copy and a missing folder exactly as they are', async () => {
+    for (const initial of [
+      shipped({ 'zoom.tsx': '// my change' }),
+      { ...shipped(), [`${folder}/notes.txt`]: 'mine' },
+      { ...shipped(), [`${folder}/manifest.json`]: '{}' },
+      {},
+    ]) {
+      const { io, files } = writableFs(initial)
+      const before = new Map(files)
+      expect(await run(io)).toEqual({ converted: [], errors: [] })
+      expect(files).toEqual(before)
+    }
+  })
+
+  it('never moves anything when the package files cannot be written, so the trusted copy keeps working', async () => {
+    const { io, files } = writableFs(shipped(), { failWrite: (path) => path.endsWith('manifest.json') })
+    const result = await run(io)
+    expect(result.converted).toEqual([])
+    expect(result.errors).toEqual([expect.stringContaining('Plugins/zoom: disk full')])
+    expect(files.get(`${folder}/zoom.tsx`)).toBe(baseline['zoom.tsx'])
+    expect(files.has(`${folder}/manifest.json`)).toBe(false)
+  })
+
+  it('reports a failed move but leaves a usable package', async () => {
+    const { io, files } = writableFs(shipped(), { failRename: true })
+    const result = await run(io)
+    expect(result.converted).toEqual(['zoom'])
+    expect(result.errors).toEqual([expect.stringContaining('moving the old files to legacy/ failed: locked')])
+    expect(files.has(`${folder}/manifest.json`)).toBe(true)
+    expect(files.get(`${folder}/zoom.tsx`)).toBe(baseline['zoom.tsx'])
   })
 })

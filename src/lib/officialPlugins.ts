@@ -11,12 +11,12 @@ export interface OfficialPlugin {
   files: Record<string, string>
 }
 
-/** Groups the bundled `Plugins/<folder>/...` examples by plugin folder. */
-export function listOfficialPlugins(examples: Record<string, string>): OfficialPlugin[] {
+/** Groups the bundled `<kind>/<folder>/...` examples by plugin folder (`Plugins` by default, `Legacy` for old sources). */
+export function listOfficialPlugins(examples: Record<string, string>, group = 'Plugins'): OfficialPlugin[] {
   const folders = new Map<string, Record<string, string>>()
   for (const [path, contents] of Object.entries(examples)) {
     const [kind, folder, ...rest] = path.split('/')
-    if (kind !== 'Plugins' || !folder || !rest.length) continue
+    if (kind !== group || !folder || !rest.length) continue
     folders.set(folder, { ...folders.get(folder), [rest.join('/')]: contents })
   }
   return [...folders].sort(([a], [b]) => a.localeCompare(b)).map(([folder, files]) => {

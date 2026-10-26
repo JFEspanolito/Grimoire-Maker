@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { exists, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
-import { MOD_EXAMPLES, readDisabledMods, writeDisabledMods } from './modLibrary'
+import { LEGACY_PLUGINS, MOD_EXAMPLES, OFFICIAL_PLUGINS, readDisabledMods, writeDisabledMods } from './modLibrary'
 
 vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn(), mkdir: vi.fn(), readDir: vi.fn(), readTextFile: vi.fn(), rename: vi.fn(), stat: vi.fn(), writeTextFile: vi.fn() }))
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(stat).mockResolvedValue({ size: 100 } as Awaited<ReturnType<typeof stat>>) })
@@ -12,8 +12,20 @@ it('ships declarative content plus complete executable Zoom and Ruler packages',
   }
   expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Snippets/'))).toHaveLength(5)
   expect(Object.keys(MOD_EXAMPLES).filter(path => !path.startsWith('Plugins/')).every(path => path.endsWith('.md'))).toBe(true)
-  expect(MOD_EXAMPLES['Plugins/zoom/zoom.tsx']).toContain('registerToolbar')
-  expect(MOD_EXAMPLES['Plugins/pixel-ruler/RulerOverlay.tsx']).toContain('GuideLine')
+  for (const folder of ['zoom', 'pixel-ruler']) {
+    expect(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`Plugins/${folder}/`)).sort())
+      .toEqual([`Plugins/${folder}/dist/index.js`, `Plugins/${folder}/index.md`, `Plugins/${folder}/manifest.json`])
+    expect(JSON.parse(MOD_EXAMPLES[`Plugins/${folder}/manifest.json`]).id).toBe(`builtin.${folder}`)
+    expect(MOD_EXAMPLES[`Plugins/${folder}/index.md`]).toContain('pnpm pack:plugin')
+  }
+  expect(OFFICIAL_PLUGINS.map(plugin => plugin.folder)).toEqual(['bookmarks', 'pixel-ruler', 'zoom'])
+  expect(OFFICIAL_PLUGINS.find(plugin => plugin.folder === 'zoom')).toMatchObject({ label: 'Zoom' })
+})
+it('keeps the old trusted sources apart as the legacy baseline, never as seedable examples', () => {
+  expect(Object.keys(MOD_EXAMPLES).some(path => path.startsWith('Legacy/'))).toBe(false)
+  expect(LEGACY_PLUGINS.map(plugin => plugin.folder)).toEqual(['pixel-ruler', 'zoom'])
+  expect(LEGACY_PLUGINS.find(plugin => plugin.folder === 'zoom')?.files['zoom.tsx']).toContain('registerToolbar')
+  expect(LEGACY_PLUGINS.find(plugin => plugin.folder === 'pixel-ruler')?.files['RulerOverlay.tsx']).toContain('GuideLine')
 })
 it('does not silently overwrite malformed preferences', async () => {
   vi.mocked(exists).mockResolvedValue(true)

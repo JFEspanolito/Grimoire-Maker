@@ -11,8 +11,8 @@
 *_bkp.webp
 node_modules
 dist
-# First-party plugin packages ship their entry file as a source file.
-!src/assets/mods/Packages/*/dist
+# Example plugin packages ship their entry file as a source file.
+!src/assets/mods/Plugins/*/dist
 src-tauri/target
 src-tauri/gen
 *.local

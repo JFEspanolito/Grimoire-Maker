@@ -53,7 +53,7 @@ and `editor:guides:write`. Its toolbar controls are drawn by the application fro
 the data in `manifest.json`. Before the first plugin starts, the application
 runs an isolation self-test; if any check fails, external plugins stay off and
 the card explains why. A plugin that hangs, errors repeatedly or floods requests
-is stopped automatically and shows as stopped. **Disable all external plugins**
+is stopped automatically and shows as stopped. **Turn off all imported plugins**
 stops every one at once.
 
 Plugin code is a single classic script (`dist/index.js`) that uses the `grimoire`
@@ -64,19 +64,41 @@ Every call returns a promise and is rejected without the matching permission.
 Limits to know: the browser cannot cap a plugin's memory, so a plugin that
 allocates without bound can slow or crash the application window; remove it.
 
-### Zoom and Pixel Ruler
+### Zoom and Pixel Ruler, and package folders
 
-Zoom and Pixel Ruler now ship inside the application as bundled isolated
-packages (`builtin.zoom`, `builtin.pixel-ruler`). They are pre-approved, drawn by
-the application from their manifests, listed as "Bundled with the app", cannot
-be removed (only deactivated) and are not stopped by "Disable all external
-plugins". New installations no longer copy their old source folders. If you
-already have `Plugins/zoom` or `Plugins/pixel-ruler`:
-- an **untouched** copy is left on disk but not loaded (the bundled plugin runs);
-- a copy you **edited or extended** keeps running and the bundled plugin stays
-  off, so your changes are never overridden. Delete the folder or restore the
-  original files to switch to the bundled version.
-The two never run at the same time.
+Zoom and Pixel Ruler are example plugin packages. They are copied into
+`Plugins/zoom` and `Plugins/pixel-ruler` on a new installation, and **Install** on
+the Plugins tab puts a fresh copy back if you delete one. Each folder holds
+`manifest.json`, an (empty) `dist/index.js` and an `index.md` that explains the
+format. Edit them, press **Refresh**, and the change takes effect; the
+application never overwrites your edits.
+
+Any folder in `Plugins` with a regular `manifest.json` is a **package folder**:
+
+- it runs isolated, exactly like an imported package, and is checked with the
+  same rules and limits (only `manifest.json` and `dist/**` are used; links,
+  reserved names, duplicate names and oversized files reject that folder only);
+  other files, such as `index.md`, notes or a `legacy/` folder, are ignored;
+- it is approved for exactly the permissions in its manifest, because you put
+  the folder there, and it shows as a local package;
+- turn it on or off with its switch in the Mod Manager, like any other mod; a
+  running plugin whose files changed is restarted on Refresh;
+- it may use a `builtin.*` id; an imported package cannot, and an imported
+  plugin with the same id is never overridden (the folder reports an error);
+- "Turn off all imported plugins" does not affect it.
+
+A folder with TSX, TS or JS files and no `manifest.json` is a **trusted plugin**
+folder (for example Bookmarks): it runs with the application's permissions and
+is never treated as a package.
+
+If you already have `Plugins/zoom` or `Plugins/pixel-ruler` from an older version:
+- an **untouched** copy (documentation differences are ignored) is converted in
+  place: its old code and style files are moved, not deleted, into
+  `legacy/` inside the folder, and the package files and a new `index.md` are
+  written;
+- a copy you **edited or extended**, or a folder that already has a
+  `manifest.json`, is left exactly as it is and keeps running as before.
+The two implementations never run at the same time.
 
 ### Writing a plugin package
 
@@ -101,7 +123,7 @@ Then run `pnpm pack:plugin <folder> [--out <folder>]` to produce
 }
 ```
 
-`id` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and `builtin.*` is reserved. Contributions
+`id` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and `builtin.*` is reserved for package folders in `Plugins`. Contributions
 are data: the application draws them and shows every label as plain text.
 - `toolbar` items: `button` or `select` with a `command` (delivered to
   `grimoire.onCommand`), or a control the application binds itself (sdkVersion 2):
@@ -115,7 +137,7 @@ are data: the application draws them and shows every label as plain text.
 - `tools`: `{ "type": "guidesMenu", "label": "Guides" }` (needs the two guides permissions).
 
 A plugin made only of such contributions needs an empty `dist/index.js`, as the
-Zoom and Pixel Ruler packages that ship with the application do.
+Zoom and Pixel Ruler example packages do.
 
 Importing a plugin **folder** is different: it is copied as trusted local code
 and runs with the application's permissions, without a sandbox.

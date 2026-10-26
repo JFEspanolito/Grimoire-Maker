@@ -12,7 +12,10 @@ export interface ExternalPluginVersion {
   sdkVersion: number
   consentAt: number | null
   installedAt: number
+  /** `import` for a package the user added, `local` for a folder in the Plugins directory. */
   source: string
+  /** The Plugins folder name, for local versions. */
+  localFolder?: string
   signature: string | null
 }
 export interface ExternalPluginRecord {
@@ -41,8 +44,10 @@ export interface ExternalPluginSummary {
   permissions: string[]
   fingerprint: string
   sdkVersion: number
-  /** `import` for a package the user added, `bundled` for one shipped inside the application. */
+  /** `import` for a package the user added, `local` for a folder in the Plugins directory. */
   source: string
+  /** The Plugins folder name, for local records. */
+  localFolder?: string
   state: string
   /** Newer bytes than the approved version exist, or nothing has been approved yet. */
   approved: boolean
@@ -86,7 +91,7 @@ export interface ExternalPluginEntry {
   behaviors: BehaviorItem[]
   overlays: OverlayItem[]
   tools: ToolItem[]
-  origin: 'import' | 'bundled'
+  origin: 'import' | 'local'
   source: string
 }
 
@@ -118,6 +123,7 @@ export function summarizeExternalPlugins(registry: ExternalPluginRegistry): Exte
       fingerprint: latest.fingerprint,
       sdkVersion: latest.sdkVersion,
       source: latest.source,
+      ...(latest.localFolder ? { localFolder: latest.localFolder } : {}),
       state: record.state,
       approved: record.current === record.latest,
     }]

@@ -29,7 +29,7 @@ vi.mock('@tauri-apps/plugin-fs', async () => {
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: async () => scope.picked, save: async () => scope.saved }))
 import { createTemplateZip, readTemplateZip } from './templatePackage'
 import { importTemplateZip, exportTemplateZip, applyTemplateFiles } from './templateActions'
-import { prepareModLibrary, MOD_EXAMPLES } from './modLibrary'
+import { prepareModLibrary, MOD_EXAMPLES, LEGACY_PLUGINS } from './modLibrary'
 import { useModStore } from '../stores/modStore'
 import { useTemplateStore } from '../stores/templateStore'
 import { loadUserTemplates } from './templates'
@@ -190,31 +190,68 @@ it('upgrades legacy template examples without replacing edits and applies every 
   }
 })
 
-const copyShipped = async (folder: string) => {
-  for (const [path, text] of Object.entries(MOD_EXAMPLES).filter(([key]) => key.startsWith(`Plugins/${folder}/`))) await put(`Mods/${path}`, text)
+const legacyFiles = (folder: string) => LEGACY_PLUGINS.find(plugin => plugin.folder === folder)!.files
+/** Recreates the folder an older release seeded, as trusted TSX sources. */
+const copyLegacy = async (folder: string) => {
+  for (const [relative, text] of Object.entries(legacyFiles(folder))) await put(`Mods/Plugins/${folder}/${relative}`, text)
 }
+const exists = (path: string) => fs.access(path).then(() => true, () => false)
 
-it('does not seed the plugins that moved to bundled isolated packages, but still seeds the others', async () => {
+it('seeds Zoom and Pixel Ruler as example packages and never the old trusted sources', async () => {
   const plugins = `${scope.root}/Mods/Plugins`
-  expect(await fs.access(`${plugins}/zoom`).then(() => true, () => false)).toBe(false)
-  expect(await fs.access(`${plugins}/pixel-ruler`).then(() => true, () => false)).toBe(false)
-  expect(await fs.access(`${plugins}/bookmarks/bookmarks.tsx`).then(() => true, () => false)).toBe(true)
-  expect(useModStore.getState().missingOfficial.map(plugin => plugin.folder)).not.toContain('zoom')
+  expect(await fs.readFile(`${plugins}/zoom/manifest.json`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/zoom/manifest.json'])
+  expect(await exists(`${plugins}/pixel-ruler/dist/index.js`)).toBe(true)
+  expect(await fs.readFile(`${plugins}/pixel-ruler/index.md`, 'utf8')).toContain('pnpm pack:plugin')
+  expect(await exists(`${plugins}/zoom/zoom.tsx`)).toBe(false)
+  expect(await exists(`${scope.root}/Mods/Legacy`)).toBe(false)
+  expect(Object.keys(MOD_EXAMPLES).some(path => path.startsWith('Legacy/'))).toBe(false)
+  const mods = useModStore.getState().mods
+  expect(mods.find(mod => mod.id === 'Plugins/zoom')?.package).toBe(true)
+  expect(mods.find(mod => mod.id === 'Plugins/bookmarks')?.package).toBeUndefined()
+  expect(useModStore.getState().missingOfficial.map(plugin => plugin.folder)).toEqual([])
+  expect(useModStore.getState().errors.join()).not.toContain('Plugins/zoom')
 })
 
-it('replaces an untouched trusted copy of a migrated plugin and lets an edited copy win, never both', async () => {
-  await copyShipped('zoom')
+it('restores a deleted example package without overwriting the user edits in the other one', async () => {
+  const plugins = `${scope.root}/Mods/Plugins`
+  await fs.rm(`${plugins}/zoom`, { recursive: true })
+  await put('Mods/Plugins/pixel-ruler/manifest.json', '{ "edited": true }')
   await useModStore.getState().reload()
-  const replaced = useModStore.getState().mods.find(mod => mod.id === 'Plugins/zoom')!
-  expect(replaced).toMatchObject({ enabled: false, replacedBy: 'builtin.zoom' })
-  expect(useModStore.getState().localWins).toEqual([])
-  expect(await fs.readFile(`${scope.root}/Mods/Plugins/zoom/zoom.tsx`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/zoom/zoom.tsx'])
+  expect(useModStore.getState().missingOfficial.map(plugin => plugin.folder)).toEqual(['zoom'])
+  await useModStore.getState().installOfficial('zoom')
+  expect(await fs.readFile(`${plugins}/zoom/dist/index.js`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/zoom/dist/index.js'])
+  expect(await fs.readFile(`${plugins}/pixel-ruler/manifest.json`, 'utf8')).toBe('{ "edited": true }')
+})
 
-  await put('Mods/Plugins/zoom/zoom.tsx', `${MOD_EXAMPLES['Plugins/zoom/zoom.tsx']}\n// my tweak`)
+it('converts an untouched old copy in place, moving its code to legacy/, and does nothing the second time', async () => {
+  const folder = `${scope.root}/Mods/Plugins/zoom`
+  await fs.rm(folder, { recursive: true })
+  await copyLegacy('zoom')
+  await put('Mods/Plugins/zoom/index.md', '# Old documentation')
   await useModStore.getState().reload()
-  const edited = useModStore.getState().mods.find(mod => mod.id === 'Plugins/zoom')!
-  expect(edited.replacedBy).toBeUndefined()
-  expect(edited.enabled).toBe(true)
-  expect(useModStore.getState().localWins).toEqual(['builtin.zoom'])
-  expect(await fs.readFile(`${scope.root}/Mods/Plugins/zoom/zoom.tsx`, 'utf8')).toContain('// my tweak')
+  expect(await fs.readFile(`${folder}/manifest.json`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/zoom/manifest.json'])
+  expect(await fs.readFile(`${folder}/index.md`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/zoom/index.md'])
+  for (const file of ['zoom.tsx', 'script.ts', 'Zoom.module.css']) {
+    expect(await exists(`${folder}/${file}`)).toBe(false)
+    expect(await fs.readFile(`${folder}/legacy/${file}`, 'utf8')).toBe(legacyFiles('zoom')[file])
+  }
+  const mod = useModStore.getState().mods.find(item => item.id === 'Plugins/zoom')!
+  expect(mod.package).toBe(true)
+  expect(useModStore.getState().errors).toEqual([])
+  const snapshot = (await fs.readdir(folder, { recursive: true })).sort()
+  await useModStore.getState().reload()
+  expect((await fs.readdir(folder, { recursive: true })).sort()).toEqual(snapshot)
+})
+
+it('leaves an edited old copy exactly as it is and keeps it running as a trusted plugin', async () => {
+  const folder = `${scope.root}/Mods/Plugins/zoom`
+  await fs.rm(folder, { recursive: true })
+  await copyLegacy('zoom')
+  await put('Mods/Plugins/zoom/zoom.tsx', `${legacyFiles('zoom')['zoom.tsx']}
+// my tweak`)
+  await useModStore.getState().reload()
+  expect(await exists(`${folder}/manifest.json`)).toBe(false)
+  expect(await exists(`${folder}/legacy`)).toBe(false)
+  expect(await fs.readFile(`${folder}/zoom.tsx`, 'utf8')).toContain('// my tweak')
+  expect(useModStore.getState().mods.find(mod => mod.id === 'Plugins/zoom')?.package).toBeUndefined()
 })

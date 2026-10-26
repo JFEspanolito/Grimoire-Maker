@@ -14,7 +14,7 @@ import { EditorToolbar } from '../editor/EditorToolbar'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import zoomPlugin from '../../assets/mods/Legacy/zoom/zoom'
 import { registerPlugin } from '../../plugins/plugin-manager'
 
 const openWorkspace = vi.hoisted(() => vi.fn())
