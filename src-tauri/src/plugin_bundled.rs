@@ -70,7 +70,7 @@ fn ensure_one(root: &Path, reg: &mut registry::Registry, package: &Bundled) -> R
         // Safe: `target` is root/<id>/<dir> where id passed `validate_id_for` and dir is the
         // embedded version plus the fingerprint of embedded bytes; nothing comes from user input.
         // The directory is refused unless it is a plain directory, never a link.
-        if !registry::plain_dir(&target) {
+        if !registry::plain_dir(&plugin_dir) || !registry::plain_dir(&target) {
             let _ = fs::remove_dir_all(&staging);
             return Err("A bundled plugin folder is not a plain directory".into());
         }

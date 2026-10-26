@@ -20,7 +20,11 @@ function statusText(plugin: ExternalPluginSummary, running: boolean, switchedOff
   const bundled = plugin.source === 'bundled'
   const mode = bundled ? 'Bundled with the app · Isolated plugin' : 'Unverified · Isolated plugin'
   if (bundled && localCopyInUse) return `${mode} · Off: your edited local copy is in use instead`
-  if (plugin.state === 'altered') return 'Files changed after installation. Remove this plugin, then import the package again.'
+  if (plugin.state === 'altered') {
+    return bundled
+      ? 'Its files changed on disk. The application restores them the next time it starts.'
+      : 'Files changed after installation. Remove this plugin, then import the package again.'
+  }
   if (switchedOff && !bundled) return `${mode} · All external plugins are switched off`
   if (!plugin.approved) return `${mode} · Needs your approval`
   if (plugin.state === 'active') return `${mode} · ${running ? 'Running' : 'Active, not running'}`

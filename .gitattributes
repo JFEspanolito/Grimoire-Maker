@@ -1,0 +1,2 @@
+# First-party plugin packages are embedded in the binary; keep their bytes identical on every checkout.
+src/assets/mods/Packages/** text eol=lf

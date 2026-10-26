@@ -79,7 +79,7 @@ describe('bound zoom controls', () => {
     const { registry } = begin(entry(ZOOM, zoomParts))
     const Toolbar = find(registry.toolbar, '.toolbar').component
     await render(<Toolbar />)
-    const select = host.querySelector<HTMLSelectElement>('[aria-label="Zoom"]')!
+    const select = host.querySelector<HTMLSelectElement>('[aria-label="Editor zoom"]')!
     expect(values(select)).toEqual(EDITOR_OPTIONS.map((option) => option.value))
     await change(select, '1.5')
     expect(useSettingsStore.getState().zoom).toBe(1.5)
@@ -94,7 +94,7 @@ describe('bound zoom controls', () => {
     const { registry } = begin(entry(ZOOM, zoomParts))
     const Toolbar = find(registry.toolbar, '.toolbar').component
     await render(<Toolbar />)
-    const select = host.querySelector<HTMLSelectElement>('[aria-label="Zoom"]')!
+    const select = host.querySelector<HTMLSelectElement>('[aria-label="Editor zoom"]')!
     expect(select.disabled).toBe(false)
     await act(async () => useTabStore.getState().open('/book/image.png'))
     expect(select.disabled).toBe(true)
@@ -107,7 +107,7 @@ describe('bound zoom controls', () => {
     const Preview = find(registry.previewToolbar, 'zoom-preview').component
     const setZoom = vi.fn()
     await render(<Preview surface={{ kind: 'preview', zoom: 0.9, setZoom }} />)
-    const select = host.querySelector<HTMLSelectElement>('[aria-label="Zoom"]')!
+    const select = host.querySelector<HTMLSelectElement>('[aria-label="Preview zoom"]')!
     expect(values(select)).toEqual(['0.4', '0.5', '0.6', '0.75', '0.9', '1'])
     expect(select.value).toBe('0.9')
     await change(select, '0.5')

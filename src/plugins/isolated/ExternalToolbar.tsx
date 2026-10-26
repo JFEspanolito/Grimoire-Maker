@@ -27,7 +27,7 @@ function ZoomSelect({ item, value, onSelect, disabled }: {
   return (
     <label className={styles.control}>
       {item.label}
-      <select aria-label={item.label} value={value} disabled={disabled} onChange={(event) => onSelect(Number(event.target.value))}>
+      <select aria-label={item.slot === 'preview' ? `Preview ${item.label.toLowerCase()}` : `Editor ${item.label.toLowerCase()}`} value={value} disabled={disabled} onChange={(event) => onSelect(Number(event.target.value))}>
         {withCurrent(item.options, value).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </label>

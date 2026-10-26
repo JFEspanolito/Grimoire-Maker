@@ -51,7 +51,11 @@ export const useModStore = create<ModState>((set, get) => {
     const reserved = templateMods.map((mod) => mod.folder.split('/').at(-1)!)
     const legacy = await loadUserTemplates(taken, { reservedIds: reserved })
     // An untouched trusted copy gives way to the bundled isolated plugin; an edited one wins. Never both.
-    const migration = await resolveMigrations(modFs, catalog.mods, BASELINE_PLUGINS).catch(() => ({ replaced: [] as string[], localWins: [] as string[] }))
+    const migration = await resolveMigrations(modFs, catalog.mods, BASELINE_PLUGINS).catch(() => ({
+      replaced: [] as string[],
+      // Fail closed: if the comparison cannot run, keep the local copy and leave the bundled plugin off.
+      localWins: MIGRATED_PLUGINS.filter((plugin) => catalog.mods.some((mod) => mod.id === `Plugins/${plugin.folder}` && mod.enabled)).map((plugin) => plugin.id),
+    }))
     const replacedBy = (id: string) => MIGRATED_PLUGINS.find((plugin) => `Plugins/${plugin.folder}` === id)?.id
     const mods = catalog.mods.map((mod) => migration.replaced.includes(mod.id) ? { ...mod, enabled: false, replacedBy: replacedBy(mod.id) } : mod)
     const pluginErrors = await reconcilePlugins(modFs, mods)
