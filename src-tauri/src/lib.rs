@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod config_root;
+mod plugin_install;
 mod plugin_package;
 mod safe_copy;
 mod ipc;
