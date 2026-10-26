@@ -20,7 +20,8 @@ export const WORKER_BOOTSTRAP = `
   var commandHandlers = [];
   var MAX_PENDING = 16;
 
-  function send(message) { port.postMessage(message); }
+  // Only short JSON text crosses to the host; it refuses anything else.
+  function send(message) { port.postMessage(JSON.stringify(message)); }
 
   function request(op, args) {
     return new Promise(function (resolve, reject) {

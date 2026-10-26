@@ -1,5 +1,5 @@
 import {
-  LIMITS, PROTOCOL_VERSION, messageSize, parseWorkerMessage,
+  LIMITS, PROTOCOL_VERSION, parseWorkerMessage,
   type Axis, type ErrorCode, type HostMessage, type ParsedRequest, type Topic,
 } from './protocol'
 import { permissionFor, permissionForTopic, type Permission } from './permissions'
@@ -124,17 +124,25 @@ export function createBridge(options: BridgeOptions): Bridge {
     })
   }
 
+  /** A message that is not a bounded JSON string is not worth reading: stop the plugin now. */
+  const fatal = (detail: string) => {
+    options.hooks.audit('protocol_violation', detail)
+    options.hooks.fault(detail, true)
+    close()
+  }
+
   const receive = (data: unknown) => {
     if (closed) return
-    const parsed = parseWorkerMessage(data)
+    // Structured clones of large objects are paid on the host thread before any check can run, so
+    // the channel carries only short JSON text: one cheap copy, then a bounded parse.
+    if (typeof data !== 'string') return fatal('non-text message')
+    if (data.length > LIMITS.messageBytes) return fatal('message larger than the limit')
+    let decoded: unknown
+    try { decoded = JSON.parse(data) } catch { return fatal('message is not valid JSON') }
+    const parsed = parseWorkerMessage(decoded)
     if (!parsed.ok) {
       violation(parsed.message)
       reject(parsed.id, parsed.code, parsed.message)
-      return
-    }
-    if (messageSize(data) > LIMITS.messageBytes) {
-      violation('message larger than the limit')
-      reject(parsed.message.kind === 'request' ? parsed.message.request.id : null, 'too_large', 'Message is too large')
       return
     }
     const message = parsed.message

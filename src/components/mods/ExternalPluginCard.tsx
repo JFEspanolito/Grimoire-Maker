@@ -28,6 +28,8 @@ export function ExternalPluginCard({ plugin, running, busy, switchedOff, run, re
   const [reviewing, setReviewing] = useState(false)
 
   const approveAndActivate = () => run(async () => {
+    // Approving an update stops the version that is still running, so the new one can start.
+    if (running) await stopExternalPluginNow(plugin.id)
     await grantPluginConsent(plugin)
     setReviewing(false)
     await refresh()
@@ -58,6 +60,10 @@ export function ExternalPluginCard({ plugin, running, busy, switchedOff, run, re
         <button type="button" disabled={busy || switchedOff} aria-label={`${plugin.state === 'active' ? 'Deactivate' : 'Activate'} external plugin ${plugin.name}`} onClick={() => void toggle()}>
           {plugin.state === 'active' ? 'Deactivate' : 'Activate'}
         </button>
+      )}
+      {!altered && !plugin.approved && running && (
+        <button type="button" disabled={busy} aria-label={`Deactivate external plugin ${plugin.name}`}
+          onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id); await refresh() })}>Deactivate</button>
       )}
       <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}
         onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id).catch(() => undefined); await removeExternalPlugin(plugin.id); await refresh() })}>Remove</button>

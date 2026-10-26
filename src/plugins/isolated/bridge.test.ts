@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { createBridge, type HostCapabilities } from './bridge'
+import { createBridge, type Bridge, type HostCapabilities } from './bridge'
 import { PERMISSIONS, type Permission } from './permissions'
 import { LIMITS, parseWorkerMessage, type HostMessage } from './protocol'
 
 const ALL = Object.keys(PERMISSIONS) as Permission[]
+/** The plugin side sends JSON text only; this mirrors the bootstrap. */
+const receive = (bridge: Bridge, data: unknown) => bridge.receive(typeof data === 'string' ? data : JSON.stringify(data))
 
 function setup(granted: Permission[] = ALL, clock?: () => number) {
   let zoom = 1
@@ -83,8 +85,8 @@ describe('protocol parsing', () => {
 describe('bridge', () => {
   it('answers a granted request and applies it through the capability', async () => {
     const { bridge, sent, settle, request, capabilities } = setup()
-    bridge.receive(request(1, 'zoom.set', { value: 2 }))
-    bridge.receive(request(2, 'geometry.get'))
+    receive(bridge, request(1, 'zoom.set', { value: 2 }))
+    receive(bridge, request(2, 'geometry.get'))
     await settle()
     expect(capabilities.setZoom).toHaveBeenCalledWith(2)
     expect(sent).toEqual([
@@ -95,9 +97,9 @@ describe('bridge', () => {
 
   it('rejects an operation whose permission was not granted, audits it and never touches the editor', async () => {
     const { bridge, sent, settle, request, capabilities, hooks } = setup(['editor:zoom:read'])
-    bridge.receive(request(1, 'zoom.set', { value: 2 }))
-    bridge.receive(request(2, 'guides.add', { axis: 'row', positionMm: 5 }))
-    bridge.receive(request(3, 'zoom.get'))
+    receive(bridge, request(1, 'zoom.set', { value: 2 }))
+    receive(bridge, request(2, 'guides.add', { axis: 'row', positionMm: 5 }))
+    receive(bridge, request(3, 'zoom.get'))
     await settle()
     expect(capabilities.setZoom).not.toHaveBeenCalled()
     expect(capabilities.addGuide).not.toHaveBeenCalled()
@@ -107,20 +109,20 @@ describe('bridge', () => {
 
   it('treats every guide operation as needing its own permission', async () => {
     const { bridge, sent, settle, request } = setup(['editor:guides:read'])
-    bridge.receive(request(1, 'guides.list'))
-    bridge.receive(request(2, 'guides.remove', { guideId: 'g1' }))
+    receive(bridge, request(1, 'guides.list'))
+    receive(bridge, request(2, 'guides.remove', { guideId: 'g1' }))
     await settle()
     expect(sent.map(message => message.kind === 'res' && message.ok)).toEqual([true, false])
   })
 
   it('drops work that was received before close() and never applies it', async () => {
     const { bridge, sent, settle, request, capabilities } = setup()
-    bridge.receive(request(1, 'zoom.set', { value: 2 }))
+    receive(bridge, request(1, 'zoom.set', { value: 2 }))
     bridge.close()
     await settle()
     expect(capabilities.setZoom).not.toHaveBeenCalled()
     expect(sent).toEqual([])
-    bridge.receive(request(2, 'zoom.set', { value: 2 }))
+    receive(bridge, request(2, 'zoom.set', { value: 2 }))
     bridge.emit('zoom')
     bridge.command('x', null)
     await settle()
@@ -130,23 +132,40 @@ describe('bridge', () => {
 
   it('answers malformed requests with an error when the id is usable and counts them', async () => {
     const { bridge, sent, request } = setup()
-    bridge.receive(request(5, 'zoom.set', { value: 'big' }))
-    bridge.receive({ junk: true })
+    receive(bridge, request(5, 'zoom.set', { value: 'big' }))
+    receive(bridge, { junk: true })
     expect(sent).toEqual([{ v: 1, kind: 'res', id: 5, ok: false, error: { code: 'invalid_arguments', message: 'Invalid arguments for zoom.set' } }])
   })
 
-  it('refuses a message over the size limit before acting on it', () => {
-    const { bridge, sent, hooks } = setup()
-    bridge.receive({ v: 1, kind: 'fault', message: 'x'.repeat(LIMITS.messageBytes + 1) })
-    expect(hooks.fault).not.toHaveBeenCalled()
-    expect(sent).toEqual([])
+  it('stops the plugin at the first message that is not bounded JSON text', () => {
+    const oversized = setup()
+    receive(oversized.bridge, { v: 1, kind: 'fault', message: 'x'.repeat(LIMITS.messageBytes + 1) })
+    expect(oversized.hooks.fault).toHaveBeenCalledWith('message larger than the limit', true)
+    expect(oversized.bridge.closed).toBe(true)
+
+    for (const payload of [{ v: 1, kind: 'ready' }, new Array(1000).fill(1.5), 42, null]) {
+      const live = setup()
+      live.bridge.receive(payload)
+      expect(live.hooks.fault).toHaveBeenCalledWith('non-text message', true)
+      expect(live.bridge.closed).toBe(true)
+    }
+    const broken = setup()
+    broken.bridge.receive('{"v":1,')
+    expect(broken.hooks.fault).toHaveBeenCalledWith('message is not valid JSON', true)
+  })
+
+  it('reads a just-under-limit message without stopping the plugin', () => {
+    const { bridge, hooks } = setup()
+    receive(bridge, { v: 1, kind: 'fault', message: 'x'.repeat(LIMITS.messageBytes - 100) })
+    expect(hooks.fault).toHaveBeenCalledWith('plugin reported an unhandled error', false)
+    expect(bridge.closed).toBe(false)
   })
 
   it('rate limits per second and recovers in the next window', async () => {
     let now = 0
     const { bridge, sent, settle, request } = setup(ALL, () => now)
     for (let id = 1; id <= LIMITS.perSecond + 5; id += 1) {
-      bridge.receive(request(id, 'zoom.get'))
+      receive(bridge, request(id, 'zoom.get'))
       if (id % 10 === 0) await settle()
     }
     await settle()
@@ -154,14 +173,14 @@ describe('bridge', () => {
     expect(limited).toHaveLength(5)
     expect(limited.every(message => message.kind === 'res' && !message.ok && message.error.code === 'rate_limited')).toBe(true)
     now = 1500
-    bridge.receive(request(500, 'zoom.get'))
+    receive(bridge, request(500, 'zoom.get'))
     await settle()
     expect(sent.at(-1)).toMatchObject({ id: 500, ok: true })
   })
 
   it('limits requests waiting for an answer', async () => {
     const { bridge, sent, settle, request } = setup(ALL, () => 0)
-    for (let id = 1; id <= LIMITS.pending + 4; id += 1) bridge.receive(request(id, 'zoom.get'))
+    for (let id = 1; id <= LIMITS.pending + 4; id += 1) receive(bridge, request(id, 'zoom.get'))
     await settle()
     const busy = sent.filter(message => message.kind === 'res' && !message.ok && message.error.code === 'busy')
     expect(busy).toHaveLength(4)
@@ -169,7 +188,7 @@ describe('bridge', () => {
 
   it('stops the plugin after repeated rejected messages', () => {
     const { bridge, hooks } = setup()
-    for (let index = 0; index < LIMITS.violations; index += 1) bridge.receive({ garbage: index })
+    for (let index = 0; index < LIMITS.violations; index += 1) receive(bridge, { garbage: index })
     expect(hooks.fault).toHaveBeenCalledTimes(1)
     expect(bridge.closed).toBe(true)
   })
@@ -178,8 +197,8 @@ describe('bridge', () => {
     const { bridge, sent, settle, request } = setup(['editor:zoom:read'])
     bridge.emit('zoom')
     expect(sent).toEqual([])
-    bridge.receive(request(1, 'subscribe', { topic: 'zoom' }))
-    bridge.receive(request(2, 'subscribe', { topic: 'guides' }))
+    receive(bridge, request(1, 'subscribe', { topic: 'zoom' }))
+    receive(bridge, request(2, 'subscribe', { topic: 'guides' }))
     await settle()
     sent.length = 0
     bridge.emit('zoom')
@@ -189,9 +208,9 @@ describe('bridge', () => {
 
   it('reports heartbeat, readiness and a plugin fault to the host', () => {
     const { bridge, hooks } = setup()
-    bridge.receive({ v: 1, kind: 'pong', n: 4 })
-    bridge.receive({ v: 1, kind: 'ready' })
-    bridge.receive({ v: 1, kind: 'fault', message: 'TypeError: x' })
+    receive(bridge, { v: 1, kind: 'pong', n: 4 })
+    receive(bridge, { v: 1, kind: 'ready' })
+    receive(bridge, { v: 1, kind: 'fault', message: 'TypeError: x' })
     expect(hooks.pong).toHaveBeenCalledWith(4)
     expect(hooks.ready).toHaveBeenCalledTimes(1)
     expect(hooks.fault).toHaveBeenCalledTimes(1)
@@ -200,7 +219,7 @@ describe('bridge', () => {
   it('does not leak a failing capability to the plugin', async () => {
     const { bridge, sent, settle, request, capabilities } = setup()
     vi.mocked(capabilities.getZoom).mockImplementation(() => { throw new Error('C:\\secret\\path') })
-    bridge.receive(request(1, 'zoom.get'))
+    receive(bridge, request(1, 'zoom.get'))
     await settle()
     expect(JSON.stringify(sent)).not.toContain('secret')
     expect(sent[0]).toMatchObject({ ok: false, error: { code: 'failed' } })
