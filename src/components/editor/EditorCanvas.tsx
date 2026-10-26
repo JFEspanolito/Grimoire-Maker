@@ -1,4 +1,4 @@
-import { useEffect, type MouseEvent } from 'react'
+import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { TextSelection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { useDocumentStore } from '../../stores/documentStore'
@@ -8,6 +8,9 @@ import { EDITOR_EXTENSIONS } from './editorExtensions'
 import { DocumentPathContext } from './DocumentPathContext'
 import { registerSnippetDropTarget } from '../../lib/snippetDrop'
 import { focusDocumentEnd, insertContentBox } from '../../lib/contentBoxes'
+import { EditorContextMenu } from './EditorContextMenu'
+import { selectionMarkdown } from './selectionMarkdown'
+import { SaveSnippetDialog } from '../snippets/SaveSnippetDialog'
 
 function getMarkdown(editor: Editor): string {
   return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()
@@ -23,6 +26,10 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
   const body = useDocumentStore((s) => path === undefined ? s.document.body : (s.buffers[path ?? '__untitled__']?.body ?? ''))
   const activePath = useDocumentStore((s) => s.document.path)
   const documentPath = path === undefined ? activePath : path
+
+  const [menu, setMenu] = useState<{ x: number; y: number; markdown: string } | null>(null)
+  const [snippetMarkdown, setSnippetMarkdown] = useState<string | null>(null)
+  const closeMenu = useCallback(() => setMenu(null), [])
 
   const editor = useEditor({
     extensions: EDITOR_EXTENSIONS,
@@ -81,9 +88,24 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     editor.commands.focus(editor.state.selection instanceof TextSelection ? undefined : 'end', { scrollIntoView: false })
   }
 
+  // With something to save (a selection, or the cursor inside a table/statblock) the right-click
+  // offers "Save Selection as Snippet..."; otherwise the native menu and page behaviors stay as they were.
+  const openContextMenu = (event: MouseEvent<HTMLDivElement>) => {
+    const markdown = editor ? selectionMarkdown(editor) : ''
+    if (!markdown) return
+    event.preventDefault()
+    event.stopPropagation()
+    setMenu({ markdown, x: Math.min(event.clientX, window.innerWidth - 220), y: Math.min(event.clientY, window.innerHeight - 56) })
+  }
+
   return (
-    <DocumentPathContext value={documentPath}><PageView onPageClick={focusWritingArea} onPagePointerDown={focusWritingArea}>
-      <EditorContent editor={editor} className="grimoire-content" />
-    </PageView></DocumentPathContext>
+    <>
+      <DocumentPathContext value={documentPath}><PageView onPageClick={focusWritingArea} onPagePointerDown={focusWritingArea}>
+        <EditorContent editor={editor} className="grimoire-content" onContextMenu={openContextMenu} />
+      </PageView></DocumentPathContext>
+      {menu && <EditorContextMenu x={menu.x} y={menu.y} onClose={closeMenu}
+        onSaveSnippet={() => setSnippetMarkdown(menu.markdown)} />}
+      {snippetMarkdown !== null && <SaveSnippetDialog markdown={snippetMarkdown} onClose={() => setSnippetMarkdown(null)} />}
+    </>
   )
 }

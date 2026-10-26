@@ -10,11 +10,14 @@ import { setExternalKillSwitch, useExternalRuntime, verifyIsolation } from '../.
 import { ExternalPluginCard } from './ExternalPluginCard'
 import { LocalPluginCard } from './LocalPluginCard'
 import { PluginCard } from './PluginCard'
+import { CreateModDialog, CREATE_MOD_TABS, type CreateModTab } from './CreateModDialog'
 import styles from './ModManager.module.css'
 
 export interface ModManagerProps {
   onClose: () => void
   onEditPaths?: () => void
+  /** Opens the existing Customize Theme flow; the host closes the Mod Manager. */
+  onOpenThemeCustomizer?: () => void
 }
 
 const CATEGORIES: ModKind[] = [
@@ -41,11 +44,12 @@ function SafetyBanner({ summary, checking, busy, onRecheck }: { summary: string;
   )
 }
 
-export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
+export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModManagerProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial } = useModStore()
   const [activeKind, setActiveKind] = useState<ModKind>(MOD_KIND.SNIPPETS)
   const [actionError, setActionError] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importKind, setImportKind] = useState<ModKind>(MOD_KIND.SNIPPETS)
   const [importSource, setImportSource] = useState<ModImportSource>('zip')
@@ -147,7 +151,7 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
         <button type="button" onClick={() => onEditPaths?.()}>Edit Mods Path</button>
         <button type="button" disabled={busy || !isTauri()} onClick={() => void run(reload)}>Refresh</button>
         <button type="button" disabled={busy || !isTauri()} onClick={openImportModal}>Import Mod</button>
-        <button type="button" disabled>Create Mod</button>
+        <button type="button" onClick={() => setCreateOpen(true)}>Create Mod</button>
         {busy && <span role="status">Loading mods…</span>}
       </div>
 
@@ -245,6 +249,13 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
           )}
         </section>
       </div>
+
+      {createOpen && (
+        <CreateModDialog
+          initialTab={(CREATE_MOD_TABS as readonly string[]).includes(activeKind) ? activeKind as CreateModTab : 'Themes'}
+          onClose={() => setCreateOpen(false)}
+          onOpenThemeCustomizer={() => { setCreateOpen(false); onOpenThemeCustomizer?.() }} />
+      )}
 
       {importOpen && (
         <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby="import-mod-title">

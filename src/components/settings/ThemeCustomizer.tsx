@@ -24,6 +24,8 @@ import {
 
 import { importThemeDecoration } from "../../lib/importThemeDecoration";
 
+import { exportTheme } from "../../lib/modExport";
+
 import { PAGE_SIZES } from "../../types/document";
 
 import { friendlyErrorMessage, reportError } from "../../lib/errorLogging";
@@ -117,6 +119,8 @@ export function ThemeCustomizer({
   const [operation, setOperation] = useState("Saving theme…");
 
   const [error, setError] = useState("");
+
+  const [notice, setNotice] = useState("");
 
   const locked = useRef(false);
 
@@ -219,6 +223,43 @@ export function ThemeCustomizer({
       reportError("theme.customize.save", cause);
 
       setError(friendlyErrorMessage(cause, "Could not save the theme."));
+    } finally {
+      locked.current = false;
+
+      setBusy(false);
+
+      busyCallback.current?.(false);
+    }
+  };
+
+  /** Exports the saved copy of the theme being edited; unsaved edits are not part of the file. */
+  const exportCurrent = async () => {
+    if (!draft?.path || locked.current) return;
+
+    locked.current = true;
+
+    setOperation("Exporting theme…");
+
+    setBusy(true);
+
+    busyCallback.current?.(true);
+
+    setError("");
+
+    setNotice("");
+
+    try {
+      const result = await exportTheme(draft.theme.id);
+
+      if (result) {
+        setNotice(
+          typeof result === "string" ? `Theme saved to ${result}` : "Theme exported.",
+        );
+      }
+    } catch (cause) {
+      reportError("theme.customize.export", cause);
+
+      setError(friendlyErrorMessage(cause, "Could not export the theme."));
     } finally {
       locked.current = false;
 
@@ -567,6 +608,8 @@ export function ThemeCustomizer({
           )}
 
           {busy && <p role="status">{operation}</p>}
+
+          {notice && !busy && <p role="status">{notice}</p>}
         </div>
       </div>
 
@@ -574,6 +617,12 @@ export function ThemeCustomizer({
         <button type="button" disabled={busy} onClick={onClose}>
           Cancel
         </button>
+
+        {draft?.path && (
+          <button type="button" disabled={busy} onClick={() => void exportCurrent()}>
+            Export
+          </button>
+        )}
 
         {draft?.path && (
           <button type="button" disabled={busy} onClick={() => void save(true)}>

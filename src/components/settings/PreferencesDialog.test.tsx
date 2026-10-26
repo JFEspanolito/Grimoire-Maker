@@ -244,3 +244,14 @@ it('offers a separate Auto commits form with editable defaults and an off switch
   expect(useSettingsStore.getState().autoCommitMinutes).toBe(45)
   expect(form.querySelector('[role="alert"]')).not.toBeNull()
 })
+
+it('can open straight into Customize Theme', async () => {
+  await act(async () => root.unmount())
+  container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root.render(<PreferencesDialog onClose={onClose} initialCustomizing />))
+  expect(container.querySelector('#customize-theme-title')?.textContent).toBe('Customize Theme')
+  expect(container.querySelector('#preferences-title')).toBeNull()
+  await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Back')!.click())
+  expect(container.querySelector('#preferences-title')?.textContent).toBe('Preferences')
+})

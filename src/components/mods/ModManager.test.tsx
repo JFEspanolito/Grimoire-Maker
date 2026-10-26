@@ -9,6 +9,8 @@ import { grantPluginConsent, listExternalPlugins, removeExternalPlugin } from '.
 import { activateExternalPlugin, setExternalKillSwitch, stopExternalPluginNow, useExternalRuntime, verifyIsolation } from '../../plugins/isolated/externalHost'
 
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true }))
+vi.mock('../../lib/modExport', () => ({ exportTheme: vi.fn(), exportSnippet: vi.fn(), exportSnippetPack: vi.fn(), exportProjectAsTemplate: vi.fn() }))
+vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: vi.fn() }))
 vi.mock('../../lib/modImport', () => ({
   pickModSource: vi.fn(async () => '/downloads/my-theme.zip'),
   importModFromPath: vi.fn(async () => 'my-theme'),
@@ -66,7 +68,7 @@ it('renders two-column category navigation, toggles mods, opens Content folders,
 
   const buttons = Array.from(container.querySelectorAll('button'))
   const createBtn = buttons.find((b) => b.textContent === 'Create Mod')
-  expect(createBtn?.disabled).toBe(true)
+  expect(createBtn?.disabled).toBe(false)
 
   // Default tab is Snippets
   await act(async () => container.querySelector<HTMLInputElement>('[aria-label="Enable D&D"]')?.click())
@@ -371,6 +373,30 @@ it('draws folder plugins with the same card: Bookmarks gets its official name an
   expect(cards[1].textContent).toContain('/mods/Plugins/mine')
   expect(cards[1].textContent).toContain('Runs with the same access as the app. Only keep plugins you trust.')
   expect(cards[1].textContent).toContain('mine/bad.tsx: broken')
+  await act(async () => root.unmount())
+  container.remove()
+})
+
+it('opens Create Mod from its button and hands the Theme Customizer request to the host', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  useModStore.setState({ busy: false, ready: true, errors: [], reload: vi.fn(async () => {}), mods: [] })
+  const openCustomizer = vi.fn()
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => root.render(<ModManager onClose={() => {}} onOpenThemeCustomizer={openCustomizer} />))
+  expect(container.querySelector('#create-mod-title')).toBeNull()
+  const open = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Create Mod')!
+  await act(async () => open.click())
+  expect(container.querySelector('#create-mod-title')?.textContent).toBe('Create Mod')
+  expect(Array.from(container.querySelectorAll('[aria-label="Kind of mod"] [role="tab"]')).map((tab) => tab.textContent)).toEqual(['Themes', 'Snippets', 'Templates'])
+  // The Mod Manager category (Snippets) decides the starting tab.
+  expect(container.querySelector('#create-mod-tab-Snippets')?.getAttribute('aria-selected')).toBe('true')
+  await act(async () => container.querySelector<HTMLButtonElement>('#create-mod-tab-Themes')!.click())
+  const customizer = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Open Theme Customizer')!
+  await act(async () => customizer.click())
+  expect(openCustomizer).toHaveBeenCalledOnce()
+  expect(container.querySelector('#create-mod-title')).toBeNull()
   await act(async () => root.unmount())
   container.remove()
 })

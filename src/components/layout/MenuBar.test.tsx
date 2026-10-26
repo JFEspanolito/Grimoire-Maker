@@ -28,6 +28,12 @@ const refreshTree = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openWorkspace, openRecent, saveFile, saveAll, openFile, createNewFile, createProject, refreshTree }), isTauri: () => false }))
 vi.mock('../../lib/images', () => ({ importImage: vi.fn() }))
 vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
+vi.mock('../../lib/modExport', () => ({ exportTheme: vi.fn(), exportSnippet: vi.fn(), exportSnippetPack: vi.fn(), exportProjectAsTemplate: vi.fn() }))
+vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: vi.fn() }))
+vi.mock('../settings/PreferencesDialog', async () => {
+  const { createElement } = await import('react')
+  return { PreferencesDialog: (props: { initialCustomizing?: boolean }) => createElement('div', { 'data-testid': 'preferences', 'data-customizing': String(!!props.initialCustomizing) }) }
+})
 
 it('groups application actions in keyboard-accessible menus', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
@@ -323,6 +329,48 @@ describe('Insert menu', () => {
     expect(editor.getJSON().content?.find((node) => node.type === 'image')?.attrs).toMatchObject({
       src: '../Assets/The Map.v2.png', alt: 'The Map.v2', align: 'center', widthMm: 55, frame: 'shadow', opacity: 1, anchor: 'flow',
     })
+    await unmount()
+  })
+})
+
+describe('File > Export > Export as Template', () => {
+  const panels = { files: true, templates: true, snippets: true, git: true, properties: true }
+  const mount = async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.open = true }
+    HTMLDialogElement.prototype.close = function () { this.open = false }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => root.render(<MenuBar visiblePanels={panels} onTogglePanel={() => {}} />))
+    const file = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'File')!
+    const entry = () => Array.from(file.querySelectorAll('button')).find((button) => button.textContent === 'Export as Template') as HTMLButtonElement
+    return { container, file, entry, unmount: async () => { await act(async () => root.unmount()); container.remove() } }
+  }
+  afterEach(() => useDocumentStore.setState({ workspaceRoot: null }))
+
+  it('lists the entry under an Export submenu and disables it without a project', async () => {
+    useDocumentStore.setState({ workspaceRoot: null })
+    const { file, entry, unmount } = await mount()
+    const submenu = Array.from(file.querySelectorAll('details')).find((menu) => menu.querySelector('summary')?.textContent === 'Export')
+    expect(submenu).toBeDefined()
+    expect(submenu!.contains(entry())).toBe(true)
+    expect(entry().disabled).toBe(true)
+    await unmount()
+  })
+
+  it('opens Create Mod on the Templates tab for the open project and can continue to the Theme Customizer', async () => {
+    useDocumentStore.setState({ workspaceRoot: '/books/Dragon Curse' })
+    const { container, entry, unmount } = await mount()
+    expect(entry().disabled).toBe(false)
+    await act(async () => entry().click())
+    expect(container.querySelector('#create-mod-title')?.textContent).toBe('Create Mod')
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Templates')
+    expect(container.textContent).toContain('Grimorio activo: Dragon Curse')
+
+    await act(async () => container.querySelector<HTMLButtonElement>('#create-mod-tab-Themes')!.click())
+    await act(async () => (Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Open Theme Customizer') as HTMLButtonElement).click())
+    expect(container.querySelector('#create-mod-title')).toBeNull()
+    expect(container.querySelector('[data-testid="preferences"]')?.getAttribute('data-customizing')).toBe('true')
     await unmount()
   })
 })

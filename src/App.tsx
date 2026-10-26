@@ -6,6 +6,8 @@ import { Toolbar } from './components/layout/Toolbar'
 import { DocumentWorkspace } from './components/layout/DocumentWorkspace'
 import { FileTree } from './components/sidebar/FileTree'
 import { SnippetPalette } from './components/snippets/SnippetPalette'
+import { ExportPageSnippetButton } from './components/snippets/ExportPageSnippetButton'
+import { ToastHost } from './components/mods/ToastHost'
 import { TemplateCatalog } from './components/templates/TemplateCatalog'
 import { PluginProvider } from './plugins/PluginContext'
 import { startActiveExternalPlugins } from './plugins/isolated/externalHost'
@@ -125,10 +127,11 @@ export default function App() {
             <div className={styles.sourceControl}>
               <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
                 onClick={() => togglePanel('properties')}>Properties</button>
-              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /></div>}
+              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /><ExportPageSnippetButton /></div>}
             </div>
           </aside>
         </div>
+        <ToastHost />
       </div>
     </PluginProvider>
   )
