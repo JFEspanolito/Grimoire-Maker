@@ -24,7 +24,7 @@ vi.mock('./runtime', () => ({
   }),
 }))
 
-const entry = (id: string) => ({ id, version: '1.0.0', fingerprint: 'f', sdkVersion: 1, permissions: [], toolbar: [], source: '' })
+const entry = (id: string) => ({ id, version: '1.0.0', fingerprint: 'f', sdkVersion: 1, permissions: [], toolbar: [], behaviors: [], overlays: [], tools: [], origin: 'import' as const, source: '' })
 const deferred = <T,>() => {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => { resolve = done })

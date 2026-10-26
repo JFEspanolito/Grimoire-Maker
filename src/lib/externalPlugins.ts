@@ -53,19 +53,38 @@ export const removeExternalPlugin = (id: string) => invoke<void>('remove_externa
 
 export interface ToolbarItem {
   id: string
-  type: 'button' | 'select'
+  type: 'button' | 'select' | 'toggle'
   label: string
-  command: string
+  /** Plugin command a button or select sends; absent for host-bound controls. */
+  command?: string
   options: { value: string; label: string }[]
+  slot?: 'main' | 'preview'
+  /** Host state the control is bound to; the plugin never sees it. */
+  bind?: 'zoom' | 'surfaceZoom' | 'rulerVisible'
+  when?: 'markdown'
 }
+export interface BehaviorItem {
+  id: string
+  type: 'wheelZoom'
+  /** Whole percentages, ascending. */
+  editorSteps: number[]
+  previewSteps: number[]
+}
+export interface OverlayItem { id: string; type: 'ruler' }
+export interface ToolItem { id: string; type: 'guidesMenu'; label: string }
 /** What the runtime needs to start one approved, active plugin; integrity was just re-verified natively. */
 export interface ExternalPluginEntry {
   id: string
   version: string
   fingerprint: string
   sdkVersion: number
+  /** The permissions the user granted. */
   permissions: string[]
   toolbar: ToolbarItem[]
+  behaviors: BehaviorItem[]
+  overlays: OverlayItem[]
+  tools: ToolItem[]
+  origin: 'import' | 'bundled'
   source: string
 }
 

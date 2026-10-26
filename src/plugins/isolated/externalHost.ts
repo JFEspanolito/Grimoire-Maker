@@ -6,7 +6,7 @@ import {
 import { reportError } from '../../lib/errorLogging'
 import { registerPlugin } from '../plugin-manager'
 import { hostCapabilities, watchHost } from './capabilities'
-import { createExternalToolbar } from './ExternalToolbar'
+import { registerHostContributions } from './hostContributions'
 import { runIsolationProbes, type IsolationReport } from './probes'
 import { startPlugin, type PluginInstance, type StopReason } from './runtime'
 
@@ -91,13 +91,13 @@ export async function startExternalPlugin(id: string): Promise<void> {
       throw new Error(`The plugin could not start (${reason})`)
     }
     const cleanups: Array<() => void> = []
-    if (entry.toolbar.length) {
-      const toolbar = createExternalToolbar(entry.toolbar, (command, value) => instance?.command(command, value))
-      const dispose = registerPlugin({
+    const declares = [entry.toolbar, entry.behaviors, entry.overlays, entry.tools].some((list) => list?.length)
+    if (declares) {
+      const send = (command: string, value: string | null) => instance?.command(command, value)
+      cleanups.push(registerPlugin({
         id: `external.${id}`, name: id, version: entry.version,
-        activate: (api) => api.registerToolbar({ id: `external.${id}.toolbar`, title: id, component: toolbar }),
-      })
-      cleanups.push(dispose)
+        activate: (api) => registerHostContributions(api, entry, send),
+      }))
     }
     cleanups.push(watchHost((topic) => instance?.emit(topic)))
     live.set(id, { instance, cleanup: () => cleanups.reverse().forEach((cleanup) => { try { cleanup() } catch (error) { reportError('plugin.external.cleanup', error) } }) })
