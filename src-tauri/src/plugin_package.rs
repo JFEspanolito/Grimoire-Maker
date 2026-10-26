@@ -30,7 +30,9 @@ const RESERVED: &[&str] = &[
 /// True for a Windows device name, with or without extensions ("nul", "NUL.txt", "com1.a.b").
 fn is_reserved(component: &str) -> bool {
     let stem = component.split('.').next().unwrap_or("").trim_end_matches(' ');
-    RESERVED.contains(&stem.to_ascii_lowercase().as_str())
+    // Windows also treats the superscript digits (COM¹, LPT²) as device names.
+    let folded: String = stem.chars().map(|c| match c { '¹' => '1', '²' => '2', '³' => '3', other => other }).collect();
+    RESERVED.contains(&folded.to_ascii_lowercase().as_str())
 }
 
 /// `^[a-z0-9][a-z0-9._-]{0,63}$` plus the Windows-safety and namespace rules of the spec.
@@ -145,7 +147,9 @@ pub struct Manifest {
 
 fn bounded(label: &str, value: &str, max: usize) -> Result<(), String> {
     let count = value.chars().count();
-    if count == 0 || count > max || value.chars().any(char::is_control) {
+    // Control and invisible/bidi format characters could make the consent text lie.
+    let spoofing = |c: char| c.is_control() || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}');
+    if count == 0 || count > max || value.chars().any(spoofing) {
         return Err(format!("{label} must be 1-{max} printable characters"));
     }
     Ok(())
@@ -289,7 +293,7 @@ mod tests {
     fn rejects_hostile_entry_paths_instead_of_skipping_them() {
         for name in [
             "", "/abs", "C:/x", "a\\b", "../x", "a/../x", "a//b", "./a", "a/./b", "dist/a:stream", "dist/nul",
-            "dist/NUL.txt", "dist/trail.", "dist/trail ", "a\0b", "dist/a?b", "a/b/c/d/e/f/g/h/i",
+            "dist/NUL.txt", "dist/COM¹.js", "dist/lpt².txt", "dist/trail.", "dist/trail ", "a\0b", "dist/a?b", "a/b/c/d/e/f/g/h/i",
         ] {
             assert!(validate_entry_path(name).is_err(), "entry {name:?} should be rejected");
         }
@@ -322,6 +326,8 @@ mod tests {
             ("bad version", manifest(&[("version", "\"1.0\"")])),
             ("empty name", manifest(&[("name", "\"\"")])),
             ("control in name", manifest(&[("name", "\"a\\u0007b\"")])),
+            ("bidi override in name", manifest(&[("name", "\"Trusted\\u202etpircs\"")])),
+            ("zero-width in author", manifest(&[("author", "\"Ev\\u200bil\"")])),
             ("bad type", manifest(&[("contributions", "{\"toolbar\":[{\"id\":\"a\",\"type\":\"html\",\"label\":\"A\",\"command\":\"c\"}]}")])),
             ("select without options", manifest(&[("contributions", "{\"toolbar\":[{\"id\":\"a\",\"type\":\"select\",\"label\":\"A\",\"command\":\"c\"}]}")])),
             ("duplicate contribution", manifest(&[("contributions", "{\"toolbar\":[{\"id\":\"a\",\"type\":\"button\",\"label\":\"A\",\"command\":\"c\"},{\"id\":\"a\",\"type\":\"button\",\"label\":\"B\",\"command\":\"c\"}]}")])),

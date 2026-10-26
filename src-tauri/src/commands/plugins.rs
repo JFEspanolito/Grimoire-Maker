@@ -13,8 +13,9 @@ async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, String> + 
     tauri::async_runtime::spawn_blocking(work).await.map_err(|error| error.to_string())?
 }
 
-/// The package must come from a file the user picked: the dialog adds it to the filesystem
-/// scope. The destination is fixed and never supplied by the renderer or the package.
+/// The source must be an absolute path inside the filesystem scope. That scope is broader than
+/// "just picked in the dialog" (it includes the user's home), so the real protection is that the
+/// destination is fixed and the package is fully validated; the renderer chooses nothing else.
 #[tauri::command]
 pub async fn install_plugin_package(app: AppHandle, zip_path: String) -> Result<InstallResult, String> {
     let source = PathBuf::from(&zip_path);

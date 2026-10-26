@@ -132,23 +132,14 @@ fn save_registry(root: &Path, registry: &Registry) -> Result<(), String> {
     })
 }
 
-fn is_version_dir(name: &str) -> bool {
-    name.rsplit_once('-').is_some_and(|(_, fp)| fp.len() == 12 && fp.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
-}
-
 fn plain_dir(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|info| info.is_dir() && crate::safe_copy::reject_special(&info).is_ok())
 }
 
-fn only_version_dirs(path: &Path) -> bool {
-    let Ok(children) = fs::read_dir(path) else { return false };
-    let names: Vec<_> = children.flatten().collect();
-    !names.is_empty() && names.iter().all(|child| is_version_dir(&child.file_name().to_string_lossy()) && plain_dir(&child.path()))
-}
-
-/// Removes only our own leftovers: staging directories, the temp registry and unreferenced
-/// version directories. Referenced versions and unknown entries are never touched.
-fn recover_locked(root: &Path, registry: &Registry) -> Result<(), String> {
+/// Removes only in-progress leftovers: staging directories and the temp registry. Version
+/// directories are never deleted here, even when the registry does not mention them: a lost or
+/// restored registry must not destroy installed files (a matching reinstall reuses them).
+fn recover_locked(root: &Path) -> Result<(), String> {
     let entries = fs::read_dir(root).map_err(|error| error.to_string())?;
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -157,22 +148,6 @@ fn recover_locked(root: &Path, registry: &Registry) -> Result<(), String> {
             let _ = fs::remove_dir_all(&path);
         } else if name == REGISTRY_TMP {
             let _ = fs::remove_file(&path);
-        } else if !registry.plugins.contains_key(&name) {
-            // A plugin folder whose record is gone (an interrupted removal) holding only version
-            // directories; anything else in the managed root is left alone.
-            if plugin_package::validate_id(&name).is_ok() && plain_dir(&path) && only_version_dirs(&path) {
-                let _ = fs::remove_dir_all(&path);
-            }
-        } else if let Some(record) = registry.plugins.get(&name) {
-            if !plain_dir(&path) {
-                continue;
-            }
-            for version in fs::read_dir(&path).map_err(|error| error.to_string())?.flatten() {
-                let dir = version.file_name().to_string_lossy().into_owned();
-                if is_version_dir(&dir) && plain_dir(&version.path()) && !record.versions.iter().any(|v| v.dir == dir) {
-                    let _ = fs::remove_dir_all(version.path());
-                }
-            }
         }
     }
     Ok(())
@@ -181,7 +156,7 @@ fn recover_locked(root: &Path, registry: &Registry) -> Result<(), String> {
 pub fn recover(root: &Path) -> Result<(), String> {
     let _guard = lock()?;
     prepare_root(root)?;
-    recover_locked(root, &load_registry(root)?)
+    recover_locked(root)
 }
 
 fn now() -> u64 {
@@ -207,7 +182,7 @@ fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallRes
     let _guard = lock()?;
     prepare_root(root)?;
     let mut registry = load_registry(root)?;
-    recover_locked(root, &registry)?;
+    recover_locked(root)?;
 
     let staging = root.join(format!("{STAGING_PREFIX}{}-{}", std::process::id(), nonce()));
     let extracted = plugin_install::extract_package(zip, &staging, limit)?;
@@ -231,7 +206,8 @@ fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallRes
 
     let plugin_dir = root.join(&manifest.id);
     let created_plugin_dir = !plugin_dir.exists();
-    let published = publish(&staging, &plugin_dir, &dir);
+    let published = publish(&staging, &plugin_dir, &dir, &extracted.fingerprint);
+    let reused = matches!(published, Ok(true));
     if let Err(error) = published {
         let _ = fs::remove_dir_all(&staging);
         if created_plugin_dir {
@@ -262,7 +238,9 @@ fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallRes
     });
     if let Err(error) = save_registry(root, &registry) {
         // The registry still describes the previous state: withdraw the version we just published.
-        let _ = fs::remove_dir_all(plugin_dir.join(&dir));
+        if !reused {
+            let _ = fs::remove_dir_all(plugin_dir.join(&dir));
+        }
         if created_plugin_dir {
             let _ = fs::remove_dir(&plugin_dir);
         }
@@ -272,7 +250,7 @@ fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallRes
 }
 
 /// Moves the validated staging directory to its final immutable location, never overwriting.
-fn publish(staging: &Path, plugin_dir: &Path, dir: &str) -> Result<(), String> {
+fn publish(staging: &Path, plugin_dir: &Path, dir: &str, fingerprint: &str) -> Result<bool, String> {
     fs::create_dir_all(plugin_dir).map_err(|error| error.to_string())?;
     let info = fs::symlink_metadata(plugin_dir).map_err(|error| error.to_string())?;
     crate::safe_copy::reject_special(&info)?;
@@ -281,16 +259,22 @@ fn publish(staging: &Path, plugin_dir: &Path, dir: &str) -> Result<(), String> {
     }
     let destination = plugin_dir.join(dir);
     if destination.exists() {
-        return Err("That plugin version already exists on disk but is not registered".into());
+        // The directory name embeds the fingerprint, so a verified match is the same package
+        // (left behind by a lost registry or an interrupted removal) and is reused as is.
+        if plugin_install::fingerprint_dir(&destination).as_deref() == Ok(fingerprint) {
+            let _ = fs::remove_dir_all(staging);
+            return Ok(true);
+        }
+        return Err("That plugin version already exists on disk with different contents".into());
     }
-    fs::rename(staging, destination).map_err(|error| format!("Could not publish the plugin: {error}"))
+    fs::rename(staging, destination).map(|_| false).map_err(|error| format!("Could not publish the plugin: {error}"))
 }
 
 pub fn list(root: &Path) -> Result<Registry, String> {
     let _guard = lock()?;
     prepare_root(root)?;
     let mut registry = load_registry(root)?;
-    recover_locked(root, &registry)?;
+    recover_locked(root)?;
     let altered = verify_integrity(root, &mut registry);
     if !altered.is_empty() {
         save_registry(root, &registry)?;
@@ -348,7 +332,7 @@ fn audit(root: &Path, event: &str, id: &str, detail: &str) {
 }
 
 /// Updates the registry first, then deletes the plugin's own folder; a failed delete leaves an
-/// unreferenced folder that the next recovery pass deletes.
+/// unreferenced folder that a later install of identical bytes reuses.
 pub fn remove(root: &Path, id: &str) -> Result<(), String> {
     plugin_package::validate_id(id)?;
     let _guard = lock()?;
@@ -480,7 +464,7 @@ mod tests {
     }
 
     #[test]
-    fn recovery_removes_only_staging_temp_and_unreferenced_versions() {
+    fn recovery_removes_only_staging_and_temp_never_installed_files() {
         let scratch = Scratch::new("recover");
         let root = scratch.root();
         run(&root, &package(&scratch, "a.zip", "1.0.0", "a")).unwrap();
@@ -488,18 +472,37 @@ mod tests {
         fs::create_dir_all(root.join(".staging-1-1/dist")).unwrap();
         fs::write(root.join(REGISTRY_TMP), "x").unwrap();
         fs::create_dir_all(root.join("community.zoom/2.0.0-abcdef012345")).unwrap();
-        fs::create_dir_all(root.join("community.zoom/notes")).unwrap();
         fs::create_dir_all(root.join("unrelated-folder")).unwrap();
         fs::write(root.join("unrelated-folder/notes.txt"), "mine").unwrap();
-        fs::create_dir_all(root.join("gone.plugin/1.0.0-0123456789ab")).unwrap(); // interrupted removal
         recover(&root).unwrap();
-        assert!(!root.join("gone.plugin").exists());
         assert!(!root.join(".staging-1-1").exists());
         assert!(!root.join(REGISTRY_TMP).exists());
-        assert!(!root.join("community.zoom/2.0.0-abcdef012345").exists());
         assert!(root.join("community.zoom").join(&kept).is_dir());
-        assert!(root.join("community.zoom/notes").is_dir(), "unknown entries are not ours to delete");
-        assert!(root.join("unrelated-folder").is_dir());
+        assert!(root.join("community.zoom/2.0.0-abcdef012345").is_dir(), "unreferenced versions are kept");
+        assert!(root.join("unrelated-folder/notes.txt").is_file());
+    }
+
+    #[test]
+    fn a_lost_registry_never_deletes_installed_files_and_a_matching_reinstall_reuses_them() {
+        let scratch = Scratch::new("lost");
+        let root = scratch.root();
+        let zip = package(&scratch, "a.zip", "1.0.0", "keep me");
+        run(&root, &zip).unwrap();
+        let dir = load_registry(&root).unwrap().plugins["community.zoom"].latest.clone();
+        fs::remove_file(root.join(REGISTRY)).unwrap();
+        assert!(list(&root).unwrap().plugins.is_empty());
+        let file = root.join("community.zoom").join(&dir).join("dist/index.js");
+        assert_eq!(fs::read(&file).unwrap(), b"keep me");
+
+        assert!(!run(&root, &zip).unwrap().already_installed);
+        assert_eq!(load_registry(&root).unwrap().plugins["community.zoom"].latest, dir);
+        assert_eq!(fs::read(&file).unwrap(), b"keep me");
+
+        // Different bytes under the same name are refused, never merged or overwritten.
+        fs::remove_file(root.join(REGISTRY)).unwrap();
+        fs::write(&file, "swapped").unwrap();
+        assert!(run(&root, &zip).is_err());
+        assert_eq!(fs::read(&file).unwrap(), b"swapped");
     }
 
     #[test]
