@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "pack:plugin": "node scripts/pack-plugin.mjs",
     "tauri": "tauri",
     "preview": "vite preview"
   },

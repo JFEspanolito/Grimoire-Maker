@@ -64,5 +64,44 @@ Every call returns a promise and is rejected without the matching permission.
 Limits to know: the browser cannot cap a plugin's memory, so a plugin that
 allocates without bound can slow or crash the application window; remove it.
 
+### Writing a plugin package
+
+A package is a folder with `manifest.json` and `dist/index.js`. Build the entry
+with any bundler into **one classic script** (for example an IIFE; no `import`,
+no network, no DOM: the plugin runs in a Worker). TypeScript and TSX are
+supported by compiling them first, e.g.
+`esbuild src/index.ts --bundle --format=iife --outfile=dist/index.js`.
+Then run `pnpm pack:plugin <folder> [--out <folder>]` to produce
+`<id>-<version>.gmp`; the application checks the same limits again on import.
+
+`manifest.json` (all fields required unless noted; unknown fields are rejected):
+
+```json
+{
+  "schemaVersion": 1, "sdkVersion": 2,
+  "id": "community.zoom-steps", "name": "Zoom Steps", "version": "1.0.0",
+  "author": "You", "description": "What it does.",
+  "main": "dist/index.js",
+  "permissions": ["editor:zoom:read", "editor:zoom:write"],
+  "contributions": { "toolbar": [ { "id": "zoom-in", "type": "button", "label": "Zoom +", "command": "zoom-in" } ] }
+}
+```
+
+`id` matches `^[a-z0-9][a-z0-9._-]{0,63}$` and `builtin.*` is reserved. Contributions
+are data: the application draws them and shows every label as plain text.
+- `toolbar` items: `button` or `select` with a `command` (delivered to
+  `grimoire.onCommand`), or a control the application binds itself (sdkVersion 2):
+  `select` with `bind: "zoom"` (editor zoom, needs `editor:zoom:write`),
+  `select` with `bind: "surfaceZoom"` and `slot: "preview"`, or `toggle` with
+  `bind: "rulerVisible"`. `when: "markdown"` enables a control only for Markdown files.
+- `behaviors`: `{ "type": "wheelZoom", "editorSteps": [...], "previewSteps": [...] }`
+  (whole percentages; Ctrl+wheel stepping drawn by the application; needs `editor:zoom:write`).
+- `overlays`: `{ "type": "ruler" }` (page measurements, margin and bleed boxes and draggable
+  guides; needs `editor:geometry:read`, `editor:guides:read` and `editor:guides:write`).
+- `tools`: `{ "type": "guidesMenu", "label": "Guides" }` (needs the two guides permissions).
+
+A plugin made only of such contributions needs an empty `dist/index.js`, as the
+Zoom and Pixel Ruler packages that ship with the application do.
+
 Importing a plugin **folder** is different: it is copied as trusted local code
 and runs with the application's permissions, without a sandbox.
