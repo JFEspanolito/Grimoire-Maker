@@ -20,9 +20,14 @@ use std::{
 
 const REGISTRY: &str = "registry.json";
 const REGISTRY_TMP: &str = "registry.json.tmp";
+const LOCK_FILE: &str = ".lock";
 const STAGING_PREFIX: &str = ".staging-";
 const MAX_REGISTRY_BYTES: u64 = 4 * 1024 * 1024;
 static INSTALL_LOCK: Mutex<()> = Mutex::new(());
+
+fn default_sdk() -> u32 {
+    1
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +42,12 @@ pub struct VersionRecord {
     /// Permissions the user approved for exactly this version (filled by the consent flow).
     #[serde(default)]
     pub granted: Vec<String>,
+    /// SDK contract the package was built for; consent is bound to it.
+    #[serde(default = "default_sdk")]
+    pub sdk_version: u32,
+    /// When the user approved exactly this version, or None while unapproved.
+    #[serde(default)]
+    pub consent_at: Option<u64>,
     pub installed_at: u64,
     pub source: String,
     #[serde(default)]
@@ -49,7 +60,8 @@ pub struct PluginRecord {
     pub latest: String,
     #[serde(default)]
     pub current: Option<String>,
-    /// `installed` until the integrity check marks it `altered`.
+    /// `installed` (approved or not, not running), `active`, `stopped` (terminated by the host)
+    /// or `altered` (files differ from the recorded fingerprint).
     pub state: String,
     pub versions: Vec<VersionRecord>,
 }
@@ -57,12 +69,15 @@ pub struct PluginRecord {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Registry {
     pub version: u32,
+    /// Emergency switch: while set, no external plugin may be activated or read for execution.
+    #[serde(default)]
+    pub disabled_all: bool,
     pub plugins: BTreeMap<String, PluginRecord>,
 }
 
 impl Default for Registry {
     fn default() -> Self {
-        Registry { version: 1, plugins: BTreeMap::new() }
+        Registry { version: 1, disabled_all: false, plugins: BTreeMap::new() }
     }
 }
 
@@ -79,8 +94,37 @@ pub struct InstallResult {
     pub already_installed: bool,
 }
 
-fn lock() -> Result<std::sync::MutexGuard<'static, ()>, String> {
-    INSTALL_LOCK.lock().map_err(|error| error.to_string())
+/// Serializes registry changes inside this process and, through an OS file lock, across several
+/// running instances of the application.
+struct Guard {
+    _file: Option<File>,
+    _process: std::sync::MutexGuard<'static, ()>,
+}
+
+fn lock() -> Result<Guard, String> {
+    let process = INSTALL_LOCK.lock().map_err(|error| error.to_string())?;
+    Ok(Guard { _file: None, _process: process })
+}
+
+/// Process lock, then the prepared root, then the cross-instance lock.
+fn locked(root: &Path) -> Result<Guard, String> {
+    let mut guard = lock()?;
+    prepare_root(root)?;
+    lock_root(&mut guard, root)?;
+    Ok(guard)
+}
+
+/// Takes the cross-instance lock once the managed root exists.
+fn lock_root(guard: &mut Guard, root: &Path) -> Result<(), String> {
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(root.join(LOCK_FILE))
+        .map_err(|error| format!("Could not open the plugin lock: {error}"))?;
+    file.lock().map_err(|error| format!("Could not lock the plugin registry: {error}"))?;
+    guard._file = Some(file);
+    Ok(())
 }
 
 /// Creates the managed root if needed and refuses a link or file in its place.
@@ -154,8 +198,7 @@ fn recover_locked(root: &Path) -> Result<(), String> {
 }
 
 pub fn recover(root: &Path) -> Result<(), String> {
-    let _guard = lock()?;
-    prepare_root(root)?;
+    let _guard = locked(root)?;
     recover_locked(root)
 }
 
@@ -179,8 +222,7 @@ pub fn install(root: &Path, zip: &Path, limit: Duration) -> Result<InstallResult
 }
 
 fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallResult, String> {
-    let _guard = lock()?;
-    prepare_root(root)?;
+    let _guard = locked(root)?;
     let mut registry = load_registry(root)?;
     recover_locked(root)?;
 
@@ -232,6 +274,8 @@ fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallRes
         description: manifest.description.clone(),
         permissions: manifest.permissions.clone(),
         granted: Vec::new(),
+        sdk_version: manifest.sdk_version,
+        consent_at: None,
         installed_at: now(),
         source: "import".into(),
         signature: None,
@@ -271,8 +315,7 @@ fn publish(staging: &Path, plugin_dir: &Path, dir: &str, fingerprint: &str) -> R
 }
 
 pub fn list(root: &Path) -> Result<Registry, String> {
-    let _guard = lock()?;
-    prepare_root(root)?;
+    let _guard = locked(root)?;
     let mut registry = load_registry(root)?;
     recover_locked(root)?;
     let altered = verify_integrity(root, &mut registry);
@@ -335,8 +378,7 @@ fn audit(root: &Path, event: &str, id: &str, detail: &str) {
 /// unreferenced folder that a later install of identical bytes reuses.
 pub fn remove(root: &Path, id: &str) -> Result<(), String> {
     plugin_package::validate_id(id)?;
-    let _guard = lock()?;
-    prepare_root(root)?;
+    let _guard = locked(root)?;
     let mut registry = load_registry(root)?;
     if registry.plugins.remove(id).is_none() {
         return Err("That plugin is not installed".into());
@@ -347,6 +389,236 @@ pub fn remove(root: &Path, id: &str) -> Result<(), String> {
     if plain_dir(&folder) {
         fs::remove_dir_all(&folder).map_err(|error| format!("The plugin was unregistered but its files could not be deleted: {error}"))?;
     }
+    Ok(())
+}
+
+/// Everything the renderer needs to run one approved, active plugin inside the isolated runtime.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryPayload {
+    pub id: String,
+    pub version: String,
+    pub fingerprint: String,
+    pub sdk_version: u32,
+    /// Exactly what the user approved for this version.
+    pub permissions: Vec<String>,
+    pub toolbar: Vec<plugin_package::ToolbarContribution>,
+    pub source: String,
+}
+
+/// Events the renderer may add to the audit trail. Anything else is rejected.
+const RENDERER_EVENTS: &[&str] = &["permission_denied", "terminated_by_host", "protocol_violation", "isolation_failed", "plugin_error"];
+
+fn sorted(values: &[String]) -> Vec<String> {
+    let mut copy = values.to_vec();
+    copy.sort();
+    copy.dedup();
+    copy
+}
+
+/// Loads the registry under the lock, re-verifies installed bytes, applies `change`, saves and
+/// audits. A rejected change still persists any `altered` finding made on the way.
+fn mutate(
+    root: &Path,
+    id: &str,
+    event: &str,
+    change: impl FnOnce(&mut Registry) -> Result<String, String>,
+) -> Result<(), String> {
+    plugin_package::validate_id(id)?;
+    let _guard = locked(root)?;
+    let mut registry = load_registry(root)?;
+    let altered = verify_integrity(root, &mut registry);
+    for found in &altered {
+        audit(root, "integrity_failed", found, "installed files differ from the recorded fingerprint");
+    }
+    match change(&mut registry) {
+        Ok(detail) => {
+            save_registry(root, &registry)?;
+            audit(root, event, id, &detail);
+            Ok(())
+        }
+        Err(error) => {
+            if !altered.is_empty() {
+                let _ = save_registry(root, &registry);
+            }
+            Err(error)
+        }
+    }
+}
+
+fn record_mut<'a>(registry: &'a mut Registry, id: &str) -> Result<&'a mut PluginRecord, String> {
+    registry.plugins.get_mut(id).ok_or_else(|| "That plugin is not installed".to_string())
+}
+
+/// Approves exactly one version. The approval is bound to id + version + fingerprint + the full
+/// requested permission set + SDK version, and only the newest imported version can be approved.
+pub fn grant_consent(root: &Path, id: &str, version: &str, fingerprint: &str, granted: &[String], sdk_version: u32) -> Result<(), String> {
+    mutate(root, id, "consent_granted", |registry| {
+        let record = record_mut(registry, id)?;
+        if record.state == "altered" {
+            return Err("The plugin files changed after installation; remove it and import the package again".into());
+        }
+        let index = record
+            .versions
+            .iter()
+            .position(|v| v.version == version && v.fingerprint == fingerprint)
+            .ok_or("That plugin version is not installed")?;
+        if record.versions[index].dir != record.latest {
+            return Err("Only the newest imported version can be approved".into());
+        }
+        let entry = &mut record.versions[index];
+        if sdk_version != entry.sdk_version {
+            return Err("The approval does not match the SDK version of the package".into());
+        }
+        if sorted(granted) != sorted(&entry.permissions) {
+            return Err("The approval must cover exactly the permissions the plugin requests".into());
+        }
+        entry.granted = sorted(granted);
+        entry.consent_at = Some(now());
+        let (dir, detail) = (entry.dir.clone(), format!("{version} {}", fingerprint.get(..12).unwrap_or("")));
+        record.current = Some(dir);
+        // A new approval never starts the plugin by itself.
+        record.state = "installed".into();
+        Ok(detail)
+    })
+}
+
+/// Withdraws the approval of the running version and stops it.
+pub fn revoke_consent(root: &Path, id: &str) -> Result<(), String> {
+    mutate(root, id, "consent_revoked", |registry| {
+        let record = record_mut(registry, id)?;
+        if let Some(current) = record.current.take() {
+            if let Some(entry) = record.versions.iter_mut().find(|v| v.dir == current) {
+                entry.granted.clear();
+                entry.consent_at = None;
+            }
+        }
+        if record.state != "altered" {
+            record.state = "installed".into();
+        }
+        Ok(String::new())
+    })
+}
+
+/// Activation requires a current, complete approval and intact files; deactivation always works.
+pub fn set_active(root: &Path, id: &str, active: bool) -> Result<(), String> {
+    mutate(root, id, if active { "activated" } else { "deactivated" }, |registry| {
+        if active && registry.disabled_all {
+            return Err("External plugins are switched off".into());
+        }
+        let record = record_mut(registry, id)?;
+        if !active {
+            if matches!(record.state.as_str(), "active" | "stopped") {
+                record.state = "installed".into();
+            }
+            return Ok(String::new());
+        }
+        if record.state == "altered" {
+            return Err("The plugin files changed after installation; remove it and import the package again".into());
+        }
+        let current = record.current.clone().ok_or("Approve the plugin before activating it")?;
+        let entry = record.versions.iter().find(|v| v.dir == current).ok_or("The approved version is missing")?;
+        if entry.consent_at.is_none() || sorted(&entry.granted) != sorted(&entry.permissions) {
+            return Err("The approval is incomplete; approve the plugin again".into());
+        }
+        let detail = format!("{} {}", entry.version, entry.fingerprint.get(..12).unwrap_or(""));
+        record.state = "active".into();
+        Ok(detail)
+    })
+}
+
+/// Records that the host terminated a running plugin (watchdog, repeated faults).
+pub fn mark_stopped(root: &Path, id: &str, reason: &str) -> Result<(), String> {
+    mutate(root, id, "terminated", |registry| {
+        let record = record_mut(registry, id)?;
+        if record.state == "active" {
+            record.state = "stopped".into();
+        }
+        Ok(reason.chars().take(200).collect())
+    })
+}
+
+/// The emergency switch. Turning it on also stops every running plugin.
+pub fn set_disabled_all(root: &Path, disabled: bool) -> Result<(), String> {
+    let _guard = locked(root)?;
+    let mut registry = load_registry(root)?;
+    registry.disabled_all = disabled;
+    if disabled {
+        for record in registry.plugins.values_mut() {
+            if record.state == "active" {
+                record.state = "installed".into();
+            }
+        }
+    }
+    save_registry(root, &registry)?;
+    audit(root, if disabled { "kill_switch_on" } else { "kill_switch_off" }, "-", "");
+    Ok(())
+}
+
+/// Returns the bytes to execute, only for an active plugin whose installed files still match the
+/// fingerprint the user approved. Called at every start, so tampering is caught before running.
+pub fn read_entry(root: &Path, id: &str) -> Result<EntryPayload, String> {
+    plugin_package::validate_id(id)?;
+    let _guard = locked(root)?;
+    let mut registry = load_registry(root)?;
+    let altered = verify_integrity(root, &mut registry);
+    if !altered.is_empty() {
+        save_registry(root, &registry)?;
+        for found in &altered {
+            audit(root, "integrity_failed", found, "installed files differ from the recorded fingerprint");
+        }
+    }
+    if registry.disabled_all {
+        return Err("External plugins are switched off".into());
+    }
+    let record = registry.plugins.get(id).ok_or("That plugin is not installed")?;
+    if record.state != "active" {
+        return Err("The plugin is not active".into());
+    }
+    let current = record.current.as_deref().ok_or("The plugin has no approved version")?;
+    let entry = record.versions.iter().find(|v| v.dir == current).ok_or("The approved version is missing")?;
+    if entry.consent_at.is_none() || sorted(&entry.granted) != sorted(&entry.permissions) {
+        return Err("The approval is incomplete; approve the plugin again".into());
+    }
+    let folder = root.join(id).join(&entry.dir);
+    let manifest = plugin_package::parse_manifest(&read_plain(&folder.join(plugin_package::MANIFEST_ENTRY), plugin_package::MAX_MANIFEST_BYTES)?)?;
+    if manifest.id != id || manifest.version != entry.version || manifest.sdk_version != entry.sdk_version {
+        return Err("The installed manifest does not match the approved version".into());
+    }
+    let bytes = read_plain(&folder.join(plugin_package::MAIN_ENTRY), plugin_package::MAX_FILE_BYTES)?;
+    let source = String::from_utf8(bytes).map_err(|_| "The plugin entry is not valid UTF-8".to_string())?;
+    Ok(EntryPayload {
+        id: id.to_string(),
+        version: entry.version.clone(),
+        fingerprint: entry.fingerprint.clone(),
+        sdk_version: entry.sdk_version,
+        permissions: sorted(&entry.granted),
+        toolbar: manifest.contributions.toolbar,
+        source,
+    })
+}
+
+fn read_plain(path: &Path, limit: u64) -> Result<Vec<u8>, String> {
+    let info = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    crate::safe_copy::reject_special(&info)?;
+    if !info.is_file() || info.len() > limit {
+        return Err("A plugin file is missing, not a regular file, or too large".into());
+    }
+    fs::read(path).map_err(|error| error.to_string())
+}
+
+/// Lets the renderer add allow-listed events (denied permission, forced termination) to the
+/// audit trail for a plugin that exists. Details are truncated by `audit`.
+pub fn log_event(root: &Path, id: &str, event: &str, detail: &str) -> Result<(), String> {
+    plugin_package::validate_id(id)?;
+    if !RENDERER_EVENTS.contains(&event) {
+        return Err("Unknown audit event".into());
+    }
+    let _guard = locked(root)?;
+    if !load_registry(root)?.plugins.contains_key(id) {
+        return Err("That plugin is not installed".into());
+    }
+    audit(root, event, id, detail);
     Ok(())
 }
 
@@ -566,5 +838,165 @@ mod tests {
         assert!(load_registry(&root).unwrap().plugins.is_empty());
         assert!(!root.join("community.zoom").exists());
         assert!(root.join("other").is_dir());
+    }
+
+    const ID: &str = "community.zoom";
+
+    /// Installs one version and returns (version, fingerprint) of the installed record.
+    fn install_version(scratch: &Scratch, root: &Path, version: &str, code: &str) -> (String, String) {
+        run(root, &package(scratch, &format!("{version}-{code}.zip"), version, code)).unwrap();
+        let registry = load_registry(root).unwrap();
+        let latest = &registry.plugins[ID].latest;
+        let entry = registry.plugins[ID].versions.iter().find(|v| &v.dir == latest).unwrap();
+        (entry.version.clone(), entry.fingerprint.clone())
+    }
+
+    fn approve(root: &Path, version: &str, fingerprint: &str) -> Result<(), String> {
+        grant_consent(root, ID, version, fingerprint, &["editor:zoom:read".to_string()], 1)
+    }
+
+    #[test]
+    fn activation_needs_a_complete_approval_bound_to_version_fingerprint_and_sdk() {
+        let scratch = Scratch::new("consent");
+        let root = scratch.root();
+        let (version, fingerprint) = install_version(&scratch, &root, "1.0.0", "console.log(1)");
+        assert!(set_active(&root, ID, true).is_err(), "no approval, no activation");
+        assert!(grant_consent(&root, ID, &version, &fingerprint, &[], 1).is_err(), "must cover every requested permission");
+        assert!(grant_consent(&root, ID, &version, &fingerprint, &["editor:zoom:read".into(), "editor:zoom:write".into()], 1).is_err());
+        assert!(grant_consent(&root, ID, &version, &fingerprint, &["editor:zoom:read".into()], 2).is_err(), "wrong SDK");
+        assert!(grant_consent(&root, ID, &version, &"0".repeat(64), &["editor:zoom:read".into()], 1).is_err(), "wrong fingerprint");
+        assert!(grant_consent(&root, ID, "9.9.9", &fingerprint, &["editor:zoom:read".into()], 1).is_err(), "wrong version");
+        assert!(grant_consent(&root, "community.missing", &version, &fingerprint, &[], 1).is_err());
+        assert_eq!(load_registry(&root).unwrap().plugins[ID].current, None, "rejected approvals change nothing");
+
+        approve(&root, &version, &fingerprint).unwrap();
+        let record = load_registry(&root).unwrap().plugins.remove(ID).unwrap();
+        assert_eq!((record.state.as_str(), record.current.is_some()), ("installed", true), "approval does not start the plugin");
+        assert!(read_entry(&root, ID).is_err(), "not active yet");
+
+        set_active(&root, ID, true).unwrap();
+        let entry = read_entry(&root, ID).unwrap();
+        assert_eq!((entry.version.as_str(), entry.source.as_str(), entry.sdk_version), ("1.0.0", "console.log(1)", 1));
+        assert_eq!(entry.permissions, vec!["editor:zoom:read".to_string()]);
+
+        set_active(&root, ID, false).unwrap();
+        assert!(read_entry(&root, ID).is_err(), "a deactivated plugin is never read");
+        assert_eq!(load_registry(&root).unwrap().plugins[ID].state, "installed");
+        let log = fs::read_to_string(root.join("audit.log")).unwrap();
+        for event in ["consent_granted", "activated", "deactivated"] {
+            assert!(log.contains(event), "missing {event}");
+        }
+    }
+
+    #[test]
+    fn an_update_never_inherits_the_previous_approval() {
+        let scratch = Scratch::new("update");
+        let root = scratch.root();
+        let (v1, f1) = install_version(&scratch, &root, "1.0.0", "old");
+        approve(&root, &v1, &f1).unwrap();
+        set_active(&root, ID, true).unwrap();
+
+        let (v2, f2) = install_version(&scratch, &root, "1.1.0", "new");
+        assert_eq!(read_entry(&root, ID).unwrap().source, "old", "the approved bytes keep running, the update does not");
+        assert!(approve(&root, &v1, &f1).is_err(), "an older version cannot be approved over a newer import");
+        approve(&root, &v2, &f2).unwrap();
+        assert_eq!(load_registry(&root).unwrap().plugins[ID].state, "installed", "approving an update stops the old one");
+        assert!(read_entry(&root, ID).is_err());
+        set_active(&root, ID, true).unwrap();
+        assert_eq!(read_entry(&root, ID).unwrap().source, "new");
+    }
+
+    #[test]
+    fn changed_bytes_block_reading_and_activation() {
+        let scratch = Scratch::new("tamper-run");
+        let root = scratch.root();
+        let (version, fingerprint) = install_version(&scratch, &root, "1.0.0", "safe");
+        approve(&root, &version, &fingerprint).unwrap();
+        set_active(&root, ID, true).unwrap();
+        let dir = load_registry(&root).unwrap().plugins[ID].latest.clone();
+        fs::write(root.join(ID).join(&dir).join("dist/index.js"), "evil").unwrap();
+
+        assert!(read_entry(&root, ID).is_err(), "tampered bytes are never handed to the runtime");
+        let record = load_registry(&root).unwrap().plugins.remove(ID).unwrap();
+        assert_eq!((record.state.as_str(), record.current), ("altered", None));
+        assert!(set_active(&root, ID, true).is_err());
+        assert!(approve(&root, &version, &fingerprint).is_err(), "an altered plugin cannot be approved again");
+    }
+
+    #[test]
+    fn revoking_consent_stops_the_plugin_and_withdraws_the_grant() {
+        let scratch = Scratch::new("revoke");
+        let root = scratch.root();
+        let (version, fingerprint) = install_version(&scratch, &root, "1.0.0", "x");
+        approve(&root, &version, &fingerprint).unwrap();
+        set_active(&root, ID, true).unwrap();
+        revoke_consent(&root, ID).unwrap();
+        let record = load_registry(&root).unwrap().plugins.remove(ID).unwrap();
+        assert_eq!((record.state.as_str(), record.current.as_deref()), ("installed", None));
+        assert!(record.versions[0].granted.is_empty() && record.versions[0].consent_at.is_none());
+        assert!(set_active(&root, ID, true).is_err() && read_entry(&root, ID).is_err());
+    }
+
+    #[test]
+    fn the_kill_switch_stops_everything_and_blocks_activation_until_cleared() {
+        let scratch = Scratch::new("kill");
+        let root = scratch.root();
+        let (version, fingerprint) = install_version(&scratch, &root, "1.0.0", "x");
+        approve(&root, &version, &fingerprint).unwrap();
+        set_active(&root, ID, true).unwrap();
+
+        set_disabled_all(&root, true).unwrap();
+        assert_eq!(load_registry(&root).unwrap().plugins[ID].state, "installed");
+        assert!(set_active(&root, ID, true).is_err() && read_entry(&root, ID).is_err());
+        set_disabled_all(&root, false).unwrap();
+        set_active(&root, ID, true).unwrap();
+        assert!(read_entry(&root, ID).is_ok());
+        assert!(fs::read_to_string(root.join("audit.log")).unwrap().contains("kill_switch_on"));
+    }
+
+    #[test]
+    fn a_stopped_plugin_can_be_started_again_only_by_an_explicit_activation() {
+        let scratch = Scratch::new("stopped");
+        let root = scratch.root();
+        let (version, fingerprint) = install_version(&scratch, &root, "1.0.0", "x");
+        approve(&root, &version, &fingerprint).unwrap();
+        set_active(&root, ID, true).unwrap();
+        mark_stopped(&root, ID, "watchdog timeout").unwrap();
+        assert_eq!(load_registry(&root).unwrap().plugins[ID].state, "stopped");
+        assert!(read_entry(&root, ID).is_err(), "a stopped plugin is not read at startup");
+        set_active(&root, ID, true).unwrap();
+        assert!(read_entry(&root, ID).is_ok());
+        assert!(fs::read_to_string(root.join("audit.log")).unwrap().contains("watchdog timeout"));
+    }
+
+    #[test]
+    fn renderer_audit_events_are_allow_listed_and_need_an_installed_plugin() {
+        let scratch = Scratch::new("events");
+        let root = scratch.root();
+        install_version(&scratch, &root, "1.0.0", "x");
+        log_event(&root, ID, "permission_denied", "editor:zoom:write").unwrap();
+        assert!(fs::read_to_string(root.join("audit.log")).unwrap().contains("permission_denied"));
+        assert!(log_event(&root, ID, "installed", "forged").is_err(), "the renderer cannot write native events");
+        assert!(log_event(&root, "community.missing", "permission_denied", "x").is_err());
+        assert!(log_event(&root, "..", "permission_denied", "x").is_err());
+    }
+
+    #[test]
+    fn a_registry_without_the_new_fields_still_loads_with_safe_defaults() {
+        let scratch = Scratch::new("legacy");
+        let root = scratch.root();
+        install_version(&scratch, &root, "1.0.0", "x");
+        let text = fs::read_to_string(root.join("registry.json")).unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        value.as_object_mut().unwrap().remove("disabledAll");
+        for version in value["plugins"][ID]["versions"].as_array_mut().unwrap() {
+            let fields = version.as_object_mut().unwrap();
+            fields.remove("sdkVersion");
+            fields.remove("consentAt");
+        }
+        fs::write(root.join("registry.json"), value.to_string()).unwrap();
+        let registry = load_registry(&root).unwrap();
+        assert!(!registry.disabled_all);
+        assert_eq!((registry.plugins[ID].versions[0].sdk_version, registry.plugins[ID].versions[0].consent_at), (1, None));
     }
 }

@@ -40,3 +40,62 @@ pub async fn remove_external_plugin(app: AppHandle, id: String) -> Result<(), St
     let root = managed_root(&app)?;
     blocking(move || plugin_registry::remove(&root, &id)).await
 }
+
+#[tauri::command]
+pub async fn grant_plugin_consent(
+    app: AppHandle,
+    id: String,
+    version: String,
+    fingerprint: String,
+    granted: Vec<String>,
+    sdk_version: u32,
+) -> Result<(), String> {
+    let root = managed_root(&app)?;
+    blocking(move || plugin_registry::grant_consent(&root, &id, &version, &fingerprint, &granted, sdk_version)).await
+}
+
+#[tauri::command]
+pub async fn revoke_plugin_consent(app: AppHandle, id: String) -> Result<(), String> {
+    let root = managed_root(&app)?;
+    blocking(move || plugin_registry::revoke_consent(&root, &id)).await
+}
+
+#[tauri::command]
+pub async fn set_external_plugin_active(app: AppHandle, id: String, active: bool) -> Result<(), String> {
+    let root = managed_root(&app)?;
+    blocking(move || plugin_registry::set_active(&root, &id, active)).await
+}
+
+/// Called when the host terminated a running plugin; the reason goes to the audit trail.
+#[tauri::command]
+pub async fn stop_external_plugin(app: AppHandle, id: String, reason: String) -> Result<(), String> {
+    let root = managed_root(&app)?;
+    blocking(move || plugin_registry::mark_stopped(&root, &id, &reason)).await
+}
+
+#[tauri::command]
+pub async fn set_external_plugins_disabled(app: AppHandle, disabled: bool) -> Result<(), String> {
+    let root = managed_root(&app)?;
+    blocking(move || plugin_registry::set_disabled_all(&root, disabled)).await
+}
+
+/// Integrity is verified again here, at every start, before any byte is handed to the runtime.
+#[tauri::command]
+pub async fn read_external_plugin_entry(app: AppHandle, id: String) -> Result<plugin_registry::EntryPayload, String> {
+    let root = managed_root(&app)?;
+    blocking(move || plugin_registry::read_entry(&root, &id)).await
+}
+
+#[tauri::command]
+pub async fn log_external_plugin_event(app: AppHandle, id: String, event: String, detail: String) -> Result<(), String> {
+    let root = managed_root(&app)?;
+    blocking(move || plugin_registry::log_event(&root, &id, &event, &detail)).await
+}
+
+/// Keeps the renderer's filesystem access away from installed plugin files and the registry: they
+/// change only through the commands above, which validate every step.
+pub fn protect_managed_root(app: &AppHandle) -> Result<(), String> {
+    let root = managed_root(app)?;
+    plugin_registry::recover(&root)?;
+    app.fs_scope().forbid_directory(&root, true).map_err(|error| error.to_string())
+}

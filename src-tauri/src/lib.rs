@@ -13,6 +13,7 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             config_root::initialize(app.handle()).map_err(std::io::Error::other)?;
+            commands::plugins::protect_managed_root(app.handle()).map_err(std::io::Error::other)?;
             commands::error_logs::initialize(app.handle());
             config::ensure(app.handle());
             if let Err(error) = commands::preferences::restore_scopes(app.handle()) {
@@ -48,6 +49,13 @@ pub fn run() {
             commands::plugins::install_plugin_package,
             commands::plugins::list_external_plugins,
             commands::plugins::remove_external_plugin,
+            commands::plugins::grant_plugin_consent,
+            commands::plugins::revoke_plugin_consent,
+            commands::plugins::set_external_plugin_active,
+            commands::plugins::stop_external_plugin,
+            commands::plugins::set_external_plugins_disabled,
+            commands::plugins::read_external_plugin_entry,
+            commands::plugins::log_external_plugin_event,
             commands::preferences::load_library_paths,
             commands::preferences::change_library_path,
             commands::preferences::delete_user_theme,
