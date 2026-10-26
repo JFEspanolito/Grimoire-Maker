@@ -136,14 +136,21 @@ export async function deleteUserTheme(id: string): Promise<void> {
   await invoke<void>('delete_user_theme', { id })
 }
 
-/** Exports a user-owned theme as a standalone `.css` file for sharing with the community. Returns false if cancelled. */
-export async function exportUserTheme(id: string): Promise<boolean> {
+/** Reads the CSS of a theme in the configured Themes folder; only a regular, non-linked file qualifies. */
+export async function readUserThemeSource(id: string): Promise<string> {
   if (!ID_PATTERN.test(id)) throw new Error('Invalid theme ID')
   const { themes: directory } = await loadLibraryPaths()
   const entry = (await readDir(directory)).find((file) => file.name.replace(/\.css$/i, '') === id)
   if (!entry) throw new Error('The theme file was removed. Reload themes and try again.')
   await regularFile(directory, entry.name)
   const css = await readTextFile(`${directory}/${entry.name}`)
+  if (new TextEncoder().encode(css).length > MAX_BYTES) throw new Error('The theme source is larger than 24 MB.')
+  return css
+}
+
+/** Exports a user-owned theme as a standalone `.css` file for sharing with the community. Returns false if cancelled. */
+export async function exportUserTheme(id: string): Promise<boolean> {
+  const css = await readUserThemeSource(id)
   const target = await save({
     defaultPath: `${id}.css`,
     filters: [{ name: 'Grimoire Theme', extensions: ['css'] }],

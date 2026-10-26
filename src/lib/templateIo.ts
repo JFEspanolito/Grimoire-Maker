@@ -3,7 +3,7 @@ import {
   PackageError,
   isPackageFile,
   packageIdFromFileName,
-  readTemplateZip,
+  readTemplatePackage,
 } from './templatePackage'
 import { serializeDocument } from './frontmatter'
 import type { Template } from './templates'
@@ -35,11 +35,12 @@ export async function installPackage(
   bytes: Uint8Array,
   reservedIds: Iterable<string> = [],
 ): Promise<string> {
-  const files = readTemplateZip(bytes)
+  const { files, manifest } = readTemplatePackage(bytes)
 
   const taken = new Set(reservedIds)
   for (const entry of await fs.readDir(dir)) taken.add(entry.name.replace(/\.md$/i, ''))
-  const id = packageIdFromFileName(zipFileName, taken)
+  // A manifest names the template; otherwise the file name does.
+  const id = packageIdFromFileName(manifest?.id ?? zipFileName, taken)
   const root = `${dir}/${id}`
 
   const folders = new Set<string>([root])
