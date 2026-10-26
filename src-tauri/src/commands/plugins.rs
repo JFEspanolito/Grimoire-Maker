@@ -1,4 +1,4 @@
-use crate::{plugin_bundled, plugin_registry::{self, InstallResult, Registry}};
+use crate::{plugin_local, plugin_registry::{self, InstallResult, Registry}};
 use std::{path::PathBuf, time::Duration};
 use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
@@ -100,11 +100,16 @@ pub fn protect_managed_root(app: &AppHandle) -> Result<(), String> {
     app.fs_scope().forbid_directory(&root, true).map_err(|error| error.to_string())
 }
 
-/// Installs or repairs the first-party packages embedded in the binary. A failure is logged and
-/// never aborts startup: the plugins simply stay as they were.
-pub fn ensure_bundled(app: &AppHandle) {
-    if let Err(error) = managed_root(app).and_then(|root| plugin_bundled::ensure(&root)) {
-        eprintln!("could not install the bundled plugins: {error}");
-        super::error_logs::best_effort("native.plugins.bundled", &error);
+/// Syncs the package folders of the Mods/Plugins folder into the managed storage. The folder must
+/// be inside the filesystem scope and can never be the managed storage itself; everything in it is
+/// validated like an import before it is published.
+#[tauri::command]
+pub async fn sync_local_plugin_packages(app: AppHandle, plugins_dir: String) -> Result<plugin_local::LocalSyncResult, String> {
+    let folder = PathBuf::from(&plugins_dir);
+    if !folder.is_absolute() || !app.fs_scope().is_allowed(&folder) {
+        return Err("The plugins folder must be inside the allowed folders".into());
     }
+    let root = managed_root(&app)?;
+    plugin_local::ensure_outside_managed(&root, &folder)?;
+    blocking(move || plugin_local::sync(&root, &folder)).await
 }

@@ -41,7 +41,7 @@ pub fn validate_id(id: &str) -> Result<(), String> {
     validate_id_for(id, false)
 }
 
-/// `allow_builtin` is true only for packages embedded in the application binary.
+/// `allow_builtin` is true only for local package folders (never for imports).
 pub fn validate_id_for(id: &str, allow_builtin: bool) -> Result<(), String> {
     let bytes = id.as_bytes();
     let valid_start = bytes.first().is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit());
@@ -345,7 +345,7 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest, String> {
     parse_manifest_for(bytes, false)
 }
 
-/// `allow_builtin` lets packages embedded in the application use the reserved `builtin.*` ids.
+/// `allow_builtin` lets local package folders use the reserved `builtin.*` ids.
 pub fn parse_manifest_for(bytes: &[u8], allow_builtin: bool) -> Result<Manifest, String> {
     if bytes.len() as u64 > MAX_MANIFEST_BYTES {
         return Err("manifest.json is larger than 64 KiB".into());
@@ -491,15 +491,15 @@ mod tests {
         assert!(parse_manifest(doc.as_bytes()).is_ok());
     }
 
-    const ZOOM: &str = include_str!("../../src/assets/mods/Packages/zoom/manifest.json");
-    const RULER: &str = include_str!("../../src/assets/mods/Packages/pixel-ruler/manifest.json");
+    const ZOOM: &str = include_str!("../../src/assets/mods/Plugins/zoom/manifest.json");
+    const RULER: &str = include_str!("../../src/assets/mods/Plugins/pixel-ruler/manifest.json");
 
     fn v2(permissions: &str, contributions: &str) -> String {
         manifest(&[("sdkVersion", "2"), ("permissions", permissions), ("contributions", contributions)])
     }
 
     #[test]
-    fn the_first_party_manifests_are_valid_only_as_bundled_packages() {
+    fn the_example_manifests_are_valid_only_as_local_packages() {
         for text in [ZOOM, RULER] {
             assert!(parse_manifest_for(text.as_bytes(), true).is_ok(), "{:?}", parse_manifest_for(text.as_bytes(), true));
             assert!(parse_manifest(text.as_bytes()).is_err(), "an imported package may never claim builtin.*");

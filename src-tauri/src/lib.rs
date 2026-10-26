@@ -1,8 +1,8 @@
 mod commands;
 mod config;
 mod config_root;
-mod plugin_bundled;
 mod plugin_install;
+mod plugin_local;
 mod plugin_package;
 mod plugin_registry;
 mod safe_copy;
@@ -16,7 +16,6 @@ pub fn run() {
             config_root::initialize(app.handle()).map_err(std::io::Error::other)?;
             commands::plugins::protect_managed_root(app.handle()).map_err(std::io::Error::other)?;
             commands::error_logs::initialize(app.handle());
-            commands::plugins::ensure_bundled(app.handle());
             config::ensure(app.handle());
             if let Err(error) = commands::preferences::restore_scopes(app.handle()) {
                 eprintln!("could not restore library directories: {error}");
@@ -58,6 +57,7 @@ pub fn run() {
             commands::plugins::set_external_plugins_disabled,
             commands::plugins::read_external_plugin_entry,
             commands::plugins::log_external_plugin_event,
+            commands::plugins::sync_local_plugin_packages,
             commands::preferences::load_library_paths,
             commands::preferences::change_library_path,
             commands::preferences::delete_user_theme,

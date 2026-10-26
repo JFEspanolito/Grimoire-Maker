@@ -49,9 +49,13 @@ pub struct VersionRecord {
     #[serde(default)]
     pub consent_at: Option<u64>,
     pub installed_at: u64,
+    /// `import` (installed from a ZIP) or `local` (synced from a package folder in Mods/Plugins).
     pub source: String,
     #[serde(default)]
     pub signature: Option<String>,
+    /// For `local` versions: the folder name inside the Plugins folder that provides the package.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_folder: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -277,8 +281,9 @@ fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallRes
         sdk_version: manifest.sdk_version,
         consent_at: None,
         installed_at: now(),
-        source: "import".into(),
+        source: IMPORT_SOURCE.into(),
         signature: None,
+        local_folder: None,
     });
     if let Err(error) = save_registry(root, &registry) {
         // The registry still describes the previous state: withdraw the version we just published.
@@ -374,16 +379,28 @@ pub(crate) fn audit(root: &Path, event: &str, id: &str, detail: &str) {
     }
 }
 
-/// First-party packages embedded in the binary are recorded with `source = "bundled"`.
-pub(crate) const BUNDLED_SOURCE: &str = "bundled";
+/// `source` of a version installed from a ZIP file.
+pub(crate) const IMPORT_SOURCE: &str = "import";
+/// `source` of a version synced from a package folder in Mods/Plugins.
+pub(crate) const LOCAL_SOURCE: &str = "local";
 
-/// True when the newest version of the plugin is a first-party embedded package.
-fn is_bundled(record: &PluginRecord) -> bool {
-    record.versions.iter().any(|v| v.dir == record.latest && v.source == BUNDLED_SOURCE)
+/// Source of the newest version of the plugin.
+pub(crate) fn latest_source(record: &PluginRecord) -> Option<&str> {
+    record.versions.iter().find(|v| v.dir == record.latest).map(|v| v.source.as_str())
 }
 
-/// Updates the registry first, then deletes the plugin's own folder; a failed delete leaves an
-/// unreferenced folder that a later install of identical bytes reuses.
+/// True when the approved version is a local package, which the emergency switch does not cover:
+/// the user put that folder there and trusted plugins in the same folder already run.
+fn exempt_from_switch(record: &PluginRecord) -> bool {
+    record
+        .current
+        .as_ref()
+        .and_then(|current| record.versions.iter().find(|v| &v.dir == current))
+        .is_some_and(|v| v.source == LOCAL_SOURCE)
+}
+
+/// Renderer-callable removal: only imported plugins. Local packages are deleted by deleting
+/// their folder, which the next sync notices.
 pub fn remove(root: &Path, id: &str) -> Result<(), String> {
     // Reserved builtin.* ids pass only to be looked up: they exist in the registry solely when
     // the application itself installed them, so an import can never reach them this way.
@@ -392,14 +409,24 @@ pub fn remove(root: &Path, id: &str) -> Result<(), String> {
     let mut registry = load_registry(root)?;
     match registry.plugins.get(id) {
         None => return Err("That plugin is not installed".into()),
-        Some(record) if is_bundled(record) => {
-            return Err("Bundled plugins cannot be removed; deactivate them instead".into());
+        Some(record) if latest_source(record) != Some(IMPORT_SOURCE) => {
+            return Err("This plugin comes from a package folder. Delete the folder instead".into());
         }
         Some(_) => {}
     }
-    registry.plugins.remove(id);
-    save_registry(root, &registry)?;
-    audit(root, "removed", id, "");
+    remove_locked(root, &mut registry, id, "removed")
+}
+
+/// Updates the registry first, then deletes the plugin's own folder; a failed delete leaves an
+/// unreferenced folder that a later install of identical bytes reuses. The caller holds the lock.
+pub(crate) fn remove_locked(root: &Path, registry: &mut Registry, id: &str, event: &str) -> Result<(), String> {
+    plugin_package::validate_id_for(id, true)?;
+    let removed = registry.plugins.remove(id).ok_or("That plugin is not installed")?;
+    if let Err(error) = save_registry(root, registry) {
+        registry.plugins.insert(id.to_string(), removed);
+        return Err(error);
+    }
+    audit(root, event, id, "");
     let folder: PathBuf = root.join(id);
     if plain_dir(&folder) {
         fs::remove_dir_all(&folder).map_err(|error| format!("The plugin was unregistered but its files could not be deleted: {error}"))?;
@@ -421,7 +448,7 @@ pub struct EntryPayload {
     pub behaviors: Vec<plugin_package::BehaviorContribution>,
     pub overlays: Vec<plugin_package::OverlayContribution>,
     pub tools: Vec<plugin_package::ToolContribution>,
-    /// `import` or `bundled`: where the approved version came from.
+    /// `import` or `local`: where the approved version came from.
     pub origin: String,
     pub source: String,
 }
@@ -429,7 +456,7 @@ pub struct EntryPayload {
 /// Events the renderer may add to the audit trail. Anything else is rejected.
 const RENDERER_EVENTS: &[&str] = &["permission_denied", "terminated_by_host", "protocol_violation", "isolation_failed", "plugin_error"];
 
-fn sorted(values: &[String]) -> Vec<String> {
+pub(crate) fn sorted(values: &[String]) -> Vec<String> {
     let mut copy = values.to_vec();
     copy.sort();
     copy.dedup();
@@ -527,8 +554,8 @@ pub fn set_active(root: &Path, id: &str, active: bool) -> Result<(), String> {
     mutate(root, id, if active { "activated" } else { "deactivated" }, |registry| {
         let disabled_all = registry.disabled_all;
         let record = record_mut(registry, id)?;
-        // The emergency switch covers external plugins only; first-party packages are exempt.
-        if active && disabled_all && !is_bundled(record) {
+        // The emergency switch covers imported packages only; local package folders are exempt.
+        if active && disabled_all && !exempt_from_switch(record) {
             return Err("External plugins are switched off".into());
         }
         if !active {
@@ -568,7 +595,7 @@ pub fn set_disabled_all(root: &Path, disabled: bool) -> Result<(), String> {
     let mut registry = load_registry(root)?;
     registry.disabled_all = disabled;
     if disabled {
-        for record in registry.plugins.values_mut().filter(|record| !is_bundled(record)) {
+        for record in registry.plugins.values_mut().filter(|record| !exempt_from_switch(record)) {
             if record.state == "active" {
                 record.state = "installed".into();
             }
@@ -603,12 +630,12 @@ pub fn read_entry(root: &Path, id: &str) -> Result<EntryPayload, String> {
     if entry.consent_at.is_none() || sorted(&entry.granted) != sorted(&entry.permissions) {
         return Err("The approval is incomplete; approve the plugin again".into());
     }
-    let bundled = entry.source == BUNDLED_SOURCE;
-    if registry.disabled_all && !bundled {
+    let local = entry.source == LOCAL_SOURCE;
+    if registry.disabled_all && !local {
         return Err("External plugins are switched off".into());
     }
     let folder = root.join(id).join(&entry.dir);
-    let manifest = plugin_package::parse_manifest_for(&read_plain(&folder.join(plugin_package::MANIFEST_ENTRY), plugin_package::MAX_MANIFEST_BYTES)?, bundled)?;
+    let manifest = plugin_package::parse_manifest_for(&read_plain(&folder.join(plugin_package::MANIFEST_ENTRY), plugin_package::MAX_MANIFEST_BYTES)?, local)?;
     if manifest.id != id || manifest.version != entry.version || manifest.sdk_version != entry.sdk_version {
         return Err("The installed manifest does not match the approved version".into());
     }
@@ -624,7 +651,7 @@ pub fn read_entry(root: &Path, id: &str) -> Result<EntryPayload, String> {
         behaviors: manifest.contributions.behaviors,
         overlays: manifest.contributions.overlays,
         tools: manifest.contributions.tools,
-        origin: if bundled { "bundled" } else { "import" }.to_string(),
+        origin: if local { LOCAL_SOURCE } else { IMPORT_SOURCE }.to_string(),
         source,
     })
 }
