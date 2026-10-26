@@ -2,6 +2,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readFile, stat, writeFile } from '@tauri-apps/plugin-fs'
 import { Unzip, UnzipInflate, UnzipPassThrough, strFromU8 } from 'fflate'
 import { findRemoteCssReference } from './cssGuard'
+import { installExternalPlugin } from './externalPlugins'
 import { MOD_KIND, type ModKind } from './modCatalog'
 import { prepareModLibrary } from './modLibrary'
 import { collectPackage, installPackage, type PackageFs } from './templateIo'
@@ -212,11 +213,9 @@ export async function pickModSource(source: ModImportSource, kind: ModKind): Pro
     const picked = await open({ directory: true, multiple: false })
     return typeof picked === 'string' ? picked.replaceAll('\\', '/') : null
   }
-  const extensions = kind === MOD_KIND.THEMES ? ['zip', 'css'] : ['zip']
-  const picked = await open({
-    multiple: false,
-    filters: [{ name: kind === MOD_KIND.THEMES ? 'Theme archive or CSS' : 'Mod archive (.zip)', extensions }],
-  })
+  const extensions = kind === MOD_KIND.THEMES ? ['zip', 'css'] : kind === MOD_KIND.PLUGINS ? ['zip', 'gmp'] : ['zip']
+  const name = kind === MOD_KIND.THEMES ? 'Theme archive or CSS' : kind === MOD_KIND.PLUGINS ? 'Plugin package (.zip, .gmp)' : 'Mod archive (.zip)'
+  const picked = await open({ multiple: false, filters: [{ name, extensions }] })
   return typeof picked === 'string' ? picked.replaceAll('\\', '/') : null
 }
 
@@ -229,6 +228,9 @@ export async function importModFromPath(
 ): Promise<string> {
   const normalized = sourcePath.replaceAll('\\', '/').replace(/\/$/, '')
   const baseName = normalized.slice(normalized.lastIndexOf('/') + 1)
+  // A downloaded plugin package never reaches the trusted loader: native validation and managed
+  // storage install it disabled and unverified. Folders stay a deliberate local-trust action.
+  if (kind === MOD_KIND.PLUGINS && source === 'zip') return (await installExternalPlugin(normalized)).id
   const paths = await prepareModLibrary()
 
   if (kind === MOD_KIND.TEMPLATES) {

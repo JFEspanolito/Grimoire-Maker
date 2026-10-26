@@ -4,6 +4,9 @@ import { useModStore } from '../../stores/modStore'
 import { MOD_KIND, type ModKind } from '../../lib/modCatalog'
 import { importModFromPath, pickModSource, type ModImportSource } from '../../lib/modImport'
 import { isTauri } from '../../hooks/useFileSystem'
+import {
+  listExternalPlugins, removeExternalPlugin, summarizeExternalPlugins, type ExternalPluginSummary,
+} from '../../lib/externalPlugins'
 import styles from './ModManager.module.css'
 
 export interface ModManagerProps {
@@ -29,11 +32,17 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
   const [importSourcePath, setImportSourcePath] = useState('')
   const [importError, setImportError] = useState('')
   const [importing, setImporting] = useState(false)
+  const [external, setExternal] = useState<ExternalPluginSummary[]>([])
+
+  const loadExternal = async () => setExternal(summarizeExternalPlugins(await listExternalPlugins()))
 
   useEffect(() => {
     const element = dialog.current
     element?.showModal()
-    if (isTauri()) void reload().catch(() => undefined)
+    if (isTauri()) {
+      void reload().catch(() => undefined)
+      void loadExternal().catch((error) => reportError('mods.external.list', error))
+    }
     return () => element?.close()
   }, [reload])
 
@@ -84,6 +93,7 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
       setActiveKind(importKind)
       setImportOpen(false)
       await reload()
+      if (importKind === MOD_KIND.PLUGINS && importSource === 'zip') await loadExternal()
     } catch (error) {
       reportError('mods.import', error)
       setImportError(friendlyErrorMessage(error, 'Could not import the selected mod.'))
@@ -148,6 +158,26 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
               </span>
               <button type="button" className={styles.install} disabled={busy} aria-label={`Install official plugin ${plugin.label}`}
                 onClick={() => void run(() => installOfficial(plugin.folder))}>Install official plugin</button>
+            </div>)}
+          </div>}
+          {activeKind === MOD_KIND.PLUGINS && external.length > 0 && <div className={styles.list} aria-label="External plugins">
+            <p className={styles.description}>
+              Imported packages are stored apart from your local plugins and stay off. They cannot run until the isolated
+              runtime is available; installing one never executes its code.
+            </p>
+            {external.map((plugin) => <div className={styles.row} key={plugin.id}>
+              <span>
+                <strong>{plugin.name} <small>v{plugin.version}</small></strong>
+                <small>{plugin.id} · by {plugin.author} (declared, not verified)</small>
+                <small>{plugin.description}</small>
+                <small>Permissions requested: {plugin.permissions.length ? plugin.permissions.join(', ') : 'none'}</small>
+                <small>Fingerprint {plugin.fingerprint.slice(0, 12)}</small>
+                <small className={styles.notice}>
+                  {plugin.state === 'altered' ? 'Files changed after installation: reinstall this plugin.' : 'Unverified · Isolated plugin · Activation unavailable'}
+                </small>
+              </span>
+              <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}
+                onClick={() => void run(async () => { await removeExternalPlugin(plugin.id); await loadExternal() })}>Remove</button>
             </div>)}
           </div>}
           {visibleMods.length === 0 ? (
@@ -217,7 +247,9 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
                   setImportError('')
                 }}
               >
-                <option value="zip">{importKind === MOD_KIND.THEMES ? 'ZIP / CSS File' : 'ZIP Archive'}</option>
+                <option value="zip">
+                  {importKind === MOD_KIND.THEMES ? 'ZIP / CSS File' : importKind === MOD_KIND.PLUGINS ? 'Plugin package (.zip / .gmp)' : 'ZIP Archive'}
+                </option>
                 <option value="folder">Folder</option>
               </select>
             </label>
@@ -238,6 +270,13 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
               </div>
             </div>
 
+            {importKind === MOD_KIND.PLUGINS && (
+              <p className={styles.notice}>
+                {importSource === 'zip'
+                  ? 'Packages are checked, stored separately, and left disabled and unverified.'
+                  : 'A folder is copied as trusted local code and runs with the app\'s permissions.'}
+              </p>
+            )}
             {importError && <p role="alert" className={styles.errors}>{importError}</p>}
 
             <footer className={styles.modalActions}>

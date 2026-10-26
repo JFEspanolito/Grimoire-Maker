@@ -4,11 +4,18 @@ import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { ModManager } from './ModManager'
 import { useModStore } from '../../stores/modStore'
 import { importModFromPath, pickModSource } from '../../lib/modImport'
+import { listExternalPlugins, removeExternalPlugin } from '../../lib/externalPlugins'
 
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true }))
 vi.mock('../../lib/modImport', () => ({
   pickModSource: vi.fn(async () => '/downloads/my-theme.zip'),
   importModFromPath: vi.fn(async () => 'my-theme'),
+}))
+
+vi.mock('../../lib/externalPlugins', async (original) => ({
+  ...(await original<typeof import('../../lib/externalPlugins')>()),
+  listExternalPlugins: vi.fn(async () => ({ version: 1, plugins: {} })),
+  removeExternalPlugin: vi.fn(async () => {}),
 }))
 
 const initial = useModStore.getState()
@@ -110,5 +117,36 @@ it('offers to install official plugins that are missing and restores the chosen 
   expect(install.textContent).toBe('Install official plugin')
   await act(async () => install.click())
   expect(installOfficial).toHaveBeenCalledWith('bookmarks')
+  await act(async () => root.unmount())
+})
+
+it('lists imported external plugins as unverified and inactive, with no way to enable them', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const version = {
+    dir: '1.0.0-0123456789ab', version: '1.0.0', fingerprint: '0123456789abcdef', name: 'Community Zoom', author: 'Someone',
+    description: 'Zoom controls.', permissions: ['editor:zoom:read'], granted: [], installedAt: 1, source: 'import', signature: null,
+  }
+  vi.mocked(listExternalPlugins).mockResolvedValue({
+    version: 1,
+    plugins: { 'community.zoom': { latest: version.dir, current: null, state: 'installed', versions: [version] } },
+  })
+  useModStore.setState({ busy: false, ready: true, errors: [], reload: vi.fn(async () => {}), mods: [], missingOfficial: [] })
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => root.render(<ModManager onClose={() => {}} />))
+  await act(async () => container.querySelector<HTMLButtonElement>('[role="tab"]:last-of-type')!.click())
+
+  const list = container.querySelector('[aria-label="External plugins"]')!
+  expect(list.textContent).toContain('Community Zoom')
+  expect(list.textContent).toContain('by Someone (declared, not verified)')
+  expect(list.textContent).toContain('Permissions requested: editor:zoom:read')
+  expect(list.textContent).toContain('Unverified · Isolated plugin · Activation unavailable')
+  expect(list.querySelector('input[type="checkbox"]')).toBeNull()
+
+  vi.mocked(listExternalPlugins).mockResolvedValue({ version: 1, plugins: {} })
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Remove external plugin Community Zoom"]')!.click())
+  expect(removeExternalPlugin).toHaveBeenCalledWith('community.zoom')
+  expect(container.querySelector('[aria-label="External plugins"]')).toBeNull()
   await act(async () => root.unmount())
 })
