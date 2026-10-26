@@ -15,6 +15,8 @@ export interface ModEntry {
   folder: string
   enabled: boolean
   errors: string[]
+  /** Set when a bundled isolated plugin with this id replaces the folder; the folder is left unloaded. */
+  replacedBy?: string
 }
 export interface ModFileEntry { name: string; isDirectory: boolean; isSymlink?: boolean }
 export interface ModFs {

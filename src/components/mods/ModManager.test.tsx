@@ -2,6 +2,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { ModManager } from './ModManager'
+import type { ModEntry } from '../../lib/modCatalog'
 import { useModStore } from '../../stores/modStore'
 import { importModFromPath, pickModSource } from '../../lib/modImport'
 import { grantPluginConsent, listExternalPlugins, removeExternalPlugin } from '../../lib/externalPlugins'
@@ -135,13 +136,13 @@ const externalVersion = {
   installedAt: 1, source: 'import', signature: null,
 }
 
-async function openExternal(record: { current: string | null; state: string }, disabledAll = false) {
+async function openExternal(record: { current: string | null; state: string }, disabledAll = false, version = externalVersion, mods: ModEntry[] = []) {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   vi.mocked(listExternalPlugins).mockResolvedValue({
     version: 1, disabledAll,
-    plugins: { 'community.zoom': { latest: externalVersion.dir, ...record, versions: [externalVersion] } },
+    plugins: { 'community.zoom': { latest: version.dir, ...record, versions: [version] } },
   })
-  useModStore.setState({ busy: false, ready: true, errors: [], reload: vi.fn(async () => {}), mods: [], missingOfficial: [] })
+  useModStore.setState({ busy: false, ready: true, errors: [], reload: vi.fn(async () => {}), mods, missingOfficial: [] })
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -224,3 +225,31 @@ it('the emergency switch disables every external plugin and blocks activation wh
   await off.close()
 })
 
+const bundledVersion = { ...externalVersion, source: 'bundled', author: 'Grimoire Maker', name: 'Zoom', dir: '2.0.0-aaaaaaaaaaaa', version: '2.0.0' }
+
+it('shows a bundled plugin as part of the app: no approval, no removal, spared by the emergency switch', async () => {
+  const { container, button, close } = await openExternal({ current: bundledVersion.dir, state: 'active' }, true, bundledVersion)
+  expect(container.textContent).toContain('Bundled with the app · Isolated plugin')
+  expect(container.textContent).not.toContain('declared, not verified')
+  expect(button('Remove external plugin Zoom')).toBeNull()
+  expect(button('Review and approve Zoom')).toBeNull()
+  expect(button('Deactivate external plugin Zoom')!.disabled).toBe(false)
+  await close()
+})
+
+it('explains that an edited local copy is used instead of the bundled plugin', async () => {
+  useModStore.setState({ localWins: ['community.zoom'] })
+  const { container, button, close } = await openExternal({ current: bundledVersion.dir, state: 'installed' }, false, bundledVersion)
+  expect(container.textContent).toContain('Off: your edited local copy is in use instead')
+  expect(button('Activate external plugin Zoom')!.disabled).toBe(true)
+  await close()
+  useModStore.setState({ localWins: [] })
+})
+
+it('marks a replaced trusted folder and does not let it be switched on', async () => {
+  const replaced: ModEntry = { id: 'Plugins/zoom', kind: 'Plugins', label: 'zoom', folder: '/p/zoom', enabled: false, errors: [], replacedBy: 'builtin.zoom' }
+  const { container, close } = await openExternal({ current: null, state: 'installed' }, false, externalVersion, [replaced])
+  expect(container.textContent).toContain('Replaced by the bundled isolated plugin (builtin.zoom)')
+  expect(container.querySelector<HTMLInputElement>('input[aria-label="Enable zoom"]')!.disabled).toBe(true)
+  await close()
+})

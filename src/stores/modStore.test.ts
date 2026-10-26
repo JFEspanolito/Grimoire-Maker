@@ -4,7 +4,7 @@ import { useTemplateStore } from './templateStore'
 
 const state = vi.hoisted(() => ({ disabled: [] as string[], failWrite: false }))
 vi.mock('../lib/modLibrary', () => ({
-  modFs: {}, OFFICIAL_PLUGINS: [], restoreOfficialPlugin: vi.fn(async () => {}), prepareModLibrary: vi.fn(async () => ({ root: '/Mods', templates: '/Mods/Templates', preferences: '/mods.json' })),
+  modFs: {}, OFFICIAL_PLUGINS: [], BASELINE_PLUGINS: [], restoreOfficialPlugin: vi.fn(async () => {}), prepareModLibrary: vi.fn(async () => ({ root: '/Mods', templates: '/Mods/Templates', preferences: '/mods.json' })),
   readDisabledMods: vi.fn(async () => [...state.disabled]),
   writeDisabledMods: vi.fn(async (_path: string, disabled: string[]) => {
     if (state.failWrite) throw new Error('Disk full')

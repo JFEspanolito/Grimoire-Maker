@@ -4,7 +4,8 @@ import {
   setExternalPluginsDisabled, stopExternalPlugin,
 } from '../../lib/externalPlugins'
 import { reportError } from '../../lib/errorLogging'
-import { registerPlugin } from '../plugin-manager'
+import { useModStore } from '../../stores/modStore'
+import { registerPlugin, usePluginRegistry } from '../plugin-manager'
 import { hostCapabilities, watchHost } from './capabilities'
 import { registerHostContributions } from './hostContributions'
 import { runIsolationProbes, type IsolationReport } from './probes'
@@ -18,7 +19,7 @@ interface ExternalRuntimeState {
 }
 export const useExternalRuntime = create<ExternalRuntimeState>(() => ({ running: [], isolation: null, checking: false }))
 
-interface Live { instance: PluginInstance; cleanup: () => void }
+interface Live { instance: PluginInstance; cleanup: () => void; bundled: boolean }
 const live = new Map<string, Live>()
 /** One token per start attempt; removing it cancels that attempt wherever it is awaiting. */
 const starts = new Map<string, symbol>()
@@ -60,6 +61,9 @@ function finished(id: string, reason: StopReason, detail: string) {
 /** Starts an already active plugin: re-verifies the files natively, then runs it isolated. */
 export async function startExternalPlugin(id: string): Promise<void> {
   if (live.has(id) || starts.has(id)) return
+  if (useModStore.getState().localWins.includes(id)) {
+    throw new Error('A locally edited copy of this plugin is in use. Reset or remove it to use the bundled version.')
+  }
   const token = Symbol(id)
   starts.set(id, token)
   const cancelled = () => starts.get(id) !== token
@@ -72,6 +76,10 @@ export async function startExternalPlugin(id: string): Promise<void> {
     }
     const entry = await readExternalPluginEntry(id)
     if (cancelled()) return
+    // The bundled version keeps the trusted plugin's id, so a loaded trusted copy can never run beside it.
+    if (entry.origin === 'bundled' && usePluginRegistry.getState().plugins.some((plugin) => plugin.id === id)) {
+      throw new Error('A trusted plugin with this id is already loaded')
+    }
     let instance: PluginInstance | null = null
     const early: { stop: { reason: StopReason; detail: string } | null } = { stop: null }
     instance = await startPlugin({
@@ -95,12 +103,12 @@ export async function startExternalPlugin(id: string): Promise<void> {
     if (declares) {
       const send = (command: string, value: string | null) => instance?.command(command, value)
       cleanups.push(registerPlugin({
-        id: `external.${id}`, name: id, version: entry.version,
+        id: entry.origin === 'bundled' ? id : `external.${id}`, name: id, version: entry.version,
         activate: (api) => registerHostContributions(api, entry, send),
       }))
     }
     cleanups.push(watchHost((topic) => instance?.emit(topic)))
-    live.set(id, { instance, cleanup: () => cleanups.reverse().forEach((cleanup) => { try { cleanup() } catch (error) { reportError('plugin.external.cleanup', error) } }) })
+    live.set(id, { instance, bundled: entry.origin === 'bundled', cleanup: () => cleanups.reverse().forEach((cleanup) => { try { cleanup() } catch (error) { reportError('plugin.external.cleanup', error) } }) })
     setRunning()
   } finally {
     if (starts.get(id) === token) starts.delete(id)
@@ -127,17 +135,23 @@ export async function activateExternalPlugin(id: string): Promise<void> {
 export async function setExternalKillSwitch(disabled: boolean): Promise<void> {
   if (disabled) {
     starts.clear()
-    for (const { instance } of [...live.values()]) instance.stop('killed')
+    for (const { instance, bundled } of [...live.values()]) if (!bundled) instance.stop('killed')
   }
   await setExternalPluginsDisabled(disabled)
+  // Clearing the pending starts above may have cancelled a first-party plugin that the switch spares.
+  if (disabled) await startActiveExternalPlugins().catch((error) => reportError('plugin.external.start', error))
 }
 
 /** App start: native integrity checks run inside the registry listing and again per plugin read. */
 export async function startActiveExternalPlugins(): Promise<void> {
+  // Trusted plugins are reconciled first, so a migrated plugin has exactly one implementation running.
+  const mods = useModStore.getState()
+  if (!mods.ready) await mods.reload().catch((error) => reportError('plugin.external.mods', error))
   const registry = await listExternalPlugins()
-  if (registry.disabledAll) return
   for (const [id, record] of Object.entries(registry.plugins)) {
-    if (record.state !== 'active') continue
+    if (record.state !== 'active' || useModStore.getState().localWins.includes(id)) continue
+    // The emergency switch stops imported packages; first-party bundled ones keep running.
+    if (registry.disabledAll && record.versions.find((version) => version.dir === record.current)?.source !== 'bundled') continue
     try { await startExternalPlugin(id) } catch (error) { reportError('plugin.external.start', error) }
   }
 }

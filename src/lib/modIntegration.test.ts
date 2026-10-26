@@ -66,7 +66,7 @@ it('seeds executable plugins but keeps snippets declarative and isolates broken 
  expect(useModStore.getState().errors.join()).toContain('index.md')
  expect(useTemplateStore.getState().templates.some(t => t.id === 'linked')).toBe(false)
  expect(scope.reads.some(p => p.endsWith('/Snippets/Community/ignored.js'))).toBe(false)
- expect(scope.reads.some(p => p.endsWith('/Plugins/zoom/zoom.tsx'))).toBe(true)
+ expect(scope.reads.some(p => p.endsWith('/Plugins/bookmarks/bookmarks.tsx'))).toBe(true)
  expect(useModStore.getState().errors.join()).toContain('Plugins/probe')
  expect(useTemplateStore.getState().templates).toHaveLength(3)
 })
@@ -103,11 +103,11 @@ it('upgrades old descriptor installations without overwriting edited executable 
   const plugins = `${scope.root}/Mods/Plugins`
   await fs.unlink(`${plugins}/.executable-plugins-v1-seeded`)
   await fs.writeFile(`${plugins}/.plugins-seeded`, '1\n')
-  await fs.writeFile(`${plugins}/zoom/zoom.tsx`, '// author edit')
-  await fs.unlink(`${plugins}/zoom/script.ts`)
+  await fs.writeFile(`${plugins}/bookmarks/bookmarks.tsx`, '// author edit')
+  await fs.unlink(`${plugins}/bookmarks/anchors.ts`)
   await prepareModLibrary()
-  expect(await fs.readFile(`${plugins}/zoom/zoom.tsx`, 'utf8')).toBe('// author edit')
-  expect(await fs.readFile(`${plugins}/zoom/script.ts`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/zoom/script.ts'])
+  expect(await fs.readFile(`${plugins}/bookmarks/bookmarks.tsx`, 'utf8')).toBe('// author edit')
+  expect(await fs.readFile(`${plugins}/bookmarks/anchors.ts`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/bookmarks/anchors.ts'])
   expect(await fs.readFile(`${plugins}/.executable-plugins-v1-seeded`, 'utf8')).toBe('1\n')
 })
 it('toggle serializes with refresh and survives a module-level app restart without builtins fallback', async () => {
@@ -188,4 +188,33 @@ it('upgrades legacy template examples without replacing edits and applies every 
     }
     expect(await fs.access(`${index.slice(0, -'index.md'.length)}README.md`).then(() => true, () => false)).toBe(false)
   }
+})
+
+const copyShipped = async (folder: string) => {
+  for (const [path, text] of Object.entries(MOD_EXAMPLES).filter(([key]) => key.startsWith(`Plugins/${folder}/`))) await put(`Mods/${path}`, text)
+}
+
+it('does not seed the plugins that moved to bundled isolated packages, but still seeds the others', async () => {
+  const plugins = `${scope.root}/Mods/Plugins`
+  expect(await fs.access(`${plugins}/zoom`).then(() => true, () => false)).toBe(false)
+  expect(await fs.access(`${plugins}/pixel-ruler`).then(() => true, () => false)).toBe(false)
+  expect(await fs.access(`${plugins}/bookmarks/bookmarks.tsx`).then(() => true, () => false)).toBe(true)
+  expect(useModStore.getState().missingOfficial.map(plugin => plugin.folder)).not.toContain('zoom')
+})
+
+it('replaces an untouched trusted copy of a migrated plugin and lets an edited copy win, never both', async () => {
+  await copyShipped('zoom')
+  await useModStore.getState().reload()
+  const replaced = useModStore.getState().mods.find(mod => mod.id === 'Plugins/zoom')!
+  expect(replaced).toMatchObject({ enabled: false, replacedBy: 'builtin.zoom' })
+  expect(useModStore.getState().localWins).toEqual([])
+  expect(await fs.readFile(`${scope.root}/Mods/Plugins/zoom/zoom.tsx`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/zoom/zoom.tsx'])
+
+  await put('Mods/Plugins/zoom/zoom.tsx', `${MOD_EXAMPLES['Plugins/zoom/zoom.tsx']}\n// my tweak`)
+  await useModStore.getState().reload()
+  const edited = useModStore.getState().mods.find(mod => mod.id === 'Plugins/zoom')!
+  expect(edited.replacedBy).toBeUndefined()
+  expect(edited.enabled).toBe(true)
+  expect(useModStore.getState().localWins).toEqual(['builtin.zoom'])
+  expect(await fs.readFile(`${scope.root}/Mods/Plugins/zoom/zoom.tsx`, 'utf8')).toContain('// my tweak')
 })

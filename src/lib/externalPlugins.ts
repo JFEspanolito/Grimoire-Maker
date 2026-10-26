@@ -41,6 +41,8 @@ export interface ExternalPluginSummary {
   permissions: string[]
   fingerprint: string
   sdkVersion: number
+  /** `import` for a package the user added, `bundled` for one shipped inside the application. */
+  source: string
   state: string
   /** Newer bytes than the approved version exist, or nothing has been approved yet. */
   approved: boolean
@@ -115,6 +117,7 @@ export function summarizeExternalPlugins(registry: ExternalPluginRegistry): Exte
       permissions: latest.permissions,
       fingerprint: latest.fingerprint,
       sdkVersion: latest.sdkVersion,
+      source: latest.source,
       state: record.state,
       approved: record.current === record.latest,
     }]

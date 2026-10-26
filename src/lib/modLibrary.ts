@@ -3,10 +3,14 @@ import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } fro
 import { ensureModDirectory, seedExamples, type ModFs } from './modCatalog'
 import { loadLibraryPaths, type LibraryPaths } from './preferences'
 import { installOfficialPlugin, listOfficialPlugins } from './officialPlugins'
+import { MIGRATED_FOLDERS } from './migratedPlugins'
 
 const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/Plugins/**/*.{ts,tsx,js,css}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 export const MOD_EXAMPLES = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
-export const OFFICIAL_PLUGINS = listOfficialPlugins(MOD_EXAMPLES)
+/** Everything the application ever shipped as a trusted plugin; the baseline for untouched-copy checks. */
+export const BASELINE_PLUGINS = listOfficialPlugins(MOD_EXAMPLES)
+/** What is still seeded and offered for restore: plugins that moved to isolated packages are not. */
+export const OFFICIAL_PLUGINS = BASELINE_PLUGINS.filter((plugin) => !MIGRATED_FOLDERS.includes(plugin.folder))
 export const modFs: ModFs = {
   exists, readDir, readTextFile, stat,
   mkdir: (path) => mkdir(path, { recursive: true }),
@@ -32,7 +36,7 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
   const examples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => {
     if (path.startsWith('Templates/')) return paths.templates === `${root}/Templates`
     if (path.startsWith('Snippets/')) return paths.snippets === `${root}/Snippets`
-    if (path.startsWith('Plugins/')) return paths.plugins === `${root}/Plugins`
+    if (path.startsWith('Plugins/')) return paths.plugins === `${root}/Plugins` && !MIGRATED_FOLDERS.includes(path.split('/')[1])
     return false
   }))
   await seedExamples(modFs, root, examples)
@@ -48,7 +52,7 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
     await modFs.writeTextFile(`${root}/Templates/.complete-templates-v1-seeded`, '1\n')
   }
   if (paths.plugins === `${root}/Plugins` && !(await exists(`${root}/Plugins/.executable-plugins-v1-seeded`))) {
-    const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/')))
+    const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/') && !MIGRATED_FOLDERS.includes(path.split('/')[1])))
     for (const [relative, contents] of Object.entries(pluginExamples)) {
       const segments = relative.split('/')
       let parent = root

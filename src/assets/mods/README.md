@@ -64,6 +64,20 @@ Every call returns a promise and is rejected without the matching permission.
 Limits to know: the browser cannot cap a plugin's memory, so a plugin that
 allocates without bound can slow or crash the application window; remove it.
 
+### Zoom and Pixel Ruler
+
+Zoom and Pixel Ruler now ship inside the application as bundled isolated
+packages (`builtin.zoom`, `builtin.pixel-ruler`). They are pre-approved, drawn by
+the application from their manifests, listed as "Bundled with the app", cannot
+be removed (only deactivated) and are not stopped by "Disable all external
+plugins". New installations no longer copy their old source folders. If you
+already have `Plugins/zoom` or `Plugins/pixel-ruler`:
+- an **untouched** copy is left on disk but not loaded (the bundled plugin runs);
+- a copy you **edited or extended** keeps running and the bundled plugin stays
+  off, so your changes are never overridden. Delete the folder or restore the
+  original files to switch to the bundled version.
+The two never run at the same time.
+
 ### Writing a plugin package
 
 A package is a folder with `manifest.json` and `dist/index.js`. Build the entry

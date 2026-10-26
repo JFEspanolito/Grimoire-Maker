@@ -10,22 +10,28 @@ interface Props {
   busy: boolean
   /** The global emergency switch is on. */
   switchedOff: boolean
+  /** An edited local copy of the same plugin is running instead of this bundled one. */
+  localCopyInUse: boolean
   run(operation: () => Promise<unknown>): Promise<void>
   refresh(): Promise<void>
 }
 
-function statusText(plugin: ExternalPluginSummary, running: boolean, switchedOff: boolean): string {
-  const mode = 'Unverified · Isolated plugin'
+function statusText(plugin: ExternalPluginSummary, running: boolean, switchedOff: boolean, localCopyInUse: boolean): string {
+  const bundled = plugin.source === 'bundled'
+  const mode = bundled ? 'Bundled with the app · Isolated plugin' : 'Unverified · Isolated plugin'
+  if (bundled && localCopyInUse) return `${mode} · Off: your edited local copy is in use instead`
   if (plugin.state === 'altered') return 'Files changed after installation. Remove this plugin, then import the package again.'
-  if (switchedOff) return `${mode} · All external plugins are switched off`
+  if (switchedOff && !bundled) return `${mode} · All external plugins are switched off`
   if (!plugin.approved) return `${mode} · Needs your approval`
   if (plugin.state === 'active') return `${mode} · ${running ? 'Running' : 'Active, not running'}`
   if (plugin.state === 'stopped') return `${mode} · Stopped because it failed or stopped responding`
   return `${mode} · Off`
 }
 
-export function ExternalPluginCard({ plugin, running, busy, switchedOff, run, refresh }: Props) {
+export function ExternalPluginCard({ plugin, running, busy, switchedOff, localCopyInUse, run, refresh }: Props) {
   const [reviewing, setReviewing] = useState(false)
+  const bundled = plugin.source === 'bundled'
+  const blocked = (switchedOff && !bundled) || (bundled && localCopyInUse)
 
   const approveAndActivate = () => run(async () => {
     // Approving an update stops the version that is still running, so the new one can start.
@@ -47,17 +53,17 @@ export function ExternalPluginCard({ plugin, running, busy, switchedOff, run, re
     <div className={styles.row}>
       <span>
         <strong>{plugin.name} <small>v{plugin.version}</small></strong>
-        <small>{plugin.id} · by {plugin.author} (declared, not verified)</small>
+        <small>{plugin.id} · by {plugin.author}{bundled ? '' : ' (declared, not verified)'}</small>
         <small>{plugin.description}</small>
         <small>Permissions requested: {plugin.permissions.length ? plugin.permissions.join(', ') : 'none'}</small>
         <small>Fingerprint {plugin.fingerprint.slice(0, 12)}</small>
-        <small className={styles.notice}>{statusText(plugin, running, switchedOff)}</small>
+        <small className={styles.notice}>{statusText(plugin, running, switchedOff, localCopyInUse)}</small>
       </span>
       {!altered && !plugin.approved && (
-        <button type="button" disabled={busy || switchedOff} aria-label={`Review and approve ${plugin.name}`} onClick={() => setReviewing(true)}>Review…</button>
+        <button type="button" disabled={busy || blocked} aria-label={`Review and approve ${plugin.name}`} onClick={() => setReviewing(true)}>Review…</button>
       )}
       {!altered && plugin.approved && (
-        <button type="button" disabled={busy || switchedOff} aria-label={`${plugin.state === 'active' ? 'Deactivate' : 'Activate'} external plugin ${plugin.name}`} onClick={() => void toggle()}>
+        <button type="button" disabled={busy || (blocked && plugin.state !== 'active')} aria-label={`${plugin.state === 'active' ? 'Deactivate' : 'Activate'} external plugin ${plugin.name}`} onClick={() => void toggle()}>
           {plugin.state === 'active' ? 'Deactivate' : 'Activate'}
         </button>
       )}
@@ -65,8 +71,10 @@ export function ExternalPluginCard({ plugin, running, busy, switchedOff, run, re
         <button type="button" disabled={busy} aria-label={`Deactivate external plugin ${plugin.name}`}
           onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id); await refresh() })}>Deactivate</button>
       )}
-      <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}
-        onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id).catch(() => undefined); await removeExternalPlugin(plugin.id); await refresh() })}>Remove</button>
+      {!bundled && (
+        <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}
+          onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id).catch(() => undefined); await removeExternalPlugin(plugin.id); await refresh() })}>Remove</button>
+      )}
 
       {reviewing && (
         <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby={`consent-${plugin.id}`}>

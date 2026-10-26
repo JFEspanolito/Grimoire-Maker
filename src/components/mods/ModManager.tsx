@@ -23,7 +23,7 @@ const CATEGORIES: ModKind[] = [
 
 export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial } = useModStore()
+  const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial, localWins } = useModStore()
   const [activeKind, setActiveKind] = useState<ModKind>(MOD_KIND.SNIPPETS)
   const [actionError, setActionError] = useState('')
   const [importOpen, setImportOpen] = useState(false)
@@ -185,7 +185,7 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
               </button>
             </div>
             {external.map((plugin) => <ExternalPluginCard key={plugin.id} plugin={plugin} running={running.includes(plugin.id)}
-              busy={busy} switchedOff={switchedOff} run={run} refresh={loadExternal} />)}
+              busy={busy} switchedOff={switchedOff} localCopyInUse={localWins.includes(plugin.id)} run={run} refresh={loadExternal} />)}
           </div>}
           {visibleMods.length === 0 ? (
             <p className={styles.description}>
@@ -200,13 +200,16 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
                   <input
                     type="checkbox"
                     checked={mod.enabled}
-                    disabled={busy}
+                    disabled={busy || !!mod.replacedBy}
                     aria-label={`Enable ${mod.label}`}
                     onChange={(event) => void run(() => setEnabled(mod.id, event.target.checked))}
                   />
                   <span>
                     <strong>{mod.label}</strong>
                     <small>{mod.folder}</small>
+                    {mod.replacedBy && (
+                      <small className={styles.notice}>Replaced by the bundled isolated plugin ({mod.replacedBy}). Your files are kept; edit them and they run instead.</small>
+                    )}
                     {mod.errors.length > 0 && (
                       <small className={styles.notice}>Contains invalid files; see errors above.</small>
                     )}
