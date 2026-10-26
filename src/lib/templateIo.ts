@@ -96,8 +96,11 @@ export async function createTemplateDocuments(fs: ProjectPackageFs, draft: strin
   const packageFiles = template.location?.kind === 'package'
     ? await collectPackage(fs, template.location.path)
     : {}
-  const documents = Object.fromEntries(Object.entries(packageFiles).filter(([name]) =>
-    (name.startsWith('chapters/') && /\.md$/i.test(name)) || name.startsWith('assets/')))
+  // A project exported as a template brings its whole tree; older packages only bring chapters and assets.
+  const wanted = template.layout === 'project'
+    ? (name: string) => name !== 'index.md' && name !== 'theme.css' && name !== 'template.json' && !name.startsWith('snippets/')
+    : (name: string) => (name.startsWith('chapters/') && /\.md$/i.test(name)) || name.startsWith('assets/')
+  const documents = Object.fromEntries(Object.entries(packageFiles).filter(([name]) => wanted(name)))
   documents['index.md'] = new TextEncoder().encode(serializeDocument(template.frontmatter, template.body))
 
   const folders = new Set<string>([staging])

@@ -173,16 +173,16 @@ describe('template.json manifest', () => {
     const { files, manifest: read } = readTemplatePackage(withManifest(manifest()))
     expect(read).toMatchObject({ id: 'base', name: 'Base Campaign', version: '1.0.0', grimoireVersion: '>=0.1.0', author: 'JF' })
     expect(Object.keys(files).sort()).toEqual(['Draft/One.md', 'index.md'])
-    expect(new TextDecoder().decode(files['index.md'])).toBe('---\ntemplateName: Base Campaign\n---\n# Base Campaign\n')
+    expect(new TextDecoder().decode(files['index.md'])).toBe('---\ntemplateName: Base Campaign\ntemplateLayout: project\n---\n# Base Campaign\n')
     expect(readTemplateZip(withManifest(manifest()))['template.json']).toBeUndefined()
   })
 
   it('adds templateName to an existing index.md without touching the rest, and keeps one that is there', () => {
     const plain = readTemplatePackage(withManifest(manifest(), { 'index.md': '---\ntitle: Mine\nitems:\n  - a\n---\n# Body\n' })).files['index.md']
-    expect(new TextDecoder().decode(plain)).toBe('---\ntemplateName: Base Campaign\ntitle: Mine\nitems:\n  - a\n---\n# Body\n')
+    expect(new TextDecoder().decode(plain)).toBe('---\ntemplateName: Base Campaign\ntemplateLayout: project\ntitle: Mine\nitems:\n  - a\n---\n# Body\n')
     const own = '---\ntemplateName: Own Label\n---\n# Body\n'
     expect(new TextDecoder().decode(readTemplatePackage(withManifest(manifest(), { 'index.md': own })).files['index.md'])).toBe(own)
-    expect(new TextDecoder().decode(readTemplatePackage(withManifest(manifest(), { 'index.md': '# Just text\n' })).files['index.md'])).toBe('---\ntemplateName: Base Campaign\n---\n# Just text\n')
+    expect(new TextDecoder().decode(readTemplatePackage(withManifest(manifest(), { 'index.md': '# Just text\n' })).files['index.md'])).toBe('---\ntemplateName: Base Campaign\ntemplateLayout: project\n---\n# Just text\n')
   })
 
   it('quotes a name that could break the frontmatter', () => {

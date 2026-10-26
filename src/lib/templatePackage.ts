@@ -252,7 +252,8 @@ export function parseTemplateManifest(bytes: Uint8Array, running: string = APP_V
 
 /** Gives index.md a `templateName` (the label Mod Manager shows) without disturbing anything else in it. */
 function withTemplateName(index: Uint8Array | undefined, manifest: TemplateManifest): Uint8Array {
-  const label = `templateName: ${yamlScalar(manifest.name)}`
+  // `templateLayout: project` tells the app to recreate the whole exported tree when the template is applied.
+  const label = `templateName: ${yamlScalar(manifest.name)}\ntemplateLayout: project`
   const description = manifest.description ? `\ndescription: ${yamlScalar(manifest.description.replace(/\s+/g, ' ').trim())}` : ''
   if (!index) return strToU8(`---\n${label}${description}\n---\n# ${manifest.name.replace(/[\r\n]+/g, ' ')}\n`)
   const text = strFromU8(index)

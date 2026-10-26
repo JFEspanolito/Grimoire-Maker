@@ -20,6 +20,8 @@ export interface Template {
   snippets?: TemplateSnippet[]
   /** Packages with chapters/assets require a project; a standalone index can fill an untitled editor. */
   requiresProject?: boolean
+  /** `project` when the template recreates a whole exported project tree, not only index.md, chapters and assets. */
+  layout?: 'project'
   /** Where a community template lives on disk, so it can be exported. */
   location?: { kind: 'package' | 'file'; path: string }
 }
@@ -110,6 +112,8 @@ export async function loadUserTemplates(takenThemeIds: Set<string>, options: Tem
       const { frontmatter, body } = parseDocument(raw)
       const label = String(frontmatter.templateName ?? id)
       delete frontmatter.templateName
+      const layout = frontmatter.templateLayout === 'project' ? ('project' as const) : undefined
+      delete frontmatter.templateLayout
 
       const themePath = `${dir}/${id}/theme.css`
       if (isPackage && children.some((file) => file.name === 'theme.css' && !file.isDirectory && !file.isSymlink)) {
@@ -137,6 +141,7 @@ export async function loadUserTemplates(takenThemeIds: Set<string>, options: Tem
         id,
         label,
         frontmatter,
+        ...(layout && { layout }),
         body,
         builtin: false,
         requiresProject: isPackage && children.some((file) => file.name === 'chapters' || file.name === 'assets'),
