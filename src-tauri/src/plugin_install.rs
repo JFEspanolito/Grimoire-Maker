@@ -193,6 +193,16 @@ fn write_entries(
         }
         hashes.push((path.clone(), hex(&hasher.finalize())));
     }
+    let files = hashes.len();
+    Ok(Extracted {
+        manifest: manifest.ok_or("manifest.json was not extracted")?,
+        fingerprint: combine(hashes),
+        files,
+    })
+}
+
+/// Canonical fingerprint: sorted `path\0file-hash\n` lines, so archive order never matters.
+fn combine(mut hashes: Vec<(String, String)>) -> String {
     hashes.sort();
     let mut overall = Sha256::new();
     for (path, hash) in &hashes {
@@ -201,11 +211,44 @@ fn write_entries(
         overall.update(hash.as_bytes());
         overall.update(b"\n");
     }
-    Ok(Extracted {
-        manifest: manifest.ok_or("manifest.json was not extracted")?,
-        fingerprint: hex(&overall.finalize()),
-        files: hashes.len(),
-    })
+    hex(&overall.finalize())
+}
+
+/// Recomputes the fingerprint of an installed version directory. Any extra, missing, changed or
+/// linked file yields a different value (or an error), which callers treat as tampering.
+pub fn fingerprint_dir(root: &Path) -> Result<String, String> {
+    fn walk(base: &Path, relative: &str, depth: usize, out: &mut Vec<(String, String)>) -> Result<(), String> {
+        if depth > package::MAX_DEPTH || out.len() > package::MAX_ENTRIES {
+            return Err("Installed plugin is larger than the package limits".into());
+        }
+        let folder = if relative.is_empty() { base.to_path_buf() } else { base.join(relative) };
+        for entry in fs::read_dir(&folder).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let path = if relative.is_empty() { name } else { format!("{relative}/{name}") };
+            let info = fs::symlink_metadata(entry.path()).map_err(|error| error.to_string())?;
+            crate::safe_copy::reject_special(&info)?;
+            if info.is_dir() {
+                walk(base, &path, depth + 1, out)?;
+            } else {
+                let mut hasher = Sha256::new();
+                let mut file = File::open(entry.path()).map_err(|error| error.to_string())?;
+                let mut buffer = [0u8; 64 * 1024];
+                loop {
+                    let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
+                    if count == 0 {
+                        break;
+                    }
+                    hasher.update(&buffer[..count]);
+                }
+                out.push((path, hex(&hasher.finalize())));
+            }
+        }
+        Ok(())
+    }
+    let mut hashes = Vec::new();
+    walk(root, "", 0, &mut hashes)?;
+    Ok(combine(hashes))
 }
 
 /// Creates one component at a time inside our own staging tree and refuses anything that is
@@ -291,6 +334,14 @@ mod tests {
         assert_eq!(extracted.files, 2);
         assert_eq!(fs::read(scratch.0.join("staging/dist/index.js")).unwrap(), b"export default {}");
         assert_eq!(extracted.fingerprint.len(), 64);
+        let staging = scratch.0.join("staging");
+        assert_eq!(fingerprint_dir(&staging).unwrap(), extracted.fingerprint);
+        fs::write(staging.join("dist/extra.js"), "x").unwrap();
+        assert_ne!(fingerprint_dir(&staging).unwrap(), extracted.fingerprint);
+        fs::remove_file(staging.join("dist/extra.js")).unwrap();
+        fs::write(staging.join("dist/index.js"), "tampered").unwrap();
+        assert_ne!(fingerprint_dir(&staging).unwrap(), extracted.fingerprint);
+        fs::write(staging.join("dist/index.js"), "export default {}").unwrap();
         // The same content in another archive order hashes the same; different bytes do not.
         fs::remove_dir_all(scratch.0.join("staging")).unwrap();
         let reordered = build(&scratch, "b.zip", |w| {

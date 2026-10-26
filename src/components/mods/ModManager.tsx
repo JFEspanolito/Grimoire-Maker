@@ -173,7 +173,7 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
                 <small>Permissions requested: {plugin.permissions.length ? plugin.permissions.join(', ') : 'none'}</small>
                 <small>Fingerprint {plugin.fingerprint.slice(0, 12)}</small>
                 <small className={styles.notice}>
-                  {plugin.state === 'altered' ? 'Files changed after installation: reinstall this plugin.' : 'Unverified · Isolated plugin · Activation unavailable'}
+                  {plugin.state === 'altered' ? 'Files changed after installation. Remove this plugin, then import the package again.' : 'Unverified · Isolated plugin · Activation unavailable'}
                 </small>
               </span>
               <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}

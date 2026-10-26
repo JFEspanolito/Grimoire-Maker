@@ -194,6 +194,16 @@ fn nonce() -> u128 {
 
 /// Installs the package at `zip` without altering any existing version on failure.
 pub fn install(root: &Path, zip: &Path, limit: Duration) -> Result<InstallResult, String> {
+    let result = install_locked(root, zip, limit);
+    match &result {
+        Ok(done) => audit(root, if done.already_installed { "already_installed" } else { "installed" }, &done.id,
+            &format!("{} {}", done.version, &done.fingerprint[..12])),
+        Err(error) => audit(root, "install_rejected", "-", error),
+    }
+    result
+}
+
+fn install_locked(root: &Path, zip: &Path, limit: Duration) -> Result<InstallResult, String> {
     let _guard = lock()?;
     prepare_root(root)?;
     let mut registry = load_registry(root)?;
@@ -279,9 +289,62 @@ fn publish(staging: &Path, plugin_dir: &Path, dir: &str) -> Result<(), String> {
 pub fn list(root: &Path) -> Result<Registry, String> {
     let _guard = lock()?;
     prepare_root(root)?;
-    let registry = load_registry(root)?;
+    let mut registry = load_registry(root)?;
     recover_locked(root, &registry)?;
+    let altered = verify_integrity(root, &mut registry);
+    if !altered.is_empty() {
+        save_registry(root, &registry)?;
+        for id in altered {
+            audit(root, "integrity_failed", &id, "installed files differ from the recorded fingerprint");
+        }
+    }
     Ok(registry)
+}
+
+/// Recomputes the fingerprint of the newest and the approved version of every plugin. A mismatch
+/// (or unreadable files) marks the plugin `altered` and withdraws its approval, so changed bytes
+/// can never run on an earlier consent. Returns the ids newly marked.
+pub fn verify_integrity(root: &Path, registry: &mut Registry) -> Vec<String> {
+    let mut newly = Vec::new();
+    for (id, record) in registry.plugins.iter_mut() {
+        let mut dirs = vec![record.latest.clone()];
+        dirs.extend(record.current.clone().filter(|current| *current != record.latest));
+        let mut tampered = false;
+        for dir in dirs {
+            let expected = record.versions.iter().find(|v| v.dir == dir).map(|v| v.fingerprint.as_str());
+            let actual = plugin_install::fingerprint_dir(&root.join(id).join(&dir));
+            if expected.is_none() || actual.as_deref().ok() != expected {
+                tampered = true;
+                if record.current.as_deref() == Some(dir.as_str()) {
+                    record.current = None;
+                }
+            }
+        }
+        if tampered && record.state != "altered" {
+            record.state = "altered".into();
+            newly.push(id.clone());
+        }
+    }
+    newly
+}
+
+/// Best-effort local audit trail (one JSON object per line, rotated at 1 MiB). It never fails
+/// or blocks the operation it describes.
+fn audit(root: &Path, event: &str, id: &str, detail: &str) {
+    const LIMIT: u64 = 1024 * 1024;
+    let path = root.join("audit.log");
+    match fs::symlink_metadata(&path) {
+        Ok(info) if !info.is_file() || crate::safe_copy::reject_special(&info).is_err() => return,
+        Ok(info) if info.len() > LIMIT => {
+            let _ = fs::rename(&path, root.join("audit.log.1"));
+        }
+        _ => {}
+    }
+    let detail: String = detail.chars().take(300).collect();
+    let line = serde_json::json!({ "at": now(), "event": event, "id": id, "detail": detail });
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(&path) {
+        let _ = writeln!(file, "{line}");
+    }
 }
 
 /// Updates the registry first, then deletes the plugin's own folder; a failed delete leaves an
@@ -295,6 +358,7 @@ pub fn remove(root: &Path, id: &str) -> Result<(), String> {
         return Err("That plugin is not installed".into());
     }
     save_registry(root, &registry)?;
+    audit(root, "removed", id, "");
     let folder: PathBuf = root.join(id);
     if plain_dir(&folder) {
         fs::remove_dir_all(&folder).map_err(|error| format!("The plugin was unregistered but its files could not be deleted: {error}"))?;
@@ -436,6 +500,52 @@ mod tests {
         assert!(root.join("community.zoom").join(&kept).is_dir());
         assert!(root.join("community.zoom/notes").is_dir(), "unknown entries are not ours to delete");
         assert!(root.join("unrelated-folder").is_dir());
+    }
+
+    #[test]
+    fn tampered_files_are_flagged_and_lose_their_approval() {
+        let scratch = Scratch::new("integrity");
+        let root = scratch.root();
+        run(&root, &package(&scratch, "a.zip", "1.0.0", "safe")).unwrap();
+        let mut registry = load_registry(&root).unwrap();
+        let dir = registry.plugins["community.zoom"].latest.clone();
+        registry.plugins.get_mut("community.zoom").unwrap().current = Some(dir.clone());
+        save_registry(&root, &registry).unwrap();
+        assert_eq!(list(&root).unwrap().plugins["community.zoom"].state, "installed", "untouched files verify");
+
+        fs::write(root.join("community.zoom").join(&dir).join("dist/index.js"), "evil").unwrap();
+        let record = &list(&root).unwrap().plugins["community.zoom"];
+        assert_eq!(record.state, "altered");
+        assert_eq!(record.current, None, "approval is withdrawn for changed bytes");
+        assert_eq!(load_registry(&root).unwrap().plugins["community.zoom"].state, "altered", "the finding is persisted");
+        assert!(fs::read_to_string(root.join("audit.log")).unwrap().contains("integrity_failed"));
+
+        // An extra file is also a change; a clean reinstall after removal restores the plugin.
+        remove(&root, "community.zoom").unwrap();
+        run(&root, &package(&scratch, "again.zip", "1.0.0", "safe")).unwrap();
+        assert_eq!(list(&root).unwrap().plugins["community.zoom"].state, "installed");
+        let dir = load_registry(&root).unwrap().plugins["community.zoom"].latest.clone();
+        fs::write(root.join("community.zoom").join(&dir).join("dist/extra.js"), "x").unwrap();
+        assert_eq!(list(&root).unwrap().plugins["community.zoom"].state, "altered");
+    }
+
+    #[test]
+    fn the_audit_trail_records_outcomes_and_cannot_fail_an_install() {
+        let scratch = Scratch::new("audit");
+        let root = scratch.root();
+        run(&root, &package(&scratch, "a.zip", "1.0.0", "a")).unwrap();
+        let bad = scratch.0.join("bad.zip");
+        fs::write(&bad, b"nope").unwrap();
+        assert!(run(&root, &bad).is_err());
+        remove(&root, "community.zoom").unwrap();
+        let log = fs::read_to_string(root.join("audit.log")).unwrap();
+        for event in ["\"installed\"", "\"install_rejected\"", "\"removed\""] {
+            assert!(log.contains(event), "missing {event} in {log}");
+        }
+        // A directory in place of the log makes auditing impossible; the install still succeeds.
+        fs::remove_file(root.join("audit.log")).unwrap();
+        fs::create_dir(root.join("audit.log")).unwrap();
+        run(&root, &package(&scratch, "b.zip", "1.0.0", "a")).unwrap();
     }
 
     #[test]

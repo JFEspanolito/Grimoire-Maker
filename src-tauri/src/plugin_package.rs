@@ -49,6 +49,10 @@ pub fn validate_id(id: &str) -> Result<(), String> {
     if id.split('.').any(is_reserved) || is_reserved(id) {
         return Err("Plugin id is a reserved Windows device name".into());
     }
+    // Names the managed root uses for its own files must never become a plugin folder.
+    if matches!(id, "registry.json" | "registry.json.tmp" | "audit.log" | "audit.log.1") {
+        return Err("Plugin id collides with a file used by the plugin manager".into());
+    }
     if id == "builtin" || id.starts_with("builtin.") {
         return Err("The builtin.* namespace is reserved for plugins shipped with the application".into());
     }
@@ -272,7 +276,7 @@ mod tests {
     fn rejects_unsafe_ids() {
         for id in [
             "", ".", "..", "-a", "Upper", "a/b", "a\\b", "a:b", "nul", "NUL", "con.txt", "com1.x", "lpt9",
-            "ends.", "builtin.zoom", "builtin", &"a".repeat(65),
+            "ends.", "builtin.zoom", "builtin", "registry.json", "audit.log", &"a".repeat(65),
         ] {
             assert!(validate_id(id).is_err(), "id {id:?} should be rejected");
         }
