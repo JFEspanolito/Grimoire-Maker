@@ -8,6 +8,8 @@ import { FileTree } from './components/sidebar/FileTree'
 import { SnippetPalette } from './components/snippets/SnippetPalette'
 import { TemplateCatalog } from './components/templates/TemplateCatalog'
 import { PluginProvider } from './plugins/PluginContext'
+import { startActiveExternalPlugins } from './plugins/isolated/externalHost'
+import { reportError } from './lib/errorLogging'
 import { useSettingsStore } from './stores/settingsStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useThemeStore } from './stores/themeStore'
@@ -71,6 +73,10 @@ export default function App() {
 
   // Mods live in a folder: scan on start and whenever the window regains focus,
   // so a theme edited in an external editor shows up without restarting.
+  useEffect(() => {
+    if (isTauri()) void startActiveExternalPlugins().catch((error) => reportError('plugin.external.startup', error))
+  }, [])
+
   useEffect(() => {
     if (!isTauri()) return
     // Templates go second: a package theme must not take an id a mod theme already holds.

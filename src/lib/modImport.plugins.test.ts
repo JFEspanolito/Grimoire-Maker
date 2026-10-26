@@ -55,9 +55,10 @@ describe('plugin imports', () => {
 
 describe('summarizeExternalPlugins', () => {
   it('describes the latest version and only calls it approved when current matches', () => {
-    const base = { fingerprint: 'f', name: 'N', author: 'A', description: 'D', permissions: [], granted: [], installedAt: 1, source: 'import', signature: null }
+    const base = { fingerprint: 'f', name: 'N', author: 'A', description: 'D', permissions: [], granted: [], sdkVersion: 1, consentAt: null, installedAt: 1, source: 'import', signature: null }
     const registry = {
       version: 1,
+      disabledAll: false,
       plugins: {
         a: { latest: '2', current: '1', state: 'installed', versions: [{ ...base, dir: '1', version: '1.0.0' }, { ...base, dir: '2', version: '1.1.0' }] },
         b: { latest: '1', current: '1', state: 'installed', versions: [{ ...base, dir: '1', version: '1.0.0' }] },

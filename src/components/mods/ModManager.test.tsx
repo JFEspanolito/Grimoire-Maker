@@ -4,7 +4,8 @@ import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { ModManager } from './ModManager'
 import { useModStore } from '../../stores/modStore'
 import { importModFromPath, pickModSource } from '../../lib/modImport'
-import { listExternalPlugins, removeExternalPlugin } from '../../lib/externalPlugins'
+import { grantPluginConsent, listExternalPlugins, removeExternalPlugin } from '../../lib/externalPlugins'
+import { activateExternalPlugin, setExternalKillSwitch, stopExternalPluginNow } from '../../plugins/isolated/externalHost'
 
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true }))
 vi.mock('../../lib/modImport', () => ({
@@ -14,8 +15,16 @@ vi.mock('../../lib/modImport', () => ({
 
 vi.mock('../../lib/externalPlugins', async (original) => ({
   ...(await original<typeof import('../../lib/externalPlugins')>()),
-  listExternalPlugins: vi.fn(async () => ({ version: 1, plugins: {} })),
+  listExternalPlugins: vi.fn(async () => ({ version: 1, disabledAll: false, plugins: {} })),
   removeExternalPlugin: vi.fn(async () => {}),
+  grantPluginConsent: vi.fn(async () => {}),
+}))
+vi.mock('../../plugins/isolated/externalHost', async (original) => ({
+  ...(await original<typeof import('../../plugins/isolated/externalHost')>()),
+  activateExternalPlugin: vi.fn(async () => {}),
+  stopExternalPluginNow: vi.fn(async () => {}),
+  setExternalKillSwitch: vi.fn(async () => {}),
+  verifyIsolation: vi.fn(async () => ({ ok: true })),
 }))
 
 const initial = useModStore.getState()
@@ -120,15 +129,17 @@ it('offers to install official plugins that are missing and restores the chosen 
   await act(async () => root.unmount())
 })
 
-it('lists imported external plugins as unverified and inactive, with no way to enable them', async () => {
+const externalVersion = {
+  dir: '1.0.0-0123456789ab', version: '1.0.0', fingerprint: '0123456789abcdef', name: 'Community Zoom', author: 'Someone',
+  description: 'Zoom controls.', permissions: ['editor:zoom:read', 'editor:zoom:write'], granted: [], sdkVersion: 1, consentAt: null,
+  installedAt: 1, source: 'import', signature: null,
+}
+
+async function openExternal(record: { current: string | null; state: string }, disabledAll = false) {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
-  const version = {
-    dir: '1.0.0-0123456789ab', version: '1.0.0', fingerprint: '0123456789abcdef', name: 'Community Zoom', author: 'Someone',
-    description: 'Zoom controls.', permissions: ['editor:zoom:read'], granted: [], installedAt: 1, source: 'import', signature: null,
-  }
   vi.mocked(listExternalPlugins).mockResolvedValue({
-    version: 1,
-    plugins: { 'community.zoom': { latest: version.dir, current: null, state: 'installed', versions: [version] } },
+    version: 1, disabledAll,
+    plugins: { 'community.zoom': { latest: externalVersion.dir, ...record, versions: [externalVersion] } },
   })
   useModStore.setState({ busy: false, ready: true, errors: [], reload: vi.fn(async () => {}), mods: [], missingOfficial: [] })
   const container = document.createElement('div')
@@ -136,17 +147,80 @@ it('lists imported external plugins as unverified and inactive, with no way to e
   const root = createRoot(container)
   await act(async () => root.render(<ModManager onClose={() => {}} />))
   await act(async () => container.querySelector<HTMLButtonElement>('[role="tab"]:last-of-type')!.click())
+  const button = (label: string) => container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`) ?? [...container.querySelectorAll('button')].find((item) => item.textContent === label) ?? null
+  return { container, button, close: () => act(async () => root.unmount()) }
+}
 
+it('lists imported external plugins as unverified and waiting for approval, with no checkbox to enable them', async () => {
+  const { container, button, close } = await openExternal({ current: null, state: 'installed' })
   const list = container.querySelector('[aria-label="External plugins"]')!
   expect(list.textContent).toContain('Community Zoom')
   expect(list.textContent).toContain('by Someone (declared, not verified)')
-  expect(list.textContent).toContain('Permissions requested: editor:zoom:read')
-  expect(list.textContent).toContain('Unverified · Isolated plugin · Activation unavailable')
+  expect(list.textContent).toContain('Permissions requested: editor:zoom:read, editor:zoom:write')
+  expect(list.textContent).toContain('Unverified · Isolated plugin · Needs your approval')
   expect(list.querySelector('input[type="checkbox"]')).toBeNull()
+  expect(button('Activate external plugin Community Zoom')).toBeNull()
 
-  vi.mocked(listExternalPlugins).mockResolvedValue({ version: 1, plugins: {} })
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Remove external plugin Community Zoom"]')!.click())
+  vi.mocked(listExternalPlugins).mockResolvedValue({ version: 1, disabledAll: false, plugins: {} })
+  await act(async () => button('Remove external plugin Community Zoom')!.click())
+  expect(stopExternalPluginNow).toHaveBeenCalledWith('community.zoom')
   expect(removeExternalPlugin).toHaveBeenCalledWith('community.zoom')
   expect(container.querySelector('[aria-label="External plugins"]')).toBeNull()
-  await act(async () => root.unmount())
+  await close()
 })
+
+it('shows what the plugin can do before approval and only grants and activates on confirm', async () => {
+  const { container, button, close } = await openExternal({ current: null, state: 'installed' })
+  await act(async () => button('Review and approve Community Zoom')!.click())
+  const dialog = container.querySelector('[aria-labelledby="consent-community.zoom"]')!
+  expect(dialog.textContent).toContain('Unverified')
+  expect(dialog.textContent).toContain('Read the zoom level')
+  expect(dialog.textContent).toContain('Set the editor zoom between 25% and 300%')
+  expect(dialog.textContent).toContain('Fingerprint 0123456789ab')
+  expect(grantPluginConsent).not.toHaveBeenCalled()
+
+  await act(async () => [...dialog.querySelectorAll('button')].find((item) => item.textContent === 'Cancel')!.click())
+  expect(grantPluginConsent).not.toHaveBeenCalled()
+  expect(container.querySelector('[aria-labelledby="consent-community.zoom"]')).toBeNull()
+
+  await act(async () => button('Review and approve Community Zoom')!.click())
+  await act(async () => [...container.querySelectorAll('button')].find((item) => item.textContent === 'Approve and activate')!.click())
+  expect(grantPluginConsent).toHaveBeenCalledWith(expect.objectContaining({
+    id: 'community.zoom', version: '1.0.0', fingerprint: '0123456789abcdef', permissions: ['editor:zoom:read', 'editor:zoom:write'], sdkVersion: 1,
+  }))
+  expect(activateExternalPlugin).toHaveBeenCalledWith('community.zoom')
+  await close()
+})
+
+it('activates an approved plugin, deactivates a running one, and offers nothing for altered files', async () => {
+  const approved = await openExternal({ current: externalVersion.dir, state: 'installed' })
+  await act(async () => approved.button('Activate external plugin Community Zoom')!.click())
+  expect(activateExternalPlugin).toHaveBeenCalledWith('community.zoom')
+  await approved.close()
+
+  const active = await openExternal({ current: externalVersion.dir, state: 'active' })
+  await act(async () => active.button('Deactivate external plugin Community Zoom')!.click())
+  expect(stopExternalPluginNow).toHaveBeenCalledWith('community.zoom')
+  await active.close()
+
+  const altered = await openExternal({ current: null, state: 'altered' })
+  expect(altered.container.textContent).toContain('Files changed after installation')
+  expect(altered.button('Review and approve Community Zoom')).toBeNull()
+  expect(altered.button('Activate external plugin Community Zoom')).toBeNull()
+  await altered.close()
+})
+
+it('the emergency switch disables every external plugin and blocks activation while on', async () => {
+  const on = await openExternal({ current: externalVersion.dir, state: 'active' })
+  await act(async () => on.button('Disable all external plugins')!.click())
+  expect(setExternalKillSwitch).toHaveBeenCalledWith(true)
+  await on.close()
+
+  const off = await openExternal({ current: externalVersion.dir, state: 'installed' }, true)
+  expect(off.container.textContent).toContain('All external plugins are switched off')
+  expect(off.button('Activate external plugin Community Zoom')!.disabled).toBe(true)
+  await act(async () => off.button('Allow external plugins')!.click())
+  expect(setExternalKillSwitch).toHaveBeenCalledWith(false)
+  await off.close()
+})
+

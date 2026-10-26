@@ -4,9 +4,9 @@ import { useModStore } from '../../stores/modStore'
 import { MOD_KIND, type ModKind } from '../../lib/modCatalog'
 import { importModFromPath, pickModSource, type ModImportSource } from '../../lib/modImport'
 import { isTauri } from '../../hooks/useFileSystem'
-import {
-  listExternalPlugins, removeExternalPlugin, summarizeExternalPlugins, type ExternalPluginSummary,
-} from '../../lib/externalPlugins'
+import { listExternalPlugins, summarizeExternalPlugins, type ExternalPluginSummary } from '../../lib/externalPlugins'
+import { setExternalKillSwitch, useExternalRuntime, verifyIsolation } from '../../plugins/isolated/externalHost'
+import { ExternalPluginCard } from './ExternalPluginCard'
 import styles from './ModManager.module.css'
 
 export interface ModManagerProps {
@@ -33,8 +33,16 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
   const [importError, setImportError] = useState('')
   const [importing, setImporting] = useState(false)
   const [external, setExternal] = useState<ExternalPluginSummary[]>([])
+  const [switchedOff, setSwitchedOff] = useState(false)
+  const running = useExternalRuntime((state) => state.running)
+  const isolation = useExternalRuntime((state) => state.isolation)
+  const checking = useExternalRuntime((state) => state.checking)
 
-  const loadExternal = async () => setExternal(summarizeExternalPlugins(await listExternalPlugins()))
+  const loadExternal = async () => {
+    const registry = await listExternalPlugins()
+    setExternal(summarizeExternalPlugins(registry))
+    setSwitchedOff(registry.disabledAll)
+  }
 
   useEffect(() => {
     const element = dialog.current
@@ -162,23 +170,22 @@ export function ModManager({ onClose, onEditPaths }: ModManagerProps) {
           </div>}
           {activeKind === MOD_KIND.PLUGINS && external.length > 0 && <div className={styles.list} aria-label="External plugins">
             <p className={styles.description}>
-              Imported packages are stored apart from your local plugins and stay off. They cannot run until the isolated
-              runtime is available; installing one never executes its code.
+              Imported packages are stored apart from your local plugins and stay off until you approve them. They run isolated,
+              with only the permissions you approve; installing one never executes its code.
             </p>
-            {external.map((plugin) => <div className={styles.row} key={plugin.id}>
+            <div className={styles.row}>
               <span>
-                <strong>{plugin.name} <small>v{plugin.version}</small></strong>
-                <small>{plugin.id} · by {plugin.author} (declared, not verified)</small>
-                <small>{plugin.description}</small>
-                <small>Permissions requested: {plugin.permissions.length ? plugin.permissions.join(', ') : 'none'}</small>
-                <small>Fingerprint {plugin.fingerprint.slice(0, 12)}</small>
-                <small className={styles.notice}>
-                  {plugin.state === 'altered' ? 'Files changed after installation. Remove this plugin, then import the package again.' : 'Unverified · Isolated plugin · Activation unavailable'}
-                </small>
+                <strong>Isolation check</strong>
+                <small role="status">{checking ? 'Running…' : isolation ? isolation.summary : 'Not run yet. It runs before the first external plugin starts.'}</small>
               </span>
-              <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}
-                onClick={() => void run(async () => { await removeExternalPlugin(plugin.id); await loadExternal() })}>Remove</button>
-            </div>)}
+              <button type="button" disabled={busy || checking} onClick={() => void run(async () => { await verifyIsolation(true) })}>Run check</button>
+              <button type="button" disabled={busy} aria-pressed={switchedOff}
+                onClick={() => void run(async () => { await setExternalKillSwitch(!switchedOff); await loadExternal() })}>
+                {switchedOff ? 'Allow external plugins' : 'Disable all external plugins'}
+              </button>
+            </div>
+            {external.map((plugin) => <ExternalPluginCard key={plugin.id} plugin={plugin} running={running.includes(plugin.id)}
+              busy={busy} switchedOff={switchedOff} run={run} refresh={loadExternal} />)}
           </div>}
           {visibleMods.length === 0 ? (
             <p className={styles.description}>
