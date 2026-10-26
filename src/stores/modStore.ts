@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { discoverMods, MOD_KIND, type ModEntry } from '../lib/modCatalog'
-import { modFs, prepareModLibrary, readDisabledMods, writeDisabledMods } from '../lib/modLibrary'
+import { modFs, OFFICIAL_PLUGINS, prepareModLibrary, readDisabledMods, restoreOfficialPlugin, writeDisabledMods } from '../lib/modLibrary'
+import { missingOfficialPlugins, type OfficialPlugin } from '../lib/officialPlugins'
 import { loadUserTemplates } from '../lib/templates'
 import { BUILTIN_THEMES } from '../lib/themes'
 import type { TemplateSnippet } from '../lib/templateSnippets'
@@ -13,10 +14,13 @@ interface ModState {
   ready: boolean
   busy: boolean
   mods: ModEntry[]
+  /** Bundled plugins that are not in the Plugins folder. */
+  missingOfficial: OfficialPlugin[]
   snippets: TemplateSnippet[]
   errors: string[]
   reload: () => Promise<void>
   setEnabled: (id: string, enabled: boolean) => Promise<void>
+  installOfficial: (folder: string) => Promise<void>
 }
 
 let pending: Promise<unknown> = Promise.resolve()
@@ -47,7 +51,7 @@ export const useModStore = create<ModState>((set, get) => {
     const errors = [...catalog.errors, ...modern.errors, ...legacy.errors, ...pluginErrors]
     themeStore.setTemplateThemes([...modern.themes, ...legacy.themes])
     useTemplateStore.setState({ templates: [...modern.templates, ...legacy.templates], dir: paths.templates, errors })
-    set({ mods: catalog.mods, snippets: catalog.snippets, ready: true, errors })
+    set({ mods: catalog.mods, missingOfficial: missingOfficialPlugins(OFFICIAL_PLUGINS, catalog.mods), snippets: catalog.snippets, ready: true, errors })
   }
   const perform = async (operation: () => Promise<void>) => {
     set({ busy: true })
@@ -59,8 +63,12 @@ export const useModStore = create<ModState>((set, get) => {
     } finally { set({ busy: false }) }
   }
   return {
-    root: null, ready: false, busy: false, mods: [], snippets: [], errors: [],
+    root: null, ready: false, busy: false, mods: [], missingOfficial: [], snippets: [], errors: [],
     reload: () => serial(() => perform(scan)),
+    installOfficial: (folder) => serial(() => perform(async () => {
+      await restoreOfficialPlugin(folder)
+      await scan()
+    })),
     setEnabled: (id, enabled) => serial(() => perform(async () => {
       if (!get().mods.some((mod) => mod.id === id)) throw new Error('This mod is no longer in the catalog. Refresh first.')
       const paths = await prepareModLibrary()

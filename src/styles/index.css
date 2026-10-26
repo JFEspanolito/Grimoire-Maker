@@ -370,3 +370,8 @@ body,
   row-gap: var(--row-gap);
 }
 [data-paginated='true'] .grimoire-section + .grimoire-section { margin-top: var(--row-gap); }
+/*
+ * In a spread every section starts at the top of a sheet: a forced break does it exactly, where a margin
+ * would land on the break between sheets and the heading would be left behind at the end of the last one.
+ */
+[data-page-layout='spreads'] .grimoire-section + .grimoire-section { margin-top: 0; break-before: column; }

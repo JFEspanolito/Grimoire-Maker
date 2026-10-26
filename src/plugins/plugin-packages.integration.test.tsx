@@ -16,7 +16,7 @@ const io: ModFs = {
   readDir: async path => Object.keys(files).filter(file => file.startsWith(`${path}/`))
     .map(file => ({ name: file.slice(path.length + 1), isDirectory: false })),
 }
-const mods: ModEntry[] = ['zoom', 'pixel-ruler'].map(name => ({ id: `Plugins/${name}`, folder: `/Mods/Plugins/${name}`,
+const mods: ModEntry[] = ['zoom', 'pixel-ruler', 'bookmarks'].map(name => ({ id: `Plugins/${name}`, folder: `/Mods/Plugins/${name}`,
   kind: 'Plugins', label: name, enabled: true, errors: [] }))
 afterEach(async () => {
   await reconcilePlugins(io, [])
@@ -26,11 +26,12 @@ afterEach(async () => {
 it('executes the shipped folders through the loader and unloads generic slots and wheel handlers', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   expect(await reconcilePlugins(io, mods)).toEqual([])
-  expect(usePluginRegistry.getState().plugins).toHaveLength(2)
+  expect(usePluginRegistry.getState().plugins).toHaveLength(3)
   const host = document.createElement('div')
   const root = createRoot(host)
   try {
     await act(async () => root.render(<><PluginSlot slot="toolbar" /><PluginSlot slot="editorTools" /><PageView>Text</PageView></>))
+    expect(host.querySelector('button[title="Bookmarks of this project"]')).not.toBeNull()
     const selector = host.querySelector<HTMLSelectElement>('[aria-label="Editor zoom"]')!
     expect(selector).not.toBeNull()
     await act(async () => { selector.value = '1.5'; selector.dispatchEvent(new Event('change', { bubbles: true })) })
@@ -40,6 +41,7 @@ it('executes the shipped folders through the loader and unloads generic slots an
     const guide = useSettingsStore.getState().rulerGuides[0]
     await act(async () => { expect(await reconcilePlugins(io, mods.map(mod => ({ ...mod, enabled: false })))).toEqual([]) })
     expect(host.querySelector('[aria-label="Editor zoom"]')).toBeNull()
+    expect(host.querySelector('button[title="Bookmarks of this project"]')).toBeNull()
     expect(host.querySelector('[data-ruler-overlay]')).toBeNull()
     expect(document.querySelector('[data-plugin-style]')).toBeNull()
     expect(useSettingsStore.getState().rulerGuides).toEqual([guide])

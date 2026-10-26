@@ -1,5 +1,5 @@
 import { reportError } from "../../lib/errorLogging";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ConfirmDialog } from "../layout/ConfirmDialog";
 import {
@@ -19,7 +19,7 @@ import { useFileSystem } from "../../hooks/useFileSystem";
 import { splitBinder } from "../../lib/binder";
 import type { FileNode } from "../../types/document";
 import { useExplorerStore } from "../../stores/explorerStore";
-import { documentLabel } from "../../lib/documentLabel";
+import { EXPLORER_SHORTCUTS } from "../../lib/shortcuts";
 import { imageReference, isImageFile } from "../../lib/assetPaths";
 import { findSnippetDropTarget } from "../../lib/snippetDrop";
 import { newImageAttrs } from "../../lib/insertActions";
@@ -30,6 +30,11 @@ const fileLabel = (name: string, isDirectory = false): string =>
 type Editing =
   | { kind: "new-file" | "new-folder"; dir: string }
   | { kind: "rename"; path: string; extension: string };
+
+const renameState = (node: FileNode): Editing => ({
+  kind: "rename", path: node.path,
+  extension: node.isDirectory ? "" : node.name.slice(fileLabel(node.name).length),
+});
 
 interface TreeContext {
   root: string | null;
@@ -55,12 +60,21 @@ function InlineInput({
   placeholder,
   onSubmit,
   onCancel,
+  commitOnBlur = false,
 }: {
   initial?: string;
   placeholder?: string;
   onSubmit: (name: string) => void;
   onCancel: () => void;
+  commitOnBlur?: boolean;
 }) {
+  const finished = useRef(false);
+  const finish = (value: string, cancel = false) => {
+    if (finished.current) return;
+    finished.current = true;
+    if (cancel || (commitOnBlur && (!value.trim() || value.trim() === initial))) onCancel();
+    else onSubmit(value);
+  };
   return (
     <input
       autoFocus
@@ -69,10 +83,14 @@ function InlineInput({
       className="w-full rounded bg-white/10 px-1 text-sm outline-none ring-1 ring-white/30"
       onFocus={(e) => e.currentTarget.select()}
       onKeyDown={(e) => {
-        if (e.key === "Enter") onSubmit(e.currentTarget.value);
-        if (e.key === "Escape") onCancel();
+        if (e.nativeEvent.isComposing) return;
+        if (e.key === "Enter" || e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(e.currentTarget.value, e.key === "Escape");
+        }
       }}
-      onBlur={onCancel}
+      onBlur={(e) => finish(e.currentTarget.value, !commitOnBlur)}
     />
   );
 }
@@ -105,7 +123,8 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
 
   const row = renaming ? (
     <InlineInput
-      initial={documentLabel(node.name, node.isDirectory)}
+      initial={label}
+      commitOnBlur
       onSubmit={ctx.onSubmit}
       onCancel={ctx.onCancel}
     />
@@ -248,6 +267,30 @@ export function FileTree() {
   const [pendingDelete, setPendingDelete] = useState<FileNode | null>(null);
 
   useEffect(() => {
+    const onRenameKey = (event: KeyboardEvent) => {
+      if (event.key !== EXPLORER_SHORTCUTS[0].keys[0] || event.defaultPrevented || event.isComposing
+        || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || editing || !selected || selected.isDirectory) return;
+      if (document.querySelector('[role="dialog"], dialog[open]')) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const find = (nodes: FileNode[]): FileNode | undefined => {
+        for (const node of nodes) {
+          if (node.path === selected.path) return node;
+          const nested = node.children && find(node.children);
+          if (nested) return nested;
+        }
+      };
+      const current = find(tree);
+      if (!current || current.isDirectory) return;
+      event.preventDefault();
+      setMenu(null);
+      setEditing(renameState(current));
+    };
+    window.addEventListener('keydown', onRenameKey);
+    return () => window.removeEventListener('keydown', onRenameKey);
+  }, [editing, selected, tree]);
+
+  useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
     const onKeyDown = (event: KeyboardEvent) => {
@@ -310,11 +353,14 @@ export function FileTree() {
     if (!editing) return;
     if (editing.kind === "rename") {
       const next = name.trim();
-      const filename =
-        editing.extension && !/\.md$/i.test(next)
-          ? `${next}${editing.extension}`
-          : next;
-      return run(() => renameEntry(editing.path, filename));
+      const filename = `${next}${editing.extension}`;
+      return run(async () => {
+        await renameEntry(editing.path, filename);
+        const path = `${parentOf(editing.path)}/${filename}`;
+        setSelected(current => current?.path === editing.path ? { ...current, path, name: filename } : current);
+        const explorer = useExplorerStore.getState();
+        if (explorer.selectedPath === editing.path) explorer.selectPath(path);
+      });
     }
     if (editing.kind === "new-folder")
       return run(() => createFolder(editing.dir, name));
@@ -417,14 +463,11 @@ export function FileTree() {
     onOpen: (path) => void run(() => openFile(path)),
     onSubmit: (name) => void onSubmit(name),
     onCancel: () => setEditing(null),
-    onStartRename: (node) =>
-      setEditing({
-        kind: "rename",
-        path: node.path,
-        extension: !node.isDirectory
-          ? (node.name.match(/\.md$/i)?.[0] ?? "")
-          : "",
-      }),
+    onStartRename: (node) => {
+      setSelected(node);
+      useExplorerStore.getState().selectPath(node.path);
+      setEditing(renameState(node));
+    },
     onContextMenu: (node, x, y) => {
       setSelected(node);
       useExplorerStore.getState().selectPath(node.path);

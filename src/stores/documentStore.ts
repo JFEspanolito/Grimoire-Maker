@@ -11,7 +11,7 @@ interface DocumentState {
   setBodyForPath: (path: string | null, body: string) => void
   setRawForPath: (path: string, raw: string) => void
   markSnapshotSaved: (path: string, snapshot: GrimoireDocument) => void
-  remapDocuments: (from: string, to: string) => void
+  remapDocuments: (from: string, to: string, transform?: (document: GrimoireDocument) => GrimoireDocument) => void
   forget: (path: string) => void
   resetDocuments: () => void
   workspaceRoot: string | null
@@ -63,11 +63,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     buffers[path] = document
     return { buffers, ...(state.document.path === snapshot.path ? { document } : {}) }
   }),
-  remapDocuments: (from, to) => set((state) => {
+  remapDocuments: (from, to, transform) => set((state) => {
     const buffers: Record<string, GrimoireDocument> = {}
     for (const current of Object.values({ ...state.buffers, [keyOf(state.document.path)]: state.document })) {
       const path = remapPath(current.path, from, to)
-      buffers[keyOf(path)] = { ...current, path }
+      buffers[keyOf(path)] = { ...(transform ? transform(current) : current), path }
     }
     return { buffers, document: buffers[keyOf(remapPath(state.document.path, from, to))] }
   }),

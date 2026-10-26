@@ -6,6 +6,7 @@ import { EditorCanvas } from '../editor/EditorCanvas'
 import { EditorToolbar } from '../editor/EditorToolbar'
 import { DocumentIndex } from '../editor/DocumentIndex'
 import { DocumentTabs } from './DocumentTabs'
+import { StatusBar } from './StatusBar'
 import styles from './DocumentWorkspace.module.css'
 import { useExplorerStore } from '../../stores/explorerStore'
 import { MarkdownSourceView } from '../editor/MarkdownSourceView'
@@ -52,5 +53,6 @@ export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; 
           Select this view, then open a file or choose a tab.
         </button>)}
     </div>
+    {!previewingFile && !(activeTab && markdownViews[activeTab]) && <StatusBar />}
   </>
 }

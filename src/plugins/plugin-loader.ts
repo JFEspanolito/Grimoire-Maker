@@ -81,10 +81,10 @@ function cssModule(source: string, identity: string): { css: string; classes: Re
 
 /** Trusted code executes in this WebView. Import resolution is not a sandbox. */
 export async function evaluatePluginPackage(pkg: PluginPackage): Promise<GrimoirePlugin> {
-  const [ts, react, jsx, zustand, sdk] = await Promise.all([
-    import('typescript'), import('react'), import('react/jsx-runtime'), import('zustand'), import('./plugin-api'),
+  const [ts, react, reactDom, jsx, zustand, sdk] = await Promise.all([
+    import('typescript'), import('react'), import('react-dom'), import('react/jsx-runtime'), import('zustand'), import('./plugin-api'),
   ])
-  const external: Record<string, unknown> = { react, 'react/jsx-runtime': jsx, zustand, '@grimoire/plugin-api': sdk }
+  const external: Record<string, unknown> = { react, 'react-dom': reactDom, 'react/jsx-runtime': jsx, zustand, '@grimoire/plugin-api': sdk }
   const cache = new Map<string, CommonJsModule>()
   const styles: string[] = []
   const evaluate = (name: string): Record<string, unknown> => {

@@ -8,6 +8,7 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { useTabStore } from '../../stores/tabStore'
+import { useLayoutStore } from '../../stores/layoutStore'
 import { loadProjectSettings, saveProjectSettings } from '../../lib/projectSettings'
 vi.mock('../../lib/projectSettings', () => ({
   EMPTY_PROJECT: { name: '', author: '', coAuthor: '' },
@@ -191,30 +192,77 @@ it('cancels list edits without writing and retains failed saves for retry', asyn
   expect(document.querySelector('dialog')).toBeNull()
 })
 
-describe('section columns', () => {
-  it('sets the columns of the section under the cursor and can start or merge sections', async () => {
+describe('page columns', () => {
+  /** Two sheets stacked in the page; each paragraph's boxes tell which sheet it is on. */
+  function layOut(editor: Editor, sheetOfBlock: number[]) {
+    const stack = document.createElement('div')
+    stack.dataset.editorStack = ''
+    document.body.append(stack)
+    const sheets = [1, 2].map((number) => {
+      const sheet = document.createElement('div')
+      sheet.dataset.editorSheet = String(number)
+      vi.spyOn(sheet, 'getBoundingClientRect').mockReturnValue({ left: 0, right: 100, top: (number - 1) * 120, bottom: (number - 1) * 120 + 100, width: 100, height: 100 } as DOMRect)
+      stack.append(sheet)
+      return sheet
+    })
+    stack.append(editor.view.dom)
+    layBlocks(editor, sheetOfBlock)
+    return { stack, sheets }
+  }
+  /** Re-applied after an edit, because ProseMirror may redraw a block's element. */
+  function layBlocks(editor: Editor, sheetOfBlock: number[]) {
+    let block = 0
+    editor.state.doc.forEach((section, sectionOffset) => section.forEach((_node, offset) => {
+      const dom = editor.view.nodeDOM(sectionOffset + 1 + offset) as HTMLElement
+      const top = (sheetOfBlock[block++] - 1) * 120 + 10
+      vi.spyOn(dom, 'getClientRects').mockReturnValue([{ left: 5, right: 95, top, bottom: top + 20, width: 90, height: 20 }] as unknown as DOMRectList)
+    }))
+  }
+
+  it('isolates the caret page in its own section, restores the pages after it and tidies up again', async () => {
     Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
-    const editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'First\n\nSecond' })
-    editor.commands.setTextSelection(editor.state.doc.firstChild!.firstChild!.nodeSize + 2)
+    const editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'One\n\nTwo\n\nThree' })
+    const { stack } = layOut(editor, [1, 2, 2])
+    editor.commands.setTextSelection(editor.state.doc.firstChild!.child(0).nodeSize + 3)
+    vi.spyOn(editor.view, 'coordsAtPos').mockReturnValue({ left: 10, right: 11, top: 130, bottom: 145 })
+    useLayoutStore.getState().setSheets('__untitled__', 2)
     const container = document.createElement('div')
     const root = createRoot(container)
+    const choose = (value: string) => act(async () => {
+      const select = container.querySelector<HTMLSelectElement>('[aria-label="This page columns"]')!
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, value)
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
     try {
       await act(async () => root.render(<PropertiesPanel expanded editor={editor} />))
-      const label = () => container.querySelector('label:has([aria-label="Section columns"])')!.textContent
-      expect(label()).toContain('(1 of 1)')
-      const click = (text: string) => act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === text)!.click())
-      await click('New page')
-      expect(label()).toContain('(2 of 2)')
-      const select = container.querySelector<HTMLSelectElement>('[aria-label="Section columns"]')!
-      await act(async () => {
-        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, '1')
-        select.dispatchEvent(new Event('change', { bubbles: true }))
-      })
-      expect(editor.state.doc.child(1).attrs.columns).toBe(1)
-      expect(editor.state.doc.child(0).attrs.columns).toBeNull()
-      await click('Merge with previous')
-      expect(label()).toContain('(1 of 1)')
-      expect(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Merge with previous')!.disabled).toBe(true)
-    } finally { await act(async () => root.unmount()); editor.destroy() }
+      expect(container.querySelector('label:has([aria-label="This page columns"])')!.textContent).toContain('(2 of 2)')
+      await choose('1')
+      // Page 1 keeps the file default; page 2 alone is one column; nothing follows it here.
+      expect(editor.state.doc.childCount).toBe(2)
+      expect(editor.state.doc.child(0).attrs).toMatchObject({ columns: null })
+      expect(editor.state.doc.child(1).attrs).toMatchObject({ columns: 1, auto: true })
+      expect(editor.state.doc.child(0).textContent).toBe('One')
+      layBlocks(editor, [1, 2, 2])
+      await choose('')
+      // The generated section no longer differs, so it merges back into the first.
+      expect(editor.state.doc.childCount).toBe(1)
+      expect(editor.state.doc.textContent).toBe('OneTwoThree')
+    } finally { await act(async () => root.unmount()); stack.remove(); editor.destroy() }
+  })
+
+  it('splits before and after a middle page so its neighbours keep their columns', () => {
+    const editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'One\n\nTwo\n\nThree' })
+    const section = editor.state.doc.firstChild!
+    const start = 1 + section.child(0).nodeSize
+    const next = start + section.child(1).nodeSize
+    editor.commands.setPageColumns({ start, next, columns: 1 })
+    expect(editor.state.doc.children.map(node => [node.textContent, node.attrs.columns, node.attrs.auto])).toEqual([
+      ['One', null, false], ['Two', 1, true], ['Three', null, true],
+    ])
+    // Setting the middle page back removes both generated markers.
+    const middle = editor.state.doc.child(0).nodeSize + 1
+    editor.commands.setPageColumns({ start: middle, next: middle + editor.state.doc.child(1).nodeSize, columns: null })
+    expect(editor.state.doc.childCount).toBe(1)
+    editor.destroy()
   })
 })

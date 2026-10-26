@@ -160,7 +160,8 @@ it.each(['flow', 'free'])('resizes a selected %s image from its corner without m
   vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 420, height: 594 } as DOMRect)
   vi.spyOn(image, 'getBoundingClientRect').mockReturnValue({ left: 60, top: 80, width: 80, height: 100 } as DOMRect)
   await act(async () => { editor.commands.setNodeSelection(1); image.dispatchEvent(new Event('load')) })
-  const handle = container.querySelector<HTMLButtonElement>('[aria-label="Resize image"]')
+  // The handle is portaled out of the page so it cannot affect the page layout.
+  const handle = document.querySelector<HTMLButtonElement>('[aria-label="Resize image"]')
   expect(handle).not.toBeNull()
   const pointer = (type: string, x: number, y: number) => {
     const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 })
@@ -286,7 +287,7 @@ it.each(['left', 'right'])('grows a %s wrapped image within its second column wi
     { left: 230, right: 400, top: 20, bottom: 300, width: 170 },
   ] as unknown as DOMRectList)
   await act(async () => { editor.commands.setNodeSelection(1); image.dispatchEvent(new Event('load')) })
-  const handle = container.querySelector<HTMLButtonElement>('[aria-label="Resize image"]')!
+  const handle = document.querySelector<HTMLButtonElement>('[aria-label="Resize image"]')!
   const pointer = (type: string, x: number, y: number) => {
     const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y })
     Object.defineProperty(event, 'pointerId', { value: 3 })

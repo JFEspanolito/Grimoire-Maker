@@ -590,3 +590,60 @@ it('hydrates auto commits including explicit false and restores defaults for leg
   await actions.restoreSession()
   expect(useSettingsStore.getState()).toMatchObject({ autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' })
 })
+
+describe('file rename references', () => {
+  it('rewrites closed files and latest dirty buffers without saving unsaved content', async () => {
+    const before = '---\ntitle: Chapter\n---\n![map](../Assets/map.jpg)'
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().loadFromRaw('/workspace/Draft/open.md', before)
+    useDocumentStore.getState().setBody('Unsaved ![map](../Assets/map.jpg)')
+    useDocumentStore.getState().loadFromRaw('/workspace/Research/inactive.md', '![map](../Assets/map.jpg)')
+    useDocumentStore.getState().activate('/workspace/Draft/open.md')
+    vi.mocked(stat).mockResolvedValue({ isFile: true, isDirectory: false } as Awaited<ReturnType<typeof stat>>)
+    let finish!: () => void
+    let started!: () => void
+    const committing = new Promise<void>(resolve => { started = resolve })
+    const committed = new Promise<void>(resolve => { finish = resolve })
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === 'snapshot_rename_references') return { documents: [
+        { path: '/workspace/Draft/open.md', before },
+        { path: '/workspace/Draft/closed.md', before: '[map](../Assets/map.jpg#detail)' },
+        { path: '/workspace/Research/inactive.md', before: '![map](../Assets/map.jpg)' },
+      ] }
+      if (command === 'commit_rename_references') { started(); await committed }
+    })
+    const operation = actions.renameEntry('/workspace/Assets/map.jpg', 'renamed.jpg')
+    await committing
+    useDocumentStore.getState().setBody('Typed during rename ![map](../Assets/map.jpg)')
+    finish()
+    await operation
+    const state = useDocumentStore.getState()
+    expect(state.document.body).toBe('Typed during rename ![map](../Assets/renamed.jpg)')
+    expect(state.document.dirty).toBe(true)
+    expect(state.buffers['/workspace/Research/inactive.md'].body).toBe('![map](../Assets/renamed.jpg)')
+    expect(state.buffers['/workspace/Research/inactive.md'].dirty).toBe(false)
+    expect(invoke).toHaveBeenCalledWith('commit_rename_references', expect.objectContaining({
+      documents: expect.arrayContaining([
+        { path: '/workspace/Draft/open.md', before, after: before.replace('map.jpg', 'renamed.jpg') },
+        { path: '/workspace/Draft/closed.md', before: '[map](../Assets/map.jpg#detail)', after: '[map](../Assets/renamed.jpg#detail)' },
+      ]),
+    }))
+    expect(writeTextFile).not.toHaveBeenCalled()
+    expect(rename).not.toHaveBeenCalled()
+  })
+
+  it('does not change buffers or tabs when the native rename fails', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().loadFromRaw('/workspace/Draft/old.md', '[self](old.md)')
+    useTabStore.getState().open('/workspace/Draft/old.md', true)
+    vi.mocked(stat).mockResolvedValue({ isFile: true, isDirectory: false } as Awaited<ReturnType<typeof stat>>)
+    vi.mocked(invoke).mockImplementation(async command => {
+      if (command === 'snapshot_rename_references') return { documents: [{ path: '/workspace/Draft/old.md', before: '[self](old.md)' }] }
+      throw new Error('Document changed outside the app')
+    })
+    await expect(actions.renameEntry('/workspace/Draft/old.md', 'new.md')).rejects.toThrow('changed outside')
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/old.md')
+    expect(useDocumentStore.getState().document.body).toBe('[self](old.md)')
+    expect(useTabStore.getState().active).toBe('/workspace/Draft/old.md')
+  })
+})

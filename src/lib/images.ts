@@ -23,14 +23,27 @@ const isAbsolute = (src: string): boolean => /^[a-zA-Z]:[\\/]|^\//.test(src)
  */
 export async function loadImageUrl(src: string, documentPath: string | null): Promise<string> {
   if (isInline(src)) return src
-  const path = isAbsolute(src)
+  let path = isAbsolute(src)
     ? src.replaceAll('\\', '/')
     : documentPath
-      ? normalizePath(`${dirOf(documentPath)}/${src}`)
+      ? normalizePath(`${dirOf(documentPath.replaceAll('\\', '/'))}/${src}`)
       : null
   if (!path) throw new Error('Save the document to show images with relative paths')
+  let bytes: Uint8Array
+  try { bytes = await readFile(path) }
+  catch (error) {
+    // Imported raw filesystem names remain first choice. Markdown URL destinations
+    // may encode the renamed basename or carry a fragment/query not part of a file.
+    let decoded: string
+    try { decoded = decodeURIComponent(src.replace(/[?#].*$/, '')) }
+    catch { throw error }
+    const fallback = isAbsolute(decoded) ? decoded.replaceAll('\\', '/')
+      : documentPath ? normalizePath(`${dirOf(documentPath.replaceAll('\\', '/'))}/${decoded}`) : null
+    if (!fallback || fallback === path) throw error
+    path = fallback
+    bytes = await readFile(path)
+  }
   const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
-  const bytes = await readFile(path)
   return URL.createObjectURL(new Blob([bytes], { type: MIME[ext] ?? 'application/octet-stream' }))
 }
 

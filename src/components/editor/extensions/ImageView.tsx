@@ -1,4 +1,5 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection } from '@tiptap/pm/state'
@@ -43,13 +44,12 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const image = imageRef.current
     const page = image?.closest('.grimoire-page')
     if (!image || !page) return
-    const bounds = editorSheetRect(page, image)
     const rect = image.getBoundingClientRect()
-    if (!bounds.width || !rect.width) return
-    const scale = PAGE_SIZES[useSettingsStore.getState().pageSize].widthMm / bounds.width
-    const origin = image.closest('.grimoire-content-box[data-placement="free"]')?.getBoundingClientRect() ?? editorStackOrigin(page, image)
-    const next = { left: (rect.left + rect.width - origin.left) * scale, top: (rect.top + rect.height - origin.top) * scale }
-    setCorner((old) => old?.left === next.left && old.top === next.top ? old : next)
+    if (!rect.width) return
+    // Viewport pixels: the handle lives outside the page, so it can never alter the page layout.
+    const next = { left: rect.left + rect.width, top: rect.top + rect.height }
+    // Sub-pixel noise must not re-render.
+    setCorner((old) => old && Math.abs(old.left - next.left) < 0.3 && Math.abs(old.top - next.top) < 0.3 ? old : next)
   }
 
   useLayoutEffect(() => {
@@ -58,10 +58,18 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const image = imageRef.current
     const page = image?.closest('.grimoire-page')
     if (!image || !page || typeof ResizeObserver === 'undefined') return
+    // Only the image: the page also resizes because of the handle itself (it is absolute inside a
+    // spread's fragmented stack), which made the handle and the page chase each other forever.
     const observer = new ResizeObserver(placeHandle)
     observer.observe(image)
-    observer.observe(page)
-    return () => observer.disconnect()
+    // The handle is fixed to the viewport, so it follows scrolling and window changes itself.
+    window.addEventListener('scroll', placeHandle, true)
+    window.addEventListener('resize', placeHandle)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('scroll', placeHandle, true)
+      window.removeEventListener('resize', placeHandle)
+    }
   }, [selected, shown, widthMm, anchor, align, xMm, yMm, viewMode, zoom])
 
   useEffect(() => () => stopDrag.current?.(), [])
@@ -378,10 +386,10 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
             onClick={() => setLoadAttempt(value => value + 1)}>Retry image</button></> : 'Loading image…'}
         </span>
       )}
-      {url && selected && corner && (anchor === 'flow' || anchor === 'free') && (
+      {url && selected && corner && (anchor === 'flow' || anchor === 'free') && createPortal(
         <button type="button" contentEditable={false} className="grimoire-image-resize"
           aria-label="Resize image" title="Drag to resize proportionally; arrow keys adjust width"
-          style={{ left: `${corner.left}mm`, top: `${corner.top}mm` }}
+          style={{ position: 'fixed', left: `${corner.left}px`, top: `${corner.top}px`, zIndex: 20 }}
           onPointerDown={startResize}
           onKeyDown={(event) => {
             if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
@@ -393,7 +401,8 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
             const page = image && pageElement ? editorSheetRect(pageElement, image) : undefined
             const current = widthMm ?? (image && page?.width ? image.getBoundingClientRect().width * PAGE_SIZES[useSettingsStore.getState().pageSize].widthMm / page.width : 40)
             updateAttributes({ widthMm: Math.min(500, Math.max(5, current + delta)) })
-          }} />
+          }} />,
+        document.body,
       )}
     </NodeViewWrapper>
   )

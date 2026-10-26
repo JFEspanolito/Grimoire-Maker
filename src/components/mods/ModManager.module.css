@@ -34,3 +34,5 @@
 .sourceRow input { flex: 1; min-width: 0; }
 .modalActions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .25rem; }
 @media (max-width: 640px) { .layout { grid-template-columns: minmax(0, 1fr); } .nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid #ffffff20; padding: 0 0 .75rem; } }
+.install { margin-left: auto; align-self: center; padding: .3rem .6rem; border-radius: .25rem; background: #ffffff12; white-space: nowrap; cursor: pointer; }
+.install:hover:not(:disabled) { background: #ffffff22; }

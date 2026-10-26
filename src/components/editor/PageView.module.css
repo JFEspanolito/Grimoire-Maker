@@ -41,6 +41,7 @@
   row-gap: 8mm;
 }
 
+/* The stack's margin repeats in every column, so each row starts at its own sheet's margin. */
 .spread > .pages {
   box-decoration-break: clone;
 }

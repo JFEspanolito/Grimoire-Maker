@@ -220,8 +220,24 @@ export function useFileSystem() {
   )
 
   const renameEntry = useCallback(
-    (path: string, name: string) => moveEntry(path, `${parentOf(path)}/${validateName(name)}`),
-    [moveEntry],
+    async (path: string, name: string) => {
+      const destination = `${parentOf(path)}/${validateName(name)}`
+      if (path === destination) return
+      const root = useDocumentStore.getState().workspaceRoot
+      // Folder moves and Trash retain their existing behavior. File renames within
+      // a project use a native transaction so saved references change together.
+      if (!root || !(await stat(path)).isFile) return moveEntry(path, destination)
+      return runFileAction(async () => {
+        if (useDocumentStore.getState().workspaceRoot !== root) throw new Error('Project changed before renaming the file')
+        const { renameProjectFile } = await import('../lib/renameReferences')
+        const transform = await renameProjectFile(root, path, destination)
+        useDocumentStore.getState().remapDocuments(path, destination, transform)
+        useTabStore.getState().remap(path, destination)
+        emitPluginEvent('document:changed')
+        await refreshTree()
+      })
+    },
+    [moveEntry, refreshTree],
   )
 
   const openFolder = useCallback(async (path: string) => {

@@ -8,6 +8,7 @@ import { pageColumns, projectPageText } from '../../lib/pageProperties'
 import { PageHeaderFooter } from './PageHeaderFooter'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEventHandler, type ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useLayoutStore } from '../../stores/layoutStore'
 import { PAGE_GAP_MM, pageGeometry, sheetCountForHeight } from '../../lib/pageLayout'
 import { alignSections, isSectionContentMutation } from '../../lib/sectionLayout'
 import { PluginSlot } from '../../plugins/PluginSlot'
@@ -31,33 +32,52 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   const size = pageGeometry(pageSize, marginMm)
   const flow = useRef<HTMLDivElement>(null)
   const [sheetCount, setSheetCount] = useState(1)
+  const shown = useRef(1)
+  const flips = useRef<number[]>([])
   const paginated = typeof CSS !== 'undefined' && !!CSS.supports?.('column-wrap', 'wrap') && CSS.supports('column-height', '100px')
+  const spreads = paginated && viewMode === 'spreads'
   const contentHeight = size.contentHeightMm
-  const rowGap = size.rowGapMm
+  // A spread breaks the stack after every row, so rows are only the sheet gap apart; a single page also spans the margins.
+  const rowGap = spreads ? PAGE_GAP_MM : size.rowGapMm
 
   useEffect(() => {
     const element = flow.current
     if (!paginated || !element || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(([entry]) => {
-      alignSections(element)
-      // ResizeObserver measures unzoomed CSS pixels. Allow one pixel of rounding
-      // so a fully filled last row does not create a spurious blank sheet.
-      const count = sheetCountForHeight(entry.contentRect.height, contentHeight, rowGap)
-      setSheetCount(Math.max(1, count))
-    })
+    const settle = (measuredHeight: number | null) => {
+      // Each section fills whole sheets, so their rows are the sheet count. Measuring the flow's height
+      // instead feeds back in a spread: the sheet count reshapes the fragmented stack, which changes
+      // the height, which changes the count (and toggles the scroll bar while typing).
+      const rows = alignSections(element)
+      if (!rows && measuredHeight === null) return
+      let count = rows || Math.max(1, sheetCountForHeight(measuredHeight ?? 0, contentHeight, rowGap))
+      // Safety net: if the count still keeps flipping, only let it grow so the layout settles.
+      const now = performance.now()
+      if (count !== shown.current) {
+        flips.current = flips.current.filter(time => now - time < 1000)
+        if (flips.current.length >= 4) count = Math.max(count, shown.current)
+        if (count !== shown.current) flips.current.push(now)
+      }
+      shown.current = count
+      setSheetCount(count)
+    }
+    const observer = new ResizeObserver(([entry]) => settle(entry.contentRect.height))
     observer.observe(element)
     // Text that shrinks inside its padded section changes no size, so edits also trigger alignment.
     let frame = 0
     const edits = new MutationObserver((records) => {
       if (!records.some(isSectionContentMutation)) return
       cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => alignSections(element))
+      frame = requestAnimationFrame(() => settle(null))
     })
     edits.observe(element, { childList: true, characterData: true, subtree: true })
     return () => { observer.disconnect(); edits.disconnect(); cancelAnimationFrame(frame) }
   }, [paginated, contentHeight, rowGap])
 
-  const spreads = paginated && viewMode === 'spreads'
+  const publishSheets = useLayoutStore(state => state.setSheets)
+  const sheetsShown = paginated ? sheetCount : 1
+  const layoutKey = (path === undefined ? current?.path : path) ?? '__untitled__'
+  useEffect(() => { publishSheets(layoutKey, sheetsShown) }, [publishSheets, layoutKey, sheetsShown])
+
   const visibleSheets = paginated
     ? (spreads ? Math.max(2, sheetCount + (sheetCount % 2)) : sheetCount)
     : 1
