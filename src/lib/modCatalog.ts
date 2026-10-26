@@ -149,7 +149,7 @@ export async function discoverMods(io: ModFs, root: string, disabled: string[], 
       const mod: ModEntry = { id, kind: MOD_KIND.PLUGINS, label: entry.name, folder, enabled: !disabled.includes(id), errors: [] }
       try {
         const files = await io.readDir(folder)
-        if (files.some(file => file.name === 'manifest.json' && !file.isDirectory && !file.isSymlink)) mod.package = true
+        if (files.some(file => file.name.toLowerCase() === 'manifest.json' && !file.isDirectory && !file.isSymlink)) mod.package = true
         else if (!files.some(file => !file.isDirectory && !file.isSymlink && /\.(tsx?|js)$/i.test(file.name) && !file.name.endsWith('.d.ts'))) {
           if (!files.some(file => file.name === 'index.md')) continue
           mod.errors.push('This folder has documentation only; add a TSX, TS or JS plugin entry.')

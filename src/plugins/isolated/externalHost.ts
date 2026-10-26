@@ -193,6 +193,13 @@ export async function applyLocalPackages(mods: ModEntry[], sync: LocalPackageSyn
       reportError('plugin.external.local', error)
     }
   }
+  // A package folder that was deleted or renamed has no mod entry any more, so the loop above never
+  // sees it: whatever still runs from a local record that the sync no longer provides must stop.
+  const provided = new Set(sync.packages.map((item) => item.id))
+  for (const id of [...live.keys()]) {
+    const record = registry.plugins[id]
+    if (!record || (sourceOf(record)?.source === 'local' && !provided.has(id))) dropLive(id, 'deactivated')
+  }
 }
 
 /** App start: native integrity checks run inside the registry listing and again per plugin read. */

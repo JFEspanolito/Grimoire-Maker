@@ -147,6 +147,28 @@ describe('local package folders', () => {
     expect(setExternalPluginActive).toHaveBeenCalledWith('builtin.zoom', false)
   })
 
+  it('stops a plugin whose folder was deleted, although no mod entry exists for it any more', async () => {
+    registry('builtin.zoom', 'active', 'zoom')
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('builtin.zoom', 'local'))
+    await applyLocalPackages([mod('zoom')], sync('zoom', 'builtin.zoom'))
+    expect(running()).toEqual(['builtin.zoom'])
+    // After the folder is deleted the native sync has removed the record and reports nothing.
+    vi.mocked(listExternalPlugins).mockResolvedValue({ version: 1, disabledAll: false, plugins: {} })
+    await applyLocalPackages([], { packages: [], errors: [] })
+    expect(running()).toEqual([])
+  })
+
+  it('keeps a running imported plugin when the local sync reports nothing', async () => {
+    vi.mocked(listExternalPlugins).mockResolvedValue({
+      version: 1, disabledAll: false,
+      plugins: { 'community.a': { latest: 'd', current: 'd', state: 'active', versions: [{ dir: 'd', source: 'import' } as never] } },
+    })
+    vi.mocked(readExternalPluginEntry).mockResolvedValue(entry('community.a', 'import'))
+    await startExternalPlugin('community.a')
+    await applyLocalPackages([], { packages: [], errors: [] })
+    expect(running()).toEqual(['community.a'])
+  })
+
   it('never starts a disabled folder', async () => {
     registry('builtin.zoom', 'installed', 'zoom')
     await applyLocalPackages([mod('zoom', { enabled: false })], sync('zoom', 'builtin.zoom'))

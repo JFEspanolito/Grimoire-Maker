@@ -41,7 +41,10 @@ If you delete the folder, the plugin disappears. **Install** on the Plugins tab 
 
 ## Share it
 
-Copy the whole `zoom` folder into another installation's **Plugins** folder, or pack it:
+Copy the whole `zoom` folder into another installation's **Plugins** folder, or pack it into a file
+others can import. The ids that start with `builtin.` are reserved for the plugins that come with
+the application, so to pack your own version first change `id` in `manifest.json` to your own name
+(for example `community.my-zoom`), then run:
 
 ```
 pnpm pack:plugin <path to this folder>
