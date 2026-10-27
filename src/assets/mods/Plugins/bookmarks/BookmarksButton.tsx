@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useOpenDocument, useWorkspaceRoot } from '@grimoire/plugin-api'
 import { revealBlock } from './anchors'
 import { toAbsolute, useBookmarks, type Bookmark } from './bookmarkStore'
@@ -55,37 +54,6 @@ function BookmarkDialog({ onClose }: { onClose: () => void }) {
   </dialog>
 }
 
-/** The page's right-click menu, shown where the pointer was. */
-function BookmarkMenu() {
-  const { menu, add, closeMenu } = useBookmarks()
-  useEffect(() => {
-    if (!menu) return
-    const dismiss = (event: Event) => {
-      if (event instanceof KeyboardEvent && event.key !== 'Escape') return
-      if (event instanceof PointerEvent && event.target instanceof Element && event.target.closest('[role="menu"]')) return
-      closeMenu()
-    }
-    window.addEventListener('pointerdown', dismiss, true)
-    window.addEventListener('keydown', dismiss, true)
-    window.addEventListener('blur', closeMenu)
-    window.addEventListener('wheel', closeMenu, true)
-    return () => {
-      window.removeEventListener('pointerdown', dismiss, true)
-      window.removeEventListener('keydown', dismiss, true)
-      window.removeEventListener('blur', closeMenu)
-      window.removeEventListener('wheel', closeMenu, true)
-    }
-  }, [menu, closeMenu])
-  if (!menu) return null
-  return createPortal(
-    <div role="menu" aria-label="Page" className={styles.menu}
-      style={{ left: Math.min(menu.x, window.innerWidth - 176), top: Math.min(menu.y, window.innerHeight - 48) }}>
-      <button type="button" role="menuitem" autoFocus onClick={() => { add(menu.path, menu.anchor); closeMenu() }}>Add to bookmark</button>
-    </div>,
-    document.body,
-  )
-}
-
 export function BookmarksButton() {
   const root = useWorkspaceRoot()
   const load = useBookmarks(state => state.load)
@@ -97,6 +65,5 @@ export function BookmarksButton() {
       Bookmarks <span className={styles.count}>{count}</span>
     </button>
     {shown && <BookmarkDialog onClose={() => setShown(false)} />}
-    <BookmarkMenu />
   </>
 }

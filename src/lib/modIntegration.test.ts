@@ -255,3 +255,26 @@ it('leaves an edited old copy exactly as it is and keeps it running as a trusted
   expect(await fs.readFile(`${folder}/zoom.tsx`, 'utf8')).toContain('// my tweak')
   expect(useModStore.getState().mods.find(mod => mod.id === 'Plugins/zoom')?.package).toBeUndefined()
 })
+
+it('updates an untouched old Bookmarks copy in place, keeping its old code in legacy/, and leaves an edited one alone', async () => {
+  const folder = `${scope.root}/Mods/Plugins/bookmarks`
+  await fs.rm(folder, { recursive: true })
+  await copyLegacy('bookmarks')
+  await useModStore.getState().reload()
+  expect(await fs.readFile(`${folder}/bookmarks.tsx`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/bookmarks/bookmarks.tsx'])
+  expect(await fs.readFile(`${folder}/bookmarks.tsx`, 'utf8')).toContain('registerContextAction')
+  expect(await fs.readFile(`${folder}/legacy/bookmarks.tsx`, 'utf8')).toBe(legacyFiles('bookmarks')['bookmarks.tsx'])
+  expect(await exists(`${folder}/manifest.json`)).toBe(false)
+  expect(useModStore.getState().errors).toEqual([])
+  const snapshot = (await fs.readdir(folder, { recursive: true })).sort()
+  await useModStore.getState().reload()
+  expect((await fs.readdir(folder, { recursive: true })).sort()).toEqual(snapshot)
+
+  await fs.rm(folder, { recursive: true })
+  await copyLegacy('bookmarks')
+  await put('Mods/Plugins/bookmarks/bookmarks.tsx', `${legacyFiles('bookmarks')['bookmarks.tsx']}
+// my tweak`)
+  await useModStore.getState().reload()
+  expect(await exists(`${folder}/legacy`)).toBe(false)
+  expect(await fs.readFile(`${folder}/bookmarks.tsx`, 'utf8')).toContain('// my tweak')
+})

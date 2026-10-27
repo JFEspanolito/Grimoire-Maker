@@ -9,6 +9,8 @@ import { EditorToolbar } from './EditorToolbar'
 import { alignSections } from '../../lib/sectionLayout'
 import { useModStore } from '../../stores/modStore'
 import { useToastStore } from '../../stores/toastStore'
+import { registerPlugin } from '../../plugins/plugin-manager'
+import type { PluginContextAction } from '../../types/plugin'
 
 const snippetMocks = vi.hoisted(() => ({ save: vi.fn() }))
 vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: snippetMocks.save }))
@@ -422,5 +424,108 @@ describe('Save Selection as Snippet', () => {
     expect(markdown).toContain('| 1 | Orc |')
     expect(markdown).not.toContain('Intro')
     useToastStore.setState({ toasts: [] })
+  })
+})
+
+describe('single editor context menu with plugin actions', () => {
+  beforeAll(() => {
+    HTMLDialogElement.prototype.showModal = function () { this.open = true }
+    HTMLDialogElement.prototype.close = function () { this.open = false }
+  })
+  const disposers: (() => void)[] = []
+  afterEach(() => { while (disposers.length) disposers.pop()!() })
+  const withAction = (action: PluginContextAction, id = 'test.plugin') =>
+    disposers.push(registerPlugin({ id, name: id, version: '1', activate: (api) => api.registerContextAction(action) }))
+  const mount = async (body: string) => {
+    useDocumentStore.getState().loadFromRaw('/book/Draft/page.md', body)
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const editors: Editor[] = []
+    await act(async () => root?.render(<EditorCanvas onReady={(value) => { editors.push(value) }} />))
+    return { container, editor: editors[0] }
+  }
+  const rightClick = (target: Element, bubbleListener?: (event: Event) => void) => {
+    if (bubbleListener) target.closest('[data-editor-zoom]')!.addEventListener('contextmenu', bubbleListener)
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 30, clientY: 40 })
+    target.dispatchEvent(event)
+    return event
+  }
+  const labels = () => Array.from(document.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent)
+  const escape = () => act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+
+  it('shows one menu with the plugin item and the snippet item, and never reaches a page-level listener', async () => {
+    withAction({ id: 'a', label: 'Add to bookmark', run: () => {} })
+    const { container, editor } = await mount('First line\n\nSecond line')
+    editor.commands.selectAll()
+    const pageListener = vi.fn()
+    const paragraph = container.querySelector('.ProseMirror p')!
+    await act(async () => { expect(rightClick(paragraph, pageListener).defaultPrevented).toBe(true) })
+    expect(pageListener).not.toHaveBeenCalled()
+    expect(document.querySelectorAll('[role="menu"]')).toHaveLength(1)
+    expect(labels()).toEqual(['Add to bookmark', 'Save Selection as Snippet...'])
+  })
+
+  it('runs the plugin action with the click context and closes the menu', async () => {
+    const run = vi.fn()
+    withAction({ id: 'a', label: 'Add to bookmark', run })
+    const { container, editor } = await mount('First line\n\nSecond line')
+    editor.commands.selectAll()
+    const paragraph = container.querySelector('.ProseMirror p')!
+    await act(async () => { rightClick(paragraph) })
+    await act(async () => document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click())
+    expect(run).toHaveBeenCalledOnce()
+    const context = run.mock.calls[0][0]
+    expect(context.target === paragraph).toBe(true)
+    expect({ path: context.path, selectionText: context.selectionText, x: context.x, y: context.y })
+      .toEqual({ path: '/book/Draft/page.md', selectionText: 'First line\nSecond line', x: 30, y: 40 })
+    expect(document.querySelector('[role="menu"]')).toBeNull()
+  })
+
+  it('offers only plugin items when nothing is selected, and keeps the native menu when nothing applies', async () => {
+    const { container, editor } = await mount('First line')
+    editor.commands.setTextSelection(2)
+    const paragraph = container.querySelector('.ProseMirror p')!
+    await act(async () => { expect(rightClick(paragraph).defaultPrevented).toBe(false) })
+    withAction({ id: 'a', label: 'Add to bookmark', when: ({ target }) => target?.tagName === 'P', run: () => {} })
+    await act(async () => { expect(rightClick(paragraph).defaultPrevented).toBe(true) })
+    expect(labels()).toEqual(['Add to bookmark'])
+    await escape()
+    expect(document.querySelector('[role="menu"]')).toBeNull()
+    await act(async () => { expect(rightClick(container.querySelector('.ProseMirror')!).defaultPrevented).toBe(false) })
+  })
+
+  it('drops the item when its plugin is disposed', async () => {
+    const { container, editor } = await mount('First line')
+    editor.commands.setTextSelection(2)
+    const dispose = registerPlugin({ id: 'gone', name: 'gone', version: '1', activate: (api) => api.registerContextAction({ id: 'a', label: 'Gone', run: () => {} }) })
+    const paragraph = container.querySelector('.ProseMirror p')!
+    await act(async () => { expect(rightClick(paragraph).defaultPrevented).toBe(true) })
+    await escape()
+    dispose()
+    await act(async () => { expect(rightClick(paragraph).defaultPrevented).toBe(false) })
+    expect(document.querySelector('[role="menu"]')).toBeNull()
+  })
+
+  it('survives a plugin that throws in when or run, and still lists the other items', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    withAction({ id: 'bad-when', label: 'Bad when', when: () => { throw new Error('boom') }, run: () => {} }, 'p1')
+    withAction({ id: 'bad-run', label: 'Bad run', run: () => { throw new Error('boom') } }, 'p2')
+    const { container, editor } = await mount('First line')
+    editor.commands.selectAll()
+    await act(async () => { rightClick(container.querySelector('.ProseMirror p')!) })
+    expect(labels()).toEqual(['Bad run', 'Save Selection as Snippet...'])
+    await act(async () => document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click())
+    expect(document.querySelector('[role="menu"]')).toBeNull()
+    error.mockRestore()
+  })
+
+  it('still offers the snippet item for a table with no selection', async () => {
+    const { container, editor } = await mount('Intro\n\n| Roll | Foe |\n| --- | --- |\n| 1 | Orc |')
+    let cell = 0
+    editor.state.doc.descendants((node, pos) => { if (!cell && node.isText && node.text === 'Orc') cell = pos + 1 })
+    editor.commands.setTextSelection(cell)
+    await act(async () => { expect(rightClick(container.querySelector('.ProseMirror td, .ProseMirror th')!).defaultPrevented).toBe(true) })
+    expect(labels()).toEqual(['Save Selection as Snippet...'])
   })
 })

@@ -2,13 +2,15 @@ import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { TextSelection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { useDocumentStore } from '../../stores/documentStore'
-import { emitPluginEvent, setPluginHost } from '../../plugins/plugin-manager'
+import { emitPluginEvent, setPluginHost, usePluginRegistry } from '../../plugins/plugin-manager'
+import type { PluginContextAction, PluginContextActionContext } from '../../types/plugin'
+import { reportError } from '../../lib/errorLogging'
 import { PageView } from './PageView'
 import { EDITOR_EXTENSIONS } from './editorExtensions'
 import { DocumentPathContext } from './DocumentPathContext'
 import { registerSnippetDropTarget } from '../../lib/snippetDrop'
 import { focusDocumentEnd, insertContentBox } from '../../lib/contentBoxes'
-import { EditorContextMenu } from './EditorContextMenu'
+import { EditorContextMenu, type EditorMenuItem } from './EditorContextMenu'
 import { selectionMarkdown } from './selectionMarkdown'
 import { SaveSnippetDialog } from '../snippets/SaveSnippetDialog'
 
@@ -27,9 +29,8 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
   const activePath = useDocumentStore((s) => s.document.path)
   const documentPath = path === undefined ? activePath : path
 
-  const [menu, setMenu] = useState<{ x: number; y: number; markdown: string } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; markdown: string; actions: PluginContextAction[]; context: PluginContextActionContext } | null>(null)
   const [snippetMarkdown, setSnippetMarkdown] = useState<string | null>(null)
-  const closeMenu = useCallback(() => setMenu(null), [])
 
   const editor = useEditor({
     extensions: EDITOR_EXTENSIONS,
@@ -88,23 +89,57 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     editor.commands.focus(editor.state.selection instanceof TextSelection ? undefined : 'end', { scrollIntoView: false })
   }
 
-  // With something to save (a selection, or the cursor inside a table/statblock) the right-click
-  // offers "Save Selection as Snippet..."; otherwise the native menu and page behaviors stay as they were.
-  const openContextMenu = (event: MouseEvent<HTMLDivElement>) => {
-    const markdown = editor ? selectionMarkdown(editor) : ''
-    if (!markdown) return
-    event.preventDefault()
-    event.stopPropagation()
-    setMenu({ markdown, x: Math.min(event.clientX, window.innerWidth - 220), y: Math.min(event.clientY, window.innerHeight - 56) })
-  }
+  const closeMenu = useCallback((restoreFocus?: boolean) => {
+    setMenu(null)
+    if (restoreFocus) editor?.commands.focus(null, { scrollIntoView: false })
+  }, [editor])
+
+  // One menu for the whole editor. The listener runs in the capture phase on the editor itself, so it sees
+  // the right-click before any listener a plugin attached to the page and stops it there: plugins add
+  // items through `registerContextAction` and can never open a second menu. With nothing to offer (no
+  // saveable selection or block and no plugin item for this click) the native menu stays as it was.
+  useEffect(() => {
+    if (!editor) return
+    let dom: HTMLElement
+    try { dom = editor.view.dom } catch { return }
+    const handler = (event: globalThis.MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null
+      const markdown = selectionMarkdown(editor)
+      const { from, to } = editor.state.selection
+      const context: PluginContextActionContext = {
+        target, path: documentPath ?? null, x: event.clientX, y: event.clientY,
+        selectionText: from === to ? '' : editor.state.doc.textBetween(from, to, '\n'),
+      }
+      const actions = usePluginRegistry.getState().contextActions.filter((action) => {
+        try { return action.when ? action.when(context) === true : true } catch (error) { reportError('plugin.contextAction.when', error); return false }
+      })
+      if (!markdown && !actions.length) return
+      event.preventDefault()
+      event.stopPropagation()
+      const count = actions.length + (markdown ? 1 : 0)
+      setMenu({
+        markdown, actions, context,
+        x: Math.min(event.clientX, window.innerWidth - 220), y: Math.min(event.clientY, window.innerHeight - (count * 34 + 12)),
+      })
+    }
+    dom.addEventListener('contextmenu', handler, true)
+    return () => dom.removeEventListener('contextmenu', handler, true)
+  }, [editor, documentPath])
+
+  const menuItems = (current: NonNullable<typeof menu>): EditorMenuItem[] => [
+    ...current.actions.map((action) => ({
+      id: action.id, label: String(action.label),
+      run: () => { try { action.run(current.context) } catch (error) { reportError('plugin.contextAction.run', error) } },
+    })),
+    ...(current.markdown ? [{ id: 'host.save-snippet', label: 'Save Selection as Snippet...', run: () => setSnippetMarkdown(current.markdown) }] : []),
+  ]
 
   return (
     <>
       <DocumentPathContext value={documentPath}><PageView onPageClick={focusWritingArea} onPagePointerDown={focusWritingArea}>
-        <EditorContent editor={editor} className="grimoire-content" onContextMenu={openContextMenu} />
+        <EditorContent editor={editor} className="grimoire-content" />
       </PageView></DocumentPathContext>
-      {menu && <EditorContextMenu x={menu.x} y={menu.y} onClose={closeMenu}
-        onSaveSnippet={() => setSnippetMarkdown(menu.markdown)} />}
+      {menu && <EditorContextMenu x={menu.x} y={menu.y} onClose={closeMenu} items={menuItems(menu)} />}
       {snippetMarkdown !== null && <SaveSnippetDialog markdown={snippetMarkdown} onClose={() => setSnippetMarkdown(null)} />}
     </>
   )

@@ -1,6 +1,6 @@
 import type {
   GrimoirePlugin, PluginApi, PluginCommand, PluginEvent, PluginPanel,
-  PluginPageBehavior, PluginSurfaceWidget,
+  PluginPageBehavior, PluginSurfaceWidget, PluginContextAction,
 } from '../types/plugin'
 import { create } from 'zustand'
 
@@ -13,16 +13,17 @@ interface PluginRegistry {
   editorTools: PluginPanel[]
   previewToolbar: PluginSurfaceWidget[]
   pageBehaviors: PluginPageBehavior[]
+  contextActions: PluginContextAction[]
 }
 
 export const usePluginRegistry = create<PluginRegistry>(() => ({
   plugins: [], commands: [], panels: [], overlays: [], toolbar: [],
-  editorTools: [], previewToolbar: [], pageBehaviors: [],
+  editorTools: [], previewToolbar: [], pageBehaviors: [], contextActions: [],
 }))
 type Handler = () => void
 const listeners = new Map<PluginEvent, Set<Handler>>()
 const disposers = new Map<string, Handler>()
-const CONTRIBUTIONS = ['commands', 'panels', 'overlays', 'toolbar', 'editorTools', 'previewToolbar', 'pageBehaviors'] as const
+const CONTRIBUTIONS = ['commands', 'panels', 'overlays', 'toolbar', 'editorTools', 'previewToolbar', 'pageBehaviors', 'contextActions'] as const
 type ContributionKey = (typeof CONTRIBUTIONS)[number]
 
 export interface PluginHost {
@@ -76,6 +77,7 @@ export function registerPlugin(plugin: GrimoirePlugin): () => void {
     registerEditorTool: value => add('editorTools', value),
     registerPreviewToolbar: value => add('previewToolbar', value),
     registerPageBehavior: value => add('pageBehaviors', value),
+    registerContextAction: value => add('contextActions', value),
     getActiveBody: () => host.getActiveBody(),
     insertContent: markdown => { assertActive(); host.insertContent(markdown) },
     addStyle: css => {

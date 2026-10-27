@@ -1,30 +1,26 @@
-import { getActivePath, type GrimoirePlugin, type PluginSurface } from '@grimoire/plugin-api'
+import type { GrimoirePlugin, PluginContextActionContext } from '@grimoire/plugin-api'
 import { describeBlock } from './anchors'
 import { useBookmarks } from './bookmarkStore'
 import { BookmarksButton } from './BookmarksButton'
 
-/** Right-click on a page's text offers Add to bookmark; everything else keeps the native menu. */
-export function mountBookmarkMenu(element: HTMLElement, surface: PluginSurface): () => void {
-  if (surface.kind !== 'editor') return () => {}
-  const contextMenu = (event: MouseEvent) => {
-    const path = getActivePath()
-    const anchor = describeBlock(event.target)
-    if (!path || !/\.md$/i.test(path) || !anchor) return
-    event.preventDefault()
-    useBookmarks.getState().openMenu({ x: event.clientX, y: event.clientY, path, anchor })
-  }
-  element.addEventListener('contextmenu', contextMenu)
-  return () => {
-    element.removeEventListener('contextmenu', contextMenu)
-    useBookmarks.getState().closeMenu()
-  }
+const isPage = (path: string | null): path is string => !!path && /\.md$/i.test(path)
+
+/** The editor's right-click menu lists this item for text blocks of a Markdown page; everything else keeps its own items. */
+export const addToBookmark = {
+  id: 'bookmarks.add',
+  label: 'Add to bookmark',
+  when: ({ target, path }: PluginContextActionContext) => isPage(path) && describeBlock(target) !== null,
+  run({ target, path }: PluginContextActionContext) {
+    const anchor = describeBlock(target)
+    if (isPage(path) && anchor) useBookmarks.getState().add(path, anchor)
+  },
 }
 
 const bookmarks: GrimoirePlugin = {
-  id: 'builtin.bookmarks', name: 'Bookmarks', version: '1.0.0',
+  id: 'builtin.bookmarks', name: 'Bookmarks', version: '1.1.0',
   activate(api) {
     api.registerToolbar({ id: 'bookmarks.control', title: 'Bookmarks', component: BookmarksButton })
-    api.registerPageBehavior({ id: 'bookmarks.context-menu', mount: mountBookmarkMenu })
+    api.registerContextAction(addToBookmark)
   },
 }
 export default bookmarks

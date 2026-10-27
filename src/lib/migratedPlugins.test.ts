@@ -158,3 +158,84 @@ describe('migrateLegacyFolders', () => {
     expect(files.get(`${folder}/zoom.tsx`)).toBe(baseline['zoom.tsx'])
   })
 })
+
+describe('migrateLegacyFolders: trusted bookmarks update', () => {
+  const pluginsDir = '/mods/Plugins'
+  const bookmarksFolder = `${pluginsDir}/bookmarks`
+  const oldFiles = { 'bookmarks.tsx': 'old entry\n', 'BookmarksButton.tsx': 'old button\n', 'anchors.ts': 'anchors\n', 'index.md': '# Old docs' }
+  const newFiles = { 'bookmarks.tsx': 'new entry', 'BookmarksButton.tsx': 'new button', 'anchors.ts': 'anchors', 'index.md': '# New docs' }
+  const legacy = [{ folder: 'bookmarks', label: 'Bookmarks', files: oldFiles }]
+  const packages = [{ folder: 'bookmarks', label: 'Bookmarks', files: newFiles }]
+  const installed = (overrides: Record<string, string | null> = {}) => {
+    const files: Record<string, string> = {}
+    for (const [name, text] of Object.entries({ ...oldFiles, ...overrides })) if (text !== null) files[`${bookmarksFolder}/${name}`] = text
+    return files
+  }
+  const run = (io: MigrationFs) => migrateLegacyFolders(io, pluginsDir, legacy, packages)
+
+  it('updates an untouched old copy in place and moves the old code to legacy/', async () => {
+    const { io, files } = writableFs(installed())
+    expect(await run(io)).toEqual({ converted: ['bookmarks'], errors: [] })
+    expect(files.get(`${bookmarksFolder}/bookmarks.tsx`)).toBe('new entry')
+    expect(files.get(`${bookmarksFolder}/BookmarksButton.tsx`)).toBe('new button')
+    expect(files.get(`${bookmarksFolder}/index.md`)).toBe('# New docs')
+    expect(files.has(`${bookmarksFolder}/manifest.json`)).toBe(false)
+    for (const name of ['bookmarks.tsx', 'BookmarksButton.tsx', 'anchors.ts']) {
+      expect(files.get(`${bookmarksFolder}/legacy/${name}`)).toBe(oldFiles[name as keyof typeof oldFiles])
+    }
+  })
+
+  it('ignores a different documentation text, and is a no-op the second time', async () => {
+    const { io, files } = writableFs(installed({ 'index.md': '# An even older description' }))
+    expect((await run(io)).converted).toEqual(['bookmarks'])
+    const after = new Map(files)
+    expect(await run(io)).toEqual({ converted: [], errors: [] })
+    expect(files).toEqual(after)
+  })
+
+  it('leaves an edited, extended or packaged copy and a missing folder exactly as they are', async () => {
+    for (const initial of [
+      installed({ 'bookmarks.tsx': '// my change' }),
+      { ...installed(), [`${bookmarksFolder}/notes.txt`]: 'mine' },
+      { ...installed(), [`${bookmarksFolder}/manifest.json`]: '{}' },
+      {},
+    ]) {
+      const { io, files } = writableFs(initial)
+      const before = new Map(files)
+      expect(await run(io)).toEqual({ converted: [], errors: [] })
+      expect(files).toEqual(before)
+    }
+  })
+
+  it('puts the old files back when a write fails, so the folder is the untouched old copy again', async () => {
+    const { io, files } = writableFs(installed(), { failWrite: (path) => path.endsWith('/bookmarks.tsx') })
+    const result = await run(io)
+    expect(result.converted).toEqual([])
+    expect(result.errors).toEqual([expect.stringContaining('Plugins/bookmarks: disk full (the old files were put back)')])
+    expect(Object.fromEntries([...files].filter(([path]) => !path.includes('/legacy/')))).toEqual(installed())
+    expect(files.get(`${bookmarksFolder}/bookmarks.tsx`)).toBe(oldFiles['bookmarks.tsx'])
+    expect([...files.keys()].some((path) => path.includes('/legacy/'))).toBe(false)
+    // The next launch retries and succeeds.
+    const retry = await migrateLegacyFolders(io, pluginsDir, legacy, packages)
+    expect(retry.converted).toEqual([])
+  })
+
+  it('puts the old files back when moving fails half way', async () => {
+    const { io, files } = writableFs(installed())
+    const rename = io.rename
+    let moves = 0
+    io.rename = async (from, to) => { if (++moves === 2) throw new Error('locked'); return rename(from, to) }
+    const result = await run(io)
+    expect(result.converted).toEqual([])
+    expect(result.errors).toEqual([expect.stringContaining('locked')])
+    for (const [name, text] of Object.entries(oldFiles)) expect(files.get(`${bookmarksFolder}/${name}`)).toBe(text)
+    expect([...files.keys()].some((path) => path.includes('/legacy/'))).toBe(false)
+  })
+
+  it('reports a documentation failure but keeps the updated plugin', async () => {
+    const { io, files } = writableFs(installed(), { failWrite: (path) => path.endsWith('/index.md') })
+    const result = await run(io)
+    expect(result.errors).toEqual([expect.stringContaining('documentation could not be written')])
+    expect(files.get(`${bookmarksFolder}/bookmarks.tsx`)).toBe('new entry')
+  })
+})

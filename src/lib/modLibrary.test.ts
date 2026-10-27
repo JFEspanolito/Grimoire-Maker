@@ -23,7 +23,7 @@ it('ships declarative content plus complete executable Zoom and Ruler packages',
 })
 it('keeps the old trusted sources apart as the legacy baseline, never as seedable examples', () => {
   expect(Object.keys(MOD_EXAMPLES).some(path => path.startsWith('Legacy/'))).toBe(false)
-  expect(LEGACY_PLUGINS.map(plugin => plugin.folder)).toEqual(['pixel-ruler', 'zoom'])
+  expect(LEGACY_PLUGINS.map(plugin => plugin.folder)).toEqual(['bookmarks', 'pixel-ruler', 'zoom'])
   expect(LEGACY_PLUGINS.find(plugin => plugin.folder === 'zoom')?.files['zoom.tsx']).toContain('registerToolbar')
   expect(LEGACY_PLUGINS.find(plugin => plugin.folder === 'pixel-ruler')?.files['RulerOverlay.tsx']).toContain('GuideLine')
 })

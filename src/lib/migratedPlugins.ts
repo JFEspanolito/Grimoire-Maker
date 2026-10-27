@@ -10,6 +10,9 @@ export interface MigrationFs extends ModFs {
   overwriteTextFile(path: string, text: string): Promise<void>
 }
 
+/** Trusted plugins that stay trusted sources but changed code; an untouched old copy is updated in place. */
+export const UPDATED_FOLDERS: readonly string[] = ['bookmarks']
+
 const MAX_FILES = 64
 
 /** Line endings differ between editors; a copy that only changed them is still untouched. */
@@ -72,12 +75,21 @@ export async function migrateLegacyFolders(
     result.errors.push(`Plugins: ${message(error)}`)
     return result
   }
-  for (const folder of MIGRATED_FOLDERS) {
+  for (const folder of [...MIGRATED_FOLDERS, ...UPDATED_FOLDERS]) {
     const entry = entries.find((item) => item.name.toLowerCase() === folder)
     if (!entry || !entry.isDirectory || entry.isSymlink) continue
     const path = `${pluginsDir}/${entry.name}`
     const baseline = legacy.find((plugin) => plugin.folder === folder)
     const next = packages.find((plugin) => plugin.folder === folder)
+    if (UPDATED_FOLDERS.includes(folder)) {
+      if (!baseline || !next) continue
+      try {
+        if (await updateTrustedCopy(io, path, baseline, next)) result.converted.push(folder)
+      } catch (error) {
+        result.errors.push(`Plugins/${entry.name}: ${message(error)}`)
+      }
+      continue
+    }
     try {
       if (!baseline || !next?.files['manifest.json']) continue
       const present = await io.readDir(path)
@@ -108,4 +120,57 @@ export async function migrateLegacyFolders(
     }
   }
   return result
+}
+
+/**
+ * Replaces an UNTOUCHED old trusted copy by the current sources. The old code and style files are
+ * first moved (rename only) into `<folder>/legacy/`, then the new files are written with the entry
+ * file last. If anything fails before the new code is complete, the moved files are renamed back,
+ * so the folder is the untouched old copy again and the next launch retries. Documentation is
+ * replaced last because it cannot be restored. Returns false when the folder must be left alone.
+ */
+async function updateTrustedCopy(io: MigrationFs, path: string, baseline: OfficialPlugin, next: OfficialPlugin): Promise<boolean> {
+  const present = await io.readDir(path)
+  if (present.some((file) => file.name.toLowerCase() === 'manifest.json')) return false
+  if (!(await isPristineCopy(io, path, baseline.files))) return false
+  const code = (files: Record<string, string>) => Object.keys(files).filter((file) => !isDocumentation(file)).sort()
+  const moved: [string, string][] = []
+  try {
+    for (const relative of code(baseline.files)) {
+      const segments = relative.split('/')
+      let parent = await ensureModDirectory(io, path, 'legacy')
+      for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(io, parent, name)
+      const target = `${parent}/${segments.at(-1)}`
+      await io.rename(`${path}/${relative}`, target)
+      moved.push([`${path}/${relative}`, target])
+    }
+    // The entry file is written last so a half-written folder never has a new entry over old helpers.
+    const entry = `${next.folder}.tsx`
+    const ordered = [...code(next.files).filter((file) => file !== entry), ...code(next.files).filter((file) => file === entry)]
+    for (const relative of ordered) {
+      const segments = relative.split('/')
+      let parent = path
+      for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(io, parent, name)
+      await io.overwriteTextFile(`${parent}/${segments.at(-1)}`, next.files[relative])
+    }
+  } catch (error) {
+    const failures: string[] = []
+    for (const [original, target] of moved.reverse()) {
+      try { await io.rename(target, original) } catch (restore) { failures.push(message(restore)) }
+    }
+    throw new Error(failures.length
+      ? `${message(error)} (restoring the old files also failed: ${failures.join('; ')}; they are in legacy/)`
+      : `${message(error)} (the old files were put back)`)
+  }
+  for (const relative of Object.keys(next.files).filter(isDocumentation)) {
+    try {
+      const segments = relative.split('/')
+      let parent = path
+      for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(io, parent, name)
+      await io.overwriteTextFile(`${parent}/${segments.at(-1)}`, next.files[relative])
+    } catch (error) {
+      throw new Error(`the plugin was updated but its documentation could not be written: ${message(error)}`)
+    }
+  }
+  return true
 }
