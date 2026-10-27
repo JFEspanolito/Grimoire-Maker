@@ -121,7 +121,15 @@ export async function exportSnippet(input: SnippetInput | string): Promise<strin
 
 /** Saves the snippets with these catalog ids (re-read from the library) as `snippets-pack.zip`. Null if cancelled. */
 export async function exportSnippetPack(ids: string[]): Promise<string | null> {
-  const pack = buildSnippetPack(await readSnippetsById(ids))
+  return saveSnippetPack(buildSnippetPack(await readSnippetsById(ids)))
+}
+
+/** Packs snippet text just written to the library (`<Category>/<name>.md`) and asks where to save the zip. Null if cancelled. */
+export async function exportSnippetPackFrom(list: SnippetInput[]): Promise<string | null> {
+  return saveSnippetPack(buildSnippetPack(list))
+}
+
+async function saveSnippetPack(pack: BuiltFile): Promise<string | null> {
   const target = await save({ defaultPath: pack.fileName, filters: [{ name: 'Snippet pack', extensions: ['zip'] }] })
   if (!target) return null
   await writeFile(target, pack.bytes)

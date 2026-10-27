@@ -9,6 +9,7 @@ import {
   exportProjectAsTemplate,
   exportSnippet,
   exportSnippetPack,
+  exportSnippetPackFrom,
   exportTheme,
   readProjectTree,
 } from './modExport'
@@ -306,6 +307,18 @@ describe('snippet packs', () => {
     expect(mocks.dialog.save.mock.calls[2][0].defaultPath).toBe('Goblin.md')
     expect(mocks.fs.writeTextFile).toHaveBeenCalledWith('/out/Goblin.md', expect.stringContaining('snippetName: Goblin'))
     await expect(exportSnippetPack(['mod:Snippets/monsters/../../x.md'])).rejects.toThrow()
+  })
+
+  it('packs a just-saved snippet as <Category>/<name>.md and keeps nothing when the dialog is cancelled', async () => {
+    mocks.dialog.save.mockResolvedValueOnce(null)
+    expect(await exportSnippetPackFrom([{ name: 'Orc Camp', category: 'Dungeons', markdown: 'Smoke' }])).toBeNull()
+    expect(mocks.fs.writeFile).not.toHaveBeenCalled()
+    mocks.dialog.save.mockResolvedValueOnce('/out/pack.zip')
+    expect(await exportSnippetPackFrom([{ name: 'Orc Camp', category: '', markdown: 'Smoke' }])).toBe('/out/pack.zip')
+    expect(mocks.dialog.save.mock.calls[1][0].defaultPath).toBe('snippets-pack.zip')
+    const zipped = unzipSync(mocks.fs.writeFile.mock.calls[0][1])
+    expect(Object.keys(zipped)).toEqual(['General/Orc-Camp.md'])
+    expect(strFromU8(zipped['General/Orc-Camp.md'])).toBe('---\nsnippetName: Orc Camp\ntags: [General]\n---\nSmoke\n')
   })
 
   it('exports typed-in text through the save dialog', async () => {

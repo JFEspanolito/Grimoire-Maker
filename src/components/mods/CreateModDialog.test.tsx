@@ -10,14 +10,14 @@ import { useToastStore } from '../../stores/toastStore'
 const mocks = vi.hoisted(() => ({
   exportTheme: vi.fn(),
   exportSnippet: vi.fn(),
-  exportSnippetPack: vi.fn(),
+  exportSnippetPackFrom: vi.fn(),
   exportProjectAsTemplate: vi.fn(),
   saveSnippetToLibrary: vi.fn(),
 }))
 vi.mock('../../lib/modExport', () => ({
   exportTheme: mocks.exportTheme,
   exportSnippet: mocks.exportSnippet,
-  exportSnippetPack: mocks.exportSnippetPack,
+  exportSnippetPackFrom: mocks.exportSnippetPackFrom,
   exportProjectAsTemplate: mocks.exportProjectAsTemplate,
 }))
 vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: mocks.saveSnippetToLibrary }))
@@ -61,7 +61,7 @@ afterEach(async () => {
   vi.clearAllMocks()
   mocks.exportTheme.mockReset()
   mocks.exportSnippet.mockReset()
-  mocks.exportSnippetPack.mockReset()
+  mocks.exportSnippetPackFrom.mockReset()
   mocks.exportProjectAsTemplate.mockReset()
   useToastStore.setState({ toasts: [] })
   useDocumentStore.setState({ workspaceRoot: null })
@@ -212,22 +212,12 @@ it('shows a plain sentence when a template export fails', async () => {
   expect(container.querySelector('[role="alert"]')?.textContent).toBe('The project has too many files to share.')
 })
 
-it('packages the selected local snippets and exports a single one as Markdown', async () => {
+it('has only the new-snippet form: no list of existing snippets, selection or per-snippet export', async () => {
   await mount('Snippets')
-  expect(Array.from(panel('Snippets').querySelectorAll('[role="group"]')).map((group) => group.getAttribute('aria-label'))).toEqual(['Dungeons', 'Zine'])
-  expect(button('Package selected as .zip').disabled).toBe(true)
-
-  await click(container.querySelector('[aria-label="Select snippet Encounter Table"]'))
-  await click(container.querySelector('[aria-label="Select snippet Frame"]'))
-  expect(button('Package selected as .zip').disabled).toBe(false)
-  mocks.exportSnippetPack.mockResolvedValueOnce('/out/pack.zip')
-  await click(button('Package selected as .zip'))
-  expect(mocks.exportSnippetPack).toHaveBeenCalledExactlyOnceWith(['dnd/table', 'zine/frame'])
-  expect(Array.from(container.querySelectorAll('[role="status"]')).map((item) => item.textContent)).toContain('Snippet pack saved to /out/pack.zip')
-
-  mocks.exportSnippet.mockResolvedValueOnce('/out/Villain-Quote.md')
-  await click(container.querySelector('[aria-label="Export Villain Quote as .md"]'))
-  expect(mocks.exportSnippet).toHaveBeenCalledExactlyOnceWith({ name: 'Villain Quote', category: 'Dungeons', markdown: '> Bow.' })
+  expect(panel('Snippets').querySelectorAll('[role="group"], input[type="checkbox"]').length).toBe(0)
+  const labels = Array.from(panel('Snippets').querySelectorAll('button')).map((item) => item.textContent)
+  expect(labels).toEqual(['Save to Snippets'])
+  expect(panel('Snippets').textContent).not.toContain('Existing snippets')
 })
 
 it('validates a new snippet, saves it to the library, reloads the mod catalog and shows the toast', async () => {
@@ -245,12 +235,16 @@ it('validates a new snippet, saves it to the library, reloads the mod catalog an
   expect(markdown.tagName).toBe('TEXTAREA')
   await type(field('Category / Folder'), 'Dungeons')
   await type(markdown, '## Orc Camp\n\nSmoke.')
+  mocks.exportSnippetPackFrom.mockResolvedValueOnce('/out/orc.zip')
   await click(button('Save to Snippets'))
   expect(mocks.saveSnippetToLibrary).toHaveBeenCalledExactlyOnceWith({ name: 'Orc Camp', category: 'Dungeons', markdown: '## Orc Camp\n\nSmoke.' })
   expect(reload).toHaveBeenCalledOnce()
   expect(useToastStore.getState().toasts.map((toast) => toast.message)).toEqual(['Snippet añadido a la paleta lateral'])
   expect(container.querySelector('[role="alert"]')).toBeNull()
   expect(field<HTMLInputElement>('Snippet Name').value).toBe('')
+  // Then the zip of that snippet is built and the save dialog opens.
+  expect(mocks.exportSnippetPackFrom).toHaveBeenCalledExactlyOnceWith([{ name: 'Orc Camp', category: 'Dungeons', markdown: '## Orc Camp\n\nSmoke.' }])
+  expect(container.querySelector('[role="status"]')?.textContent).toBe('Snippet added to your library (/mods/Snippets/Dungeons/Orc-Camp.md). Zip saved to /out/orc.zip')
 })
 
 it('reports a failed snippet save in plain words without a toast or reload', async () => {
@@ -262,4 +256,29 @@ it('reports a failed snippet save in plain words without a toast or reload', asy
   expect(container.querySelector('[role="alert"]')?.textContent).toBe('A snippet with this name already exists.')
   expect(reload).not.toHaveBeenCalled()
   expect(useToastStore.getState().toasts).toEqual([])
+  expect(mocks.exportSnippetPackFrom).not.toHaveBeenCalled()
+})
+
+it('keeps the library save when the zip dialog is cancelled and says the zip was not saved', async () => {
+  await mount('Snippets')
+  await type(field('Snippet Name'), 'Orc Camp')
+  await type(field<HTMLTextAreaElement>('Markdown'), 'text')
+  mocks.exportSnippetPackFrom.mockResolvedValueOnce(null)
+  await click(button('Save to Snippets'))
+  expect(mocks.saveSnippetToLibrary).toHaveBeenCalledOnce()
+  expect(reload).toHaveBeenCalledOnce()
+  expect(container.querySelector('[role="status"]')?.textContent).toBe('Snippet added to your library (/mods/Snippets/Dungeons/Orc-Camp.md). The zip was not saved.')
+  expect(container.querySelector('[role="alert"]')).toBeNull()
+})
+
+it('keeps the library save and shows a plain error when the zip fails', async () => {
+  await mount('Snippets')
+  await type(field('Snippet Name'), 'Orc Camp')
+  await type(field<HTMLTextAreaElement>('Markdown'), 'text')
+  mocks.exportSnippetPackFrom.mockRejectedValueOnce(new Error('Disk is full.'))
+  await click(button('Save to Snippets'))
+  expect(reload).toHaveBeenCalledOnce()
+  expect(useToastStore.getState().toasts.map((toast) => toast.message)).toEqual(['Snippet añadido a la paleta lateral'])
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('The snippet was added to your library, but the zip could not be saved.')
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('Disk is full.')
 })

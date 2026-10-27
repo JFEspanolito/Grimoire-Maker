@@ -32,9 +32,3 @@
 .warnings ul { margin: .3rem 0 0; padding-left: 1.1rem; }
 .block { display: flex; flex-direction: column; gap: .6rem; padding-bottom: .9rem; border-bottom: 1px solid #ffffff12; }
 .block h4 { margin: 0; font-size: .85rem; font-weight: 600; color: #cfb37c; }
-.group { display: flex; flex-direction: column; gap: .15rem; }
-.group > strong { font-size: .75rem; color: #bcb7ac; }
-.snippetRow { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .25rem .35rem; border-bottom: 1px solid #ffffff12; }
-.snippetRow label { display: flex; align-items: center; gap: .5rem; min-width: 0; cursor: pointer; }
-.snippetRow input { accent-color: #c3a46a; }
-.snippetRow span { overflow-wrap: anywhere; }

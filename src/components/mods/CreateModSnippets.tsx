@@ -1,73 +1,46 @@
 import { useId, useState } from 'react'
-import { exportSnippet, exportSnippetPack } from '../../lib/modExport'
-import { useModStore } from '../../stores/modStore'
+import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
+import { exportSnippetPackFrom } from '../../lib/modExport'
 import { saveSnippetAndRefresh, snippetDraftProblem, useSnippetCategories } from '../snippets/saveSnippet'
 import { savedMessage, useAction } from './createModShared'
-import type { TemplateSnippet } from '../../lib/templateSnippets'
 import styles from './CreateMod.module.css'
 
-/** Snippets tab: A packages existing snippets, B writes a new one into the local Snippets library. */
+/** Snippets tab: write a new snippet. Saving adds it to the Snippets library and then offers its zip package. */
 export function CreateModSnippets() {
-  const snippets = useModStore((state) => state.snippets)
   const categories = useSnippetCategories()
   const list = useId()
-  const [picked, setPicked] = useState<string[]>([])
   const [name, setName] = useState('')
   const [category, setCategory] = useState('')
   const [markdown, setMarkdown] = useState('')
-  const pack = useAction()
   const create = useAction()
-  const groups = categories.map((group) => ({ group, items: snippets.filter((snippet) => snippet.group === group) }))
-  const selected = picked.filter((id) => snippets.some((snippet) => snippet.id === id))
 
-  const toggle = (id: string) => setPicked((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
-  const exportOne = (snippet: TemplateSnippet) => void pack.run('mods.create.snippet-export', 'Could not export the snippet.', async () => {
-    const result = await exportSnippet({ name: snippet.label, category: snippet.group, markdown: snippet.markdown })
-    return result ? savedMessage('Snippet', result) : ''
-  })
-  const exportPack = () => void pack.run('mods.create.snippet-pack', 'Could not package the snippets.', async () => {
-    const result = await exportSnippetPack(selected)
-    return result ? savedMessage('Snippet pack', result) : ''
-  })
   const save = () => {
     const problem = snippetDraftProblem({ name, category, markdown })
     if (problem) { create.setError(problem); return }
+    const draft = { name: name.trim(), category: category.trim(), markdown }
     void create.run('mods.create.snippet-save', 'Could not save the snippet.', async () => {
-      const path = await saveSnippetAndRefresh({ name, category, markdown })
+      // Step 1: the library save. A failure here stops everything and nothing is packaged.
+      const path = await saveSnippetAndRefresh(draft)
       setName('')
       setMarkdown('')
-      return `Snippet saved to ${path}`
+      // Step 2: the zip. The snippet is already in the library, so a cancelled or failed zip never undoes it.
+      try {
+        const zip = await exportSnippetPackFrom([draft])
+        if (!zip) return `Snippet added to your library (${path}). The zip was not saved.`
+        return `Snippet added to your library (${path}). ${savedMessage('Zip', zip)}`
+      } catch (cause) {
+        reportError('mods.create.snippet-pack', cause)
+        create.setError(`The snippet was added to your library, but the zip could not be saved. ${friendlyErrorMessage(cause, 'Try again from Export.')}`)
+        return `Snippet added to your library (${path}).`
+      }
     })
   }
 
   return (
     <div className={styles.stack}>
-      <section className={styles.block} aria-label="Existing snippets">
-        <h4>Existing snippets</h4>
-        {snippets.length === 0 ? <p className={styles.hint}>No snippets found yet. Create one below.</p> : groups.map(({ group, items }) => (
-          <div key={group} role="group" aria-label={group} className={styles.group}>
-            <strong>{group}</strong>
-            {items.map((snippet) => (
-              <div key={snippet.id} className={styles.snippetRow}>
-                <label>
-                  <input type="checkbox" aria-label={`Select snippet ${snippet.label}`} checked={selected.includes(snippet.id)}
-                    disabled={pack.busy} onChange={() => toggle(snippet.id)} />
-                  <span>{snippet.label}</span>
-                </label>
-                <button type="button" aria-label={`Export ${snippet.label} as .md`} disabled={pack.busy} onClick={() => exportOne(snippet)}>Export .md</button>
-              </div>
-            ))}
-          </div>
-        ))}
-        <div className={styles.row}>
-          <button type="button" className={styles.primary} disabled={pack.busy || selected.length === 0} onClick={exportPack}>Package selected as .zip</button>
-        </div>
-        {pack.status && <p role="status" className={styles.success}>{pack.status}</p>}
-        {pack.error && <p role="alert" className={styles.error}>{pack.error}</p>}
-      </section>
-
       <section className={styles.block} aria-label="New snippet">
         <h4>New snippet</h4>
+        <p className={styles.hint}>Saving adds the snippet to your Snippets library, then asks where to save a zip of it to share.</p>
         <label className={styles.field}>
           <span>Snippet Name</span>
           <input value={name} maxLength={80} disabled={create.busy} onChange={(event) => setName(event.target.value)} />
