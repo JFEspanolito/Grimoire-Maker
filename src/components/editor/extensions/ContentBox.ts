@@ -16,6 +16,17 @@ export const BOX_BORDER_MAX_PX = 12
 export const DEFAULT_BORDER_COLOR = '#000000'
 /** Only plain hex colors reach a style attribute, so a stored value can never inject CSS. */
 export const boxBorderColor = (value: unknown): string => typeof value === 'string' && /^#[\da-f]{6}$/i.test(value) ? value.toLowerCase() : DEFAULT_BORDER_COLOR
+/** Background override: only #rgb, #rrggbb or #rrggbbaa hex reaches a style attribute; anything else means "no override". */
+export function boxBackgroundColor(value: unknown): string | null {
+  return typeof value === 'string' && /^#(?:[\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.test(value) ? value.toLowerCase() : null
+}
+/** The native color input only understands #rrggbb, so shorter or alpha forms are shown as their opaque color. */
+export function boxBackgroundInputValue(value: unknown): string {
+  const color = boxBackgroundColor(value)
+  if (!color) return '#ffffff'
+  if (color.length === 4) return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
+  return color.slice(0, 7)
+}
 export function boxBorderWidth(value: unknown): number | null {
   const width = boxNumber(value)
   return width === null || width === 0 ? null : Math.min(BOX_BORDER_MAX_PX, Math.round(width))
@@ -29,6 +40,7 @@ export function boxAttributes(attrs: PMNode['attrs']): Record<string, string> {
   const y = boxNumber(attrs.yMm)
   const border = boxBorderWidth(attrs.borderWidth)
   const borderColor = boxBorderColor(attrs.borderColor)
+  const background = boxBackgroundColor(attrs.backgroundColor)
   return {
     'data-type': 'standard-content-box',
     'data-placement': placement,
@@ -38,7 +50,8 @@ export function boxAttributes(attrs: PMNode['attrs']): Record<string, string> {
     ...(x === null ? {} : { 'data-x-mm': String(x) }),
     ...(y === null ? {} : { 'data-y-mm': String(y) }),
     ...(border === null ? {} : { 'data-border-width': String(border), 'data-border-color': borderColor }),
-    style: `${border === null ? '' : `border:${border}px solid ${borderColor};padding:2mm;box-sizing:border-box;`}${width === null ? '' : `width:${width}mm;`}${height === null ? '' : `min-height:${height}mm;`}${placement === 'free' ? `position:absolute;left:${x ?? 0}mm;top:${y ?? 0}mm;` : ''}`,
+    ...(background === null ? {} : { 'data-bg-color': background }),
+    style: `${border === null ? '' : `border:${border}px solid ${borderColor};padding:2mm;box-sizing:border-box;`}${background === null ? '' : `background-color:${background};`}${width === null ? '' : `width:${width}mm;`}${height === null ? '' : `min-height:${height}mm;`}${placement === 'free' ? `position:absolute;left:${x ?? 0}mm;top:${y ?? 0}mm;` : ''}`,
   }
 }
 
@@ -60,6 +73,7 @@ export const ContentBox = Node.create({
       yMm: { default: null, rendered: false, parseHTML: (element) => boxNumber(element.dataset.yMm) },
       borderWidth: { default: null, rendered: false, parseHTML: (element) => boxBorderWidth(element.dataset.borderWidth) },
       borderColor: { default: DEFAULT_BORDER_COLOR, rendered: false, parseHTML: (element) => boxBorderColor(element.dataset.borderColor) },
+      backgroundColor: { default: null, rendered: false, parseHTML: (element) => boxBackgroundColor(element.dataset.bgColor) },
     }
   },
   parseHTML() { return [{ tag: 'div[data-type="standard-content-box"]' }] },
