@@ -15,7 +15,6 @@ pub struct Extracted {
     pub manifest: Manifest,
     /// SHA-256 over the sorted `path\0file-hash\n` lines of every extracted file.
     pub fingerprint: String,
-    pub files: usize,
 }
 
 #[derive(PartialEq)]
@@ -193,11 +192,9 @@ fn write_entries(
         }
         hashes.push((path.clone(), hex(&hasher.finalize())));
     }
-    let files = hashes.len();
     Ok(Extracted {
         manifest: manifest.ok_or("manifest.json was not extracted")?,
         fingerprint: combine(hashes),
-        files,
     })
 }
 
@@ -331,7 +328,6 @@ mod tests {
         let first = build(&scratch, "a.zip", valid);
         let extracted = extract(&scratch, &first).unwrap();
         assert_eq!(extracted.manifest.id, "community.zoom");
-        assert_eq!(extracted.files, 2);
         assert_eq!(fs::read(scratch.0.join("staging/dist/index.js")).unwrap(), b"export default {}");
         assert_eq!(extracted.fingerprint.len(), 64);
         let staging = scratch.0.join("staging");
