@@ -48,3 +48,55 @@ it('explains that nothing is selected instead of exporting an empty book', async
   expect(mocks.renderBook).not.toHaveBeenCalled()
   await unmount()
 })
+
+const click = (element: Element | null | undefined) => act(async () => { (element as HTMLElement).click(); await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+function seed(order: string[], excluded: string[] = []) {
+  useDocumentStore.getState().setWorkspace('/w', [{ name: 'Draft', path: '/w/Draft', isDirectory: true, children: [file('/w/Draft/A.md'), file('/w/Draft/B.md')] }])
+  useProjectStore.setState({
+    entries: { '/w': { settings: { ...EMPTY_PROJECT, documentOrder: { order, excluded } }, ready: true, busy: false, error: '' } },
+    save: async (root, settings) => { useProjectStore.setState({ entries: { [root]: { settings, ready: true, busy: false, error: '' } } }); return true },
+  })
+  mocks.loadBookContents.mockImplementation(async (_root: string, documents: string[]) => documents.map(() => document.createElement('div')))
+  mocks.renderBook.mockImplementation(async (_request, stage: HTMLElement) => { stage.innerHTML = '<div class="native-print-sheet">sheet</div>'; return 1 })
+}
+
+it('lists the documents in the preview and drops a document from the book when it is unchecked', async () => {
+  seed(['Draft/A.md', 'Draft/B.md'])
+  const { container, onExport, unmount } = await mount()
+  expect(Array.from(container.querySelectorAll('ol[aria-label="Documents"] li span'), (node) => node.textContent)).toEqual(['A', 'B'])
+  await click(container.querySelector('input[aria-label="Include A"]'))
+  expect(mocks.loadBookContents).toHaveBeenLastCalledWith('/w', ['Draft/B.md'], 2)
+  expect(useProjectStore.getState().entries['/w'].settings.documentOrder).toEqual({ order: ['Draft/A.md', 'Draft/B.md'], excluded: ['Draft/A.md'] })
+  await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export PDF…'))
+  expect(onExport.mock.calls[0][0].plan).toEqual({ root: '/w', documents: ['Draft/B.md'] })
+  await unmount()
+})
+
+it('reorders the printed documents from the preview list', async () => {
+  seed(['Draft/A.md', 'Draft/B.md'])
+  const { container, unmount } = await mount()
+  await click(container.querySelector('button[aria-label="Move A down"]'))
+  expect(mocks.loadBookContents).toHaveBeenLastCalledWith('/w', ['Draft/B.md', 'Draft/A.md'], 2)
+  expect(container.querySelector('button[aria-label="Move B up"]')).toHaveProperty('disabled', true)
+  await unmount()
+})
+
+it('shares the saved order with other views and keeps the list when everything is unchecked', async () => {
+  seed(['Draft/B.md', 'Draft/A.md'], ['Draft/A.md', 'Draft/B.md'])
+  const { container, unmount } = await mount()
+  expect(container.textContent).toContain('No documents are selected')
+  expect(Array.from(container.querySelectorAll('ol li span'), (node) => node.textContent)).toEqual(['B', 'A'])
+  await click(container.querySelector('input[aria-label="Include B"]'))
+  expect(container.textContent).not.toContain('No documents are selected')
+  expect(mocks.loadBookContents).toHaveBeenLastCalledWith('/w', ['Draft/B.md'], 2)
+  await unmount()
+})
+
+it('has no list when the project has no Draft documents', async () => {
+  useDocumentStore.getState().setWorkspace('/w', [])
+  useProjectStore.setState({ entries: { '/w': { settings: EMPTY_PROJECT, ready: true, busy: false, error: '' } } })
+  const { container, unmount } = await mount()
+  expect(container.querySelector('ol')).toBeNull()
+  await unmount()
+})

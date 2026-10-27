@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { reportError } from '../../lib/errorLogging'
 import { loadBookContents } from '../../lib/bookContent'
 import { pageRequest, planBook, type BookPlan } from '../../lib/exportSettings'
 import { renderBook } from '../../lib/exportPdf'
 import { useDocumentStore } from '../../stores/documentStore'
-import { useProjectStore } from '../../stores/projectStore'
+import { EMPTY_ENTRY, useProjectStore } from '../../stores/projectStore'
+import { draftDocuments, includedDocuments, resolveDocumentOrder, toDocumentOrder, type OrderItem } from '../../lib/documentOrder'
+import { DocumentOrderList } from './DocumentOrderList'
 import styles from './ExportPdfDialog.module.css'
 
 type Status =
@@ -24,6 +26,17 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   const [zoom, setZoom] = useState(0.35)
   const theme = pageRequest().theme
+  const root = useDocumentStore((state) => state.workspaceRoot)
+  const tree = useDocumentStore((state) => state.tree)
+  const entry = useProjectStore((state) => (root ? state.entries[root] : undefined) ?? EMPTY_ENTRY)
+  const items = useMemo(() => root && entry.ready ? resolveDocumentOrder(draftDocuments(tree, root), entry.settings.documentOrder) : [],
+    [root, tree, entry.ready, entry.settings.documentOrder])
+  // The preview is rebuilt whenever the printed documents or their order change.
+  const bookKey = includedDocuments(items).join('|')
+  // Same persisted state as the Document Order dialog, so both stay in sync.
+  const reorder = (next: OrderItem[]) => {
+    if (root) void useProjectStore.getState().save(root, { ...entry.settings, documentOrder: toDocumentOrder(next) })
+  }
 
   useEffect(() => {
     const element = dialog.current
@@ -37,6 +50,7 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
 
   useEffect(() => {
     let cancelled = false
+    setStatus({ kind: 'loading' })
     // Layout is measured in an unzoomed, off-screen stage; the visible copy is only scaled.
     const stage = document.createElement('div')
     stage.dataset.theme = theme
@@ -63,7 +77,7 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
       }
     })()
     return () => { cancelled = true; stage.remove() }
-  }, [theme])
+  }, [theme, bookKey])
 
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="export-pdf-title"
     onCancel={(event) => { event.preventDefault(); onClose() }}>
@@ -76,11 +90,19 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
       </label>
       <button type="button" className={styles.dismiss} aria-label="Close Export PDF" onClick={onClose}>×</button>
     </header>
+    <div className={styles.body}>
+      {items.length > 0 && <details className={styles.order} open>
+        <summary>Document Order</summary>
+        <p className={styles.hint}>Checked documents are printed, top to bottom.</p>
+        <DocumentOrderList items={items} onChange={reorder} disabled={entry.busy} />
+        {entry.error && <p role="alert">{entry.error}</p>}
+      </details>}
     <div className={styles.preview} data-theme={theme}>
       {status.kind === 'loading' && <p role="status">Preparing preview…</p>}
-      {status.kind === 'empty' && <p role="status">No documents are selected. Choose some in Document → Document Order…</p>}
+      {status.kind === 'empty' && <p role="status">No documents are selected. Check some in Document Order.</p>}
       {status.kind === 'error' && <p role="alert">Preview failed: {status.message}</p>}
       <div ref={display} className={styles.sheets} style={{ zoom }} hidden={status.kind !== 'ready'} />
+    </div>
     </div>
     <footer className={styles.footer}>
       <span role="status">{status.kind === 'ready' ? `${status.sheets} page${status.sheets === 1 ? '' : 's'}` : ''}</span>
