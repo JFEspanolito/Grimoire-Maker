@@ -6,7 +6,7 @@ use std::{
 use serde::Deserialize;
 use tauri::AppHandle;
 
-use super::preferences::{restore_scopes, CHANGES};
+use super::preferences::{restore_scopes_locked, CHANGES};
 
 /// This command has no renderer-selected path and does not weaken workspace folder guards.
 fn mods_folder(config: &Path) -> Result<PathBuf, String> {
@@ -158,24 +158,30 @@ fn delete_mod_in(library: &Path, name: &str) -> Result<(), String> {
     fs::remove_dir_all(&resolved).map_err(|error| error.to_string())
 }
 
+/// The configured directory of one mod kind, read from the serialized library paths.
+fn library_for(paths: &serde_json::Value, kind: ModKind) -> Result<String, String> {
+    let key = match kind {
+        ModKind::Snippets => "snippets",
+        ModKind::Templates => "templates",
+        ModKind::Plugins => "plugins",
+    };
+    paths
+        .get(key)
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| "The library folder is not configured.".to_string())
+}
+
 /// Permanently deletes one snippet, template or plugin folder from its configured library directory.
 #[tauri::command]
 pub async fn delete_mod(app: AppHandle, kind: ModKind, name: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        // `restore_scopes` takes the preferences lock itself, so it runs before ours.
-        let paths =
-            serde_json::to_value(restore_scopes(&app)?).map_err(|error| error.to_string())?;
-        let key = match kind {
-            ModKind::Snippets => "snippets",
-            ModKind::Templates => "templates",
-            ModKind::Plugins => "plugins",
-        };
-        let library = paths
-            .get(key)
-            .and_then(|value| value.as_str())
-            .ok_or("The library folder is not configured.")?
-            .to_string();
+        // The library paths are read and the folder is deleted under one hold of the preferences lock,
+        // so a library switch cannot slip in between and make this delete from the previous library.
         let _guard = CHANGES.lock().map_err(|error| error.to_string())?;
+        let paths =
+            serde_json::to_value(restore_scopes_locked(&app)?).map_err(|error| error.to_string())?;
+        let library = library_for(&paths, kind)?;
         delete_mod_in(Path::new(&library), &name)
     })
     .await
@@ -244,6 +250,34 @@ mod tests {
         fs::remove_dir(link).unwrap();
         #[cfg(unix)]
         fs::remove_file(link).unwrap();
+    }
+
+    #[test]
+    fn picks_the_library_of_the_requested_kind_and_refuses_a_missing_one() {
+        let paths = serde_json::json!({
+            "snippets": "C:/a/Snippets", "templates": "C:/a/Templates", "plugins": "C:/a/Plugins",
+            "themes": "C:/a/Themes", "logs": "C:/a/Logs"
+        });
+        assert_eq!(library_for(&paths, ModKind::Snippets).unwrap(), "C:/a/Snippets");
+        assert_eq!(library_for(&paths, ModKind::Templates).unwrap(), "C:/a/Templates");
+        assert_eq!(library_for(&paths, ModKind::Plugins).unwrap(), "C:/a/Plugins");
+        let missing = serde_json::json!({ "snippets": 3 });
+        assert!(library_for(&missing, ModKind::Snippets).is_err());
+        assert!(library_for(&missing, ModKind::Plugins).is_err());
+    }
+
+    #[test]
+    fn a_library_switched_after_the_paths_were_read_would_delete_from_the_old_one() {
+        // Documents why delete_mod reads the paths under the lock it deletes under: delete_mod_in trusts the
+        // library it is handed, so a stale path deletes from the previous library.
+        let root = scratch("switch");
+        let old_library = root.join("Old");
+        let new_library = root.join("New");
+        fs::create_dir_all(old_library.join("mine")).unwrap();
+        fs::create_dir_all(new_library.join("mine")).unwrap();
+        delete_mod_in(&old_library, "mine").unwrap();
+        assert!(new_library.join("mine").exists(), "the new library is untouched");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

@@ -7,7 +7,7 @@ import { useTemplateStore } from './templateStore'
 
 const state = vi.hoisted(() => ({
   deleteFiles: vi.fn(async (_mod: unknown) => {}),
-  disabled: [] as string[], failWrite: false,
+  disabled: [] as string[], failWrite: false, gone: new Set<string>(),
   sync: { packages: [] as unknown[], errors: [] as { folder: string; message: string }[] } as { packages: unknown[]; errors: { folder: string; message: string }[] } | null,
   migrationErrors: [] as string[],
 }))
@@ -33,7 +33,7 @@ vi.mock('../lib/modCatalog', async (original) => ({
   ...await original<typeof import('../lib/modCatalog')>(),
   discoverMods: vi.fn(async (_fs: unknown, _root: string, disabled: string[]) => ({
     mods: [
-      { id: 'Snippets/dnd', kind: 'Snippets', label: 'DND', folder: '/Mods/Snippets/dnd', enabled: !disabled.includes('Snippets/dnd'), errors: [] },
+      ...state.gone.has('Snippets/dnd') ? [] : [{ id: 'Snippets/dnd', kind: 'Snippets', label: 'DND', folder: '/Mods/Snippets/dnd', enabled: !disabled.includes('Snippets/dnd'), errors: [] }],
       { id: 'Templates/book', kind: 'Templates', label: 'Book', folder: '/Mods/Templates/book', enabled: !disabled.includes('Templates/book'), errors: [] },
       { id: 'Plugins/zoom', kind: 'Plugins', label: 'zoom', folder: '/Mods/Plugins/zoom', enabled: !disabled.includes('Plugins/zoom'), errors: [], package: true },
       { id: 'Plugins/mine', kind: 'Plugins', label: 'mine', folder: '/Mods/Plugins/mine', enabled: true, errors: [] },
@@ -52,6 +52,7 @@ vi.mock('../lib/templates', async (original) => ({
 beforeEach(() => {
   state.deleteFiles.mockImplementation(async () => {})
   state.disabled = []
+  state.gone = new Set()
   state.failWrite = false
   state.sync = { packages: [], errors: [] }
   state.migrationErrors = []
@@ -125,14 +126,34 @@ it('deletes a mod from disk, forgets its disabled flag and rescans', async () =>
   expect(state.disabled).toEqual(['Templates/book'])
   expect(reconcilePlugins).toHaveBeenCalledTimes(2)
 })
-it('keeps the catalog and the disabled list when the delete is refused', async () => {
+it('keeps the disabled list and reports the error when the delete is refused, but still rescans', async () => {
   state.disabled = ['Snippets/dnd']
   await useModStore.getState().reload()
   state.deleteFiles.mockRejectedValueOnce(new Error('That mod is a link, so it was not deleted.'))
   await expect(useModStore.getState().deleteMod('Snippets/dnd')).rejects.toThrow('That mod is a link')
   expect(state.disabled).toEqual(['Snippets/dnd'])
   expect(useModStore.getState().errors).toEqual(['That mod is a link, so it was not deleted.'])
-  expect(reconcilePlugins).toHaveBeenCalledTimes(1)
+  expect(reconcilePlugins).toHaveBeenCalledTimes(2)
+})
+it('rescans after a delete that failed halfway, so a partly deleted mod leaves the list, and rethrows the original error', async () => {
+  await useModStore.getState().reload()
+  expect(useModStore.getState().mods.some((mod) => mod.id === 'Snippets/dnd')).toBe(true)
+  // The delete removed part of the folder, then a locked file stopped it; the next scan no longer finds the mod.
+  state.deleteFiles.mockImplementationOnce(async () => {
+    state.gone.add('Snippets/dnd')
+    throw new Error('The process cannot access the file')
+  })
+  await expect(useModStore.getState().deleteMod('Snippets/dnd')).rejects.toThrow('The process cannot access the file')
+  expect(useModStore.getState().mods.some((mod) => mod.id === 'Snippets/dnd')).toBe(false)
+  expect(useModStore.getState().busy).toBe(false)
+  expect(useModStore.getState().errors).toEqual(['The process cannot access the file'])
+})
+it('never lets a failing rescan replace the delete error', async () => {
+  await useModStore.getState().reload()
+  state.deleteFiles.mockRejectedValueOnce(new Error('Locked'))
+  state.sync = null
+  vi.mocked(reconcilePlugins).mockRejectedValueOnce(new Error('Rescan exploded'))
+  await expect(useModStore.getState().deleteMod('Snippets/dnd')).rejects.toThrow('Locked')
 })
 it('refuses to delete an id that is not in the catalog', async () => {
   await useModStore.getState().reload()

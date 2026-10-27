@@ -177,6 +177,7 @@ it('lists imported external plugins as unverified and waiting for approval, with
 
   vi.mocked(listExternalPlugins).mockResolvedValue({ version: 1, disabledAll: false, plugins: {} })
   await act(async () => button('Delete Community Zoom')!.click())
+  await wait()
   await act(async () => [...container.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find((item) => item.textContent === 'Delete')!.click())
   expect(stopExternalPluginNow).toHaveBeenCalledWith('community.zoom')
   expect(removeExternalPlugin).toHaveBeenCalledWith('community.zoom')
@@ -402,9 +403,13 @@ it('opens Create Mod from its button and hands the Theme Customizer request to t
   container.remove()
 })
 
-/** Opens the confirmation for a Delete button and returns the dialog and its buttons. */
+/** The dialog's buttons ignore clicks for a moment after it opens (a double-click must not delete). */
+const wait = (ms = 350) => act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)) })
+
+/** Opens the confirmation for a Delete button, waits until its buttons react, and returns the dialog and its buttons. */
 async function askDelete(container: HTMLElement, label: string) {
   await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click())
+  await wait()
   const dialog = container.querySelector<HTMLElement>('[role="alertdialog"]')!
   const inDialog = (text: string) => [...dialog.querySelectorAll('button')].find((item) => item.textContent === text)!
   return { dialog, cancel: inDialog('Cancel'), confirm: inDialog('Delete') }
@@ -494,4 +499,28 @@ it.each([
   expect(deleteMod).toHaveBeenCalledExactlyOnceWith(id)
   await act(async () => root.unmount())
   container.remove()
+})
+
+it('ignores clicks on the confirmation buttons for 300 ms after it opens, then reacts', async () => {
+  const deleteMod = vi.fn(async () => {})
+  const { container, details, close } = await openExternal({ current: localVersion.dir, state: 'active' }, false, localVersion, [packageMod()])
+  useModStore.setState({ deleteMod })
+  await details('Zoom')
+  vi.useFakeTimers()
+  try {
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Delete Zoom"]')!.click())
+    const buttons = () => [...container.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')]
+    // The second click of a double-click lands on the dialog's Delete button.
+    await act(async () => buttons().find((item) => item.textContent === 'Delete')!.click())
+    await act(async () => buttons().find((item) => item.textContent === 'Cancel')!.click())
+    expect(container.querySelector('[role="alertdialog"]')).not.toBeNull()
+    expect(deleteMod).not.toHaveBeenCalled()
+    await act(async () => { vi.advanceTimersByTime(301) })
+    await act(async () => buttons().find((item) => item.textContent === 'Delete')!.click())
+    expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+  expect(deleteMod).toHaveBeenCalledOnce()
+  await close()
 })

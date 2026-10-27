@@ -9,6 +9,9 @@ interface Props {
   onConfirm(): void | Promise<unknown>
 }
 
+/** How long the dialog's buttons ignore clicks after it opens. */
+const ARM_DELAY_MS = 300
+
 /** A small Delete button that never deletes without a confirmation dialog (Cancel is focused first). */
 export function DeleteModButton({ name, disabled, onConfirm }: Props) {
   const [open, setOpen] = useState(false)
@@ -17,13 +20,24 @@ export function DeleteModButton({ name, disabled, onConfirm }: Props) {
   const titleId = useId()
   const textId = useId()
 
-  useEffect(() => { if (open) cancel.current?.focus() }, [open])
+  // A double-click on the trigger can land its second click on a dialog button; they ignore clicks for a moment.
+  const armed = useRef(false)
+
+  useEffect(() => {
+    if (!open) return undefined
+    armed.current = false
+    cancel.current?.focus()
+    const timer = setTimeout(() => { armed.current = true }, ARM_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [open])
 
   const close = () => {
     setOpen(false)
     trigger.current?.focus()
   }
+  const cancelClick = () => { if (armed.current) close() }
   const confirm = () => {
+    if (!armed.current) return
     setOpen(false)
     void onConfirm()
   }
@@ -41,7 +55,7 @@ export function DeleteModButton({ name, disabled, onConfirm }: Props) {
               {name} will be deleted permanently. It cannot be recovered. To use it again you will have to install it again.
             </p>
             <footer className={styles.modalActions}>
-              <button ref={cancel} type="button" onClick={close}>Cancel</button>
+              <button ref={cancel} type="button" onClick={cancelClick}>Cancel</button>
               <button type="button" className={styles.danger} onClick={confirm}>Delete</button>
             </footer>
           </div>
