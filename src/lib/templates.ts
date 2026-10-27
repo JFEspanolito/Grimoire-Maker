@@ -144,7 +144,8 @@ export async function loadUserTemplates(takenThemeIds: Set<string>, options: Tem
         ...(layout && { layout }),
         body,
         builtin: false,
-        requiresProject: isPackage && children.some((file) => file.name === 'chapters' || file.name === 'assets'),
+        // An exported project (layout `project`) always needs a project; folder names are matched ignoring case.
+        requiresProject: isPackage && (layout === 'project' || children.some((file) => ['chapters', 'assets'].includes(file.name.toLowerCase()))),
         snippets: packageSnippets.snippets,
         location: isPackage
           ? { kind: 'package', path: `${dir}/${id}` }

@@ -6,18 +6,20 @@ import { boxAttributes, boxBackgroundColor, boxBackgroundInputValue, boxBorderCo
 
 let editor: Editor | null = null
 afterEach(() => { editor?.destroy(); editor = null })
+/** The first content box of the document, typed so its attributes can be read. */
+const boxIn = (value: Editor) => value.getJSON().content?.[0].content?.find((node) => node.type === 'standardContentBox') as { attrs?: Record<string, unknown> } | undefined
 const markdown = (value: Editor) => (value.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown()
 
 it('inserts a free box with a 2 px black border that survives saving and reopening', () => {
   editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'Body text' })
   expect(insertFloatingBox(editor)).toBe(true)
-  const box = editor.getJSON().content?.[0].content?.find((node) => node.type === 'standardContentBox')
+  const box = boxIn(editor)
   expect(box?.attrs).toMatchObject({ placement: 'free', widthMm: 60, borderWidth: 2, borderColor: '#000000' })
   const saved = markdown(editor)
   expect(saved).toContain('data-border-width="2"')
   expect(saved).toContain('border:2px solid #000000')
   const reopened = new Editor({ extensions: EDITOR_EXTENSIONS, content: saved })
-  expect(reopened.getJSON().content?.[0].content?.find((node) => node.type === 'standardContentBox')?.attrs).toMatchObject({ placement: 'free', borderWidth: 2, borderColor: '#000000' })
+  expect(boxIn(reopened)?.attrs).toMatchObject({ placement: 'free', borderWidth: 2, borderColor: '#000000' })
   reopened.destroy()
 })
 
@@ -53,7 +55,7 @@ it('serializes the background like the sibling attributes and leaves old boxes u
 it('round-trips the background through Markdown, rejects an injected value, and keeps old documents as they were', () => {
   editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'Body' })
   insertFloatingBox(editor)
-  const box = () => editor!.getJSON().content?.[0].content?.find((node) => node.type === 'standardContentBox')
+  const box = () => boxIn(editor!)
   expect(box()?.attrs?.backgroundColor).toBeNull()
   expect(markdown(editor)).not.toContain('data-bg-color')
   editor.state.doc.descendants((node, pos) => {
@@ -63,10 +65,10 @@ it('round-trips the background through Markdown, rejects an injected value, and 
   expect(saved).toContain('data-bg-color="#ffeecc"')
   expect(saved).toContain('background-color:#ffeecc')
   const reopened = new Editor({ extensions: EDITOR_EXTENSIONS, content: saved })
-  expect(reopened.getJSON().content?.[0].content?.find((node) => node.type === 'standardContentBox')?.attrs).toMatchObject({ backgroundColor: '#ffeecc', borderWidth: 2 })
+  expect(boxIn(reopened)?.attrs).toMatchObject({ backgroundColor: '#ffeecc', borderWidth: 2 })
   reopened.destroy()
   const hostile = new Editor({ extensions: EDITOR_EXTENSIONS, content: '<div data-type="standard-content-box" data-bg-color="url(javascript:x)"><p>x</p></div>' })
-  expect(hostile.getJSON().content?.[0].content?.find((node) => node.type === 'standardContentBox')?.attrs?.backgroundColor).toBeNull()
+  expect(boxIn(hostile)?.attrs?.backgroundColor).toBeNull()
   expect(markdown(hostile)).not.toContain('url(')
   hostile.destroy()
 })

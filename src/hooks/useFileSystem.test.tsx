@@ -494,6 +494,14 @@ describe('applying templates', () => {
     expect(applyTemplateFiles).not.toHaveBeenCalled()
   })
 
+  it('refuses an imported project-layout template when no project is open', async () => {
+    useDocumentStore.getState().setWorkspace(null, [])
+    useDocumentStore.getState().loadFromRaw(null, '# Notes')
+    await expect(actions.applyTemplate({ ...template, layout: 'project', requiresProject: true })).rejects.toThrow('Open a project folder')
+    expect(useDocumentStore.getState().document.body).toBe('# Notes')
+    expect(applyTemplateFiles).not.toHaveBeenCalled()
+  })
+
   it('creates project documents and opens the index without Save As for a clean editor', async () => {
     useDocumentStore.getState().setWorkspace('/workspace', [])
 

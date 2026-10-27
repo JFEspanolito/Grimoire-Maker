@@ -13,7 +13,7 @@ import {
   exportTheme,
   readProjectTree,
 } from './modExport'
-import type { PackageFs } from './templateIo'
+import type { PackageFs, ProjectPackageFs } from './templateIo'
 import { LIMITS, readTemplatePackage } from './templatePackage'
 import { useDocumentStore } from '../stores/documentStore'
 
@@ -352,10 +352,10 @@ describe('buildTemplateExport', () => {
       '',
       `Inline \`${root}/Assets/Chapter 1/map.png\` stays.`,
     ].join('\n'),
-    'Draft/Chapter 2/Two.md': '# Two\n\n![up](../../Assets/Chapter 1/map.png)\n[escape](../../../outside.md)\n',
+    'Draft/Chapter 2/Two.md': `# Two\n\n![up](../../Assets/Chapter 1/map.png)\n[escape](../../../outside.md)\n[notes](../../Research/Notes.txt) [abs notes](${root}/Research/Notes.txt)\n`,
     'Assets/Chapter 1/map.png': map,
     'Research/Notes.txt': 'notes',
-    'Empty folder/': '',
+    'Draft/Empty folder/': '',
   })
 
   const build = (files = project(), meta = {}) => buildTemplateExport(files, root, { name: 'Dragon Curse Base', author: 'JF', description: 'A base.\nTwo lines.', includeContent: true, ...meta })
@@ -365,17 +365,20 @@ describe('buildTemplateExport', () => {
     const built = build()
     expect(built.fileName).toBe('dragon-curse-base.zip')
     const entries = unpack(built.bytes)
-    expect(Object.keys(entries).sort()).toEqual(['Assets/Chapter 1/map.png', 'Draft/Chapter 1/Welcome.md', 'Draft/Chapter 2/Two.md', 'Research/Notes.txt', 'template.json'])
+    // The tree is the content of Draft plus the project's Assets folder; Research does not travel.
+    expect(Object.keys(entries).sort()).toEqual(['Assets/Chapter 1/map.png', 'Chapter 1/Welcome.md', 'Chapter 2/Two.md', 'template.json'])
     const manifest = JSON.parse(strFromU8(entries['template.json']))
     expect(Object.keys(manifest)).toEqual(['id', 'name', 'version', 'grimoireVersion', 'author', 'rootDirectory', 'description', 'structure'])
-    expect(manifest).toMatchObject({ id: 'dragon-curse-base', name: 'Dragon Curse Base', version: '1.0.0', author: 'JF', rootDirectory: 'Dragon Curse', description: 'A base.\nTwo lines.' })
+    expect(manifest).toMatchObject({ id: 'dragon-curse-base', name: 'Dragon Curse Base', version: '1.0.0', author: 'JF', rootDirectory: 'Draft', description: 'A base.\nTwo lines.' })
     expect(manifest.grimoireVersion).toMatch(/^>=\d+\.\d+\.\d+$/)
     expect(manifest.structure).toEqual(expect.arrayContaining([
-      { path: 'Draft/', type: 'directory' },
-      { path: 'Draft/Chapter 1/', type: 'directory' },
-      { path: 'Draft/Chapter 1/Welcome.md', type: 'file' },
+      { path: 'Chapter 1/', type: 'directory' },
+      { path: 'Chapter 1/Welcome.md', type: 'file' },
+      { path: 'Assets/', type: 'directory' },
+      { path: 'Assets/Chapter 1/map.png', type: 'file' },
       { path: 'Empty folder/', type: 'directory' },
     ]))
+    expect(manifest.structure.some((entry: { path: string }) => /^(Draft|Research)\b/.test(entry.path))).toBe(false)
     const read = readTemplatePackage(built.bytes)
     expect(read.manifest?.id).toBe('dragon-curse-base')
     expect(read.files['template.json']).toBeUndefined()
@@ -383,12 +386,12 @@ describe('buildTemplateExport', () => {
 
   it('makes absolute project paths relative to each file and neutralizes everything else, with warnings', () => {
     const built = build()
-    const welcome = strFromU8(unpack(built.bytes)['Draft/Chapter 1/Welcome.md'])
-    expect(welcome).toContain('![Map](../../Assets/Chapter%201/map.png)')
-    expect(welcome).toContain('![Map again](<../../Assets/Chapter 1/map.png> "Title")')
-    expect(welcome).toContain('<img src="../../Assets/Chapter 1/map.png" data-width-mm="40" />')
-    expect(welcome).toContain('[ref]: ../../Assets/Chapter%201/map.png')
-    expect(welcome).toContain('![Encoded](../../Assets/Chapter%201/map.png)')
+    const welcome = strFromU8(unpack(built.bytes)['Chapter 1/Welcome.md'])
+    expect(welcome).toContain('![Map](../Assets/Chapter%201/map.png)')
+    expect(welcome).toContain('![Map again](<../Assets/Chapter 1/map.png> "Title")')
+    expect(welcome).toContain('<img src="../Assets/Chapter 1/map.png" data-width-mm="40" />')
+    expect(welcome).toContain('[ref]: ../Assets/Chapter%201/map.png')
+    expect(welcome).toContain('![Encoded](../Assets/Chapter%201/map.png)')
     expect(welcome).toContain('[Next](../Chapter 2/Two.md)')
     expect(welcome).toContain('https://example.test/a')
     expect(welcome).toContain('[top](#welcome)')
@@ -401,12 +404,15 @@ describe('buildTemplateExport', () => {
     // No path of this computer remains outside code.
     expect(welcome.replace(/```[\s\S]*?```/g, '').replace(/`[^`]*`/g, '')).not.toMatch(/Users|C:/)
     expect(built.warnings.join('\n')).toMatch(/outside the project/)
-    expect(built.warnings.join('\n')).toMatch(/front matter of "Draft\/Chapter 1\/Welcome.md"/)
-    expect(strFromU8(unpack(built.bytes)['Draft/Chapter 2/Two.md'])).toBe('# Two\n\n![up](../../Assets/Chapter 1/map.png)\n[]()\n'.replace('[]()', '[escape]()'))
+    expect(built.warnings.join('\n')).toMatch(/front matter of "Chapter 1\/Welcome.md"/)
+    // From Chapter 2/Two.md the shared Assets folder is one level up now; links into Research are removed with a warning.
+    expect(strFromU8(unpack(built.bytes)['Chapter 2/Two.md'])).toBe('# Two\n\n![up](../Assets/Chapter 1/map.png)\n[escape]()\n[notes]() [abs notes]()\n')
+    expect(built.warnings.join('\n')).toMatch(/part of the project the template does not include/)
+    expect(built.warnings.join('\n')).toMatch(/not part of the template/)
   })
 
   it('removes volatile and local-path frontmatter lines and keeps the rest', () => {
-    const welcome = strFromU8(unpack(build().bytes)['Draft/Chapter 1/Welcome.md'])
+    const welcome = strFromU8(unpack(build().bytes)['Chapter 1/Welcome.md'])
     expect(welcome.startsWith('---\ntitle: Welcome\ntheme: parchment\n---\n')).toBe(true)
     expect(VOLATILE_FRONTMATTER_KEYS).toContain('zoom')
   })
@@ -414,11 +420,10 @@ describe('buildTemplateExport', () => {
   it('structure only: every file keeps its path and frontmatter with an empty body; images are left out', () => {
     const built = build(project(), { includeContent: false })
     const entries = unpack(built.bytes)
-    expect(Object.keys(entries).sort()).toEqual(['Draft/Chapter 1/Welcome.md', 'Draft/Chapter 2/Two.md', 'Research/Notes.txt', 'template.json'])
-    expect(strFromU8(entries['Draft/Chapter 1/Welcome.md'])).toBe('---\ntitle: Welcome\ntheme: parchment\n---\n')
+    expect(Object.keys(entries).sort()).toEqual(['Chapter 1/Welcome.md', 'Chapter 2/Two.md', 'template.json'])
+    expect(strFromU8(entries['Chapter 1/Welcome.md'])).toBe('---\ntitle: Welcome\ntheme: parchment\n---\n')
     expect(built.warnings.join('\n')).toMatch(/local path from the front matter/)
-    expect(strFromU8(entries['Draft/Chapter 2/Two.md'])).toBe('')
-    expect(entries['Research/Notes.txt']).toHaveLength(0)
+    expect(strFromU8(entries['Chapter 2/Two.md'])).toBe('')
     expect(readTemplatePackage(built.bytes).manifest?.name).toBe('Dragon Curse Base')
   })
 
@@ -428,7 +433,7 @@ describe('buildTemplateExport', () => {
       '.git/config': 'x', '.cache/a.md': 'x', 'Draft/.hidden/a.md': 'x', '.grimoire-project.json': '{}', 'Draft/.undo.md': 'x',
       'notes.pdf': new Uint8Array([1]), 'macro.js': 'alert(1)', 'a.docx': new Uint8Array([1]), '__MACOSX/a.md': 'x',
     })
-    expect(Object.keys(unpack(built.bytes)).sort()).toEqual(['Assets/Chapter 1/map.png', 'Draft/Chapter 1/Welcome.md', 'Draft/Chapter 2/Two.md', 'Research/Notes.txt', 'template.json'])
+    expect(Object.keys(unpack(built.bytes)).sort()).toEqual(['Assets/Chapter 1/map.png', 'Chapter 1/Welcome.md', 'Chapter 2/Two.md', 'template.json'])
     expect(built.warnings.join('\n')).not.toMatch(/\.git|\.cache|pdf|macro/)
   })
 
@@ -440,7 +445,7 @@ describe('buildTemplateExport', () => {
       'Draft\\Win\\path.md': 'fine', 'Draft/style.css': "@import url('https://evil.test/x.css');",
     })
     const names = Object.keys(unpack(built.bytes)).sort()
-    expect(names).toEqual(['Draft/Dup.md', 'Draft/Good.md', 'Draft/Win/path.md', 'template.json'])
+    expect(names).toEqual(['Dup.md', 'Good.md', 'Win/path.md', 'template.json'])
     expect(built.warnings.length).toBeGreaterThanOrEqual(9)
     expect(() => readTemplatePackage(built.bytes)).not.toThrow()
   })
@@ -487,13 +492,91 @@ describe('buildTemplateExport', () => {
     expect(id).toBe('dragon-curse-base')
     const base = '/Mods/Templates/dragon-curse-base'
     expect([...files.keys()].filter((path) => path.startsWith(base)).map((path) => path.slice(base.length + 1)).sort()).toEqual([
-      'Assets/Chapter 1/map.png', 'Draft/Chapter 1/Welcome.md', 'Draft/Chapter 2/Two.md', 'Research/Notes.txt', 'index.md',
+      'Assets/Chapter 1/map.png', 'Chapter 1/Welcome.md', 'Chapter 2/Two.md', 'index.md',
     ])
     expect(text(files, `${base}/index.md`)).toContain('templateName: Dragon Curse Base')
     for (const [path, data] of files) {
       if (path.startsWith(base) && path.endsWith('.md')) expect(strFromU8(data).replace(/```[\s\S]*?```/g, '').replace(/`[^`]*`/g, '')).not.toMatch(/C:\/|C:\\|Users/)
     }
     expect(Array.from(files.get(`${base}/Assets/Chapter 1/map.png`)!)).toEqual(Array.from(map))
+  })
+  it('exports a project without a Draft folder whole, named after the project folder', () => {
+    const built = build({ 'Chapters/One.md': '# One\n![m](Maps/m.png)', 'Maps/m.png': map, 'Notes.md': 'n' })
+    expect(Object.keys(unpack(built.bytes)).sort()).toEqual(['Chapters/One.md', 'Maps/m.png', 'Notes.md', 'template.json'])
+    const manifest = JSON.parse(strFromU8(unpack(built.bytes)['template.json']))
+    expect(manifest.rootDirectory).toBe('Dragon Curse')
+    expect(strFromU8(unpack(built.bytes)['Chapters/One.md'])).toContain('![m](Maps/m.png)')
+  })
+
+  it('keeps Draft content ahead of Assets on a name clash and ignores letter case of Draft/Assets', () => {
+    const built = build({ 'draft/a.md': '# a', 'draft/Assets/x.png': asset(PNG, 20, 1), 'ASSETS/x.png': asset(PNG, 20, 2), 'Research/r.md': 'r' })
+    expect(Object.keys(unpack(built.bytes)).sort()).toEqual(['Assets/x.png', 'a.md', 'template.json'])
+    expect(Array.from(unpack(built.bytes)['Assets/x.png'])).toEqual(Array.from(asset(PNG, 20, 1)))
+    expect(built.warnings.join('\n')).toMatch(/differs from it only by letter case/)
+  })
+
+  it('does not leak absolute paths written percent-encoded, in srcset, poster, data-src, anchors, sources or UNC form', () => {
+    const doc = [
+      '![a](C:%5CUsers%5CBob%20Smith%5Cx.png)',
+      '![b](c:%2FUsers%2FBob%2Fy.png)',
+      '![c](C%3A%5CUsers%5CBob%5Cz.png)',
+      '![d](C:%255CUsers%255CBob%255Cw.png)',
+      '![e](\\server\share\Bob\q.png)',
+      '![f](file:%2F%2F%2FC:%2FUsers%2FBob%2Fr.png)',
+      '<img srcset="C:/Users/Bob/x.png 1x, D:\\Users\\Bob\\x2.png 2x, ../Assets/ok.png 3x" src="d:/Users/Bob/s.png">',
+      "<img srcset='C:/Users/Bob Smith/x.png 1x'>",
+      '<video poster="C:\\Users\\Bob\\p.png"></video>',
+      '<img data-src="c:/Users/Bob/d.png">',
+      '<a href="C:%5CUsers%5CBob%5Ca.pdf">link</a>',
+      '<link href="file:///C:/Users/Bob/s.css">',
+      '<picture><source src="C:/Users/Bob/v.webm" srcset="/Users/Bob/h.png 1x"></picture>',
+      '<C:%5CUsers%5CBob%5Cauto.png>',
+    ].join('\n')
+    const built = build({ 'Draft/One.md': `---\ncover: C:%5CUsers%5CBob%5Ccover.png\n---\n${doc}\n`, 'Assets/ok.png': map })
+    const entries = unpack(built.bytes)
+    const all = Object.values(entries).map((bytes) => strFromU8(bytes)).join('\n')
+    expect(all).not.toMatch(/Users|Bob|Smith|server|share|C:|D:|%5C|%2F/i)
+    const one = strFromU8(entries['One.md'])
+    expect(one).toContain('./Assets/ok.png 3x')
+    expect(one).toContain('srcset="./Assets/ok.png 3x"')
+    expect(built.warnings.length).toBeGreaterThan(5)
+  })
+
+  it('round-trips export, import, listing and apply: project layout needs a project and keeps image links working', async () => {
+    const built = build()
+    const { fs, files } = memoryFs({ '/dl/dragon-curse-base.zip': built.bytes })
+    await importModFromPath('/dl/dragon-curse-base.zip', 'zip', 'Templates', fs)
+    mocks.fs.readDir.mockImplementation(async (path: string) => (await fs.readDir(path)).map((e) => ({ ...e, isSymlink: false })))
+    mocks.fs.stat.mockImplementation(async (path: string) => ({ size: files.get(path)?.length ?? 0 }))
+    mocks.fs.readTextFile.mockImplementation(async (path: string) => text(files, path))
+    const { loadUserTemplates } = await import('./templates')
+    const listed = await loadUserTemplates(new Set(), { dir: '/Mods/Templates', reservedIds: [] })
+    const template = listed.templates.find((item) => item.id === 'dragon-curse-base')!
+    expect(template.layout).toBe('project')
+    expect(template.requiresProject).toBe(true)
+
+    // Applying into a project: Draft/<id>/Chapter 1/... and Draft/<id>/Assets/... with links that still resolve.
+    const { createTemplateDocuments } = await import('./templateIo')
+    const target = new Map<string, Uint8Array>()
+    const folders = new Set<string>(['/proj/Draft'])
+    const projectFs: ProjectPackageFs = {
+      readFile: async (path) => (files.get(path) ?? target.get(path)) as Uint8Array,
+      writeFile: async (path, data) => { target.set(path, data) },
+      mkdir: async (path) => { folders.add(path) },
+      exists: async (path) => folders.has(path) || target.has(path),
+      readDir: (path) => fs.readDir(path),
+      rename: async (from, to) => {
+        for (const [path, data] of [...target]) if (path.startsWith(`${from}/`)) { target.delete(path); target.set(`${to}${path.slice(from.length)}`, data) }
+        folders.add(to)
+      },
+      removeDir: async () => undefined,
+    }
+    await createTemplateDocuments(projectFs, '/proj/Draft', template)
+    const welcome = strFromU8(target.get('/proj/Draft/dragon-curse-base/Chapter 1/Welcome.md')!)
+    expect([...target.keys()]).toContain('/proj/Draft/dragon-curse-base/Assets/Chapter 1/map.png')
+    expect([...target.keys()].some((path) => path.includes('/Draft/dragon-curse-base/Draft/'))).toBe(false)
+    // "../Assets/Chapter%201/map.png" from Chapter 1/ lands on Assets/Chapter 1/map.png next to it.
+    expect(welcome).toContain('![Map](../Assets/Chapter%201/map.png)')
   })
 })
 
@@ -533,7 +616,7 @@ describe('readProjectTree and exportProjectAsTemplate', () => {
     const result = await exportProjectAsTemplate({ name: 'Mine', includeContent: true })
     expect(result?.path).toBe('/out/mine.zip')
     expect(mocks.dialog.save.mock.calls[1][0].defaultPath).toBe('mine.zip')
-    expect(Object.keys(unzipSync(mocks.fs.writeFile.mock.calls[0][1])).sort()).toEqual(['Draft/One.md', 'logo.png', 'template.json'])
+    expect(Object.keys(unzipSync(mocks.fs.writeFile.mock.calls[0][1])).sort()).toEqual(['One.md', 'template.json'])
   })
 
   it('needs an open project', async () => {

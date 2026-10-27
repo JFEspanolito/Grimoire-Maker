@@ -174,15 +174,22 @@ const LOCAL_START = /^(?:[A-Za-z]:[\\/]|\\\\|file:|~[\\/]|\/(?![/\s]))/i
 
 /** Whether a frontmatter value is a path on this computer. */
 const isLocalPathValue = (value: string): boolean => {
-  const v = value.trim().replace(/^(["'])(.*)\1$/, '$2')
+  const v = decodeFully(value.trim().replace(/^(["'])(.*)\1$/, '$2'))
   return LOCAL_START.test(v) || WINDOWS_PATH_ANYWHERE.test(v)
 }
 
 interface Context {
+  /** Lower-cased package path -> package path, for every file that travels. */
   tree: Map<string, string>
   root: string
   warnings: string[]
   seen: Set<string>
+  /** Package path -> the path the file has in the project (links are written against the project layout). */
+  origins: Map<string, string>
+  /** Lower-cased project path -> package path. */
+  projectMap: Map<string, string>
+  /** Where a project-relative path lands in the package, or null when the template does not carry that part of the project. */
+  layout: (projectPath: string) => string | null
 }
 
 function warn(context: Context, message: string): void {
@@ -197,6 +204,17 @@ const safeDecode = (value: string): string => {
   } catch {
     return value
   }
+}
+
+/** Percent-decodes until nothing changes (at most 3 rounds), so `%255C` and `%5C` are both seen as a backslash. */
+function decodeFully(value: string): string {
+  let current = value
+  for (let round = 0; round < 3; round++) {
+    const next = safeDecode(current)
+    if (next === current) break
+    current = next
+  }
+  return current
 }
 
 /** Resolves `.`/`..` against a folder inside the project; null when the path climbs out of it. */
@@ -234,9 +252,11 @@ function classify(raw: string, file: string, context: Context): string | null | 
   const cut = text.search(/[?#]/)
   const pathPart = cut === -1 ? text : text.slice(0, cut)
   const suffix = cut === -1 ? '' : text.slice(cut)
-  const isDrive = /^[A-Za-z]:[\\/]/.test(pathPart)
-  const scheme = !isDrive ? /^([A-Za-z][A-Za-z0-9+.-]*):/.exec(pathPart)?.[1].toLowerCase() : undefined
-  let path = safeDecode(pathPart).replaceAll('\\', '/')
+  // Decode first: `C:%5CUsers%5Cme%5Cx.png` is a path on this computer, not a link with a scheme.
+  const decoded = decodeFully(pathPart)
+  const isDrive = /^[A-Za-z]:/.test(decoded)
+  const scheme = !isDrive ? /^([A-Za-z][A-Za-z0-9+.-]*):/.exec(decoded)?.[1].toLowerCase() : undefined
+  let path = decoded.replaceAll('\\', '/')
   if (scheme === 'file') {
     // file:///C:/x or file:///home/x are local; file://server/share is a network location.
     if (!/^file:\/\/\//i.test(path)) {
@@ -246,18 +266,27 @@ function classify(raw: string, file: string, context: Context): string | null | 
     path = path.slice(7).replace(/^\/([A-Za-z]:\/)/, '$1')
   } else if (scheme) return undefined
 
-  const absolute = /^[A-Za-z]:\//.test(path) || path.startsWith('/') || path.startsWith('~/')
+  const absolute = /^[A-Za-z]:/.test(path) || path.startsWith('/') || path.startsWith('~/')
   if (!absolute) {
-    // Relative: fine when it stays inside the project, whether or not the target is a shared file.
-    if (resolveInProject(dirOf(file), path) === null) {
+    // Relative links are resolved where the document was in the project and rewritten for where it lands in the package.
+    const resolved = resolveInProject(dirOf(context.origins.get(file) ?? file), path)
+    if (resolved === null) {
       warn(context, `Removed a link in "${file}" that points outside the project (${shown(text)})`)
       return null
     }
-    return undefined
+    if (resolved === '') return undefined
+    const target = context.layout(resolved)
+    if (target === null) {
+      warn(context, `Removed a link in "${file}" to a part of the project the template does not include (${shown(text)})`)
+      return null
+    }
+    if (resolveInProject(dirOf(file), path)?.toLowerCase() === target.toLowerCase()) return undefined
+    return `${relativeFolderPath(dirOf(file), target)}${suffix}`
   }
   const prefix = `${context.root}/`
   if (path.toLowerCase().startsWith(prefix.toLowerCase())) {
-    const inside = context.tree.get(path.slice(prefix.length).toLowerCase())
+    const mapped = context.projectMap.get(path.slice(prefix.length).toLowerCase())
+    const inside = mapped ? context.tree.get(mapped.toLowerCase()) : undefined
     if (inside) return `${relativeFolderPath(dirOf(file), inside)}${suffix}`
     warn(context, `Removed a link in "${file}" to a project file that is not part of the template (${shown(text)})`)
     return null
@@ -329,10 +358,11 @@ function mapMarkdownDestinations(text: string, change: (destination: string) => 
   return out + text.slice(last)
 }
 
-const ATTRIBUTE = /(\b(?:src|href|poster)\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi
+const SRCSET = /(\bsrcset\s*=\s*)(?:"([^"]*)"|'([^']*)')/gi
+const ATTRIBUTE = /(\b(?:src|href|poster|data-src)\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi
 const CSS_URL = /url\(\s*(["']?)([^)"']*)\1\s*\)/gi
 const REFERENCE_DEFINITION = /^( {0,3}\[[^\]\n]+\]:[ \t]*)(<[^>\n]*>|[^\n]*?)(?=[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\))[ \t]*$|[ \t]*$)/gm
-const AUTOLINK = /<((?:file:|[A-Za-z]:[\\/])[^>\s]*)>/gi
+const AUTOLINK = /<((?:file:|[A-Za-z]:(?:[\\/]|%5C|%2F))[^>\s]*)>/gi
 const decodeAttribute = (value: string): string => value.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
 const encodeAttribute = (value: string): string => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
 
@@ -374,6 +404,19 @@ function sanitizeMarkdown(source: string, file: string, context: Context): strin
     if (result === undefined) return whole
     return `${head}"${result === null ? '' : encodeAttribute(result)}"`
   })
+  body = body.replace(SRCSET, (_whole, head: string, double?: string, single?: string) => {
+    const kept: string[] = []
+    // Candidates are `url descriptor` pairs separated by a comma and whitespace; a path with spaces stays in one piece.
+    for (const candidate of decodeAttribute(double ?? single ?? '').split(/,\s+|,$/)) {
+      const part = candidate.trim()
+      if (!part) continue
+      const descriptor = /\s+[\d.]+[wx]$/.exec(part)?.[0] ?? ''
+      const result = classify(part.slice(0, part.length - descriptor.length), file, context)
+      if (result === null) continue
+      kept.push(result === undefined ? part : `${result}${descriptor}`)
+    }
+    return `${head}"${encodeAttribute(kept.join(', '))}"`
+  })
   body = body.replace(CSS_URL, (whole, _quote: string, value: string) => {
     const result = classify(value, file, context)
     if (result === undefined) return whole
@@ -397,7 +440,10 @@ const asText = (value: string | Uint8Array): string => (typeof value === 'string
 /**
  * Builds the template package from the open project. `files` maps project-relative paths to their
  * content (a key ending in `/` is an empty folder). The result is a zip with `template.json` at its root
- * and the project tree next to it, which the importer accepts without any editing.
+ * (`rootDirectory: "Draft"`) and next to it the content of the project's `Draft` folder plus its `Assets`
+ * folder, which the importer accepts without any editing. Other project folders (Research, ...) do not
+ * travel and links into them are removed. A project without a `Draft` folder is exported whole, with
+ * the project folder's name as `rootDirectory`.
  *
  * Left out, silently: hidden files and folders (`.git`, `.cache`, ...), anything whose type a template
  * may not carry. Left out with a warning: names the importer would refuse, case-only duplicates, style
@@ -413,14 +459,28 @@ export function buildTemplateExport(
   if (!name) throw new Error('Give the template a name.')
   const root = projectRoot.replaceAll('\\', '/').replace(/\/+$/, '')
   const warnings: string[] = []
-  const context: Context = { tree: new Map(), root, warnings, seen: new Set() }
+  const normalize = (key: string): string => key.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '')
+  // Spec 4.1: with a Draft folder the template is Draft's content plus the project's Assets folder.
+  // A project without Draft is exported whole instead.
+  const hasDraft = Object.keys(files).some((key) => normalize(key).split('/')[0].toLowerCase() === 'draft' && (key.endsWith('/') || key.endsWith('\\') || normalize(key).includes('/')))
+  const layout = (projectPath: string): string | null => {
+    if (!hasDraft) return projectPath
+    const [first, ...rest] = projectPath.split('/')
+    if (first.toLowerCase() === 'draft') return rest.join('/')
+    if (first.toLowerCase() === 'assets') return ['Assets', ...rest].join('/')
+    return null
+  }
+  const context: Context = { tree: new Map(), root, warnings, seen: new Set(), origins: new Map(), projectMap: new Map(), layout }
 
-  // 1. Choose what can travel.
+  // 1. Choose what can travel. Draft content goes first so it wins a name clash with Assets.
   const chosen = new Map<string, string | Uint8Array>()
   const folders = new Set<string>()
-  for (const [rawKey, content] of Object.entries(files)) {
+  const rank = (key: string): number => (hasDraft && normalize(key).split('/')[0].toLowerCase() === 'assets' ? 1 : 0)
+  for (const [rawKey, content] of Object.entries(files).sort(([a], [b]) => rank(a) - rank(b))) {
     const isFolder = rawKey.endsWith('/') || rawKey.endsWith('\\')
-    const path = rawKey.replaceAll('\\', '/').replace(/^\.\//, '').replace(/\/+$/, '')
+    const projectPath = normalize(rawKey)
+    if (!projectPath) continue
+    const path = layout(projectPath)
     if (!path) continue
     if (isFolder) {
       if (isPackageFile(`${path}/x.md`) && isSafePackagePath(path)) folders.add(path)
@@ -441,6 +501,8 @@ export function buildTemplateExport(
       continue
     }
     context.tree.set(lower, path)
+    context.origins.set(path, projectPath)
+    context.projectMap.set(projectPath.toLowerCase(), path)
     chosen.set(path, content)
   }
 
@@ -508,7 +570,7 @@ export function buildTemplateExport(
   const id = slugify(name, 'template')
   const description = meta.description?.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g, '').trim().slice(0, 2000)
   const author = cleanLine(meta.author ?? '', 120)
-  const rootDirectory = cleanLine(root.slice(root.lastIndexOf('/') + 1), 100)
+  const rootDirectory = hasDraft ? 'Draft' : cleanLine(root.slice(root.lastIndexOf('/') + 1), 100)
   const manifest: TemplateManifest = {
     id,
     name,
