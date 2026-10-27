@@ -2,6 +2,8 @@ import { MOD_KIND, modKey, type ModEntry } from '../../lib/modCatalog'
 import { OFFICIAL_PLUGINS } from '../../lib/modLibrary'
 import type { ExternalPluginSummary } from '../../lib/externalPlugins'
 import { PERMISSIONS, isPermission } from '../../plugins/isolated/permissions'
+import { stopExternalPluginNow } from '../../plugins/isolated/externalHost'
+import { DeleteModButton } from './DeleteModButton'
 import { DetailLine, PluginCard } from './PluginCard'
 
 interface Props {
@@ -10,6 +12,8 @@ interface Props {
   /** The registry record of a package folder, when the native sync has recorded it. */
   record?: ExternalPluginSummary
   setEnabled(id: string, enabled: boolean): Promise<void>
+  /** Permanently removes the folder, then rescans. */
+  deleteMod(id: string): Promise<void>
   run(operation: () => Promise<unknown>): Promise<void>
 }
 
@@ -25,13 +29,14 @@ function packageStatus(mod: ModEntry, record?: ExternalPluginSummary): { word: s
 }
 
 /** A plugin from the Plugins directory: a package folder (runs isolated) or a TSX folder (trusted). */
-export function LocalPluginCard({ mod, busy, record, setEnabled, run }: Props) {
+export function LocalPluginCard({ mod, busy, record, setEnabled, deleteMod, run }: Props) {
   const official = OFFICIAL_PLUGINS.find((plugin) => modKey(MOD_KIND.PLUGINS, plugin.folder) === mod.id)
   const isPackage = Boolean(mod.package)
   const status = isPackage ? packageStatus(mod, record) : { word: mod.enabled ? 'On' : 'Off' }
   const permissions = record?.permissions ?? []
+  const name = record?.name ?? official?.label ?? mod.label
   return (
-    <PluginCard name={record?.name ?? official?.label ?? mod.label} version={record?.version}
+    <PluginCard name={name} version={record?.version}
       origin={isPackage ? 'Local package' : official ? 'Built in' : 'Local'} status={status.word}
       description={record?.description || official?.description || FALLBACK_DESCRIPTION}
       actions={(
@@ -50,6 +55,13 @@ export function LocalPluginCard({ mod, busy, record, setEnabled, run }: Props) {
             </DetailLine>
           ) : <p>Runs with the same access as the app. Only keep plugins you trust.</p>}
           {mod.errors.length > 0 && <ul aria-label="Plugin problems">{mod.errors.map((error, index) => <li key={`${index}:${error}`}>{error}</li>)}</ul>}
+          <p>
+            <DeleteModButton name={name} disabled={busy} onConfirm={() => run(async () => {
+              // Stop a running isolated plugin first; the rescan after the delete then unloads whatever is left.
+              if (record) await stopExternalPluginNow(record.id).catch(() => undefined)
+              await deleteMod(mod.id)
+            })} />
+          </p>
         </>
       )} />
   )

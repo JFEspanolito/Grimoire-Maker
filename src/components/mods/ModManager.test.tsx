@@ -9,7 +9,7 @@ import { grantPluginConsent, listExternalPlugins, removeExternalPlugin } from '.
 import { activateExternalPlugin, setExternalKillSwitch, stopExternalPluginNow, useExternalRuntime, verifyIsolation } from '../../plugins/isolated/externalHost'
 
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true }))
-vi.mock('../../lib/modExport', () => ({ exportTheme: vi.fn(), exportSnippet: vi.fn(), exportSnippetPack: vi.fn(), exportProjectAsTemplate: vi.fn() }))
+vi.mock('../../lib/modExport', () => ({ exportTheme: vi.fn(), exportSnippet: vi.fn(), exportSnippetPackFrom: vi.fn(), exportProjectAsTemplate: vi.fn() }))
 vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: vi.fn() }))
 vi.mock('../../lib/modImport', () => ({
   pickModSource: vi.fn(async () => '/downloads/my-theme.zip'),
@@ -167,7 +167,7 @@ it('lists imported external plugins as unverified and waiting for approval, with
   expect(list.querySelector('input[type="checkbox"]')).toBeNull()
   expect(button('Activate external plugin Community Zoom')).toBeNull()
   // The removal lives inside Details, together with the technical facts.
-  expect(button('Remove external plugin Community Zoom')).toBeNull()
+  expect(button('Delete Community Zoom')).toBeNull()
   expect(list.textContent).not.toContain('ingerprint')
   await details('Community Zoom')
   expect(list.textContent).toContain('Someone (declared by the package, not verified)')
@@ -176,7 +176,8 @@ it('lists imported external plugins as unverified and waiting for approval, with
   expect(list.textContent).toContain('Version fingerprint 0123456789ab')
 
   vi.mocked(listExternalPlugins).mockResolvedValue({ version: 1, disabledAll: false, plugins: {} })
-  await act(async () => button('Remove external plugin Community Zoom')!.click())
+  await act(async () => button('Delete Community Zoom')!.click())
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find((item) => item.textContent === 'Delete')!.click())
   expect(stopExternalPluginNow).toHaveBeenCalledWith('community.zoom')
   expect(removeExternalPlugin).toHaveBeenCalledWith('community.zoom')
   expect(container.querySelector('[aria-label="External plugins"]')).toBeNull()
@@ -261,7 +262,7 @@ it('lists a package folder once, as a local card with its permissions and folder
   expect(container.textContent).toContain('/mods/Plugins/zoom')
   expect(container.textContent).toContain('Read the zoom levelChange the zoom level')
   expect(container.textContent).not.toContain('editor:zoom:read')
-  expect(button('Remove external plugin Zoom')).toBeNull()
+  expect(button('Delete Zoom')).not.toBeNull()
   expect(button('Review and approve Zoom')).toBeNull()
   await act(async () => button('Enable zoom')!.click())
   expect(setEnabled).toHaveBeenCalledWith('Plugins/zoom', false)
@@ -397,6 +398,100 @@ it('opens Create Mod from its button and hands the Theme Customizer request to t
   await act(async () => customizer.click())
   expect(openCustomizer).toHaveBeenCalledOnce()
   expect(container.querySelector('#create-mod-title')).toBeNull()
+  await act(async () => root.unmount())
+  container.remove()
+})
+
+/** Opens the confirmation for a Delete button and returns the dialog and its buttons. */
+async function askDelete(container: HTMLElement, label: string) {
+  await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click())
+  const dialog = container.querySelector<HTMLElement>('[role="alertdialog"]')!
+  const inDialog = (text: string) => [...dialog.querySelectorAll('button')].find((item) => item.textContent === text)!
+  return { dialog, cancel: inDialog('Cancel'), confirm: inDialog('Delete') }
+}
+
+it('never deletes a folder plugin without confirming; Cancel is focused and cancelling does nothing', async () => {
+  const deleteMod = vi.fn(async () => {})
+  const { container, details, close } = await openExternal({ current: localVersion.dir, state: 'active' }, false, localVersion, [packageMod()])
+  useModStore.setState({ deleteMod })
+  expect(container.querySelector('[aria-label="Delete Zoom"]')).toBeNull()
+  await details('Zoom')
+  const { dialog, cancel } = await askDelete(container, 'Delete Zoom')
+  expect(document.activeElement).toBe(cancel)
+  expect(dialog.getAttribute('aria-modal')).toBe('true')
+  expect(dialog.textContent).toContain('deleted permanently')
+  expect(dialog.textContent).toContain('cannot be recovered')
+  expect(dialog.textContent).toContain('install it again')
+  await act(async () => cancel.click())
+  expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+  expect(deleteMod).not.toHaveBeenCalled()
+  expect(stopExternalPluginNow).not.toHaveBeenCalled()
+  await close()
+})
+
+it('deletes a folder plugin after confirming: stops it, deletes through the store and shows a refusal plainly', async () => {
+  const deleteMod = vi.fn(async () => {})
+  const { container, details, close } = await openExternal({ current: localVersion.dir, state: 'active' }, false, localVersion, [packageMod()])
+  useModStore.setState({ deleteMod })
+  await details('Zoom')
+  await act(async () => (await askDelete(container, 'Delete Zoom')).confirm.click())
+  expect(stopExternalPluginNow).toHaveBeenCalledWith('community.zoom')
+  expect(deleteMod).toHaveBeenCalledExactlyOnceWith('Plugins/zoom')
+  expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+
+  deleteMod.mockRejectedValueOnce(new Error('That mod is a link, so it was not deleted.'))
+  await act(async () => (await askDelete(container, 'Delete Zoom')).confirm.click())
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('That mod is a link, so it was not deleted.')
+  await close()
+})
+
+it('closes the confirmation with Escape without deleting', async () => {
+  const deleteMod = vi.fn(async () => {})
+  const { container, details, close } = await openExternal({ current: localVersion.dir, state: 'active' }, false, localVersion, [packageMod()])
+  useModStore.setState({ deleteMod })
+  await details('Zoom')
+  const { cancel } = await askDelete(container, 'Delete Zoom')
+  await act(async () => { cancel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+  expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+  expect(deleteMod).not.toHaveBeenCalled()
+  await close()
+})
+
+it('imported plugins use the existing removal path behind the same confirmation', async () => {
+  const { container, details, close } = await openExternal({ current: null, state: 'installed' })
+  await details('Community Zoom')
+  const { cancel } = await askDelete(container, 'Delete Community Zoom')
+  await act(async () => cancel.click())
+  expect(removeExternalPlugin).not.toHaveBeenCalled()
+  await act(async () => (await askDelete(container, 'Delete Community Zoom')).confirm.click())
+  expect(removeExternalPlugin).toHaveBeenCalledExactlyOnceWith('community.zoom')
+  await close()
+})
+
+it.each([
+  ['Snippets', 'Snippets/dnd', 'D&D'],
+  ['Templates', 'Templates/zine', 'A5 Zine'],
+  ['Themes', 'Themes/arcane', 'Arcane Ink'],
+])('deletes a %s row only after confirming, and a cancel leaves it alone', async (kind, id, label) => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const deleteMod = vi.fn(async () => {})
+  useModStore.setState({
+    busy: false, ready: true, errors: [], reload: vi.fn(async () => {}), deleteMod, missingOfficial: [],
+    mods: [{ id, kind: kind as ModEntry['kind'], folder: `/config/${kind}/x`, label, enabled: true, errors: [] }],
+  })
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => root.render(<ModManager onClose={() => {}} />))
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) => tab.textContent?.startsWith(kind))!.click())
+  // The toggle stays, the Delete button sits next to it and is not nested in the toggle label.
+  expect(container.querySelector(`[aria-label="Enable ${label}"]`)).toBeTruthy()
+  expect(container.querySelector(`label [aria-label="Delete ${label}"]`)).toBeNull()
+  const first = await askDelete(container, `Delete ${label}`)
+  await act(async () => first.cancel.click())
+  expect(deleteMod).not.toHaveBeenCalled()
+  await act(async () => (await askDelete(container, `Delete ${label}`)).confirm.click())
+  expect(deleteMod).toHaveBeenCalledExactlyOnceWith(id)
   await act(async () => root.unmount())
   container.remove()
 })

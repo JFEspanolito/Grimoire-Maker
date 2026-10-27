@@ -47,6 +47,7 @@ pub fn run() {
             commands::workspace::open_folder,
             commands::workspace::delete_from_trash,
             commands::mods::open_mods_folder,
+            commands::mods::delete_mod,
             commands::plugins::install_plugin_package,
             commands::plugins::list_external_plugins,
             commands::plugins::remove_external_plugin,

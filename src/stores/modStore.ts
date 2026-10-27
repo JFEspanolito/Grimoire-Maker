@@ -11,6 +11,7 @@ import { reconcilePlugins } from '../plugins/plugin-loader'
 import { migrateLegacyFolders } from '../lib/migratedPlugins'
 import { folderName, sameFolder, syncLocalPackages } from '../lib/localPackages'
 import { reportError } from '../lib/errorLogging'
+import { deleteModFiles } from '../lib/modDelete'
 
 interface ModState {
   root: string | null
@@ -24,6 +25,8 @@ interface ModState {
   reload: () => Promise<void>
   setEnabled: (id: string, enabled: boolean) => Promise<void>
   installOfficial: (folder: string) => Promise<void>
+  /** Permanently deletes the mod's files, forgets its disabled flag and rescans (which unloads it). */
+  deleteMod: (id: string) => Promise<void>
 }
 
 let pending: Promise<unknown> = Promise.resolve()
@@ -92,6 +95,18 @@ export const useModStore = create<ModState>((set, get) => {
     reload: () => serial(() => perform(scan)),
     installOfficial: (folder) => serial(() => perform(async () => {
       await restoreOfficialPlugin(folder)
+      await scan()
+    })),
+    deleteMod: (id) => serial(() => perform(async () => {
+      const mod = get().mods.find((item) => item.id === id)
+      if (!mod) throw new Error('This mod is no longer in the catalog. Refresh first.')
+      await deleteModFiles(mod)
+      // The files are gone. A reinstall must not come back silently disabled, but a failure here never undoes the delete.
+      try {
+        const paths = await prepareModLibrary()
+        const disabled = await readDisabledMods(paths.preferences)
+        if (disabled.includes(id)) await writeDisabledMods(paths.preferences, disabled.filter((item) => item !== id))
+      } catch (error) { reportError('mods.delete.disabled', error) }
       await scan()
     })),
     setEnabled: (id, enabled) => serial(() => perform(async () => {

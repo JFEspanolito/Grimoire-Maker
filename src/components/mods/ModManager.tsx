@@ -9,6 +9,7 @@ import { listExternalPlugins, summarizeExternalPlugins, type ExternalPluginSumma
 import { setExternalKillSwitch, useExternalRuntime, verifyIsolation } from '../../plugins/isolated/externalHost'
 import { ExternalPluginCard } from './ExternalPluginCard'
 import { LocalPluginCard } from './LocalPluginCard'
+import { DeleteModButton } from './DeleteModButton'
 import { PluginCard } from './PluginCard'
 import { CreateModDialog, CREATE_MOD_TABS, type CreateModTab } from './CreateModDialog'
 import styles from './ModManager.module.css'
@@ -46,7 +47,7 @@ function SafetyBanner({ summary, checking, busy, onRecheck }: { summary: string;
 
 export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModManagerProps) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial } = useModStore()
+  const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial, deleteMod } = useModStore()
   const [activeKind, setActiveKind] = useState<ModKind>(MOD_KIND.SNIPPETS)
   const [actionError, setActionError] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -222,28 +223,31 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
             )
           ) : activeKind === MOD_KIND.PLUGINS ? (
             <div className={styles.list} aria-label="Local plugins">
-              {visibleMods.map((mod) => <LocalPluginCard key={mod.id} mod={mod} busy={busy} setEnabled={setEnabled} run={run}
+              {visibleMods.map((mod) => <LocalPluginCard key={mod.id} mod={mod} busy={busy} setEnabled={setEnabled} deleteMod={deleteMod} run={run}
                 record={mod.package ? external.find((plugin) => plugin.source === 'local' && plugin.localFolder?.toLowerCase() === folderName(mod.folder).toLowerCase()) : undefined} />)}
             </div>
           ) : (
             <div className={styles.list}>
               {visibleMods.map((mod) => (
-                <label className={styles.row} key={mod.id}>
-                  <input
-                    type="checkbox"
-                    checked={mod.enabled}
-                    disabled={busy}
-                    aria-label={`Enable ${mod.label}`}
-                    onChange={(event) => void run(() => setEnabled(mod.id, event.target.checked))}
-                  />
-                  <span>
-                    <strong>{mod.label}</strong>
-                    <small>{mod.folder}</small>
-                    {mod.errors.length > 0 && (
-                      <small className={styles.notice}>Contains invalid files; see errors above.</small>
-                    )}
-                  </span>
-                </label>
+                <div className={styles.rowWrap} key={mod.id}>
+                  <label className={styles.row}>
+                    <input
+                      type="checkbox"
+                      checked={mod.enabled}
+                      disabled={busy}
+                      aria-label={`Enable ${mod.label}`}
+                      onChange={(event) => void run(() => setEnabled(mod.id, event.target.checked))}
+                    />
+                    <span>
+                      <strong>{mod.label}</strong>
+                      <small>{mod.folder}</small>
+                      {mod.errors.length > 0 && (
+                        <small className={styles.notice}>Contains invalid files; see errors above.</small>
+                      )}
+                    </span>
+                  </label>
+                  <DeleteModButton name={mod.label} disabled={busy} onConfirm={() => run(() => deleteMod(mod.id))} />
+                </div>
               ))}
             </div>
           )}

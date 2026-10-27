@@ -6,6 +6,7 @@ import { migrateLegacyFolders } from '../lib/migratedPlugins'
 import { useTemplateStore } from './templateStore'
 
 const state = vi.hoisted(() => ({
+  deleteFiles: vi.fn(async (_mod: unknown) => {}),
   disabled: [] as string[], failWrite: false,
   sync: { packages: [] as unknown[], errors: [] as { folder: string; message: string }[] } as { packages: unknown[]; errors: { folder: string; message: string }[] } | null,
   migrationErrors: [] as string[],
@@ -17,6 +18,7 @@ vi.mock('../lib/localPackages', async (original) => ({
 vi.mock('../lib/migratedPlugins', () => ({
   migrateLegacyFolders: vi.fn(async () => ({ converted: [], errors: state.migrationErrors })),
 }))
+vi.mock('../lib/modDelete', () => ({ deleteModFiles: state.deleteFiles }))
 vi.mock('../plugins/plugin-loader', () => ({ reconcilePlugins: vi.fn(async () => []) }))
 vi.mock('../plugins/isolated/externalHost', () => ({ applyLocalPackages: vi.fn(async () => {}) }))
 vi.mock('../lib/modLibrary', () => ({
@@ -48,6 +50,7 @@ vi.mock('../lib/templates', async (original) => ({
 }))
 
 beforeEach(() => {
+  state.deleteFiles.mockImplementation(async () => {})
   state.disabled = []
   state.failWrite = false
   state.sync = { packages: [], errors: [] }
@@ -112,4 +115,35 @@ it('skips activation outside the desktop application', async () => {
   await new Promise((resolve) => setTimeout(resolve, 0))
   expect(applyLocalPackages).not.toHaveBeenCalled()
   expect(useModStore.getState().ready).toBe(true)
+})
+
+it('deletes a mod from disk, forgets its disabled flag and rescans', async () => {
+  state.disabled = ['Snippets/dnd', 'Templates/book']
+  await useModStore.getState().reload()
+  await useModStore.getState().deleteMod('Snippets/dnd')
+  expect(state.deleteFiles).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'Snippets/dnd', folder: '/Mods/Snippets/dnd' }))
+  expect(state.disabled).toEqual(['Templates/book'])
+  expect(reconcilePlugins).toHaveBeenCalledTimes(2)
+})
+it('keeps the catalog and the disabled list when the delete is refused', async () => {
+  state.disabled = ['Snippets/dnd']
+  await useModStore.getState().reload()
+  state.deleteFiles.mockRejectedValueOnce(new Error('That mod is a link, so it was not deleted.'))
+  await expect(useModStore.getState().deleteMod('Snippets/dnd')).rejects.toThrow('That mod is a link')
+  expect(state.disabled).toEqual(['Snippets/dnd'])
+  expect(useModStore.getState().errors).toEqual(['That mod is a link, so it was not deleted.'])
+  expect(reconcilePlugins).toHaveBeenCalledTimes(1)
+})
+it('refuses to delete an id that is not in the catalog', async () => {
+  await useModStore.getState().reload()
+  await expect(useModStore.getState().deleteMod('Snippets/ghost')).rejects.toThrow('no longer in the catalog')
+  expect(state.deleteFiles).not.toHaveBeenCalled()
+})
+it('still rescans when only the disabled-list cleanup fails', async () => {
+  state.disabled = ['Snippets/dnd']
+  await useModStore.getState().reload()
+  state.failWrite = true
+  await useModStore.getState().deleteMod('Snippets/dnd')
+  expect(state.deleteFiles).toHaveBeenCalledOnce()
+  expect(reconcilePlugins).toHaveBeenCalledTimes(2)
 })

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { grantPluginConsent, removeExternalPlugin, type ExternalPluginSummary } from '../../lib/externalPlugins'
 import { activateExternalPlugin, stopExternalPluginNow } from '../../plugins/isolated/externalHost'
 import { PERMISSIONS, isPermission } from '../../plugins/isolated/permissions'
+import { DeleteModButton } from './DeleteModButton'
 import { DetailLine, PluginCard } from './PluginCard'
 import styles from './ModManager.module.css'
 
@@ -77,8 +78,8 @@ export function ExternalPluginCard({ plugin, running, busy, switchedOff, run, re
       </DetailLine>
       <DetailLine label="Version fingerprint">{plugin.fingerprint.slice(0, 12)}</DetailLine>
       <p>
-        <button type="button" disabled={busy} aria-label={`Remove external plugin ${plugin.name}`}
-          onClick={() => void run(async () => { await stopExternalPluginNow(plugin.id).catch(() => undefined); await removeExternalPlugin(plugin.id); await refresh() })}>Remove</button>
+        <DeleteModButton name={plugin.name} disabled={busy}
+          onConfirm={() => run(async () => { await stopExternalPluginNow(plugin.id).catch(() => undefined); await removeExternalPlugin(plugin.id); await refresh() })} />
       </p>
     </>
   )
