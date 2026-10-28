@@ -19,6 +19,7 @@ pub const KNOWN_PERMISSIONS: &[&str] = &[
     "editor:geometry:read",
     "editor:guides:read",
     "editor:guides:write",
+    "editor:insert",
 ];
 
 const RESERVED: &[&str] = &[
@@ -136,6 +137,19 @@ pub struct ToolbarContribution {
     /// Host-evaluated condition: `markdown` enables the control only for Markdown files.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<String>,
+    /// Declarative action the host runs on click; exclusive with `command` and `bind`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<ToolbarAction>,
+}
+
+/// Data the host executes itself; the plugin never runs code for it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ToolbarAction {
+    /// Only `insertMarkdown` exists.
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub markdown: String,
 }
 
 /// Ctrl+wheel zoom stepping implemented by the host; steps are whole percent values.
@@ -198,11 +212,15 @@ pub struct Manifest {
     pub contributions: Contributions,
 }
 
+/// Zero-width, bidi and other invisible format characters.
+fn is_invisible(c: char) -> bool {
+    matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}')
+}
+
 fn bounded(label: &str, value: &str, max: usize) -> Result<(), String> {
     let count = value.chars().count();
     // Control and invisible/bidi format characters could make the consent text lie.
-    let spoofing = |c: char| c.is_control() || matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}');
-    if count == 0 || count > max || value.chars().any(spoofing) {
+    if count == 0 || count > max || value.chars().any(|c| c.is_control() || is_invisible(c)) {
         return Err(format!("{label} must be 1-{max} printable characters"));
     }
     Ok(())
@@ -242,8 +260,195 @@ fn validate_steps(label: &str, steps: &[u32], min: u32, max: u32) -> Result<(), 
     Ok(())
 }
 
+pub const MAX_INSERT_MARKDOWN_CHARS: usize = 8192;
+const FORBIDDEN_TAGS: &[&str] = &["script", "iframe", "object", "embed", "link", "meta", "style", "base", "form"];
+const FORBIDDEN_SCHEMES: &[&str] = &["http", "https", "ftp", "file", "javascript", "vbscript"];
+
+/// Named character references an attacker could use to hide a scheme or a tag.
+const NAMED_ENTITIES: &[(&str, char)] = &[
+    ("colon", ':'), ("sol", '/'), ("bsol", '\\'), ("amp", '&'), ("lt", '<'), ("gt", '>'), ("quot", '"'), ("apos", '\''),
+    ("tab", '\t'), ("newline", '\n'), ("lpar", '('), ("rpar", ')'), ("equals", '='), ("percnt", '%'), ("num", '#'),
+    ("excl", '!'), ("comma", ','), ("period", '.'), ("lsqb", '['), ("rsqb", ']'), ("nbsp", ' '),
+];
+
+/// One character reference at the start of `rest` (which begins with `&`): the character and the chars consumed.
+fn entity_at(rest: &[char]) -> Option<(char, usize)> {
+    if rest.get(1) == Some(&'#') {
+        let (radix, start) = if matches!(rest.get(2), Some('x') | Some('X')) { (16, 3) } else { (10, 2) };
+        let (mut end, mut value) = (start, 0u32);
+        while end < rest.len() && end - start < 8 {
+            let Some(digit) = rest[end].to_digit(radix) else { break };
+            value = value.saturating_mul(radix).saturating_add(digit);
+            end += 1;
+        }
+        if end == start {
+            return None;
+        }
+        let used = if rest.get(end) == Some(&';') { end + 1 } else { end };
+        return char::from_u32(value).map(|c| (c, used));
+    }
+    let name: String = rest[1..].iter().take_while(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
+    let end = 1 + name.chars().count();
+    let terminated = rest.get(end) == Some(&';');
+    // Browsers accept these four without the semicolon.
+    let legacy = matches!(name.as_str(), "amp" | "lt" | "gt" | "quot");
+    if !terminated && !legacy {
+        return None;
+    }
+    let (_, decoded) = NAMED_ENTITIES.iter().find(|(known, _)| *known == name)?;
+    Some((*decoded, if terminated { end + 1 } else { end }))
+}
+
+fn decode_entities(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '&' {
+            if let Some((decoded, used)) = entity_at(&chars[i..]) {
+                out.push(decoded);
+                i += used;
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = |b: u8| (b as char).to_digit(16);
+        if bytes[i] == b'%' && i + 2 < bytes.len() && hex(bytes[i + 1]).is_some() && hex(bytes[i + 2]).is_some() {
+            out.push((hex(bytes[i + 1]).unwrap() * 16 + hex(bytes[i + 2]).unwrap()) as u8);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn is_scheme_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-')
+}
+
+/// Names the first remote or active construct in already lower-cased text, if any.
+fn active_content(s: &str) -> Option<&'static str> {
+    for scheme in FORBIDDEN_SCHEMES {
+        for (i, _) in s.match_indices(&format!("{scheme}:")) {
+            let boundary = s[..i].chars().next_back().is_none_or(|c| !is_scheme_char(c));
+            if boundary || matches!(*scheme, "javascript" | "vbscript") {
+                return Some("a remote, file or script address (http:, https:, ftp:, file:, javascript:, vbscript:)");
+            }
+        }
+    }
+    for (i, _) in s.match_indices("data:") {
+        if !s[..i].chars().next_back().is_none_or(|c| !is_scheme_char(c)) {
+            continue;
+        }
+        let rest = s[i + 5..].trim_start();
+        let token = rest.bytes().take_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'-')).count();
+        if rest.starts_with(';') || rest.starts_with(',') || (token > 0 && rest.as_bytes().get(token) == Some(&b'/')) {
+            return Some("a data: address");
+        }
+    }
+    for (i, _) in s.match_indices('<') {
+        let rest = s[i + 1..].strip_prefix('/').unwrap_or(&s[i + 1..]);
+        for tag in FORBIDDEN_TAGS {
+            if rest.starts_with(tag) && !rest[tag.len()..].chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) {
+                return Some("raw HTML script, frame, object, embed, link, meta, style, base or form tags");
+            }
+        }
+    }
+    for (i, _) in s.match_indices("on") {
+        if s[..i].chars().next_back().is_some_and(|c| c.is_ascii_alphanumeric()) {
+            continue;
+        }
+        let rest = &s[i + 2..];
+        let letters = rest.bytes().take_while(|b| b.is_ascii_alphabetic()).count();
+        if (2..=20).contains(&letters) && rest[letters..].trim_start().starts_with('=') {
+            return Some("an on<event>= attribute");
+        }
+    }
+    // Protocol-relative targets; browsers read a backslash as a slash in a URL.
+    let slashed = s.replace('\\', "/");
+    for prefix in ["](", "]:", "=", "<", "url("] {
+        for (i, _) in slashed.match_indices(prefix) {
+            let mut rest = slashed[i + prefix.len()..].trim_start();
+            if let Some(stripped) = rest.strip_prefix(['<', '"', '\'']) {
+                rest = stripped;
+            }
+            if rest.starts_with("//") {
+                return Some("a protocol-relative (//host) address");
+            }
+        }
+    }
+    None
+}
+
+/// Rules for text a button inserts into the page. Checked on the raw text and again after
+/// repeatedly decoding character references and percent escapes, so an encoded address is still found.
+fn validate_insert_markdown(text: &str) -> Result<(), String> {
+    let count = text.chars().count();
+    if count == 0 || count > MAX_INSERT_MARKDOWN_CHARS {
+        return Err(format!("Inserted Markdown must be 1-{MAX_INSERT_MARKDOWN_CHARS} characters"));
+    }
+    if text.chars().any(|c| (c.is_control() && !matches!(c, '\n' | '\r' | '\t')) || is_invisible(c)) {
+        return Err("Inserted Markdown contains control, zero-width or direction-changing characters".into());
+    }
+    let mut current = text.to_string();
+    for _ in 0..5 {
+        let lower = current.to_lowercase();
+        // Browsers drop tabs, newlines and invisible characters inside an address.
+        let squeezed: String = lower.chars().filter(|c| !c.is_control() && !is_invisible(*c)).collect();
+        for variant in [&lower, &squeezed] {
+            if let Some(found) = active_content(variant) {
+                return Err(format!("Inserted Markdown must not contain {found}"));
+            }
+        }
+        let next = percent_decode(&decode_entities(&current));
+        if next == current {
+            break;
+        }
+        current = next;
+    }
+    Ok(())
+}
+
+fn validate_action_item(item: &ToolbarContribution, action: &ToolbarAction, sdk_version: u32, permissions: &[String]) -> Result<(), String> {
+    if sdk_version < 2 {
+        return Err("Actions require sdkVersion 2".into());
+    }
+    if item.command.is_some() || item.bind.is_some() {
+        return Err("A control declares exactly one of command, bind or action".into());
+    }
+    if item.kind != "button" || !item.options.is_empty() {
+        return Err("An action belongs to a button without options".into());
+    }
+    if !matches!(item.slot.as_deref(), None | Some("main")) {
+        return Err("An action button must use the main slot".into());
+    }
+    if !matches!(item.when.as_deref(), None | Some("markdown")) {
+        return Err("Unsupported 'when' condition".into());
+    }
+    if action.kind != "insertMarkdown" {
+        return Err(format!("Unsupported action type '{}'", action.kind));
+    }
+    needs(permissions, &["editor:insert"], "An insertMarkdown action")?;
+    validate_insert_markdown(&action.markdown)
+}
+
 fn validate_toolbar_item(item: &ToolbarContribution, sdk_version: u32, permissions: &[String]) -> Result<(), String> {
     bounded("Contribution label", &item.label, 40)?;
+    if let Some(action) = &item.action {
+        return validate_action_item(item, action, sdk_version, permissions);
+    }
     let extended = item.slot.is_some() || item.bind.is_some() || item.when.is_some() || item.kind == "toggle";
     if extended && sdk_version < 2 {
         return Err("Slots, bound controls and toggles require sdkVersion 2".into());
@@ -548,5 +753,164 @@ mod tests {
         for (label, doc) in &bad {
             assert!(parse_manifest(doc.as_bytes()).is_err(), "{label} should be rejected");
         }
+    }
+
+    // ---- insertMarkdown actions -------------------------------------------------------------
+
+    fn action_manifest(item: serde_json::Value, sdk: u32, permissions: &[&str]) -> Vec<u8> {
+        serde_json::to_vec(&serde_json::json!({
+            "schemaVersion": 1, "sdkVersion": sdk, "id": "custom.insert", "name": "Insert", "version": "1.0.0",
+            "author": "Me", "description": "Inserts text.", "main": "dist/index.js",
+            "permissions": permissions,
+            "contributions": { "toolbar": [item] }
+        }))
+        .unwrap()
+    }
+
+    fn insert_item(markdown: &str) -> serde_json::Value {
+        serde_json::json!({ "id": "insert-1", "type": "button", "label": "Insert", "action": { "type": "insertMarkdown", "markdown": markdown } })
+    }
+
+    fn parse_insert(markdown: &str) -> Result<Manifest, String> {
+        parse_manifest(&action_manifest(insert_item(markdown), 2, &["editor:insert"]))
+    }
+
+    #[test]
+    fn the_shared_insert_fixture_parses() {
+        let parsed = parse_manifest(include_str!("../../src/lib/fixtures/insert-plugin.manifest.json").as_bytes()).unwrap();
+        assert_eq!(parsed.id, "custom.encounter-tools");
+        assert_eq!(parsed.permissions, vec!["editor:insert".to_string()]);
+        let action = parsed.contributions.toolbar[0].action.as_ref().unwrap();
+        assert_eq!(action.kind, "insertMarkdown");
+        assert!(action.markdown.starts_with("## Encounter\n\n| d6 | Result |"));
+    }
+
+    #[test]
+    fn editor_insert_is_a_known_permission() {
+        assert!(KNOWN_PERMISSIONS.contains(&"editor:insert"));
+    }
+
+    #[test]
+    fn accepts_plain_markdown_and_safe_links() {
+        for markdown in [
+            "## Title\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n",
+            "Tabs\tand\r\nCRLF are fine",
+            "A [relative link](./notes/a.md) and an [anchor](#section) and ![img](assets/map.png)",
+            "The word http alone, or https without a colon, is only text",
+            "Metadata: the field name data is not an address; neither is profile: or a // comment",
+            "Wizard's action = 3 and person=2 and a tag <b>bold</b> and <linkage>",
+            "Fractions like 1/2 and a path a//b are text",
+            &"x".repeat(MAX_INSERT_MARKDOWN_CHARS),
+        ] {
+            assert!(parse_insert(markdown).is_ok(), "{markdown:?} should be accepted: {:?}", parse_insert(markdown).err());
+        }
+    }
+
+    #[test]
+    fn the_action_survives_serialization_for_the_host() {
+        let parsed = parse_insert("Hello").unwrap();
+        let json = serde_json::to_value(&parsed.contributions.toolbar[0]).unwrap();
+        assert_eq!(json["action"]["type"], "insertMarkdown");
+        assert_eq!(json["action"]["markdown"], "Hello");
+        let plain = serde_json::to_value(&parse_manifest(manifest(&[]).as_bytes()).unwrap().contributions.toolbar[0]).unwrap();
+        assert!(plain.get("action").is_none());
+    }
+
+    #[test]
+    fn rejects_remote_and_active_markdown() {
+        let bad = [
+            "[x](https://a.example)", "[x](http://a.example)", "see HTTP://A.EXAMPLE", "ftp://host/file", "file:///c:/x",
+            "[x](javascript:alert(1))", "[x](JaVaScRiPt:alert(1))", "[x](vbscript:run)", "![i](data:image/png;base64,AAAA)",
+            "[x](data:text/html,<b>)", "[x](//evil.example/a)", "![i](//evil.example/a.png)", "[x](<//evil.example>)",
+            "[x](\\\\evil.example\\a)", "[x]: //evil.example", "<img src=//evil.example/a.png>", "<img src=\"//evil.example\">",
+            "<script>alert(1)</script>", "<SCRIPT src=x>", "<iframe src=x></iframe>", "<object data=x>", "<embed src=x>",
+            "<link rel=stylesheet href=x>", "<meta http-equiv=refresh>", "<style>a{}</style>", "<base href=x>",
+            "<form action=x>", "</script>", "<img src=x onerror=alert(1)>", "<b onclick = \"x\">", "<svg/onload=alert(1)>",
+            // encoded forms
+            "&#104;ttp://x.example", "&#x68;ttp://x.example", "&#104ttp://x.example", "jav&#x61;script:alert(1)",
+            "%68ttp://x.example", "%68%74%74%70%73%3A%2F%2Fx.example", "[x](&#47;&#47;evil.example)", "[x](%2F%2Fevil.example)",
+            "http&colon;//x.example", "&lt;script&gt;alert(1)&lt;/script&gt;", "&#60;iframe src=x&#62;", "&amp;#104;ttp://x",
+            "%2568ttp://x.example", "java\tscript:alert(1)", "java&Tab;script:alert(1)", "ht\ntp://x.example", "java&#10;script:x",
+            "&#x3C;img src=x &#111;nerror=alert(1)>",
+        ];
+        for markdown in bad {
+            assert!(parse_insert(markdown).is_err(), "{markdown:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn rejects_each_forbidden_tag_and_scheme_individually() {
+        for tag in FORBIDDEN_TAGS {
+            for text in [format!("<{tag}>"), format!("<{} x=1>", tag.to_uppercase()), format!("</{tag}>")] {
+                assert!(parse_insert(&text).is_err(), "{text:?} should be rejected");
+            }
+        }
+        for scheme in FORBIDDEN_SCHEMES {
+            for text in [format!("{scheme}:x"), format!("[a]({}:x)", scheme.to_uppercase())] {
+                assert!(parse_insert(&text).is_err(), "{text:?} should be rejected");
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_markdown_outside_the_length_and_character_limits() {
+        assert!(parse_insert("").is_err());
+        assert!(parse_insert(&"x".repeat(MAX_INSERT_MARKDOWN_CHARS + 1)).is_err());
+        for bad in [
+            "a\u{0}b", "a\u{1B}b", "a\u{7}b", "a\u{85}b", "zero\u{200B}width", "joiner\u{200D}x", "bidi\u{202E}text", "isolate\u{2066}x",
+            "bom\u{FEFF}x", "word\u{2060}joiner",
+        ] {
+            assert!(parse_insert(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn an_action_needs_sdk_2_the_permission_and_exactly_one_kind_of_control() {
+        let ok = insert_item("Hi");
+        assert!(parse_manifest(&action_manifest(ok.clone(), 2, &["editor:insert"])).is_ok());
+        assert!(parse_manifest(&action_manifest(ok.clone(), 1, &["editor:insert"])).is_err(), "sdk 1");
+        assert!(parse_manifest(&action_manifest(ok.clone(), 2, &[])).is_err(), "no permission");
+        assert!(parse_manifest(&action_manifest(ok.clone(), 2, &["editor:zoom:read"])).is_err(), "wrong permission");
+
+        let with = |key: &str, value: serde_json::Value| {
+            let mut item = ok.clone();
+            item[key] = value;
+            parse_manifest(&action_manifest(item, 2, &["editor:insert", "editor:zoom:write"]))
+        };
+        assert!(with("command", "go".into()).is_err(), "action + command");
+        assert!(with("bind", "zoom".into()).is_err(), "action + bind");
+        assert!(with("options", serde_json::json!([{ "value": "1", "label": "One" }])).is_err(), "action + options");
+        assert!(with("type", "toggle".into()).is_err(), "action on a toggle");
+        assert!(with("type", "select".into()).is_err(), "action on a select");
+        assert!(with("slot", "preview".into()).is_err(), "action in the preview slot");
+        assert!(with("slot", "main".into()).is_ok());
+        assert!(with("when", "markdown".into()).is_ok());
+        assert!(with("when", "always".into()).is_err());
+
+        let mut other_type = ok.clone();
+        other_type["action"]["type"] = "runCommand".into();
+        assert!(parse_manifest(&action_manifest(other_type, 2, &["editor:insert"])).is_err());
+        let mut extra = ok.clone();
+        extra["action"]["code"] = "x".into();
+        assert!(parse_manifest(&action_manifest(extra, 2, &["editor:insert"])).is_err(), "unknown action field");
+        let mut missing = ok;
+        missing["action"].as_object_mut().unwrap().remove("markdown");
+        assert!(parse_manifest(&action_manifest(missing, 2, &["editor:insert"])).is_err(), "missing markdown");
+    }
+
+    #[test]
+    fn a_plugin_may_declare_sixteen_action_buttons_but_not_seventeen() {
+        let build = |count: usize| {
+            let items: Vec<serde_json::Value> = (1..=count)
+                .map(|n| serde_json::json!({ "id": format!("insert-{n}"), "type": "button", "label": format!("B{n}"), "action": { "type": "insertMarkdown", "markdown": "x" } }))
+                .collect();
+            serde_json::to_vec(&serde_json::json!({
+                "schemaVersion": 1, "sdkVersion": 2, "id": "custom.many", "name": "Many", "version": "1.0.0", "author": "Me",
+                "description": "d", "main": "dist/index.js", "permissions": ["editor:insert"], "contributions": { "toolbar": items }
+            }))
+            .unwrap()
+        };
+        assert!(parse_manifest(&build(16)).is_ok());
+        assert!(parse_manifest(&build(17)).is_err());
     }
 }

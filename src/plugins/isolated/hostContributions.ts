@@ -10,6 +10,7 @@ import { mountWheelZoom } from './wheelZoom'
 const ZOOM = ['editor:zoom:write']
 const RULER = ['editor:geometry:read', 'editor:guides:read', 'editor:guides:write']
 const GUIDES = ['editor:guides:read', 'editor:guides:write']
+const INSERT = ['editor:insert']
 
 /** Defence in depth: the native side validated the manifest, the host checks the grant again. */
 function covered(entry: ExternalPluginEntry, needed: string[], what: string): boolean {
@@ -37,6 +38,12 @@ export function registerHostContributions(
   const toolbar = entry.toolbar ?? []
   const main: ToolbarItem[] = []
   for (const item of toolbar) {
+    if (item.action) {
+      const valid = item.type === 'button' && item.action.type === 'insertMarkdown' && typeof item.action.markdown === 'string' && !item.command && !item.bind
+      if (!valid) { reportError('plugin.external.contribution', new Error(`${entry.id}: toolbar ${item.id} skipped, unsupported action`)); continue }
+      if (covered(entry, INSERT, `toolbar ${item.id}`)) main.push(item)
+      continue
+    }
     const bound = item.bind === 'zoom' || item.bind === 'surfaceZoom'
     if (bound && !covered(entry, ZOOM, `toolbar ${item.id}`)) continue
     if (item.slot === 'preview') {
@@ -49,7 +56,7 @@ export function registerHostContributions(
     }
   }
   if (main.length) {
-    attempt(entry, 'toolbar', () => api.registerToolbar({ id: `${prefix}.toolbar`, title: entry.id, component: createExternalToolbar(main, send) }))
+    attempt(entry, 'toolbar', () => api.registerToolbar({ id: `${prefix}.toolbar`, title: entry.id, component: createExternalToolbar(main, send, (markdown) => api.insertContent(markdown)) }))
   }
   if (main.some((item) => item.bind === 'rulerVisible') || (entry.overlays ?? []).some((item) => item.type === 'ruler')) {
     api.onCleanup(() => useRulerStore.getState().reset())

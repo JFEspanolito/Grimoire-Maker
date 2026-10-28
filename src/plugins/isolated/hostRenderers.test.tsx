@@ -6,7 +6,7 @@ import type { ExternalPluginEntry } from '../../lib/externalPlugins'
 import { useRulerStore } from '../../stores/rulerStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
-import { registerPlugin, usePluginRegistry } from '../plugin-manager'
+import { registerPlugin, setPluginHost, usePluginRegistry } from '../plugin-manager'
 import { registerHostContributions } from './hostContributions'
 
 const reportError = vi.hoisted(() => vi.fn())
@@ -371,5 +371,75 @@ describe('readable toolbar styling', () => {
     expect(css).toContain('.control select:disabled { opacity: .4')
     expect(css).toContain('outline: 2px solid #cfb37c')
     expect(css).toMatch(/\.toggle, \.button \{[^}]*color: #d1c5ad/)
+  })
+})
+
+describe('insertMarkdown action buttons', () => {
+  const MARKDOWN = ['## Encounter', '', '| d6 | Result |', '| --- | --- |', '| 1 | Goblins |', ''].join('\n')
+  const action = (extra: Record<string, unknown> = {}) => ({
+    toolbar: [{ id: 'insert-1', type: 'button' as const, label: 'Encounter <b>table</b>', options: [], action: { type: 'insertMarkdown' as const, markdown: MARKDOWN }, ...extra }],
+  })
+  const insertContent = vi.fn()
+  beforeEach(() => {
+    insertContent.mockReset()
+    setPluginHost({ getActiveBody: () => '', insertContent })
+  })
+  afterEach(() => setPluginHost({ getActiveBody: () => '', insertContent: () => {} }))
+
+  const button = () => host.querySelector('button') as HTMLButtonElement
+  const mount = async (permissions: string[], extra: Partial<ExternalPluginEntry> = action()) => {
+    const started = begin(entry(permissions, extra))
+    const Toolbar = find(started.registry.toolbar, '.toolbar').component
+    await render(<Toolbar />)
+    return started
+  }
+
+  it('inserts exactly the manifest string through the host on click', async () => {
+    await mount(['editor:insert'])
+    expect(button().textContent).toBe('Encounter <b>table</b>')
+    expect(host.querySelector('b')).toBeNull()
+    await act(async () => button().click())
+    expect(insertContent).toHaveBeenCalledTimes(1)
+    expect(insertContent).toHaveBeenCalledWith(MARKDOWN)
+  })
+
+  it('is skipped and reported without the editor:insert permission', () => {
+    const { registry } = begin(entry([], action()))
+    expect(registry.toolbar).toHaveLength(0)
+    expect(reportError).toHaveBeenCalled()
+  })
+
+  it('is skipped when it also declares a command or an unknown action', () => {
+    expect(begin(entry(['editor:insert'], action({ command: 'go' }))).registry.toolbar).toHaveLength(0)
+    expect(begin(entry(['editor:insert'], { toolbar: [{ ...action().toolbar[0], action: { type: 'run' as never, markdown: 'x' } }] })).registry.toolbar).toHaveLength(0)
+  })
+
+  it.each([[null], ['/book/page.txt']])('is disabled without a Markdown document (%s)', async (path) => {
+    useTabStore.getState().reset(path)
+    await mount(['editor:insert'])
+    expect(button().disabled).toBe(true)
+    await act(async () => button().click())
+    expect(insertContent).not.toHaveBeenCalled()
+  })
+
+  it('never throws into the UI when the host insertion fails', async () => {
+    insertContent.mockImplementation(() => { throw new Error('no editor') })
+    await mount(['editor:insert'])
+    await act(async () => button().click())
+    expect(reportError).toHaveBeenCalledWith('plugin.external.action', expect.any(Error))
+  })
+
+  it('does not put script-like text in the DOM; only the host function sees it', async () => {
+    const hostile = '<script>window.pwned = 1</script>'
+    await mount(['editor:insert'], { toolbar: [{ ...action().toolbar[0], action: { type: 'insertMarkdown' as const, markdown: hostile } }] })
+    await act(async () => button().click())
+    expect(insertContent).toHaveBeenCalledWith(hostile)
+    expect(host.querySelector('script')).toBeNull()
+  })
+
+  it('removes the button when the plugin stops', async () => {
+    const { dispose } = await mount(['editor:insert'])
+    dispose()
+    expect(usePluginRegistry.getState().toolbar).toHaveLength(0)
   })
 })

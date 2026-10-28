@@ -69,6 +69,8 @@ export interface ToolbarItem {
   /** Host state the control is bound to; the plugin never sees it. */
   bind?: 'zoom' | 'surfaceZoom' | 'rulerVisible'
   when?: 'markdown'
+  /** Declarative action the host runs on click; needs the editor:insert permission. */
+  action?: { type: 'insertMarkdown'; markdown: string }
 }
 export interface BehaviorItem {
   id: string

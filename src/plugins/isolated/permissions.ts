@@ -14,6 +14,7 @@ export const PERMISSIONS = {
   'editor:geometry:read': { label: 'Read page dimensions', description: 'See the page width, height and zoom. It never sees text, file names or paths.' },
   'editor:guides:read': { label: 'Read ruler guides', description: 'See the position of the guides on the page.' },
   'editor:guides:write': { label: 'Add and remove ruler guides', description: 'Create guides and remove guides on the page.' },
+  'editor:insert': { label: 'Insert text you chose', description: 'Adds the text written in this plugin to your page when you press its button. It cannot read your text.' },
 } as const satisfies Record<string, PermissionInfo>
 
 export type Permission = keyof typeof PERMISSIONS

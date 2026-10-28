@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import type { ToolbarItem } from '../../lib/externalPlugins'
+import { reportError } from '../../lib/errorLogging'
 import { useRulerStore } from '../../stores/rulerStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
@@ -19,6 +20,22 @@ function withCurrent(options: Option[], current: number): Option[] {
 function useBlocked(item: ToolbarItem): boolean {
   const path = useTabStore((state) => state.active)
   return item.when === 'markdown' && !!path && !/\.md$/i.test(path)
+}
+
+/** A button whose declarative action the host runs: it needs an open Markdown document. */
+function ActionButton({ item, insert }: { item: ToolbarItem; insert?: (markdown: string) => void }) {
+  const path = useTabStore((state) => state.active)
+  const disabled = !path || !/\.md$/i.test(path)
+  const markdown = item.action?.markdown
+  const run = () => {
+    try {
+      if (markdown === undefined || !insert) throw new Error(`toolbar ${item.id}: no insert handler`)
+      insert(markdown)
+    } catch (error) {
+      reportError('plugin.external.action', error instanceof Error ? error : new Error(String(error)))
+    }
+  }
+  return <button type="button" className={styles.button} disabled={disabled} onClick={run}>{item.label}</button>
 }
 
 function ZoomSelect({ item, value, onSelect, disabled }: {
@@ -64,11 +81,13 @@ export function createPreviewZoom(item: ToolbarItem): ComponentType<{ surface: P
 export function createExternalToolbar(
   items: ToolbarItem[],
   send: (command: string, value: string | null) => void,
+  insert?: (markdown: string) => void,
 ): ComponentType {
   return function ExternalToolbar() {
     return (
       <>
         {items.map((item) => {
+          if (item.action) return item.action.type === 'insertMarkdown' && item.type === 'button' ? <ActionButton key={item.id} item={item} insert={insert} /> : null
           if (item.bind === 'zoom' && item.type === 'select') return <EditorZoom key={item.id} item={item} />
           if (item.bind === 'rulerVisible' && item.type === 'toggle') return <RulerToggle key={item.id} item={item} />
           const { command } = item
