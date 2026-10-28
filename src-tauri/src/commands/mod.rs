@@ -7,4 +7,5 @@ pub mod mods;
 pub mod preferences;
 pub mod error_logs;
 pub mod rename_references;
+pub mod replace_text;
 pub mod plugins;

@@ -75,6 +75,8 @@ pub fn run() {
             commands::workspace::rename_workspace,
             commands::rename_references::snapshot_rename_references,
             commands::rename_references::commit_rename_references,
+            commands::replace_text::snapshot_project_texts,
+            commands::replace_text::commit_project_replace,
             commands::workspace::open_folder,
             commands::workspace::delete_from_trash,
             commands::mods::open_mods_folder,
