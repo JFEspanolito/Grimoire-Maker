@@ -260,13 +260,13 @@ describe('project explorer', () => {
     const file = container.querySelector('[data-tree-path="/projects/My Grimoire/Draft/Chapter.md"]')
     await act(async () => file?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 20, clientY: 20 })))
 
-    expect(container.querySelector('[role="menuitem"]')?.textContent).toBe('Open')
-    expect(container.textContent).toContain('Open in New Tab')
+    expect(container.querySelector('[role="menuitem"]')?.textContent).toBe('Open File')
+    expect(container.textContent).toContain('Open in new Tab')
     expect(container.textContent).toContain('Move to Trash')
 
     await act(async () => {
       Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-        .find((button) => button.textContent === 'Open in New Tab')?.click()
+        .find((button) => button.textContent === 'Open in new Tab')?.click()
     })
     expect(openFileMock).toHaveBeenCalledWith('/projects/My Grimoire/Draft/Chapter.md', true)
 
@@ -306,7 +306,7 @@ describe('project explorer', () => {
     await act(async () => root?.render(<FileTree />))
     await act(async () => container.querySelector('li > div')?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true })))
     const action = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-      .find((button) => button.textContent === 'Open Containing Folder')
+      .find((button) => button.textContent === 'Open Folder')
     expect(action).toBeDefined()
     await act(async () => action?.click())
     expect(openFolderMock).toHaveBeenCalledWith('/book/Research')
