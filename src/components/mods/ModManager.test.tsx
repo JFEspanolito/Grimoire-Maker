@@ -391,7 +391,7 @@ it('opens Create Mod from its button and hands the Theme Customizer request to t
   const open = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Create Mod')!
   await act(async () => open.click())
   expect(container.querySelector('#create-mod-title')?.textContent).toBe('Create Mod')
-  expect(Array.from(container.querySelectorAll('[aria-label="Kind of mod"] [role="tab"]')).map((tab) => tab.textContent)).toEqual(['Themes', 'Snippets', 'Templates', 'Plugins'])
+  expect(Array.from(container.querySelectorAll('[aria-label="Kind of mod"] [role="tab"]')).map((tab) => tab.textContent)).toEqual(['Themes', 'Snippets', 'Templates'])
   // The Mod Manager category (Snippets) decides the starting tab.
   expect(container.querySelector('#create-mod-tab-Snippets')?.getAttribute('aria-selected')).toBe('true')
   await act(async () => container.querySelector<HTMLButtonElement>('#create-mod-tab-Themes')!.click())

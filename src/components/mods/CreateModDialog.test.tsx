@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   exportSnippetPackFrom: vi.fn(),
   exportProjectAsTemplate: vi.fn(),
   saveSnippetToLibrary: vi.fn(),
-  createPluginFromInput: vi.fn(),
 }))
 vi.mock('../../lib/modExport', () => ({
   exportTheme: mocks.exportTheme,
@@ -22,7 +21,6 @@ vi.mock('../../lib/modExport', () => ({
   exportProjectAsTemplate: mocks.exportProjectAsTemplate,
 }))
 vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: mocks.saveSnippetToLibrary }))
-vi.mock('../../lib/pluginCreator', async (original) => ({ ...(await original<typeof import('../../lib/pluginCreator')>()), createPluginFromInput: mocks.createPluginFromInput }))
 vi.mock('../../lib/errorLogging', async (original) => ({ ...(await original<typeof import('../../lib/errorLogging')>()), reportError: vi.fn() }))
 
 let root: Root
@@ -65,7 +63,6 @@ afterEach(async () => {
   mocks.exportSnippet.mockReset()
   mocks.exportSnippetPackFrom.mockReset()
   mocks.exportProjectAsTemplate.mockReset()
-  mocks.createPluginFromInput.mockReset()
   useToastStore.setState({ toasts: [] })
   useDocumentStore.setState({ workspaceRoot: null })
 })
@@ -90,14 +87,14 @@ const field = <T extends HTMLElement>(label: string) =>
   Array.from(container.querySelectorAll('label')).find((item) => item.querySelector('span')?.textContent === label)!.querySelector<T>('input, textarea, select')!
 const panel = (tab: CreateModTab) => container.querySelector<HTMLElement>(`#create-mod-panel-${tab}`)!
 
-it('opens as a modal with the four tabs and can start on the Templates tab', async () => {
+it('opens as a modal with the three tabs and can start on the Templates tab', async () => {
   await mount()
   expect(container.querySelector('dialog')?.open).toBe(true)
   expect(container.querySelector('dialog')?.getAttribute('aria-labelledby')).toBe('create-mod-title')
   expect(container.querySelector('#create-mod-title')?.textContent).toBe('Create Mod')
   const tabs = Array.from(container.querySelectorAll('[role="tab"]'))
-  expect(tabs.map((tab) => tab.textContent)).toEqual(['Themes', 'Snippets', 'Templates', 'Plugins'])
-  expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false', 'false'])
+  expect(tabs.map((tab) => tab.textContent)).toEqual(['Themes', 'Snippets', 'Templates'])
+  expect(tabs.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false'])
   expect(panel('Themes').hidden).toBe(false)
   expect(panel('Templates').hidden).toBe(true)
   await click(tabs[2])
@@ -284,126 +281,4 @@ it('keeps the library save and shows a plain error when the zip fails', async ()
   expect(useToastStore.getState().toasts.map((toast) => toast.message)).toEqual(['Snippet añadido a la paleta lateral'])
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('The snippet was added to your library, but the zip could not be saved.')
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('Disk is full.')
-})
-
-/* ---- Plugins tab ---------------------------------------------------------------------------- */
-
-const pfield = <T extends HTMLElement>(label: string) =>
-  Array.from(panel('Plugins').querySelectorAll('label')).find((item) => item.querySelector('span')?.textContent === label)!.querySelector<T>('input, textarea')!
-const buttonsIn = () => Array.from(panel('Plugins').querySelectorAll('ol > li'))
-const pluginErrors = () => Array.from(panel('Plugins').querySelectorAll('span[id]')).map((item) => item.textContent)
-async function fillPlugin(markdown = '## Hi') {
-  await type(pfield('Plugin Name'), '  Encounter Tools ')
-  await type(pfield('Button label'), ' Hello ')
-  await type(pfield<HTMLTextAreaElement>('Markdown to insert'), markdown)
-}
-
-it('adds a selectable Plugins tab after Templates with the capability summary', async () => {
-  await mount()
-  const tab = Array.from(container.querySelectorAll('[role="tab"]')).at(-1)!
-  expect(tab.textContent).toBe('Plugins')
-  await click(tab)
-  expect(tab.getAttribute('aria-selected')).toBe('true')
-  expect(panel('Plugins').hidden).toBe(false)
-  expect(panel('Templates').hidden).toBe(true)
-  expect(panel('Plugins').textContent).toContain('This plugin will be able to: insert the text you wrote when you press its buttons. It cannot read your pages, files or network.')
-  expect(buttonsIn()).toHaveLength(1)
-  expect(pfield<HTMLTextAreaElement>('Markdown to insert').tagName).toBe('TEXTAREA')
-})
-
-it('shows field errors only after the first submit, then as the user types', async () => {
-  await mount('Plugins')
-  expect(pluginErrors()).toEqual([])
-  await click(button('Create Plugin'))
-  expect(mocks.createPluginFromInput).not.toHaveBeenCalled()
-  expect(pluginErrors()).toEqual(['Enter a plugin name.', 'Enter a button label.', 'Enter the text this button inserts.'])
-  expect(container.querySelector('[role="alert"]')?.textContent).toBe('Fix the highlighted fields and try again.')
-  await type(pfield('Plugin Name'), 'Ok')
-  expect(pluginErrors()).toEqual(['Enter a button label.', 'Enter the text this button inserts.'])
-  await type(pfield<HTMLTextAreaElement>('Markdown to insert'), '[a](https://x.test)')
-  expect(pluginErrors().at(-1)).toContain('http:')
-  await type(pfield('Author'), 'a'.repeat(65))
-  expect(pluginErrors()).toContain('The author must be 64 characters or fewer.')
-})
-
-it('shows errors after the first blur without submitting', async () => {
-  await mount('Plugins')
-  await act(async () => { pfield('Plugin Name').dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
-  expect(pluginErrors()).toContain('Enter a plugin name.')
-})
-
-it('adds buttons up to 12 and removes them down to 1', async () => {
-  await mount('Plugins')
-  expect(container.querySelector<HTMLButtonElement>('[aria-label="Remove button 1"]')!.disabled).toBe(true)
-  for (let i = 0; i < 11; i++) await click(button('Add button'))
-  expect(buttonsIn()).toHaveLength(12)
-  expect(button('Add button').disabled).toBe(true)
-  await click(container.querySelector('[aria-label="Remove button 12"]'))
-  expect(buttonsIn()).toHaveLength(11)
-  expect(button('Add button').disabled).toBe(false)
-  for (let i = 0; i < 10; i++) await click(container.querySelector('[aria-label="Remove button 1"]'))
-  expect(buttonsIn()).toHaveLength(1)
-  expect(container.querySelector<HTMLButtonElement>('[aria-label="Remove button 1"]')!.disabled).toBe(true)
-})
-
-it('creates the plugin with the exact input, reloads the catalog, toasts and resets the form', async () => {
-  await mount('Plugins')
-  mocks.createPluginFromInput.mockResolvedValueOnce({ folder: 'encounter-tools', id: 'custom.encounter-tools', path: '/mods/Plugins/encounter-tools' })
-  await fillPlugin('## Hi\n\ntext')
-  await type(pfield('Author'), ' JF ')
-  await click(button('Add button'))
-  const labels = Array.from(panel('Plugins').querySelectorAll<HTMLInputElement>('ol input'))
-  const areas = Array.from(panel('Plugins').querySelectorAll<HTMLTextAreaElement>('ol textarea'))
-  await type(labels[1], 'Second')
-  await type(areas[1], 'two')
-  await click(button('Create Plugin'))
-  expect(mocks.createPluginFromInput).toHaveBeenCalledExactlyOnceWith({
-    name: 'Encounter Tools', author: 'JF',
-    buttons: [{ label: 'Hello', markdown: '## Hi\n\ntext' }, { label: 'Second', markdown: 'two' }],
-  })
-  expect(reload).toHaveBeenCalledOnce()
-  expect(useToastStore.getState().toasts.map((toast) => toast.message)).toEqual(['Plugin created. Find it in Mod Manager > Plugins.'])
-  expect(Array.from(container.querySelectorAll('[role="status"]')).map((item) => item.textContent)).toContain('Plugin "Encounter Tools" created in /mods/Plugins/encounter-tools')
-  expect(container.querySelector('[role="alert"]')).toBeNull()
-  expect(pfield<HTMLInputElement>('Plugin Name').value).toBe('')
-  expect(pfield<HTMLInputElement>('Author').value).toBe('')
-  expect(buttonsIn()).toHaveLength(1)
-  expect(pfield<HTMLInputElement>('Button label').value).toBe('')
-  expect(pluginErrors()).toEqual([])
-})
-
-it('reports a failed creation in plain words without a toast, reload or form reset', async () => {
-  await mount('Plugins')
-  await fillPlugin()
-  mocks.createPluginFromInput.mockRejectedValueOnce(new Error('The Plugins folder is not writable.'))
-  await click(button('Create Plugin'))
-  expect(container.querySelector('[role="alert"]')?.textContent).toBe('The Plugins folder is not writable.')
-  expect(reload).not.toHaveBeenCalled()
-  expect(useToastStore.getState().toasts).toEqual([])
-  expect(pfield<HTMLInputElement>('Plugin Name').value).toBe('  Encounter Tools ')
-})
-
-it('still reports success when the catalog refresh fails after the plugin was written', async () => {
-  await mount('Plugins')
-  await fillPlugin()
-  mocks.createPluginFromInput.mockResolvedValueOnce({ folder: 'f', id: 'custom.f', path: '/p/f' })
-  reload.mockRejectedValueOnce(new Error('scan failed'))
-  await click(button('Create Plugin'))
-  expect(container.querySelector('[role="alert"]')).toBeNull()
-  expect(useToastStore.getState().toasts).toHaveLength(1)
-})
-
-it('disables the form while the plugin is being written', async () => {
-  await mount('Plugins')
-  await fillPlugin()
-  let finish!: (value: { folder: string; id: string; path: string }) => void
-  mocks.createPluginFromInput.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
-  await click(button('Create Plugin'))
-  expect(button('Create Plugin').disabled).toBe(true)
-  expect(button('Add button').disabled).toBe(true)
-  expect(pfield<HTMLInputElement>('Plugin Name').disabled).toBe(true)
-  await click(button('Create Plugin'))
-  expect(mocks.createPluginFromInput).toHaveBeenCalledOnce()
-  await act(async () => finish({ folder: 'f', id: 'custom.f', path: '/p/f' }))
-  expect(button('Create Plugin').disabled).toBe(false)
 })

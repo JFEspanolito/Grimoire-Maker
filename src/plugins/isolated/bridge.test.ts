@@ -35,27 +35,6 @@ describe('permission catalog', () => {
   })
 })
 
-describe('insert permission', () => {
-  it('has a catalog entry but no worker operation can use it', () => {
-    expect(PERMISSIONS['editor:insert'].label).toBe('Insert text you chose')
-    for (const op of ['insert', 'insert.markdown', 'insertMarkdown', 'insertContent', 'editor.insert']) {
-      const parsed = parseWorkerMessage({ v: 1, kind: 'req', id: 1, op, args: { markdown: 'hi' } })
-      expect(parsed.ok, op).toBe(false)
-    }
-    const source = readFileSync('src/plugins/isolated/permissions.ts', 'utf8')
-    expect(source.match(/OPERATION_PERMISSION[^}]*}/s)?.[0]).not.toContain('editor:insert')
-    expect(source.match(/TOPIC_PERMISSION[^}]*}/s)?.[0]).not.toContain('editor:insert')
-  })
-
-  it('rejects an insert request from the worker as an unknown operation and never touches the host', async () => {
-    const { bridge, capabilities, sent, settle } = setup()
-    receive(bridge, { v: 1, kind: 'req', id: 1, op: 'insert.markdown', args: { markdown: '# hi' } })
-    await settle()
-    expect(Object.values(capabilities).every(fn => (fn as ReturnType<typeof vi.fn>).mock.calls.length === 0)).toBe(true)
-    expect(JSON.stringify(sent)).not.toContain('# hi')
-  })
-})
-
 describe('protocol parsing', () => {
   const rejected = [
     ['a missing version', { kind: 'req', id: 1, op: 'zoom.get' }],

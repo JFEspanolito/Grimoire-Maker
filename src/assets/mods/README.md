@@ -48,8 +48,8 @@ permission set; any change to the package, or an update, asks again.
 An approved plugin runs in an isolated frame: no access to your documents,
 files, network, other plugins or the application's internals. It can only use
 the listed permissions: `editor:zoom:read`, `editor:zoom:write`,
-`editor:geometry:read` (page size and zoom, never text), `editor:guides:read`,
-`editor:guides:write` and `editor:insert` (adds text the plugin author wrote; it cannot read your text). Its toolbar controls are drawn by the application from
+`editor:geometry:read` (page size and zoom, never text), `editor:guides:read`
+and `editor:guides:write`. Its toolbar controls are drawn by the application from
 the data in `manifest.json`. Before the first plugin starts, the application
 runs an isolation self-test; if any check fails, external plugins stay off and
 the card explains why. A plugin that hangs, errors repeatedly or floods requests
@@ -130,26 +130,6 @@ are data: the application draws them and shows every label as plain text.
   `select` with `bind: "zoom"` (editor zoom, needs `editor:zoom:write`),
   `select` with `bind: "surfaceZoom"` and `slot: "preview"`, or `toggle` with
   `bind: "rulerVisible"`. `when: "markdown"` enables a control only for Markdown files.
-- A `button` may carry `"action": { "type": "insertMarkdown", "markdown": "..." }`
-  instead of `command` or `bind` (exactly one of the three; sdkVersion 2; needs the
-  `editor:insert` permission; `slot` must be `main`). Pressing it inserts that text
-  at the cursor of the open Markdown document through the normal Markdown parser;
-  the button is disabled when no Markdown document is open. The plugin runs no
-  code for this. The text must be 1-8192 characters, may use only newline,
-  carriage return and tab as control characters, may not contain zero-width or
-  direction-changing characters, and may only use plain Markdown (an allow-list,
-  checked on the text as written and again after decoding HTML entities, `%XX`
-  escapes and backslash escapes, so `&#104;ttp://` and `&#0000000104;ttp://` are
-  refused too): no raw HTML at all (a `<` followed by a letter, `/`, `!` or `?`
-  starts a tag, comment or autolink; `a < 3` is fine); every link, image and
-  `[label]: target` must be an anchor (`#a`) or a relative path (`./a.md`,
-  `../b.png`, `a/b.png`), never a target with a scheme (`mailto:`, `tel:`,
-  `asset:`, `blob:`, `c:`...), starting with `/` or `//`, or with a `:` before its
-  first `/`; and the words `http:`, `https:`, `ftp:`, `ftps:`, `file:`, `ws:`,
-  `wss:`, `data:`, `blob:`, `javascript:`, `vbscript:`, `asset:`, `tauri:`, `ipc:`,
-  `www.example.com` and `//host.tld` are refused anywhere in the text, even in
-  prose. Trade-off: ordinary text such as "data: 5", "File: notes" or code such as
-  `Vec<String>` is refused too; rephrase it.
 - `behaviors`: `{ "type": "wheelZoom", "editorSteps": [...], "previewSteps": [...] }`
   (whole percentages; Ctrl+wheel stepping drawn by the application; needs `editor:zoom:write`).
 - `overlays`: `{ "type": "ruler" }` (page measurements, margin and bleed boxes and draggable
