@@ -14,13 +14,13 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 }))
 
 it('exports an official preset as a usable zip package', async () => {
-  vi.mocked(save).mockResolvedValue('C:/exports/classic-fantasy.zip')
+  vi.mocked(save).mockResolvedValue('C:/exports/poetry-collection.zip')
   vi.mocked(writeFile).mockResolvedValue(undefined)
 
   expect(await exportTemplateZip(OFFICIAL_TEMPLATES[0])).toBe(true)
 
   const [path, bytes] = vi.mocked(writeFile).mock.calls[0]
-  expect(path).toBe('C:/exports/classic-fantasy.zip')
+  expect(path).toBe('C:/exports/poetry-collection.zip')
   const files = readTemplateZip(bytes as Uint8Array)
-  expect(strFromU8(files['index.md'])).toContain('title: Untitled Adventure')
+  expect(strFromU8(files['index.md'])).toContain('title: Untitled Poetry Collection')
 })
