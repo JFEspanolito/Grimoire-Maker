@@ -108,11 +108,6 @@ export function GitRollbackDialog({
           <p className={styles.legend}>
             <span className={styles.removed}>− Current version (will be replaced)</span>
             <span className={styles.added}>+ Saved version (will be restored)</span>
-            {selectedCommit && (
-              <span>
-                Comparing current files → <strong>{selectedCommit.shortHash}</strong> ({selectedCommit.subject})
-              </span>
-            )}
           </p>
           <div className={styles.scroll} tabIndex={0} aria-label="Version diff preview">
             {loading && <p role="status" style={{ padding: '.75rem', margin: 0 }}>Loading version preview…</p>}
@@ -126,13 +121,26 @@ export function GitRollbackDialog({
                     <thead>
                       <tr>
                         <th scope="col">Current files</th>
-                        <th scope="col">Saved version ({selectedCommit?.shortHash ?? ''})</th>
+                        <th scope="col">
+                          {selectedCommit
+                            ? `Saved version at ${selectedCommit.timestamp} (${selectedCommit.shortHash})`
+                            : 'Saved version'}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map((row, index) => (
-                        <tr key={index}>
-                          {row.note !== undefined ? (
+                        <tr key={index} className={row.file !== undefined ? styles.fileRow : undefined}>
+                          {row.file !== undefined ? (
+                            <>
+                              <td>{row.file}</td>
+                              <td className={styles.fileRowMeta}>
+                                {selectedCommit
+                                  ? `Saved version at ${selectedCommit.timestamp}`
+                                  : 'Saved version'}
+                              </td>
+                            </>
+                          ) : row.note !== undefined ? (
                             <td colSpan={2} className={styles.note}>
                               {row.note}
                             </td>
@@ -144,6 +152,7 @@ export function GitRollbackDialog({
                                   ? 'removed'
                                   : 'added'
                                 : undefined
+                              const kindClass = styles[`kind_${line?.kind ?? 'body'}`] ?? ''
                               return (
                                 <td key={side} data-change={change} className={change ? styles[change] : undefined}>
                                   <div className={styles.line}>
@@ -151,7 +160,7 @@ export function GitRollbackDialog({
                                     <span className={styles.sign} aria-hidden="true">
                                       {change === 'removed' ? '−' : change === 'added' ? '+' : ''}
                                     </span>
-                                    <code>{line?.text ?? ''}</code>
+                                    <span className={`${styles.viewerText} ${kindClass}`}>{line?.text ?? ''}</span>
                                   </div>
                                 </td>
                               )

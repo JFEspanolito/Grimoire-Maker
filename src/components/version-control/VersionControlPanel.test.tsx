@@ -46,7 +46,16 @@ describe('VersionControlPanel', () => {
     actions.getRepositoryStatus.mockResolvedValue(repository)
     actions.diffChange.mockResolvedValue({ text: '+new text', binary: false, truncated: false })
     actions.diffCommit.mockResolvedValue({
-      text: 'diff --git a/Draft/chapter.md b/Draft/chapter.md\n--- a/Draft/chapter.md\n+++ b/Draft/chapter.md\n@@ -1,1 +1,1 @@\n-broken draft\n+restored draft\n',
+      text: [
+        'diff --git a/Draft/chapter.md b/Draft/chapter.md',
+        'similarity index 99%',
+        'index 88f1c5d..7c9ff7f 100644',
+        '--- a/Draft/chapter.md',
+        '+++ b/Draft/chapter.md',
+        '@@ -16,1 +16,1 @@',
+        '-<div><h1>broken draft</h1></div>',
+        '+<div><h1>restored draft</h1></div>',
+      ].join('\n'),
       binary: false,
       truncated: false,
     })
@@ -234,6 +243,9 @@ describe('VersionControlPanel', () => {
     expect(rollbackModal.open).toBe(true)
     expect(actions.diffCommit).toHaveBeenCalledWith('/books', 'abc1234567890')
     expect(rollbackModal.querySelector('[data-change="removed"]')?.textContent).toContain('broken draft')
+    expect(rollbackModal.querySelector('[data-change="removed"]')?.textContent).not.toContain('<div>')
+    expect(rollbackModal.textContent).not.toContain('similarity index')
+    expect(rollbackModal.textContent).toContain('Draft/chapter.md')
     expect(rollbackModal.querySelector('[data-change="added"]')?.textContent).toContain('restored draft')
 
     // Select the second checkpoint in the list and verify its diff is fetched

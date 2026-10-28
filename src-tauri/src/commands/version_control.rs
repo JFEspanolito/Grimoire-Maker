@@ -371,7 +371,7 @@ fn recent_commits(root: &Path) -> Result<Vec<GitCommit>, String> {
             "log",
             "-n",
             "10",
-            "--date=short",
+            "--date=format:%Y-%m-%d %H:%M",
             "--format=%H\x1f%h\x1f%cd\x1f%s%x00",
         ],
     )?;
@@ -804,6 +804,7 @@ fn commit_diff_in(root: &Path, commit: &str, path: Option<&str>) -> Result<GitDi
         "--no-textconv",
         "--no-color",
         "--ignore-submodules=all",
+        "--no-renames",
         "-R",
         commit,
     ];
