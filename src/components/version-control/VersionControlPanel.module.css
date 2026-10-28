@@ -29,12 +29,7 @@
 .empty p { margin: .15rem 0; }
 .initButton { width: 100%; padding: .45rem .65rem !important; font-weight: 600; background: color-mix(in srgb, var(--color-accent, #ba935c) 18%, transparent) !important; border-color: var(--color-accent, #ba935c) !important; }
 .initButton:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent, #ba935c) 28%, transparent) !important; }
-.checkpoints { max-height: 9rem; overflow: auto; }
-.checkpointRow { display: flex; align-items: center; justify-content: space-between; gap: .35rem; padding: .2rem 0; border-bottom: 1px solid color-mix(in srgb, var(--color-border, #57515b) 40%, transparent); }
-.checkpointInfo { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.checkpointSubject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.checkpointMeta { font-size: .65rem; opacity: .65; font-family: monospace; }
-.rollbackBtn { flex-shrink: 0; font-size: .68rem; padding: .2rem .4rem !important; }
+.rollbackTrigger { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-top: .6rem; padding: .4rem .6rem !important; font-weight: 600; }
 .contextMenu { position: fixed; z-index: 50; display: grid; gap: .15rem; min-width: 10rem; padding: .25rem; border: 1px solid var(--color-border, #57515b); border-radius: .35rem; background: #262523; box-shadow: 0 8px 24px rgb(0 0 0 / .45); }
 .contextMenu button { border: 0; text-align: left; padding: .35rem .55rem; width: 100%; }
 .dangerItem { color: #f08e8e !important; }

@@ -7,7 +7,8 @@ import { useDocumentStore } from '../../stores/documentStore'
 
 const actions = vi.hoisted(() => ({
   getRepositoryStatus: vi.fn(), initializeRepository: vi.fn(), stageChange: vi.fn(),
-  unstageChange: vi.fn(), revertChange: vi.fn(), rollbackToCommit: vi.fn(), diffChange: vi.fn(), commitChanges: vi.fn(),
+  unstageChange: vi.fn(), revertChange: vi.fn(), rollbackToCommit: vi.fn(),
+  diffCommit: vi.fn(), diffChange: vi.fn(), commitChanges: vi.fn(),
 }))
 vi.mock('../../lib/versionControl', () => actions)
 
@@ -19,6 +20,7 @@ const repository = {
   ],
   commits: [
     { hash: 'abc1234567890', shortHash: 'abc1234', subject: 'Auto-commit: 2026-10-28', timestamp: '2026-10-28' },
+    { hash: 'def9876543210', shortHash: 'def9876', subject: 'Initial draft', timestamp: '2026-10-27' },
   ],
 }
 
@@ -43,6 +45,11 @@ describe('VersionControlPanel', () => {
     HTMLDialogElement.prototype.close = function () { this.open = false }
     actions.getRepositoryStatus.mockResolvedValue(repository)
     actions.diffChange.mockResolvedValue({ text: '+new text', binary: false, truncated: false })
+    actions.diffCommit.mockResolvedValue({
+      text: 'diff --git a/Draft/chapter.md b/Draft/chapter.md\n--- a/Draft/chapter.md\n+++ b/Draft/chapter.md\n@@ -1,1 +1,1 @@\n-broken draft\n+restored draft\n',
+      binary: false,
+      truncated: false,
+    })
     useDocumentStore.getState().resetDocuments()
     container = document.createElement('div')
     document.body.append(container)
@@ -208,7 +215,7 @@ describe('VersionControlPanel', () => {
     expect(actions.revertChange).toHaveBeenCalledExactlyOnceWith('/books', 'chapter.md')
   })
 
-  it('reverts a file directly from the inline Revert button and rolls back from recent checkpoints', async () => {
+  it('reverts a file directly from the inline Revert button and opens the Rollback modal with diff preview', async () => {
     useDocumentStore.getState().loadFromRaw('/books/Draft/chapter.md', '# Draft')
     await render('/books')
 
@@ -220,13 +227,22 @@ describe('VersionControlPanel', () => {
     await act(async () => revertBtn.click())
     expect(actions.revertChange).toHaveBeenCalledExactlyOnceWith('/books', 'new.md')
 
-    // Click Rollback on recent checkpoint and restore active file only
-    expect(container.textContent).toContain('Recent checkpoints (Rollback)')
-    await click('Rollback to abc1234')
-    const rollbackDialog = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="confirm-title"]')!
-    expect(rollbackDialog.textContent).toContain('Restore from checkpoint abc1234')
-    const restoreFileBtn = Array.from(rollbackDialog.querySelectorAll('button')).find((b) => b.textContent === 'Restore "Draft/chapter.md" only')!
+    // Click the Recent checkpoints (Rollback) button to open the rollback modal
+    await click('Recent checkpoints (Rollback)')
+    const rollbackModal = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="git-rollback-title"]')!
+    expect(rollbackModal).not.toBeNull()
+    expect(rollbackModal.open).toBe(true)
+    expect(actions.diffCommit).toHaveBeenCalledWith('/books', 'abc1234567890')
+    expect(rollbackModal.querySelector('[data-change="removed"]')?.textContent).toContain('broken draft')
+    expect(rollbackModal.querySelector('[data-change="added"]')?.textContent).toContain('restored draft')
+
+    // Select the second checkpoint in the list and verify its diff is fetched
+    await click('Rollback to def9876')
+    expect(actions.diffCommit).toHaveBeenCalledWith('/books', 'def9876543210')
+
+    // Confirm rollback for the active file only
+    const restoreFileBtn = Array.from(rollbackModal.querySelectorAll('button')).find((b) => b.textContent === 'Restore "Draft/chapter.md" only')!
     await act(async () => restoreFileBtn.click())
-    expect(actions.rollbackToCommit).toHaveBeenCalledExactlyOnceWith('/books', 'abc1234567890', 'Draft/chapter.md')
+    expect(actions.rollbackToCommit).toHaveBeenCalledExactlyOnceWith('/books', 'def9876543210', 'Draft/chapter.md')
   })
 })

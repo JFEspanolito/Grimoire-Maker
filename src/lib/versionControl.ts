@@ -46,6 +46,9 @@ export const revertChange = (workspace: string, path: string) =>
 export const rollbackToCommit = (workspace: string, commit: string, path?: string) =>
   invoke<void>('git_rollback', { workspace, commit, path: path ?? null })
 
+export const diffCommit = (workspace: string, commit: string, path?: string) =>
+  invoke<GitDiff>('git_commit_diff', { workspace, commit, path: path ?? null })
+
 export const diffChange = (workspace: string, path: string, staged: boolean) =>
   invoke<GitDiff>('git_diff', { workspace, path, staged })
 

@@ -21,3 +21,17 @@
 .table .note { background: #ffffff08; color: #bcb7ac; padding: .35rem .6rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: monospace; }
 .warning { color: #e1bd78; margin-top: .75rem; }
 .dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: -2px; }
+.rollbackBody { display: grid; grid-template-columns: minmax(14rem, 18rem) 1fr; gap: .85rem; margin-top: .5rem; min-height: 22rem; max-height: 62vh; }
+.checkpointList { list-style: none; margin: 0; padding: 0; overflow: auto; border: 1px solid #ffffff20; border-radius: .35rem; background: #1f1e1b; }
+.checkpointItem { width: 100%; display: flex; flex-direction: column; gap: .2rem; text-align: left; padding: .55rem .65rem; border: 0; border-bottom: 1px solid #ffffff14; background: transparent; color: inherit; cursor: pointer; }
+.checkpointItem:hover { background: #ffffff12; }
+.checkpointItemActive { background: #cfb37c26 !important; border-left: 3px solid #cfb37c; }
+.checkpointTitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.checkpointMeta { font-size: .7rem; color: #bcb7ac; font-family: monospace; }
+.diffPane { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.diffPane .scroll { flex: 1; max-height: none; }
+.footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .5rem; margin-top: .85rem; padding-top: .75rem; border-top: 1px solid #ffffff20; }
+.footer button { padding: .45rem .85rem; border: 1px solid #625c50; border-radius: .35rem; background: transparent; color: inherit; cursor: pointer; }
+.footer button:hover:not(:disabled) { background: #ffffff20; border-color: #cfb37c; }
+.dangerBtn { background: #6b2929 !important; border-color: #b85c5c !important; color: #ffe3e3 !important; font-weight: 600; }
+.dangerBtn:hover:not(:disabled) { background: #843232 !important; }

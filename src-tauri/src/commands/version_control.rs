@@ -789,6 +789,54 @@ pub async fn git_unstage(app: AppHandle, workspace: String, path: String) -> Res
     in_project(app, workspace, move |root| unstage_in(root, &path)).await
 }
 
+fn commit_diff_in(root: &Path, commit: &str, path: Option<&str>) -> Result<GitDiff, String> {
+    require_repository(root)?;
+    if commit.len() < 7
+        || commit.len() > 40
+        || !commit.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err("Invalid commit identifier".into());
+    }
+    checked(root, &["rev-parse", "--verify", &format!("{commit}^{{commit}}")])?;
+    let mut args = vec![
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        "--ignore-submodules=all",
+        "-R",
+        commit,
+    ];
+    if let Some(rel) = path {
+        guard_path(root, rel)?;
+        args.extend(["--", rel]);
+    }
+    let output = checked(root, &args)?;
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    let binary = output.stdout.contains(&0)
+        || text
+            .lines()
+            .any(|line| line.starts_with("Binary files ") || line == "GIT binary patch");
+    Ok(GitDiff {
+        text,
+        binary,
+        truncated: output.truncated,
+    })
+}
+
+#[tauri::command]
+pub async fn git_commit_diff(
+    app: AppHandle,
+    workspace: String,
+    commit: String,
+    path: Option<String>,
+) -> Result<GitDiff, String> {
+    in_project(app, workspace, move |root| {
+        commit_diff_in(root, &commit, path.as_deref())
+    })
+    .await
+}
+
 fn rollback_in(root: &Path, commit: &str, path: Option<&str>) -> Result<(), String> {
     require_repository(root)?;
     if commit.len() < 7
