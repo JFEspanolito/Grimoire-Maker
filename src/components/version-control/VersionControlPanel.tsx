@@ -1,11 +1,27 @@
 import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { useEffect, useRef, useState } from 'react'
-import { commitChanges, diffChange, getRepositoryStatus, initializeRepository, revertChange, stageChange, unstageChange } from '../../lib/versionControl'
-import type { GitDiff, GitEntry, RepositoryStatus } from '../../lib/versionControl'
+import { commitChanges, diffChange, getRepositoryStatus, initializeRepository, revertChange, rollbackToCommit, stageChange, unstageChange } from '../../lib/versionControl'
+import type { GitCommit, GitDiff, GitEntry, RepositoryStatus } from '../../lib/versionControl'
 import styles from './VersionControlPanel.module.css'
 import { notifyRepositoryChanged, REPOSITORY_CHANGED } from '../../lib/repositoryEvents'
 import { GitDiffDialog } from './GitDiffDialog'
 import { ConfirmDialog } from '../layout/ConfirmDialog'
+import { useDocumentStore } from '../../stores/documentStore'
+
+async function reloadActiveDocumentFromDisk(workspace: string) {
+  if (!('__TAURI_INTERNALS__' in window)) return
+  const activePath = useDocumentStore.getState().document.path
+  if (!activePath || !activePath.startsWith(`${workspace}/`) || !/\.md$/i.test(activePath)) return
+  try {
+    const { exists, readTextFile } = await import('@tauri-apps/plugin-fs')
+    if (await exists(activePath)) {
+      const raw = await readTextFile(activePath)
+      useDocumentStore.getState().loadFromRaw(activePath, raw)
+    }
+  } catch {
+    // Keep the existing buffer if disk reload is unavailable.
+  }
+}
 
 interface VersionControlPanelProps {
   workspace: string | null
@@ -41,6 +57,11 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
   const [diff, setDiff] = useState<GitDiff | null>(null)
   const [menu, setMenu] = useState<ContextMenuState | null>(null)
   const [pendingRevert, setPendingRevert] = useState<GitEntry | null>(null)
+  const [pendingRollback, setPendingRollback] = useState<GitCommit | null>(null)
+  const activeDocPath = useDocumentStore((s) => s.document.path)
+  const activeRelativePath = workspace && activeDocPath?.startsWith(`${workspace}/`)
+    ? activeDocPath.slice(workspace.length + 1)
+    : null
   const epoch = useRef(0)
   const pending = useRef(false)
   const refreshQueued = useRef(false)
@@ -152,6 +173,10 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
             <span className={styles.code}>{isStaged ? entry.indexStatus : entry.worktreeStatus}</span>
             <span>{entry.path}</span>
           </button>
+          <button className={styles.action} disabled={busy} title="Revert changes in this file"
+            aria-label={`Revert ${entry.path}`} onClick={() => setPendingRevert(entry)}>
+            ↺
+          </button>
           <button className={styles.action} disabled={busy} aria-label={`${isStaged ? 'Unstage' : 'Stage'} ${entry.path}`}
             onClick={() => void run((project) => isStaged ? unstageChange(project, entry.path) : stageChange(project, entry.path))}>
             {isStaged ? '−' : '+'}
@@ -199,6 +224,23 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
         <button type="submit" disabled={busy || !staged.length || !message.trim()}>Commit staged ({staged.length})</button>
         <p className={styles.hint}>Commits all staged files only. Git hooks and signing are bypassed. No remote operations.</p>
       </form>
+      {(status.commits?.length ?? 0) > 0 && <section className={styles.group} aria-label="Recent checkpoints">
+        <h4>Recent checkpoints (Rollback) <span>{status.commits!.length}</span></h4>
+        <ul className={styles.checkpoints}>
+          {status.commits!.map((commit) => <li key={commit.hash} className={styles.checkpointRow}>
+            <div className={styles.checkpointInfo} title={`${commit.subject} (${commit.shortHash} · ${commit.timestamp})`}>
+              <span className={styles.checkpointSubject}>{commit.subject}</span>
+              <span className={styles.checkpointMeta}>{commit.timestamp} · {commit.shortHash}</span>
+            </div>
+            <button type="button" className={styles.rollbackBtn} disabled={busy}
+              aria-label={`Rollback to ${commit.shortHash}`}
+              title={`Restore files from checkpoint "${commit.subject}"`}
+              onClick={() => setPendingRollback(commit)}>
+              ↺ Rollback
+            </button>
+          </li>)}
+        </ul>
+      </section>}
       {selection && <GitDiffDialog path={selection.path} staged={selection.staged} diff={diff} loading={busy}
         error={error} onClose={() => setSelection(null)} />}
       {menu && <div role="menu" aria-label={`${menu.entry.path} actions`} className={styles.contextMenu}
@@ -225,7 +267,40 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
           ? `Delete "${pendingRevert.path}"? This untracked or newly added file will be permanently removed.`
           : `Discard all changes in "${pendingRevert.path}" and restore it to HEAD? This cannot be undone.`}
         confirmLabel="Revert" danger onCancel={() => setPendingRevert(null)}
-        onConfirm={() => { const entry = pendingRevert; setPendingRevert(null); void run((project) => revertChange(project, entry.path), `Reverted ${entry.path}.`) }} />}
+        onConfirm={() => {
+          const entry = pendingRevert
+          setPendingRevert(null)
+          void run(async (project) => {
+            await revertChange(project, entry.path)
+            await reloadActiveDocumentFromDisk(project)
+          }, `Reverted ${entry.path}.`)
+        }} />}
+      {pendingRollback && <ConfirmDialog title={`Rollback to "${pendingRollback.subject}"`}
+        message={activeRelativePath
+          ? `Restore from checkpoint ${pendingRollback.shortHash} (${pendingRollback.timestamp})? You can restore only "${activeRelativePath}" or the entire project.`
+          : `Restore project files from checkpoint ${pendingRollback.shortHash} (${pendingRollback.timestamp})?`}
+        cancelLabel="Cancel"
+        secondaryLabel={activeRelativePath ? `Restore "${activeRelativePath}" only` : undefined}
+        confirmLabel="Restore entire project"
+        danger
+        onCancel={() => setPendingRollback(null)}
+        onSecondary={activeRelativePath ? () => {
+          const commit = pendingRollback
+          const targetPath = activeRelativePath
+          setPendingRollback(null)
+          void run(async (project) => {
+            await rollbackToCommit(project, commit.hash, targetPath)
+            await reloadActiveDocumentFromDisk(project)
+          }, `Restored ${targetPath} from ${commit.shortHash}.`)
+        } : undefined}
+        onConfirm={() => {
+          const commit = pendingRollback
+          setPendingRollback(null)
+          void run(async (project) => {
+            await rollbackToCommit(project, commit.hash)
+            await reloadActiveDocumentFromDisk(project)
+          }, `Rolled back project to ${commit.shortHash}.`)
+        }} />}
     </>}
   </section>
 }

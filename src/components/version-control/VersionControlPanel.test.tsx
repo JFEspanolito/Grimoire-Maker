@@ -3,10 +3,11 @@ import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { VersionControlPanel } from './VersionControlPanel'
+import { useDocumentStore } from '../../stores/documentStore'
 
 const actions = vi.hoisted(() => ({
   getRepositoryStatus: vi.fn(), initializeRepository: vi.fn(), stageChange: vi.fn(),
-  unstageChange: vi.fn(), revertChange: vi.fn(), diffChange: vi.fn(), commitChanges: vi.fn(),
+  unstageChange: vi.fn(), revertChange: vi.fn(), rollbackToCommit: vi.fn(), diffChange: vi.fn(), commitChanges: vi.fn(),
 }))
 vi.mock('../../lib/versionControl', () => actions)
 
@@ -15,6 +16,9 @@ const repository = {
   entries: [
     { path: 'chapter.md', originalPath: null, indexStatus: 'M', worktreeStatus: 'M' },
     { path: 'new.md', originalPath: null, indexStatus: '?', worktreeStatus: '?' },
+  ],
+  commits: [
+    { hash: 'abc1234567890', shortHash: 'abc1234', subject: 'Auto-commit: 2026-10-28', timestamp: '2026-10-28' },
   ],
 }
 
@@ -39,6 +43,7 @@ describe('VersionControlPanel', () => {
     HTMLDialogElement.prototype.close = function () { this.open = false }
     actions.getRepositoryStatus.mockResolvedValue(repository)
     actions.diffChange.mockResolvedValue({ text: '+new text', binary: false, truncated: false })
+    useDocumentStore.getState().resetDocuments()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -201,5 +206,27 @@ describe('VersionControlPanel', () => {
     const confirmBtn = Array.from(confirmDialog.querySelectorAll('button')).find((b) => b.textContent === 'Revert')!
     await act(async () => confirmBtn.click())
     expect(actions.revertChange).toHaveBeenCalledExactlyOnceWith('/books', 'chapter.md')
+  })
+
+  it('reverts a file directly from the inline Revert button and rolls back from recent checkpoints', async () => {
+    useDocumentStore.getState().loadFromRaw('/books/Draft/chapter.md', '# Draft')
+    await render('/books')
+
+    // Click inline Revert button on new.md
+    await click('Revert new.md')
+    const revertDialog = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="confirm-title"]')!
+    expect(revertDialog.textContent).toContain('Delete "new.md"?')
+    const revertBtn = Array.from(revertDialog.querySelectorAll('button')).find((b) => b.textContent === 'Revert')!
+    await act(async () => revertBtn.click())
+    expect(actions.revertChange).toHaveBeenCalledExactlyOnceWith('/books', 'new.md')
+
+    // Click Rollback on recent checkpoint and restore active file only
+    expect(container.textContent).toContain('Recent checkpoints (Rollback)')
+    await click('Rollback to abc1234')
+    const rollbackDialog = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="confirm-title"]')!
+    expect(rollbackDialog.textContent).toContain('Restore from checkpoint abc1234')
+    const restoreFileBtn = Array.from(rollbackDialog.querySelectorAll('button')).find((b) => b.textContent === 'Restore "Draft/chapter.md" only')!
+    await act(async () => restoreFileBtn.click())
+    expect(actions.rollbackToCommit).toHaveBeenCalledExactlyOnceWith('/books', 'abc1234567890', 'Draft/chapter.md')
   })
 })

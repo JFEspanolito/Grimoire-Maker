@@ -7,10 +7,18 @@ export interface GitEntry {
   worktreeStatus: string
 }
 
+export interface GitCommit {
+  hash: string
+  shortHash: string
+  subject: string
+  timestamp: string
+}
+
 export interface RepositoryStatus {
   isRepository: boolean
   branch: string
   entries: GitEntry[]
+  commits?: GitCommit[]
   indexFingerprint: string
 }
 
@@ -34,6 +42,9 @@ export const unstageChange = (workspace: string, path: string) =>
 
 export const revertChange = (workspace: string, path: string) =>
   invoke<void>('git_revert', { workspace, path })
+
+export const rollbackToCommit = (workspace: string, commit: string, path?: string) =>
+  invoke<void>('git_rollback', { workspace, commit, path: path ?? null })
 
 export const diffChange = (workspace: string, path: string, staged: boolean) =>
   invoke<GitDiff>('git_diff', { workspace, path, staged })

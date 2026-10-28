@@ -24,12 +24,22 @@ pub struct GitEntry {
     worktree_status: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommit {
+    hash: String,
+    short_hash: String,
+    subject: String,
+    timestamp: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositoryStatus {
     is_repository: bool,
     branch: String,
     entries: Vec<GitEntry>,
+    commits: Vec<GitCommit>,
     index_fingerprint: String,
 }
 
@@ -350,6 +360,47 @@ fn fingerprint(root: &Path) -> Result<String, String> {
     Ok(format!("{:016x}", hasher.finish()))
 }
 
+fn recent_commits(root: &Path) -> Result<Vec<GitCommit>, String> {
+    let head = git(root, &["rev-parse", "--verify", "HEAD"])?;
+    if !head.success {
+        return Ok(vec![]);
+    }
+    let log = checked(
+        root,
+        &[
+            "log",
+            "-n",
+            "10",
+            "--date=short",
+            "--format=%H\x1f%h\x1f%cd\x1f%s%x00",
+        ],
+    )?;
+    let mut commits = Vec::new();
+    for record in log.stdout.split(|byte| *byte == 0) {
+        if record.is_empty() {
+            continue;
+        }
+        let text = std::str::from_utf8(record)
+            .map_err(|_| "Non-UTF-8 commit history")?
+            .trim_start_matches(['\r', '\n']);
+        let mut parts = text.splitn(4, '\x1f');
+        if let (Some(hash), Some(short_hash), Some(timestamp), Some(subject)) = (
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+        ) {
+            commits.push(GitCommit {
+                hash: hash.to_string(),
+                short_hash: short_hash.to_string(),
+                timestamp: timestamp.to_string(),
+                subject: subject.trim().to_string(),
+            });
+        }
+    }
+    Ok(commits)
+}
+
 fn status_in(root: &Path) -> Result<RepositoryStatus, String> {
     checked(root, &["--version"])?;
     if !repository(root)? {
@@ -357,6 +408,7 @@ fn status_in(root: &Path) -> Result<RepositoryStatus, String> {
             is_repository: false,
             branch: String::new(),
             entries: vec![],
+            commits: vec![],
             index_fingerprint: String::new(),
         });
     }
@@ -375,6 +427,7 @@ fn status_in(root: &Path) -> Result<RepositoryStatus, String> {
         return Err("Too many changes to display safely. Use an external Git client.".into());
     }
     let entries = parse_status(&output.stdout)?;
+    let commits = recent_commits(root)?;
     let branch = git(root, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
     let branch = if branch.success {
         String::from_utf8_lossy(&branch.stdout).trim().to_string()
@@ -388,6 +441,7 @@ fn status_in(root: &Path) -> Result<RepositoryStatus, String> {
         is_repository: true,
         branch,
         entries,
+        commits,
         index_fingerprint,
     })
 }
@@ -735,9 +789,44 @@ pub async fn git_unstage(app: AppHandle, workspace: String, path: String) -> Res
     in_project(app, workspace, move |root| unstage_in(root, &path)).await
 }
 
+fn rollback_in(root: &Path, commit: &str, path: Option<&str>) -> Result<(), String> {
+    require_repository(root)?;
+    if commit.len() < 7
+        || commit.len() > 40
+        || !commit.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err("Invalid commit identifier".into());
+    }
+    checked(root, &["rev-parse", "--verify", &format!("{commit}^{{commit}}")])?;
+    let source = format!("--source={commit}");
+    match path {
+        Some(rel) => {
+            guard_path(root, rel)?;
+            checked(root, &["restore", "--staged", "--worktree", &source, "--", rel])?;
+        }
+        None => {
+            checked(root, &["restore", "--staged", "--worktree", &source, "--", "."])?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn git_revert(app: AppHandle, workspace: String, path: String) -> Result<(), String> {
     in_project(app, workspace, move |root| revert_in(root, &path)).await
+}
+
+#[tauri::command]
+pub async fn git_rollback(
+    app: AppHandle,
+    workspace: String,
+    commit: String,
+    path: Option<String>,
+) -> Result<(), String> {
+    in_project(app, workspace, move |root| {
+        rollback_in(root, &commit, path.as_deref())
+    })
+    .await
 }
 
 #[tauri::command]
