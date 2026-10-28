@@ -11,7 +11,7 @@ use std::{
 use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
 
-static CHANGES: Mutex<()> = Mutex::new(());
+pub(crate) static CHANGES: Mutex<()> = Mutex::new(());
 const TRANSACTION: &str = ".grimoire-rename-transaction";
 const MAX_ENTRIES: usize = 5_000;
 const MAX_DOCUMENT: usize = 4 * 1024 * 1024;
@@ -80,7 +80,7 @@ pub async fn commit_rename_references(
     .map_err(|e| e.to_string())?
 }
 
-fn portable(path: &Path) -> Result<String, String> {
+pub(crate) fn portable(path: &Path) -> Result<String, String> {
     let raw = path
         .to_str()
         .ok_or("Paths must be valid Unicode")?
@@ -92,7 +92,7 @@ fn portable(path: &Path) -> Result<String, String> {
     })
 }
 
-fn clean_absolute(path: &Path) -> Result<(), String> {
+pub(crate) fn clean_absolute(path: &Path) -> Result<(), String> {
     if !path.is_absolute()
         || path
             .components()
@@ -197,21 +197,19 @@ struct Verified {
     locks: Vec<File>,
 }
 
-fn verify_paths(
+/// Checks that the root is absolute, inside the granted scope and the active remembered
+/// workspace. Returns the canonical root and the directory locks that guard it.
+pub(crate) fn verify_root(
     state_path: &Path,
     root: &Path,
-    from: &Path,
-    to: &Path,
     allowed: &dyn Fn(&Path) -> bool,
-) -> Result<Verified, String> {
-    for path in [root, from, to] {
-        clean_absolute(path)?;
-        if !allowed(path) {
-            return Err(format!(
-                "Path is outside the granted filesystem scope: {}",
-                path.display()
-            ));
-        }
+) -> Result<(PathBuf, Vec<File>), String> {
+    clean_absolute(root)?;
+    if !allowed(root) {
+        return Err(format!(
+            "Path is outside the granted filesystem scope: {}",
+            root.display()
+        ));
     }
     let mut locks = Vec::new();
     lock_ancestors(root, &mut locks)?;
@@ -240,6 +238,26 @@ fn verify_paths(
     {
         return Err("Reference rename requires the active remembered workspace".into());
     }
+    Ok((root, locks))
+}
+
+fn verify_paths(
+    state_path: &Path,
+    root: &Path,
+    from: &Path,
+    to: &Path,
+    allowed: &dyn Fn(&Path) -> bool,
+) -> Result<Verified, String> {
+    for path in [from, to] {
+        clean_absolute(path)?;
+        if !allowed(path) {
+            return Err(format!(
+                "Path is outside the granted filesystem scope: {}",
+                path.display()
+            ));
+        }
+    }
+    let (root, mut locks) = verify_root(state_path, root, allowed)?;
     let parent = from.parent().ok_or("Cannot rename a filesystem root")?;
     lock_ancestors(parent, &mut locks)?;
     let parent = fs::canonicalize(parent).map_err(|e| e.to_string())?;
@@ -282,14 +300,25 @@ fn verify_paths(
     })
 }
 
-struct LockedDocument {
-    path: PathBuf,
-    before: String,
+pub(crate) struct LockedDocument {
+    pub(crate) path: PathBuf,
+    pub(crate) before: String,
     _file: File,
 }
 fn inventory(
     verified: &mut Verified,
     allowed: &dyn Fn(&Path) -> bool,
+) -> Result<Vec<LockedDocument>, String> {
+    inventory_in(&verified.root, &mut verified.locks, allowed, &|_, _| false)
+}
+
+/// Locks and reads every Markdown document below `root`. `skip(path, name)` excludes a
+/// directory (and everything below it) from the walk; `.git` is always excluded.
+pub(crate) fn inventory_in(
+    root: &Path,
+    locks: &mut Vec<File>,
+    allowed: &dyn Fn(&Path) -> bool,
+    skip: &dyn Fn(&Path, &str) -> bool,
 ) -> Result<Vec<LockedDocument>, String> {
     fn walk(
         path: &Path,
@@ -299,6 +328,7 @@ fn inventory(
         found: &mut Vec<LockedDocument>,
         locks: &mut Vec<File>,
         allowed: &dyn Fn(&Path) -> bool,
+        skip: &dyn Fn(&Path, &str) -> bool,
     ) -> Result<(), String> {
         if depth > 32 {
             return Err("Markdown inventory exceeds 32 directory levels".into());
@@ -318,6 +348,9 @@ fn inventory(
                 continue;
             }
             let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+            if metadata.is_dir() && skip(&path, name) {
+                continue;
+            }
             reject_special(&metadata)?;
             if !allowed(&path) {
                 return Err(format!(
@@ -327,7 +360,7 @@ fn inventory(
             }
             if metadata.is_dir() {
                 locks.push(open_checked(&path, true)?);
-                walk(&path, depth + 1, entries, bytes, found, locks, allowed)?;
+                walk(&path, depth + 1, entries, bytes, found, locks, allowed, skip)?;
             } else if path
                 .extension()
                 .and_then(|extension| extension.to_str())
@@ -349,15 +382,7 @@ fn inventory(
         Ok(())
     }
     let mut result = Vec::new();
-    walk(
-        &verified.root,
-        0,
-        &mut 0,
-        &mut 0,
-        &mut result,
-        &mut verified.locks,
-        allowed,
-    )?;
+    walk(root, 0, &mut 0, &mut 0, &mut result, locks, allowed, skip)?;
     result.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(result)
 }
@@ -485,7 +510,7 @@ fn expect_bytes(path: &Path, expected: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-struct Operation {
+pub(crate) struct Operation {
     original: PathBuf,
     target: PathBuf,
     staged: PathBuf,
@@ -535,7 +560,16 @@ fn cleanup(directory: &Path, operations: &[Operation]) -> Result<(), String> {
             Err(error) => return Err(error.to_string()),
         }
     }
-    fs::remove_dir(directory).map_err(|e| e.to_string())
+    // Windows can report a just-emptied directory as non-empty while deletions settle.
+    let mut result = fs::remove_dir(directory);
+    for _ in 0..40 {
+        if result.is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+        result = fs::remove_dir(directory);
+    }
+    result.map_err(|e| e.to_string())
 }
 
 fn rollback(
@@ -656,8 +690,48 @@ fn commit_in(
             published: false,
         });
     }
-    fs::create_dir(&transaction).map_err(|e| e.to_string())?;
-    let transaction_lock = open_checked(&transaction, true)?;
+    run_transaction(&transaction, operations, snapshot, checkpoint, "Rename")
+}
+
+/// Builds the operation that overwrites `path` in place with `after` (no rename step).
+pub(crate) fn replace_operation(
+    transaction: &Path,
+    index: usize,
+    path: &Path,
+    before: &str,
+    after: &str,
+) -> Operation {
+    Operation {
+        original: path.to_path_buf(),
+        target: path.to_path_buf(),
+        staged: transaction.join(format!("{index}.stage")),
+        backup: transaction.join(format!("{index}.backup")),
+        discarded: transaction.join(format!("{index}.discarded")),
+        before: Some(before.as_bytes().to_vec()),
+        after: Some(after.as_bytes().to_vec()),
+        backed_up: false,
+        published: false,
+    }
+}
+
+pub(crate) fn transaction_dir(root: &Path) -> PathBuf {
+    root.join(TRANSACTION)
+}
+
+pub(crate) const DOCUMENT_LIMIT: usize = MAX_DOCUMENT;
+pub(crate) const TOTAL_LIMIT: usize = MAX_TOTAL;
+
+/// Stages, backs up and publishes every operation with a rollback journal. On any failure
+/// all originals are restored; `verb` only words the user-facing messages.
+pub(crate) fn run_transaction(
+    transaction: &Path,
+    mut operations: Vec<Operation>,
+    snapshot: Vec<LockedDocument>,
+    checkpoint: &mut dyn FnMut(&str) -> Result<(), String>,
+    verb: &str,
+) -> Result<(), String> {
+    fs::create_dir(transaction).map_err(|e| e.to_string())?;
+    let transaction_lock = open_checked(transaction, true)?;
     let result = (|| {
         let mut log = OpenOptions::new()
             .write(true)
@@ -726,19 +800,19 @@ fn commit_in(
         let restored = rollback(&mut operations, checkpoint);
         drop(transaction_lock);
         if let Err(rollback_error) = restored {
-            return Err(format!("Rename failed: {error}. Rollback incomplete: {rollback_error}. Recovery data retained at {}. Inspect journal.jsonl before retrying.", transaction.display()));
+            return Err(format!("{verb} failed: {error}. Rollback incomplete: {rollback_error}. Recovery data retained at {}. Inspect journal.jsonl before retrying.", transaction.display()));
         }
-        if let Err(cleanup_error) = cleanup(&transaction, &operations) {
-            return Err(format!("Rename failed and originals were restored: {error}. Recovery cleanup failed: {cleanup_error}. Inspect {} before retrying.", transaction.display()));
+        if let Err(cleanup_error) = cleanup(transaction, &operations) {
+            return Err(format!("{verb} failed and originals were restored: {error}. Recovery cleanup failed: {cleanup_error}. Inspect {} before retrying.", transaction.display()));
         }
-        return Err(format!("Rename failed; original files restored: {error}"));
+        return Err(format!("{verb} failed; original files restored: {error}"));
     }
     drop(transaction_lock);
     // A cleanup error cannot turn a confirmed commit into a false failed rename.
     // The durable committed marker explains the residue; the next invocation refuses it.
-    if let Err(error) = cleanup(&transaction, &operations) {
+    if let Err(error) = cleanup(transaction, &operations) {
         eprintln!(
-            "Rename committed; recovery cleanup needed at {}: {error}",
+            "{verb} committed; recovery cleanup needed at {}: {error}",
             transaction.display()
         );
     }

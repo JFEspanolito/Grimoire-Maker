@@ -6,18 +6,14 @@ export const PLUGIN_ID = 'builtin.bookmarks'
 const MAX_BOOKMARKS = 1000
 
 export interface Bookmark extends BlockAnchor { id: string; path: string }
-export interface MenuState { x: number; y: number; path: string; anchor: BlockAnchor }
 
 interface BookmarkState {
   root: string | null
   items: Bookmark[]
   error: string
-  menu: MenuState | null
   load(root: string): Promise<void>
   add(path: string, anchor: BlockAnchor): void
   remove(id: string): void
-  openMenu(menu: MenuState): void
-  closeMenu(): void
 }
 
 /** Paths are saved relative to the project so the folder can be moved or shared. */
@@ -44,7 +40,7 @@ export const useBookmarks = create<BookmarkState>((set, get) => {
       .catch((error: unknown) => set({ error: `Could not save bookmarks: ${error instanceof Error ? error.message : String(error)}` }))
   }
   return {
-    root: null, items: [], error: '', menu: null,
+    root: null, items: [], error: '',
     load: async (root) => {
       set({ root, items: [], error: '' })
       try {
@@ -65,7 +61,5 @@ export const useBookmarks = create<BookmarkState>((set, get) => {
       persist()
     },
     remove: (id) => { set(state => ({ items: state.items.filter(item => item.id !== id) })); persist() },
-    openMenu: (menu) => set({ menu }),
-    closeMenu: () => set({ menu: null }),
   }
 })

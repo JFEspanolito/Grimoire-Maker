@@ -20,6 +20,8 @@ export interface Template {
   snippets?: TemplateSnippet[]
   /** Packages with chapters/assets require a project; a standalone index can fill an untitled editor. */
   requiresProject?: boolean
+  /** `project` when the template recreates a whole exported project tree, not only index.md, chapters and assets. */
+  layout?: 'project'
   /** Where a community template lives on disk, so it can be exported. */
   location?: { kind: 'package' | 'file'; path: string }
 }
@@ -76,10 +78,19 @@ export interface TemplateScanOptions {
   allowedFolders?: Set<string>
   reservedIds?: string[]
   styleId?: string
+  /** The legacy scan does nothing when its folder is this one (Windows ignores case), so one folder is never read twice. */
+  skipWhenSameAs?: string
 }
+
+const normalizeFolder = (path: string) => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+const sameFolder = (a: string, b: string) => normalizeFolder(a) === normalizeFolder(b)
 
 export async function loadUserTemplates(takenThemeIds: Set<string>, options: TemplateScanOptions = {}): Promise<UserTemplates> {
   const dir = options.dir ?? await ensureConfigSubdir('templates')
+  if (options.skipWhenSameAs && sameFolder(dir, options.skipWhenSameAs)) {
+    applyStyle(options.styleId ?? 'grimoire-template-themes', '')
+    return { dir, templates: [], themes: [], errors: [] }
+  }
   const templates: Template[] = []
   const themes: ThemeInfo[] = []
   const errors: string[] = []
@@ -110,6 +121,8 @@ export async function loadUserTemplates(takenThemeIds: Set<string>, options: Tem
       const { frontmatter, body } = parseDocument(raw)
       const label = String(frontmatter.templateName ?? id)
       delete frontmatter.templateName
+      const layout = frontmatter.templateLayout === 'project' ? ('project' as const) : undefined
+      delete frontmatter.templateLayout
 
       const themePath = `${dir}/${id}/theme.css`
       if (isPackage && children.some((file) => file.name === 'theme.css' && !file.isDirectory && !file.isSymlink)) {
@@ -137,9 +150,11 @@ export async function loadUserTemplates(takenThemeIds: Set<string>, options: Tem
         id,
         label,
         frontmatter,
+        ...(layout && { layout }),
         body,
         builtin: false,
-        requiresProject: isPackage && children.some((file) => file.name === 'chapters' || file.name === 'assets'),
+        // An exported project (layout `project`) always needs a project; folder names are matched ignoring case.
+        requiresProject: isPackage && (layout === 'project' || children.some((file) => ['chapters', 'assets'].includes(file.name.toLowerCase()))),
         snippets: packageSnippets.snippets,
         location: isPackage
           ? { kind: 'package', path: `${dir}/${id}` }

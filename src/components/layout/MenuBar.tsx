@@ -3,14 +3,17 @@ import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from 'rea
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
 import { useDocumentStore } from '../../stores/documentStore'
-import { useSettingsStore } from '../../stores/settingsStore'
+import { useSettingsStore, type PanelId } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
 import { PAGE_SIZES, type PageSizeId } from '../../types/document'
 import styles from './MenuBar.module.css'
 import { ModManager } from '../mods/ModManager'
+import { CreateModDialog } from '../mods/CreateModDialog'
 import { useImportSection } from '../../stores/explorerStore'
 import { NewProjectDialog } from '../project/NewProjectDialog'
-import { fileShortcut } from '../../lib/shortcuts'
+import { fileShortcut, findShortcut } from '../../lib/shortcuts'
+import { useFindStore } from '../../stores/findStore'
+import { selectedSearchText } from '../editor/extensions/searchHighlight'
 import { useSessionStore } from '../../stores/sessionStore'
 import { AppInfoDialog, type InfoDialogKind } from '../settings/AppInfoDialog'
 import { StatisticsDialog } from './StatisticsDialog'
@@ -29,6 +32,9 @@ interface Props {
   editor?: Editor | null
 }
 
+/** Any open dialog except the floating Find panel, which never blocks the application shortcuts. */
+const MODAL_DIALOG = 'dialog[open]:not([data-find-panel])'
+
 export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) {
   const actions = useFileSystem()
   const print = usePrint()
@@ -44,6 +50,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
   const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
   const [preferencesSection, setPreferencesSection] = useState<'appearance' | 'folders'>('appearance')
+  const [preferencesCustomizing, setPreferencesCustomizing] = useState(false)
+  const [templateExportOpen, setTemplateExportOpen] = useState(false)
   const [statisticsOpen, setStatisticsOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [orderOpen, setOrderOpen] = useState(false)
@@ -62,16 +70,39 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
     document.addEventListener('pointerdown', closeOutside)
     return () => document.removeEventListener('pointerdown', closeOutside)
   }, [])
+  /** Same flow as Preferences > Customize Theme: Preferences opens straight into the customizer. */
+  const openThemeCustomizer = (closeCaller: () => void) => {
+    closeCaller()
+    setPreferencesSection('appearance')
+    setPreferencesCustomizing(true)
+    setPreferencesOpen(true)
+  }
   const run = async (action: () => unknown | Promise<unknown>) => {
     closeMenus()
     setError('')
     try { await action() } catch (cause) { reportError('menu.action', cause); setError(friendlyErrorMessage(cause)) }
   }
+  const openFind = (replace = false) => {
+    useFindStore.getState().show({ replace, seed: editor ? selectedSearchText(editor) : undefined })
+  }
   const onFileShortcut = useEffectEvent((event: KeyboardEvent) => {
+    const find = findShortcut(event)
+    if (find === 'find' || find === 'replace') {
+      // Always ours: the webview's own find-in-page must never open.
+      event.preventDefault()
+      if (!document.querySelector(MODAL_DIALOG)) openFind(find === 'replace')
+      return
+    }
+    if (find) {
+      if (!useFindStore.getState().open) return
+      event.preventDefault()
+      useFindStore.getState().requestStep(find === 'next' ? 1 : -1)
+      return
+    }
     const shortcut = fileShortcut(event)
     if (!shortcut) return
     event.preventDefault()
-    if (event.repeat || document.querySelector('dialog[open]')) return
+    if (event.repeat || document.querySelector(MODAL_DIALOG)) return
     void run(() => actions[shortcut]())
   })
   useEffect(() => {
@@ -108,6 +139,13 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <button disabled={!workspace || !importSection} title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'} onClick={() => void run(() => actions.importInto())}>Import…</button>
         <hr />
         <button disabled={readOnly} onClick={() => { closeMenus(); setExportOpen(true) }}>Export PDF…</button>
+        <details className={styles.recent}>
+          <summary>Export</summary>
+          <div role="group" aria-label="Export">
+            <button disabled={!workspace} title={workspace ? 'Export the open project as a template' : 'Open a project first'}
+              onClick={() => { closeMenus(); setTemplateExportOpen(true) }}>Export as Template</button>
+          </div>
+        </details>
         <hr />
       </div>
     </details>
@@ -154,6 +192,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
           </select>
         </label>
         <hr />
+        <button type="button" aria-keyshortcuts="Control+F" onClick={() => { closeMenus(); openFind() }}>Find and Replace…<kbd style={{ float: 'right', marginLeft: '1.5rem', opacity: 0.7, font: 'inherit' }}>Ctrl+F</kbd></button>
         <button type="button" onClick={() => { closeMenus(); setPropertiesOpen(true) }}>Properties…</button>
         <button type="button" disabled={!workspace} onClick={() => { closeMenus(); setOrderOpen(true) }}>Document Order…</button>
         <button type="button" onClick={() => { closeMenus(); setStatisticsOpen(true) }}>Statistics…</button>
@@ -165,15 +204,18 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <summary ref={settingsSummary}>Settings</summary>
       <div className={styles.menu}>
         <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
-        <button type="button" onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesOpen(true) }}>Preferences…</button>
+        <button type="button" onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}>Preferences…</button>
         <button type="button" onClick={() => openInfo('about')}>About</button>
         <button type="button" onClick={() => openInfo('tutorial')}>Tutorial</button>
       </div>
     </details>
     {error && <span role="alert" className={styles.error}>{error}</span>}
-  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} onEditPaths={() => { setModsOpen(false); setPreferencesSection('folders'); setPreferencesOpen(true) }} />}
+  </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} onEditPaths={() => { setModsOpen(false); setPreferencesSection('folders'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}
+    onOpenThemeCustomizer={() => openThemeCustomizer(() => setModsOpen(false))} />}
+    {templateExportOpen && <CreateModDialog initialTab="Templates" onClose={() => setTemplateExportOpen(false)}
+      onOpenThemeCustomizer={() => openThemeCustomizer(() => setTemplateExportOpen(false))} />}
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
-    {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog initialSection={preferencesSection} onClose={() => setPreferencesOpen(false)} /></Suspense>}
+    {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog initialSection={preferencesSection} initialCustomizing={preferencesCustomizing} onClose={() => setPreferencesOpen(false)} /></Suspense>}
     {statisticsOpen && <StatisticsDialog onClose={() => setStatisticsOpen(false)} />}
     {propertiesOpen && <PropertiesDialog editor={editor} onClose={() => setPropertiesOpen(false)} />}
     {orderOpen && workspace && <DocumentOrderDialog root={workspace} onClose={() => setOrderOpen(false)} />}

@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { PageView } from './PageView'
 import { useSettingsStore } from '../../stores/settingsStore'
-import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import zoomPlugin from '../../assets/mods/Legacy/zoom/zoom'
 import { registerPlugin, unregisterPlugin } from '../../plugins/plugin-manager'
 
 beforeEach(() => { vi.stubGlobal('CSS', { supports: () => true }); registerPlugin(zoomPlugin) })

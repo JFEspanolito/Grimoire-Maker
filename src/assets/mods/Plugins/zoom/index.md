@@ -1,43 +1,54 @@
 ---
 pluginName: Zoom
 pluginId: builtin.zoom
+pluginDescription: Editor and preview zoom selectors with Ctrl+wheel stepping.
 ---
-# Zoom plugin
+# Zoom: an example plugin package
 
-This folder is a complete executable plugin. `zoom.tsx` exports the plugin and
-the editor/preview dropdown components. `script.ts` owns zoom levels and the
-Ctrl+wheel behavior. `Zoom.module.css` contains its styles. This Markdown file
-is documentation; it does not implement the plugin.
+This folder is a complete plugin package. Use it as a starting point for your own mods.
+Everything the application needs is in two files; this `index.md` is only documentation.
 
-## Install and share
+## What is in the folder
 
-1. Copy the entire `zoom` folder into the application's configured **Plugins**
-   content folder. Keep all source/style files together.
-2. Open the mod manager, refresh the catalog, and enable **Zoom**. If it was
-   already enabled, refresh reloads changed source files.
-3. Use the toolbar selector or hold Ctrl while scrolling over an editor page.
-   The print preview has its own selector and zoom stops.
+- `manifest.json` describes the plugin. The application reads it and draws the controls for you.
+- `dist/index.js` is the plugin's code. For Zoom it is empty on purpose: the zoom selectors and the
+  Ctrl+wheel behavior are drawn and handled by the application, so no code is needed.
+- Any other file here (this page, notes, a `legacy/` folder) is ignored.
 
-Copying this folder to another installation of Grimoire Maker with the v1 plugin
-API transfers the implementation. No build step or separate npm installation is
-needed. Do not install a second copy with the same plugin ID: `builtin.zoom`.
+## manifest.json, field by field
 
-## How it works
+- `id`, `name`, `version`, `author`, `description`: who the plugin is. `id` must be unique.
+  Local packages may use a `builtin.` id, like this one; imported packages cannot.
+- `main`: the entry file, always `dist/index.js`.
+- `schemaVersion` and `sdkVersion`: format versions. Leave them as they are.
+- `permissions`: what the plugin may do. Zoom asks for two:
+  `editor:zoom:read` (see the current zoom) and `editor:zoom:write` (change it).
+  A local package is approved for exactly the permissions listed here, so remove any it does not use.
+- `contributions`: the controls the application draws.
+  - `toolbar` has two dropdowns. `zoom-editor` is bound to the editor zoom (`"bind": "zoom"`) and
+    shows only for Markdown files. `zoom-preview` is bound to the print preview zoom
+    (`"bind": "surfaceZoom"`, `"slot": "preview"`). Each `options` entry is a value and its label.
+  - `behaviors` has `zoom-wheel`, which makes Ctrl+wheel step through `editorSteps` in the editor
+    and `previewSteps` in the preview (whole percentages, ascending).
 
-The default export provides `id`, `name`, `version`, and `activate(api)`.
-Activation registers a main toolbar component, a preview toolbar component, and
-a page behavior. The host renders these generic slots; no Zoom-specific host
-component is required. The native wheel listener returns its cleanup callback,
-so disabling the plugin or unmounting a page removes it. Disabling leaves the
-saved zoom preference intact but removes the controls and wheel behavior.
+## Edit it
 
-The plugin uses the host React runtime for JSX and `@grimoire/plugin-api` for
-persisted page settings, active-document state and types. Relative imports keep
-helper code in this folder.
+1. Change `manifest.json`, for example remove a step from `editorSteps` and the matching option.
+2. Open **Mod Manager** and choose **Refresh**. A running plugin whose files changed is restarted.
+3. Use **Turn off** or **Turn on** on the card to switch it. Your edits are never overwritten.
 
-## Trust model
+If you delete the folder, the plugin disappears. **Install** on the Plugins tab puts a fresh copy back.
 
-Phase one plugins run as trusted code in the application's WebView, with the
-same authority as the application. They are **not sandboxed**. Only enable code
-you have reviewed and trust. Isolation for externally supplied plugins is a
-separate future phase.
+## Share it
+
+Copy the whole `zoom` folder into another installation's **Plugins** folder, or pack it into a file
+others can import. The ids that start with `builtin.` are reserved for the plugins that come with
+the application, so to pack your own version first change `id` in `manifest.json` to your own name
+(for example `community.my-zoom`), then run:
+
+```
+pnpm pack:plugin <path to this folder>
+```
+
+This writes a `.gmp` file that others can add with **Mod Manager > Import Mod**. Imported packages
+are approved by the person who imports them, so they start off until reviewed.

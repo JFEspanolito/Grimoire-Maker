@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import bookmarks from '../assets/mods/Plugins/bookmarks/bookmarks'
 import { describeBlock, locateBlock } from '../assets/mods/Plugins/bookmarks/anchors'
 import { useBookmarks } from '../assets/mods/Plugins/bookmarks/bookmarkStore'
-import type { PluginApi, PluginPageBehavior, PluginPanel } from '../types/plugin'
+import type { PluginApi, PluginContextAction, PluginPanel } from '../types/plugin'
 import { useDocumentStore } from '../stores/documentStore'
 import { useTabStore } from '../stores/tabStore'
 
@@ -18,10 +18,10 @@ vi.mock('../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openFile }) }
 
 function activate() {
   const toolbar: PluginPanel[] = []
-  const behaviors: PluginPageBehavior[] = []
-  const api = { registerToolbar: (value: PluginPanel) => { toolbar.push(value) }, registerPageBehavior: (value: PluginPageBehavior) => { behaviors.push(value) } }
+  const actions: PluginContextAction[] = []
+  const api = { registerToolbar: (value: PluginPanel) => { toolbar.push(value) }, registerContextAction: (value: PluginContextAction) => { actions.push(value) } }
   bookmarks.activate(api as unknown as PluginApi)
-  return { Button: toolbar[0].component, behavior: behaviors[0] }
+  return { Button: toolbar[0].component, action: actions[0], actions }
 }
 
 let root: Root | undefined
@@ -37,7 +37,7 @@ beforeEach(() => {
   openFile.mockClear()
   useDocumentStore.setState({ workspaceRoot: '/book' })
   useTabStore.getState().reset('/book/Draft/Chapter 1.md')
-  useBookmarks.setState({ root: null, items: [], error: '', menu: null })
+  useBookmarks.setState({ root: null, items: [], error: '' })
   surface = document.createElement('div')
   surface.dataset.activeEditor = 'true'
   surface.innerHTML = '<div class="ProseMirror"><h1>Title</h1><p>First paragraph</p><p></p><p>Second paragraph</p></div>'
@@ -63,46 +63,38 @@ it('describes a text block and finds it again by its text after blocks move', ()
   expect(locateBlock(editor, anchor)).toBeNull()
 })
 
-it('adds a bookmark from the page right-click menu and saves it relative to the project', async () => {
-  const { Button, behavior } = activate()
-  const dispose = behavior.mount(surface, { kind: 'editor', zoom: 1, setZoom: () => {} })
+const clickContext = (target: Element | null, path: string | null = '/book/Draft/Chapter 1.md') => ({ target, path, selectionText: '', x: 40, y: 50 })
+
+it('registers one context action and no page behavior or menu of its own', async () => {
+  const { actions, Button } = activate()
+  expect(actions.map(action => [action.id, action.label])).toEqual([['bookmarks.add', 'Add to bookmark']])
   root = createRoot(document.body.appendChild(document.createElement('div')))
   await act(async () => root?.render(<Button />))
-
-  const plain = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 50 })
-  await act(async () => { surface.querySelector('.ProseMirror')!.dispatchEvent(plain) })
-  expect(plain.defaultPrevented).toBe(false)
+  const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+  surface.querySelectorAll('p')[0].dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(false)
   expect(document.querySelector('[role="menu"]')).toBeNull()
-
-  const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 40, clientY: 50 })
-  await act(async () => { surface.querySelectorAll('p')[0].dispatchEvent(event) })
-  expect(event.defaultPrevented).toBe(true)
-  await act(async () => document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click())
-
-  expect(document.querySelector('[role="menu"]')).toBeNull()
-  expect(useBookmarks.getState().items).toMatchObject([{ path: 'Draft/Chapter 1.md', index: 1, excerpt: 'First paragraph' }])
-  expect(JSON.parse(files.writes.at(-1)!).items[0].path).toBe('Draft/Chapter 1.md')
-
-  // The same block is not saved twice.
-  await act(async () => { surface.querySelectorAll('p')[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })) })
-  await act(async () => document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click())
-  expect(useBookmarks.getState().items).toHaveLength(1)
-  dispose()
 })
 
-it('ignores previews and non-Markdown files', async () => {
-  const { behavior } = activate()
-  const preview = behavior.mount(surface, { kind: 'preview', zoom: 1, setZoom: () => {} })
-  const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
-  surface.querySelector('p')!.dispatchEvent(event)
-  expect(event.defaultPrevented).toBe(false)
-  preview()
-  useTabStore.getState().reset('/book/cover.png')
-  const editor = behavior.mount(surface, { kind: 'editor', zoom: 1, setZoom: () => {} })
-  const image = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
-  surface.querySelector('p')!.dispatchEvent(image)
-  expect(image.defaultPrevented).toBe(false)
-  editor()
+it('adds the clicked block as a bookmark saved relative to the project, once', () => {
+  const { action } = activate()
+  const first = surface.querySelectorAll('p')[0]
+  expect(action.when?.(clickContext(first))).toBe(true)
+  action.run(clickContext(first))
+  expect(useBookmarks.getState().items).toMatchObject([{ path: 'Draft/Chapter 1.md', index: 1, excerpt: 'First paragraph' }])
+  action.run(clickContext(first))
+  expect(useBookmarks.getState().items).toHaveLength(1)
+})
+
+it('only applies to text blocks of Markdown pages', () => {
+  const { action } = activate()
+  expect(action.when?.(clickContext(surface.querySelectorAll('p')[1]))).toBe(false)
+  expect(action.when?.(clickContext(surface))).toBe(false)
+  expect(action.when?.(clickContext(null))).toBe(false)
+  expect(action.when?.(clickContext(surface.querySelector('p'), '/book/cover.png'))).toBe(false)
+  expect(action.when?.(clickContext(surface.querySelector('p'), null))).toBe(false)
+  action.run(clickContext(surface.querySelector('p'), '/book/cover.png'))
+  expect(useBookmarks.getState().items).toEqual([])
 })
 
 it('lists the project bookmarks, opens one at its text and removes another', async () => {

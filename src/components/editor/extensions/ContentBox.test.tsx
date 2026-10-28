@@ -5,6 +5,7 @@ import type { Editor } from '@tiptap/react'
 import { EditorCanvas } from '../EditorCanvas'
 import { useDocumentStore } from '../../../stores/documentStore'
 import { useSettingsStore } from '../../../stores/settingsStore'
+import { printableContent } from '../../../lib/exportPdf'
 import { registerPlugin } from '../../../plugins/plugin-manager'
 import type { PluginApi } from '../../../types/plugin'
 
@@ -166,4 +167,27 @@ it('creates a trailing paragraph outside the box when clicking the page below a 
   await act(async () => editor.commands.insertContent('After box'))
   expect(editor.state.doc.firstChild!.child(1).textContent).toBe('After box')
   expect(editor.state.doc.firstChild!.child(0).textContent).toBe('GroupEditable text')
+})
+
+it('sets the box background from the properties bar, renders it in the editor and print copy, and clears it', async () => {
+  const { container, editor } = await mount(`${boxHtml('flow')}\n\nAfter`)
+  const box = container.querySelector<HTMLElement>('.grimoire-content-box')!
+  expect(box.style.backgroundColor).toBe('')
+  expect(box.hasAttribute('data-bg-color')).toBe(false)
+  const picker = box.querySelector<HTMLInputElement>('[aria-label="Content box background color"]')!
+  const clear = box.querySelector<HTMLButtonElement>('[aria-label="Clear content box background"]')!
+  expect(clear.disabled).toBe(true)
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(picker, '#ffeecc')
+    picker.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(editor.state.doc.firstChild!.firstChild?.attrs.backgroundColor).toBe('#ffeecc')
+  expect(box.style.backgroundColor).toBe('rgb(255, 238, 204)')
+  expect(box.getAttribute('data-bg-color')).toBe('#ffeecc')
+  const printed = printableContent(editor.view.dom.innerHTML, 1).querySelector<HTMLElement>('.grimoire-content-box')!
+  expect(printed.style.backgroundColor).toBe('rgb(255, 238, 204)')
+  await act(async () => clear.click())
+  expect(editor.state.doc.firstChild!.firstChild?.attrs.backgroundColor).toBeNull()
+  expect(box.style.backgroundColor).toBe('')
+  expect(box.hasAttribute('data-bg-color')).toBe(false)
 })

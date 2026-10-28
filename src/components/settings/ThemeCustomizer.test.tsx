@@ -20,6 +20,10 @@ vi.mock('../../stores/themeStore', () => ({ useThemeStore: Object.assign(() => (
 
 }), { getState: () => ({ reload: mocks.reload, userThemes: mocks.users, errors: [] }) }) }))
 
+const exportMocks = vi.hoisted(() => ({ exportTheme: vi.fn() }))
+
+vi.mock('../../lib/modExport', () => ({ exportTheme: exportMocks.exportTheme }))
+
 vi.mock('../../lib/importThemeDecoration', () => ({ importThemeDecoration: mocks.importImage }))
 
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true }))
@@ -270,5 +274,35 @@ it('previews header and footer live on a page without saving', async () => {
   })
   expect(preview!.textContent).toContain('Sample Author - 1/10')
   expect(preview!.style.aspectRatio).not.toBe('')
+  expect(mocks.save).not.toHaveBeenCalled()
+})
+
+
+const exportButton = () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export') as HTMLButtonElement | undefined
+
+it('hides Export for built-in themes', () => {
+  expect(exportButton()).toBeUndefined()
+})
+
+it('exports the user theme being edited and shows where it was saved', async () => {
+  await act(async () => root.unmount())
+  mocks.load.mockResolvedValue({ theme: { id: 'ember', name: 'Ember', builtin: false }, css: "[data-theme='ember'] { --page-bg: #123456; }", path: '/themes/ember.css', directory: '/themes' })
+  container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root.render(<ThemeCustomizer onClose={close} />))
+  expect(exportButton()).toBeDefined()
+
+  exportMocks.exportTheme.mockResolvedValueOnce(null)
+  await act(async () => exportButton()!.click())
+  expect(exportMocks.exportTheme).toHaveBeenCalledExactlyOnceWith('ember')
+  expect(container.textContent).not.toContain('Theme saved to')
+
+  exportMocks.exportTheme.mockResolvedValueOnce('/home/me/ember.css')
+  await act(async () => exportButton()!.click())
+  expect(container.textContent).toContain('Theme saved to /home/me/ember.css')
+
+  exportMocks.exportTheme.mockRejectedValueOnce(new Error('The theme file is missing.'))
+  await act(async () => exportButton()!.click())
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe('The theme file is missing.')
   expect(mocks.save).not.toHaveBeenCalled()
 })

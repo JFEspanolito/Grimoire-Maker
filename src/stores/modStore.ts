@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { discoverMods, MOD_KIND, type ModEntry } from '../lib/modCatalog'
-import { modFs, OFFICIAL_PLUGINS, prepareModLibrary, readDisabledMods, restoreOfficialPlugin, writeDisabledMods } from '../lib/modLibrary'
+import { LEGACY_PLUGINS, migrationFs, modFs, OFFICIAL_PLUGINS, prepareModLibrary, readDisabledMods, restoreOfficialPlugin, writeDisabledMods } from '../lib/modLibrary'
 import { missingOfficialPlugins, type OfficialPlugin } from '../lib/officialPlugins'
 import { loadUserTemplates } from '../lib/templates'
 import { BUILTIN_THEMES } from '../lib/themes'
@@ -8,6 +8,10 @@ import type { TemplateSnippet } from '../lib/templateSnippets'
 import { useTemplateStore } from './templateStore'
 import { useThemeStore } from './themeStore'
 import { reconcilePlugins } from '../plugins/plugin-loader'
+import { migrateLegacyFolders } from '../lib/migratedPlugins'
+import { folderName, sameFolder, syncLocalPackages } from '../lib/localPackages'
+import { reportError } from '../lib/errorLogging'
+import { deleteModFiles } from '../lib/modDelete'
 
 interface ModState {
   root: string | null
@@ -21,6 +25,8 @@ interface ModState {
   reload: () => Promise<void>
   setEnabled: (id: string, enabled: boolean) => Promise<void>
   installOfficial: (folder: string) => Promise<void>
+  /** Permanently deletes the mod's files, forgets its disabled flag and rescans (which unloads it). */
+  deleteMod: (id: string) => Promise<void>
 }
 
 let pending: Promise<unknown> = Promise.resolve()
@@ -35,6 +41,9 @@ export const useModStore = create<ModState>((set, get) => {
     const paths = await prepareModLibrary()
     set({ root: paths.root })
     const disabled = await readDisabledMods(paths.preferences)
+    // Convert untouched old Zoom / Pixel Ruler copies into packages before anything reads the folders.
+    const migration = await migrateLegacyFolders(migrationFs, paths.plugins, LEGACY_PLUGINS, OFFICIAL_PLUGINS)
+      .catch((error): { converted: string[]; errors: string[] } => ({ converted: [], errors: [`Plugins: ${error instanceof Error ? error.message : String(error)}`] }))
     const catalog = await discoverMods(modFs, paths.root, disabled, { Snippets: paths.snippets, Templates: paths.templates, Themes: paths.themes, Plugins: paths.plugins })
     await useThemeStore.getState().reload().catch(() => undefined)
     const themeStore = useThemeStore.getState()
@@ -46,12 +55,31 @@ export const useModStore = create<ModState>((set, get) => {
     })
     // Legacy folders remain readable. A disabled modern package must not reappear via a duplicate legacy ID.
     const reserved = templateMods.map((mod) => mod.folder.split('/').at(-1)!)
-    const legacy = await loadUserTemplates(taken, { reservedIds: reserved })
-    const pluginErrors = await reconcilePlugins(modFs, catalog.mods)
-    const errors = [...catalog.errors, ...modern.errors, ...legacy.errors, ...pluginErrors]
+    const legacy = await loadUserTemplates(taken, { reservedIds: reserved, skipWhenSameAs: paths.templates })
+    // Package folders run isolated from their own files; the trusted TSX loader never sees them.
+    const pluginErrors = await reconcilePlugins(modFs, catalog.mods.filter((mod) => !mod.package))
+    const sync = await syncLocalPackages(paths.plugins).catch((error) => {
+      reportError('plugin.local.sync', error)
+      return null
+    })
+    const syncErrors = sync?.errors ?? []
+    const mods = catalog.mods.map((mod) => {
+      const own = mod.package ? syncErrors.filter((item) => sameFolder(item.folder, folderName(mod.folder))) : []
+      return own.length ? { ...mod, errors: [...mod.errors, ...own.map((item) => item.message)] } : mod
+    })
+    const errors = [
+      ...migration.errors, ...catalog.errors, ...modern.errors, ...legacy.errors, ...pluginErrors,
+      ...syncErrors.map((item) => `Plugins/${item.folder}: ${item.message}`),
+    ]
+    if (sync) {
+      // Activation must not hold up the scan; failures are logged.
+      void import('../plugins/isolated/externalHost')
+        .then((host) => host.applyLocalPackages(mods, sync))
+        .catch((error) => reportError('plugin.external.local', error))
+    }
     themeStore.setTemplateThemes([...modern.themes, ...legacy.themes])
     useTemplateStore.setState({ templates: [...modern.templates, ...legacy.templates], dir: paths.templates, errors })
-    set({ mods: catalog.mods, missingOfficial: missingOfficialPlugins(OFFICIAL_PLUGINS, catalog.mods), snippets: catalog.snippets, ready: true, errors })
+    set({ mods, missingOfficial: missingOfficialPlugins(OFFICIAL_PLUGINS, mods), snippets: catalog.snippets, ready: true, errors })
   }
   const perform = async (operation: () => Promise<void>) => {
     set({ busy: true })
@@ -68,6 +96,23 @@ export const useModStore = create<ModState>((set, get) => {
     installOfficial: (folder) => serial(() => perform(async () => {
       await restoreOfficialPlugin(folder)
       await scan()
+    })),
+    deleteMod: (id) => serial(() => perform(async () => {
+      const mod = get().mods.find((item) => item.id === id)
+      if (!mod) throw new Error('This mod is no longer in the catalog. Refresh first.')
+      try {
+        await deleteModFiles(mod)
+        // The files are gone. A reinstall must not come back silently disabled, but a failure here never undoes the delete.
+        try {
+          const paths = await prepareModLibrary()
+          const disabled = await readDisabledMods(paths.preferences)
+          if (disabled.includes(id)) await writeDisabledMods(paths.preferences, disabled.filter((item) => item !== id))
+        } catch (error) { reportError('mods.delete.disabled', error) }
+      } finally {
+        // A delete that failed halfway (a locked file left a partial folder) must still refresh the catalog.
+        // The original error keeps propagating; a failing rescan never replaces it.
+        try { await scan() } catch (error) { reportError('mods.delete.rescan', error) }
+      }
     })),
     setEnabled: (id, enabled) => serial(() => perform(async () => {
       if (!get().mods.some((mod) => mod.id === id)) throw new Error('This mod is no longer in the catalog. Refresh first.')

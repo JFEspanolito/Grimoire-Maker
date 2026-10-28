@@ -11,6 +11,8 @@
 *_bkp.webp
 node_modules
 dist
+# Example plugin packages ship their entry file as a source file.
+!src/assets/mods/Plugins/*/dist
 src-tauri/target
 src-tauri/gen
 *.local
@@ -94,3 +96,4 @@ AI/skills/*
 #--------------------------------------------------------------------------------
 /export
 /AI/stats
+/release

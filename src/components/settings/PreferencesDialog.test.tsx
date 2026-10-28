@@ -177,6 +177,8 @@ it('organizes preferences with a section index and a basic shortcut reference', 
     expect(container.querySelector<HTMLElement>('#preferences-appearance')!.hidden).toBe(true)
     const save = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Save All'))!
     expect(Array.from(save.querySelectorAll('kbd')).map(key => key.textContent)).toEqual(['Ctrl', 'S'])
+    const findRow = Array.from(panel.querySelectorAll('tr')).find(row => row.querySelector('td')?.textContent === 'Find and Replace')!
+    expect(Array.from(findRow.querySelectorAll('kbd')).map(key => key.textContent)).toEqual(['Ctrl', 'F'])
     expect(panel.textContent).toContain('Bold')
     for (const [label, direction] of [['Zoom In', 'Scroll Up'], ['Zoom Out', 'Scroll Down']]) {
       const row = Array.from(panel.querySelectorAll('tr')).find(item => item.textContent?.includes(label))!
@@ -243,4 +245,15 @@ it('offers a separate Auto commits form with editable defaults and an off switch
   await act(async () => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
   expect(useSettingsStore.getState().autoCommitMinutes).toBe(45)
   expect(form.querySelector('[role="alert"]')).not.toBeNull()
+})
+
+it('can open straight into Customize Theme', async () => {
+  await act(async () => root.unmount())
+  container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root.render(<PreferencesDialog onClose={onClose} initialCustomizing />))
+  expect(container.querySelector('#customize-theme-title')?.textContent).toBe('Customize Theme')
+  expect(container.querySelector('#preferences-title')).toBeNull()
+  await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Back')!.click())
+  expect(container.querySelector('#preferences-title')?.textContent).toBe('Preferences')
 })

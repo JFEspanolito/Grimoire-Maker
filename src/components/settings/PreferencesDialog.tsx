@@ -8,7 +8,7 @@ import { resolveTheme, type ThemeInfo } from '../../lib/themes'
 import { deleteUserTheme, exportUserTheme } from '../../lib/themeEditor'
 import styles from './PreferencesDialog.module.css'
 import { ThemeCustomizer } from './ThemeCustomizer'
-import { EDITOR_SHORTCUTS, EXPLORER_SHORTCUTS, FILE_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
+import { EDITOR_SHORTCUTS, EXPLORER_SHORTCUTS, FILE_SHORTCUTS, FIND_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
 import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { ProjectSettings } from './ProjectSettings'
 import { AutoSaveSettings } from './AutoSaveSettings'
@@ -26,7 +26,7 @@ const SECTIONS = { appearance: 'Appearance', folders: 'Content folders', shortcu
 type Section = keyof typeof SECTIONS
 const SECTION_IDS = Object.keys(SECTIONS) as Section[]
 
-export function PreferencesDialog({ onClose, initialSection = 'appearance' }: { onClose: () => void; initialSection?: Section }) {
+export function PreferencesDialog({ onClose, initialSection = 'appearance', initialCustomizing = false }: { onClose: () => void; initialSection?: Section; initialCustomizing?: boolean }) {
   const desktop = isTauri()
   const dialog = useRef<HTMLDialogElement>(null)
   const locked = useRef(false)
@@ -36,7 +36,7 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance' }: { 
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [attempt, setAttempt] = useState(0)
-  const [customizing, setCustomizing] = useState(false)
+  const [customizing, setCustomizing] = useState(initialCustomizing)
   const [pendingDeleteTheme, setPendingDeleteTheme] = useState<ThemeInfo | null>(null)
   const [section, setSection] = useState<Section>(initialSection)
   const { theme, setTheme } = useSettingsStore()
@@ -196,6 +196,7 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance' }: { 
         <thead><tr><th scope="col">Action</th><th scope="col">Shortcut</th></tr></thead>
         <tbody>{[
           ...Object.values(FILE_SHORTCUTS).map(({ label, key }) => ({ label, keys: ['Ctrl', key.toUpperCase()] })),
+          ...FIND_SHORTCUTS,
           ...EDITOR_SHORTCUTS,
           ...EXPLORER_SHORTCUTS,
           ...ZOOM_SHORTCUTS,

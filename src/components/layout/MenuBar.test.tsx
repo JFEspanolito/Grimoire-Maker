@@ -14,7 +14,8 @@ import { EditorToolbar } from '../editor/EditorToolbar'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import { useFindStore } from '../../stores/findStore'
+import zoomPlugin from '../../assets/mods/Legacy/zoom/zoom'
 import { registerPlugin } from '../../plugins/plugin-manager'
 
 const openWorkspace = vi.hoisted(() => vi.fn())
@@ -28,6 +29,12 @@ const refreshTree = vi.hoisted(() => vi.fn())
 vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openWorkspace, openRecent, saveFile, saveAll, openFile, createNewFile, createProject, refreshTree }), isTauri: () => false }))
 vi.mock('../../lib/images', () => ({ importImage: vi.fn() }))
 vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
+vi.mock('../../lib/modExport', () => ({ exportTheme: vi.fn(), exportSnippet: vi.fn(), exportSnippetPack: vi.fn(), exportProjectAsTemplate: vi.fn() }))
+vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: vi.fn() }))
+vi.mock('../settings/PreferencesDialog', async () => {
+  const { createElement } = await import('react')
+  return { PreferencesDialog: (props: { initialCustomizing?: boolean }) => createElement('div', { 'data-testid': 'preferences', 'data-customizing': String(!!props.initialCustomizing) }) }
+})
 
 it('groups application actions in keyboard-accessible menus', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
@@ -325,4 +332,98 @@ describe('Insert menu', () => {
     })
     await unmount()
   })
+})
+
+describe('File > Export > Export as Template', () => {
+  const panels = { files: true, templates: true, snippets: true, git: true, properties: true }
+  const mount = async () => {
+    HTMLDialogElement.prototype.showModal = function () { this.open = true }
+    HTMLDialogElement.prototype.close = function () { this.open = false }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => root.render(<MenuBar visiblePanels={panels} onTogglePanel={() => {}} />))
+    const file = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'File')!
+    const entry = () => Array.from(file.querySelectorAll('button')).find((button) => button.textContent === 'Export as Template') as HTMLButtonElement
+    return { container, file, entry, unmount: async () => { await act(async () => root.unmount()); container.remove() } }
+  }
+  afterEach(() => useDocumentStore.setState({ workspaceRoot: null }))
+
+  it('lists the entry under an Export submenu and disables it without a project', async () => {
+    useDocumentStore.setState({ workspaceRoot: null })
+    const { file, entry, unmount } = await mount()
+    const submenu = Array.from(file.querySelectorAll('details')).find((menu) => menu.querySelector('summary')?.textContent === 'Export')
+    expect(submenu).toBeDefined()
+    expect(submenu!.contains(entry())).toBe(true)
+    expect(entry().disabled).toBe(true)
+    await unmount()
+  })
+
+  it('opens Create Mod on the Templates tab for the open project and can continue to the Theme Customizer', async () => {
+    useDocumentStore.setState({ workspaceRoot: '/books/Dragon Curse' })
+    const { container, entry, unmount } = await mount()
+    expect(entry().disabled).toBe(false)
+    await act(async () => entry().click())
+    expect(container.querySelector('#create-mod-title')?.textContent).toBe('Create Mod')
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Templates')
+    expect(container.textContent).toContain('Grimorio activo: Dragon Curse')
+
+    await act(async () => container.querySelector<HTMLButtonElement>('#create-mod-tab-Themes')!.click())
+    await act(async () => (Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Open Theme Customizer') as HTMLButtonElement).click())
+    expect(container.querySelector('#create-mod-title')).toBeNull()
+    expect(container.querySelector('[data-testid="preferences"]')?.getAttribute('data-customizing')).toBe('true')
+    await unmount()
+  })
+})
+
+it('opens the one Find panel from the Document menu, Ctrl+F and Ctrl+H, and steps with F3 while it is open', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  const modal = document.createElement('dialog')
+  const press = async (key: string, modifiers: KeyboardEventInit = { ctrlKey: true }) => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...modifiers })
+    await act(async () => window.dispatchEvent(event))
+    return event
+  }
+  useTabStore.getState().reset(null)
+  useFindStore.setState({ open: false, term: '', focusToken: 0, step: { direction: 1, token: 0 } })
+  try {
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
+    const entry = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Document')!
+      .querySelector<HTMLButtonElement>('button[aria-keyshortcuts="Control+F"]')!
+    expect(entry.textContent).toBe('Find and Replace…Ctrl+F')
+    await act(async () => entry.click())
+    expect(useFindStore.getState().open).toBe(true)
+
+    useFindStore.getState().hide()
+    expect((await press('f')).defaultPrevented).toBe(true)
+    expect(useFindStore.getState().open).toBe(true)
+    expect(useFindStore.getState().focusTarget).toBe('find')
+    await press('h')
+    expect(useFindStore.getState().focusTarget).toBe('replace')
+
+    await press('F3', {})
+    await press('F3', { shiftKey: true })
+    expect(useFindStore.getState().step).toEqual({ direction: -1, token: 2 })
+
+    // An open panel does not stop the other shortcuts; a modal dialog does stop Find.
+    saveAll.mockClear()
+    const panel = document.createElement('dialog')
+    panel.setAttribute('data-find-panel', '')
+    panel.open = true
+    document.body.append(panel)
+    await press('s')
+    expect(saveAll).toHaveBeenCalledOnce()
+    panel.remove()
+    useFindStore.getState().hide()
+    modal.open = true; document.body.append(modal)
+    expect((await press('f')).defaultPrevented).toBe(true)
+    expect(useFindStore.getState().open).toBe(false)
+    modal.remove()
+
+    // F3 does nothing while the panel is closed.
+    const closed = await press('F3', {})
+    expect(closed.defaultPrevented).toBe(false)
+  } finally { modal.remove(); container.remove(); await act(async () => root.unmount()) }
 })

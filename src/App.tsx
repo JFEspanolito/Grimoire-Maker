@@ -6,8 +6,12 @@ import { Toolbar } from './components/layout/Toolbar'
 import { DocumentWorkspace } from './components/layout/DocumentWorkspace'
 import { FileTree } from './components/sidebar/FileTree'
 import { SnippetPalette } from './components/snippets/SnippetPalette'
+import { ExportPageSnippetButton } from './components/snippets/ExportPageSnippetButton'
+import { ToastHost } from './components/mods/ToastHost'
 import { TemplateCatalog } from './components/templates/TemplateCatalog'
 import { PluginProvider } from './plugins/PluginContext'
+import { startActiveExternalPlugins } from './plugins/isolated/externalHost'
+import { reportError } from './lib/errorLogging'
 import { useSettingsStore } from './stores/settingsStore'
 import { useSessionStore } from './stores/sessionStore'
 import { useThemeStore } from './stores/themeStore'
@@ -18,6 +22,7 @@ import { watchSettings } from './lib/appState'
 import { useTabStore } from './stores/tabStore'
 import { useUnsavedClose } from './hooks/useUnsavedClose'
 import { MenuBar } from './components/layout/MenuBar'
+import { FindReplaceDialog } from './components/editor/FindReplaceDialog'
 import styles from './App.module.css'
 import { VersionControlPanel } from './components/version-control/VersionControlPanel'
 import { useDocumentStore } from './stores/documentStore'
@@ -72,6 +77,10 @@ export default function App() {
   // Mods live in a folder: scan on start and whenever the window regains focus,
   // so a theme edited in an external editor shows up without restarting.
   useEffect(() => {
+    if (isTauri()) void startActiveExternalPlugins().catch((error) => reportError('plugin.external.startup', error))
+  }, [])
+
+  useEffect(() => {
     if (!isTauri()) return
     // Templates go second: a package theme must not take an id a mod theme already holds.
     const reload = async () => {
@@ -119,10 +128,12 @@ export default function App() {
             <div className={styles.sourceControl}>
               <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
                 onClick={() => togglePanel('properties')}>Properties</button>
-              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /></div>}
+              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /><ExportPageSnippetButton /></div>}
             </div>
           </aside>
         </div>
+        <FindReplaceDialog editor={activeEditor} />
+        <ToastHost />
       </div>
     </PluginProvider>
   )

@@ -43,3 +43,12 @@ it('restores a plugin with its nested folders and never replaces an existing fil
   expect(disk.get('/Plugins/bookmarks/index.md')).toBe('edited by the user')
   expect(disk.get('/Plugins/bookmarks/lib/anchors.ts')).toBe('export {}')
 })
+
+it('reads the optional plain description from the pluginDescription frontmatter key', () => {
+  const plugins = listOfficialPlugins({
+    ...examples,
+    'Plugins/bookmarks/index.md': '---\npluginName: Bookmarks\npluginDescription: Mark places in your book.\n---\n# Bookmarks',
+  })
+  expect(plugins.find(plugin => plugin.folder === 'bookmarks')?.description).toBe('Mark places in your book.')
+  expect(plugins.find(plugin => plugin.folder === 'zoom')?.description).toBeUndefined()
+})

@@ -5,21 +5,27 @@ import { ensureModDirectory, modKey, MOD_KIND, type ModEntry, type ModFs } from 
 export interface OfficialPlugin {
   folder: string
   label: string
+  /** One plain sentence from the `pluginDescription` frontmatter key, when the plugin declares one. */
+  description?: string
   /** Contents by path relative to the plugin folder. */
   files: Record<string, string>
 }
 
-/** Groups the bundled `Plugins/<folder>/...` examples by plugin folder. */
-export function listOfficialPlugins(examples: Record<string, string>): OfficialPlugin[] {
+/** Groups the bundled `<kind>/<folder>/...` examples by plugin folder (`Plugins` by default, `Legacy` for old sources). */
+export function listOfficialPlugins(examples: Record<string, string>, group = 'Plugins'): OfficialPlugin[] {
   const folders = new Map<string, Record<string, string>>()
   for (const [path, contents] of Object.entries(examples)) {
     const [kind, folder, ...rest] = path.split('/')
-    if (kind !== 'Plugins' || !folder || !rest.length) continue
+    if (kind !== group || !folder || !rest.length) continue
     folders.set(folder, { ...folders.get(folder), [rest.join('/')]: contents })
   }
   return [...folders].sort(([a], [b]) => a.localeCompare(b)).map(([folder, files]) => {
-    const name = files['index.md'] ? parseDocument(files['index.md']).frontmatter.pluginName : undefined
-    return { folder, label: typeof name === 'string' && name ? name : folder, files }
+    const meta = files['index.md'] ? parseDocument(files['index.md']).frontmatter : {}
+    const { pluginName: name, pluginDescription: description } = meta
+    return {
+      folder, label: typeof name === 'string' && name ? name : folder,
+      ...(typeof description === 'string' && description ? { description } : {}), files,
+    }
   })
 }
 

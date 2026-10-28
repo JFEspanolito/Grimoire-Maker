@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Previewer } from 'pagedjs'
 import { paginate } from '../../lib/exportPdf'
 import { PagePreview } from './PagePreview'
-import zoomPlugin from '../../assets/mods/Plugins/zoom/zoom'
+import zoomPlugin from '../../assets/mods/Legacy/zoom/zoom'
 import { registerPlugin, unregisterPlugin } from '../../plugins/plugin-manager'
 
 vi.mock('../../lib/exportPdf', () => ({ paginate: vi.fn() }))

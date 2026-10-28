@@ -149,7 +149,7 @@ export const Section = Node.create({
     return {
       markdown: {
         // Markdown has no sections: a break is an HTML marker line that carries the column choice.
-        serialize(state: MarkdownState, node: PMNode, parent: PMNode, index: number) {
+        serialize(state: MarkdownState, node: PMNode, _parent: PMNode, index: number) {
           const columns = sectionColumns(node.attrs.columns)
           if (index > 0 || columns) {
             state.write(`<div data-type="section-break"${columns ? ` data-columns="${columns}"` : ''}${node.attrs.auto ? ' data-auto="true"' : ''}></div>`)

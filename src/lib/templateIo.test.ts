@@ -170,6 +170,41 @@ describe('createTemplateDocuments', () => {
     expect(fs.files.has('/project/Draft/pack/index.md')).toBe(false)
   })
 
+  it('recreates the whole exported tree for a project-layout template, never the manifest, theme or snippets', async () => {
+    const packageRoot = `${DIR}/pack`
+    fs.files.set(`${packageRoot}/index.md`, strToU8('# Start'))
+    fs.files.set(`${packageRoot}/Research/Notes.md`, strToU8('# Notes'))
+    fs.files.set(`${packageRoot}/Chapter 1/Welcome.md`, strToU8('# Welcome'))
+    fs.files.set(`${packageRoot}/Assets/map.png`, new Uint8Array([3, 4]))
+    fs.files.set(`${packageRoot}/template.json`, strToU8('{}'))
+    fs.files.set(`${packageRoot}/theme.css`, strToU8('body {}'))
+    fs.files.set(`${packageRoot}/snippets/encounter.md`, strToU8('# Encounter'))
+
+    await createTemplateDocuments(fs, '/project/Draft', {
+      id: 'pack', label: 'Pack', frontmatter: {}, body: '# Start', builtin: false, layout: 'project',
+      location: { kind: 'package', path: packageRoot },
+    })
+
+    expect(strFromU8(fs.files.get('/project/Draft/pack/Research/Notes.md')!)).toBe('# Notes')
+    expect(strFromU8(fs.files.get('/project/Draft/pack/Chapter 1/Welcome.md')!)).toBe('# Welcome')
+    expect(Array.from(fs.files.get('/project/Draft/pack/Assets/map.png')!)).toEqual([3, 4])
+    for (const skipped of ['template.json', 'theme.css', 'snippets/encounter.md']) {
+      expect(fs.files.has(`/project/Draft/pack/${skipped}`)).toBe(false)
+    }
+    expect(fs.writes.at(-1)).toMatch(/\/index\.md$/)
+  })
+
+  it('keeps copying only chapters and assets for a template without the project layout', async () => {
+    const packageRoot = `${DIR}/pack`
+    fs.files.set(`${packageRoot}/index.md`, strToU8('# Start'))
+    fs.files.set(`${packageRoot}/Research/Notes.md`, strToU8('# Notes'))
+    await createTemplateDocuments(fs, '/project/Draft', {
+      id: 'pack', label: 'Pack', frontmatter: {}, body: '# Start', builtin: false,
+      location: { kind: 'package', path: packageRoot },
+    })
+    expect(fs.files.has('/project/Draft/pack/Research/Notes.md')).toBe(false)
+  })
+
   it('leaves no partial template folder when a file write fails', async () => {
     const packageRoot = `${DIR}/pack`
     fs.files.set(`${packageRoot}/index.md`, strToU8('# Start'))

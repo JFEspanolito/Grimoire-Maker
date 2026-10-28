@@ -2,6 +2,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import App from './App'
+import { useToastStore } from './stores/toastStore'
 
 vi.mock('./hooks/useRepositoryStatus', () => ({ useRepositoryStatus: () => ({ status: { isRepository: true, entries: [{}, {}] }, error: '' }) }))
 vi.mock('./hooks/useFileSystem', () => ({
@@ -96,4 +97,16 @@ it('opens Properties below Snippets and keeps it available when Snippets is hidd
   expect(container.textContent).toContain('Page properties')
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Hide snippets panel"]')!.click())
   expect(container.querySelector('#properties-panel')).not.toBeNull()
+})
+
+it('offers Export Page Content as Snippet in the properties panel and hosts toasts', async () => {
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root?.render(<App />))
+  const properties = container.querySelector('#properties-panel')!
+  expect(Array.from(properties.querySelectorAll('button')).some((button) => button.textContent === 'Export Page Content as Snippet')).toBe(true)
+  expect(container.querySelector('[role="status"]')).toBeNull()
+  await act(async () => { useToastStore.getState().show('Snippet añadido a la paleta lateral', 0) })
+  expect(container.querySelector('[role="status"]')?.textContent).toBe('Snippet añadido a la paleta lateral')
+  await act(async () => useToastStore.setState({ toasts: [] }))
 })

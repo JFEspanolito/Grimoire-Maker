@@ -5,7 +5,7 @@ import { useSettingsStore } from '../../../stores/settingsStore'
 import { PAGE_SIZES } from '../../../types/document'
 import { editorSheetRect, editorStackOrigin, positionImageOnPage } from '../../../lib/imagePlacement'
 import { moveContentBox } from '../../../lib/contentBoxes'
-import { BOX_BORDER_MAX_PX, boxAttributes, boxBorderColor, boxBorderWidth, boxNumber } from './ContentBox'
+import { BOX_BORDER_MAX_PX, boxAttributes, boxBackgroundColor, boxBackgroundInputValue, boxBorderColor, boxBorderWidth, boxNumber } from './ContentBox'
 
 /** Only the handle moves a group; its children retain ordinary editable text/table/image behavior. */
 export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps) {
@@ -20,6 +20,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
   const { placement, widthMm, heightMm, xMm, yMm } = node.attrs
   const borderWidth = boxBorderWidth(node.attrs.borderWidth)
   const borderColor = boxBorderColor(node.attrs.borderColor)
+  const backgroundColor = boxBackgroundColor(node.attrs.backgroundColor)
   const { class: boxClassName, style: _boxStyle, ...attributes } = boxAttributes(node.attrs)
   const change = (attrs: Record<string, unknown>) => {
     const position = getPos()
@@ -112,6 +113,7 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
     <NodeViewWrapper className={boxClassName} {...attributes} ref={boxRef} data-selected={selected || editing}
       style={{ width: widthMm === null ? undefined : `${boxNumber(widthMm, 5)}mm`,
         ...(borderWidth === null ? {} : { border: `${borderWidth}px solid ${borderColor}`, padding: '2mm', boxSizing: 'border-box' as const }),
+        ...(backgroundColor === null ? {} : { backgroundColor }),
         minHeight: heightMm === null ? undefined : `${boxNumber(heightMm, 5)}mm`,
         position: placement === 'free' ? 'absolute' : undefined,
         left: placement === 'free' ? `${boxNumber(xMm) ?? 0}mm` : undefined,
@@ -130,6 +132,10 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
           value={borderWidth ?? 0} onChange={(event) => change({ borderWidth: boxBorderWidth(event.target.value) })} /></label>
         <input aria-label="Content box border color" title="Border color" type="color" value={borderColor}
           onChange={(event) => change({ borderColor: boxBorderColor(event.target.value) })} />
+        <label>Fill <input aria-label="Content box background color" title="Background color" type="color" value={boxBackgroundInputValue(backgroundColor)}
+          onChange={(event) => change({ backgroundColor: boxBackgroundColor(event.target.value) })} /></label>
+        <button type="button" aria-label="Clear content box background" title="Remove the background color" disabled={backgroundColor === null}
+          onClick={() => change({ backgroundColor: null })}>No fill</button>
         <button type="button" aria-label="Delete content box" title="Delete the entire content box" onClick={() => {
           const position = getPos()
           if (typeof position !== 'number') return

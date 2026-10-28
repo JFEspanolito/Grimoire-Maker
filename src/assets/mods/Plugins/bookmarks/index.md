@@ -1,6 +1,7 @@
 ---
 pluginName: Bookmarks
 pluginId: builtin.bookmarks
+pluginDescription: Mark places in your book and jump back to them from anywhere in the project.
 ---
 # Bookmarks plugin
 
@@ -23,10 +24,11 @@ blocks and its opening text. When you jump, the text confirms the position, so
 a bookmark survives edits above it. If the text itself changes or is deleted,
 the plugin tells you instead of scrolling somewhere wrong.
 
-`bookmarks.tsx` exports the plugin and registers a toolbar control and a page
-behavior for the right-click menu. `bookmarkStore.ts` owns the list and its
+`bookmarks.tsx` exports the plugin and registers a toolbar control and a
+context action (`api.registerContextAction`), which the editor shows in its
+single right-click menu next to its own items. `bookmarkStore.ts` owns the list and its
 saving through the host's per-project data API, `anchors.ts` finds and reveals
-blocks, and `BookmarksButton.tsx` holds the dialog and the menu.
+blocks, and `BookmarksButton.tsx` holds the dialog.
 
 ## Trust model
 

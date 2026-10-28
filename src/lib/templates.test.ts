@@ -28,3 +28,32 @@ it('loads only enabled Mods folders and never follows a linked index', async () 
   expect(readTextFile).not.toHaveBeenCalledWith('/Mods/Templates/disabled/index.md')
   expect(readTextFile).not.toHaveBeenCalledWith('/Mods/Templates/linked/index.md')
 })
+it('requires a project for an exported project layout and for Chapters/Assets folders in any letter case', async () => {
+  vi.mocked(readTextFile).mockImplementation(async (path) => String(path).endsWith('/exported/index.md')
+    ? '---\ntemplateName: Exported\ntemplateLayout: project\n---\n# Begin'
+    : '---\ntemplateName: Adventure\n---\n# Begin')
+  vi.mocked(readDir).mockImplementation(async (path) => {
+    const p = String(path)
+    if (p === '/Mods/Templates') return [file('exported', true), file('upper', true), file('plain', true)]
+    if (p.endsWith('/exported')) return [file('index.md'), file('Draft', true), file('Research', true)]
+    if (p.endsWith('/upper')) return [file('index.md'), file('Assets', true)]
+    return [file('index.md')]
+  })
+  const result = await loadUserTemplates(new Set(), { dir: '/Mods/Templates', reservedIds: [] })
+  const byId = Object.fromEntries(result.templates.map((template) => [template.id, template]))
+  expect(byId.exported.layout).toBe('project')
+  expect(byId.exported.requiresProject).toBe(true)
+  expect(byId.upper.requiresProject).toBe(true)
+  expect(byId.plain.requiresProject).toBe(false)
+})
+
+it('skips the legacy scan when its folder is the same one as the Templates library, ignoring case and slashes', async () => {
+  vi.mocked(readDir).mockResolvedValue([file('pack', true)])
+  const same = await loadUserTemplates(new Set(), { dir: 'C:\\App\\Data\\templates', skipWhenSameAs: 'c:/app/data/Templates/' })
+  expect(same).toMatchObject({ templates: [], themes: [], errors: [] })
+  expect(readDir).not.toHaveBeenCalled()
+
+  vi.mocked(readDir).mockImplementation(async (path) => String(path) === '/legacy' ? [file('loose.md')] : [])
+  const different = await loadUserTemplates(new Set(), { skipWhenSameAs: '/Mods/Templates' })
+  expect(different.templates.map((template) => template.id)).toEqual(['loose'])
+})
