@@ -9,6 +9,7 @@
 - **Part I — Overview & Installation**
   - [About This Project](#about-this-project)
   - [What Does Grimoire Maker Include?](#what-does-grimoire-maker-include)
+  - [Mods & Community Contributions](#mods--community-contributions)
   - [How to Install](#how-to-install)
 - **Part II — For Developers: Mods & Contributing**
   - [For Developers: How to Make Mods](#for-developers-how-to-make-mods)
@@ -72,6 +73,16 @@ Most writing tools force a choice between clean plain-text authoring (Markdown e
 - **Rol Adventures (Nested System Library):** Organized with collapsible sub-groups for:
   - `General & Utilities` (Read-aloud boxes, dice tables, called shots, quest contracts, room entries, loot tables)
   - `D&D 5e`, `Pathfinder 2e`, `Call of Cthulhu`, `Ars Magica 5e`, `Hitos`, `Fabula Ultima`, and `Daggerheart` (system-specific character sheets, statblocks, and reference blocks).
+
+---
+
+## Mods & Community Contributions
+
+Grimoire Maker is built around an open, shareable modding ecosystem. Users can freely **create, import, and export** custom **Snippets, Themes, and Templates** directly from the app or share them as community contributions:
+
+- **Create:** Design your own project blueprints (`Templates`), reusable Markdown blocks and RPG system kits (`Snippets`), or custom print stylesheets (`Themes`) using plain `.md` and `.css` files.
+- **Import & Export:** Package and share Templates (`.zip`), Snippets, and Themes with other writers and Game Masters, or toggle installed packages on and off anytime from the built-in **Mod Manager** without losing your files.
+- **Contribute to the Community:** Built a great theme, template, or RPG system snippet pack? Check the [For Developers: How to Make Mods](#for-developers-how-to-make-mods) and [How to Contribute](#how-to-contribute-pull-request-from-a-fork) sections below to share your creations with the official library.
 
 ---
 
@@ -219,14 +230,18 @@ Write standard Markdown (tables, blockquotes, headings, task lists) inside each 
 
 ---
 
-### 4. Creating Local Plugins
+### 4. Creating Local Plugins *(In Development)*
 
-Executable plugins live in `Mods/Plugins/<PluginName>/index.tsx` (or `.ts` / `.js`). Active plugins are transpiled locally and can register commands, toolbar widgets, sidebar panels, page overlays, and editor tools.
+> **Status — Under Active Development:** The local plugin runtime and SDK (`@grimoire/plugin-api`) are currently in active development. APIs and lifecycle hooks may evolve in upcoming releases.
 
-> **Security Note:** Local plugins run with full application permissions and are **not sandboxed**. Only install plugins from sources you trust.
+Executable plugins live in `Mods/Plugins/<PluginName>/index.tsx` (or `.ts` / `.js`). Active packages are transpiled locally and run against a **controlled host bridge (`@grimoire/plugin-api`)** with:
+- **Package & filesystem boundaries:** Bounded package size (`4 MiB` total, `512 KiB` per file, max `8` folder levels, no symlinks, and strict relative path confinement).
+- **Allowlisted module resolution:** Plugins can only import relative files inside their own folder or the host-provided modules (`react`, `react-dom`, `zustand`, `@grimoire/plugin-api`).
+- **Scoped styles:** `.module.css` files are automatically hashed and scoped per plugin (`plugin_<hash>_`).
+- **Runtime note:** While imports and package files are confined, plugin code currently executes via `new Function` in the host WebView realm (full runtime/VM sandboxing is still in development—only enable third-party plugins you trust).
 
 ```tsx
-import type { GrimoirePlugin } from '../../../types/plugin'
+import type { GrimoirePlugin } from '@grimoire/plugin-api'
 
 const wordCounterPlugin: GrimoirePlugin = {
   id: 'custom-word-counter',
@@ -235,7 +250,7 @@ const wordCounterPlugin: GrimoirePlugin = {
   activate(api) {
     api.registerCommand({
       id: 'custom-word-counter.insert-stamp',
-      title: 'Insert Timestamp',
+      label: 'Insert Timestamp',
       run: () => {
         api.insertContent(`\n> _Updated: ${new Date().toISOString()}_\n`)
       },
@@ -247,14 +262,14 @@ export default wordCounterPlugin
 ```
 
 **Available `PluginApi` Registration Hooks:**
-- `api.registerCommand({ id, title, run })`
-- `api.registerToolbar({ id, title, render })`
-- `api.registerPanel({ id, title, render })`
-- `api.registerOverlay({ id, title, render })`
-- `api.registerEditorTool({ id, title, render })`
-- `api.registerPreviewToolbar({ id, title, render })`
-- `api.registerPageBehavior({ id, ... })`
-- `api.registerContextAction({ id, title, ... })`
+- `api.registerCommand({ id, label, run })`
+- `api.registerToolbar({ id, title, component })`
+- `api.registerPanel({ id, title, component })`
+- `api.registerOverlay({ id, title, component })`
+- `api.registerEditorTool({ id, title, component })`
+- `api.registerPreviewToolbar({ id, title, component })`
+- `api.registerPageBehavior({ id, mount })`
+- `api.registerContextAction({ id, label, when, run })`
 
 ---
 
