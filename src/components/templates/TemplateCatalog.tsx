@@ -46,7 +46,8 @@ export function TemplateCatalog() {
   const { applyTemplate } = useFileSystem()
   const hasProject = useDocumentStore((state) => state.workspaceRoot !== null)
   const { templates, dir, errors, reload } = useTemplateStore()
-  const [open, setOpen] = useState(false)
+  const [manualOpen, setManualOpen] = useState<{ hasProject: boolean; open: boolean } | null>(null)
+  const open = manualOpen?.hasProject === hasProject ? manualOpen.open : !hasProject
   const [notice, setNotice] = useState<Notice | null>(null)
   const [pendingTemplate, setPendingTemplate] = useState<Template | null>(null)
 
@@ -89,7 +90,7 @@ export function TemplateCatalog() {
         className="flex w-full items-center gap-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:text-white/80"
         aria-expanded={open}
         title={dir ? `Community templates folder: ${dir}` : undefined}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setManualOpen({ hasProject, open: !open })}
       >
         <span aria-hidden>{open ? '▾' : '▸'}</span>
         Templates
