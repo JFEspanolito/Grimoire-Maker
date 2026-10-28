@@ -234,13 +234,12 @@ Write standard Markdown (tables, blockquotes, headings, task lists) inside each 
 
 ### 4. Creating Local Plugins *(In Development)*
 
-> **Status — Under Active Development:** The local plugin runtime and SDK (`@grimoire/plugin-api`) are currently in active development. APIs and lifecycle hooks may evolve in upcoming releases.
+> **Status — Under Active Development:** The plugin runtime and SDK are currently in active development. APIs, capability permissions, and lifecycle hooks may evolve in upcoming releases.
 
-Executable plugins live in `Mods/Plugins/<PluginName>/index.tsx` (or `.ts` / `.js`). Active packages are transpiled locally and run against a **controlled host bridge (`@grimoire/plugin-api`)** with:
-- **Package & filesystem boundaries:** Bounded package size (`4 MiB` total, `512 KiB` per file, max `8` folder levels, no symlinks, and strict relative path confinement).
-- **Allowlisted module resolution:** Plugins can only import relative files inside their own folder or the host-provided modules (`react`, `react-dom`, `zustand`, `@grimoire/plugin-api`).
-- **Scoped styles:** `.module.css` files are automatically hashed and scoped per plugin (`plugin_<hash>_`).
-- **Runtime note:** While imports and package files are confined, plugin code currently executes via `new Function` in the host WebView realm (full runtime/VM sandboxing is still in development—only enable third-party plugins you trust).
+Grimoire Maker runs external plugins inside a **multi-layer isolated sandbox (`src/plugins/isolated/`)**:
+- **Sandboxed Iframe + Blob Worker Frontier:** Each plugin executes inside a dedicated `iframe[sandbox="allow-scripts"]` (opaque origin, no `allow-same-origin`, no navigation, no forms/popups) with a strict Content Security Policy (`default-src 'none'`, `connect-src 'none'`). The iframe spawns an isolated blob `Worker` where plugin code actually runs—with **zero direct DOM or `window` access**.
+- **Private `MessageChannel` & Capability Permissions:** Communication between the Worker and the host happens exclusively over a private `MessageChannel` (`bridge.ts`), gated by explicit capability permissions (`permissions.ts`) and audited by a heartbeat watchdog (`runtime.ts`) that terminates unresponsive or faulting plugins automatically.
+- **Package & Module Guards:** Package scanning (`readPluginPackage`) enforces strict size and depth limits (`4 MiB` per package, `512 KiB` per file, max `8` folder levels, no symlinks, and relative-path confinement), plus automatic CSS module selector scoping (`plugin_<hash>_`).
 
 ```tsx
 import type { GrimoirePlugin } from '@grimoire/plugin-api'

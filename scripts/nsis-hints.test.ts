@@ -11,8 +11,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const hooks = readFileSync(join(ROOT, 'src-tauri', 'nsis', 'hooks.nsh'), 'utf8')
-const portableRs = readFileSync(join(ROOT, 'src-tauri', 'src', 'portable.rs'), 'utf8')
+const hooks = readFileSync(join(ROOT, 'src-tauri', 'nsis', 'hooks.nsh'), 'utf8').replaceAll('\r\n', '\n')
+const portableRs = readFileSync(join(ROOT, 'src-tauri', 'src', 'portable.rs'), 'utf8').replaceAll('\r\n', '\n')
 const cases = JSON.parse(readFileSync(join(ROOT, 'src-tauri', 'nsis', 'hint-path-cases.json'), 'utf8')) as {
   valid: string[]
   invalid: string[]

@@ -8,12 +8,32 @@ const mocks = vi.hoisted(() => ({
   export: vi.fn().mockResolvedValue(true),
   import: vi.fn().mockResolvedValue('classic-fantasy'),
   reload: vi.fn(),
+  workspaceRoot: '/project' as string | null,
   template: { id: 'classic-fantasy', label: 'Classic Fantasy', frontmatter: {}, body: '# Demo', builtin: false },
 }))
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true, useFileSystem: () => ({ applyTemplate: mocks.apply }) }))
 vi.mock('../../stores/templateStore', () => ({ useTemplateStore: () => ({ templates: [mocks.template], errors: [], reload: mocks.reload }) }))
-vi.mock('../../stores/documentStore', () => ({ useDocumentStore: (selector: (state: { workspaceRoot: string }) => unknown) => selector({ workspaceRoot: '/project' }) }))
+vi.mock('../../stores/documentStore', () => ({ useDocumentStore: (selector: (state: { workspaceRoot: string | null }) => unknown) => selector({ workspaceRoot: mocks.workspaceRoot }) }))
 vi.mock('../../lib/templateActions', () => ({ exportTemplateZip: mocks.export, importTemplateZip: mocks.import }))
+
+it('is expanded by default when no project is open and collapsed by default when a project is open', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    mocks.workspaceRoot = null
+    await act(async () => root.render(<TemplateCatalog />))
+    expect(container.querySelector('button')?.getAttribute('aria-expanded')).toBe('true')
+    expect(container.textContent).toContain('Classic Fantasy')
+
+    mocks.workspaceRoot = '/project'
+    await act(async () => root.render(<TemplateCatalog />))
+    expect(container.querySelector('button')?.getAttribute('aria-expanded')).toBe('false')
+  } finally {
+    mocks.workspaceRoot = '/project'
+    await act(async () => root.unmount())
+  }
+})
 
 it('shows template names and format-neutral controls without changing their actions', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
