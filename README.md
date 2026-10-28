@@ -88,14 +88,13 @@ Grimoire Maker is built around an open, shareable modding ecosystem. Users can f
 
 ## How to Install
 
-### Option A: Prebuilt Installer (End Users)
+### Option A: Prebuilt Releases (End Users)
 
 1. Go to the [**Releases**](../../releases) page of this repository.
-2. Download the installer for your operating system:
-   - **Windows:** `.msi` or `-setup.exe`
-   - **macOS:** `.dmg`
-   - **Linux:** `.AppImage` or `.deb`
-3. Run the installer and launch **Grimoire Maker**. On first launch, default Templates, Snippets, Themes, and Plugins are automatically seeded into your local configuration folder.
+2. Choose between the two official editions for Windows (`x64`):
+   - **Full Installer (`Grimoire Maker_<version>_x64-setup.exe`):** Standard NSIS per-user installer with Start Menu/Desktop shortcuts and uninstaller. Stores configuration and mods in `%APPDATA%\app.grimoiremaker.desktop`.
+   - **Portable Edition (`GrimoireMaker-portable-<version>-x64.zip`):** Zero-install archive containing `Grimoire Maker.exe`, `portable.flag`, and `README-portable.txt`. Keeps all settings, mods, logs, and WebView2 data inside a self-contained `Data\` folder next to the executable (ideal for USB drives or synced folders).
+3. Launch **Grimoire Maker**. On first launch, default Templates, Snippets, Themes, and Plugins are automatically seeded into your configuration folder.
 
 ### Option B: Build from Source (Developers)
 
@@ -121,8 +120,11 @@ pnpm install
 # 3. Start the full desktop app in development mode
 pnpm tauri dev
 
-# 4. Build a production desktop bundle
-pnpm tauri build
+# 4. Build the Full NSIS Installer (src-tauri/target/release/bundle/nsis/)
+pnpm build:installer
+
+# 5. Build the Portable Edition ZIP (release/GrimoireMaker-portable-<version>-x64.zip)
+pnpm build:portable
 ```
 
 ---
