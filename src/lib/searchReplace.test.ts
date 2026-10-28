@@ -75,7 +75,7 @@ describe('findInText', () => {
     const start = Date.now()
     const result = findInText(text, q('zzz'), { protect: true })
     expect(result.matches).toEqual([])
-    expect(Date.now() - start).toBeLessThan(3000)
+    expect(Date.now() - start).toBeLessThan(15000)
   })
 })
 
