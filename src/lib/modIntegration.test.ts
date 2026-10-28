@@ -112,7 +112,7 @@ it('seeds the shipped examples into native-managed folders (portable Data or ins
   for (const relative of exampleKeys('Templates')) expect(await present(`${managedPaths.templates}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Snippets')) expect(await present(`${managedPaths.snippets}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Plugins')) expect(await present(`${managedPaths.plugins}/${relative}`)).toBe(true)
-  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.complete-templates-v1-seeded`, `${managedPaths.plugins}/.executable-plugins-v1-seeded`, `${managedPaths.snippets}/.editorial-snippets-v1-seeded`]) expect(await present(marker)).toBe(true)
+  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.complete-templates-v1-seeded`, `${managedPaths.plugins}/.executable-plugins-v1-seeded`, `${managedPaths.snippets}/.editorial-snippets-v2-seeded`]) expect(await present(marker)).toBe(true)
   expect(await present(`${managedPaths.themes}/.examples-seeded`)).toBe(false)
   // A removed or edited example is never restored or replaced on the next start.
   const removed = exampleKeys('Templates')[0]

@@ -10,7 +10,7 @@ it('ships declarative content plus complete executable Zoom and Ruler packages',
     expect(MOD_EXAMPLES[`Templates/${id}/README.md`]).toContain('Create your own')
     expect(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`Templates/${id}/chapters/`)).length).toBeGreaterThanOrEqual(3)
   }
-  expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Snippets/'))).toHaveLength(22)
+  expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Snippets/'))).toHaveLength(26)
   expect(Object.keys(MOD_EXAMPLES).filter(path => !path.startsWith('Plugins/')).every(path => path.endsWith('.md'))).toBe(true)
   for (const folder of ['zoom', 'pixel-ruler']) {
     expect(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`Plugins/${folder}/`)).sort())

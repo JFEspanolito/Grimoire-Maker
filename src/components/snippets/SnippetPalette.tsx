@@ -74,7 +74,7 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
       <div className="flex flex-col gap-2 p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Snippets</h2>
         {groups.map((group) => (
-          <details key={group} open className="group" aria-label={group}>
+          <details key={group} className="group" aria-label={group}>
             <summary className="flex cursor-pointer list-none items-center gap-2 rounded px-1 py-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:bg-white/5 [&::-webkit-details-marker]:hidden">
               <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">▸</span>
               {group}

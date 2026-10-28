@@ -23,7 +23,7 @@ it('inserts all shipped default snippets across every category and blocks script
   })
   try {
     const snippetPaths = Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Snippets/')).sort()
-    expect(snippetPaths).toHaveLength(22)
+    expect(snippetPaths).toHaveLength(26)
     for (const path of snippetPaths) {
       const { frontmatter, body } = parseDocument(MOD_EXAMPLES[path])
       expect(typeof frontmatter.snippetName).toBe('string')
