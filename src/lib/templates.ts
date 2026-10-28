@@ -78,10 +78,19 @@ export interface TemplateScanOptions {
   allowedFolders?: Set<string>
   reservedIds?: string[]
   styleId?: string
+  /** The legacy scan does nothing when its folder is this one (Windows ignores case), so one folder is never read twice. */
+  skipWhenSameAs?: string
 }
+
+const normalizeFolder = (path: string) => path.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+const sameFolder = (a: string, b: string) => normalizeFolder(a) === normalizeFolder(b)
 
 export async function loadUserTemplates(takenThemeIds: Set<string>, options: TemplateScanOptions = {}): Promise<UserTemplates> {
   const dir = options.dir ?? await ensureConfigSubdir('templates')
+  if (options.skipWhenSameAs && sameFolder(dir, options.skipWhenSameAs)) {
+    applyStyle(options.styleId ?? 'grimoire-template-themes', '')
+    return { dir, templates: [], themes: [], errors: [] }
+  }
   const templates: Template[] = []
   const themes: ThemeInfo[] = []
   const errors: string[] = []

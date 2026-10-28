@@ -46,3 +46,14 @@ it('requires a project for an exported project layout and for Chapters/Assets fo
   expect(byId.upper.requiresProject).toBe(true)
   expect(byId.plain.requiresProject).toBe(false)
 })
+
+it('skips the legacy scan when its folder is the same one as the Templates library, ignoring case and slashes', async () => {
+  vi.mocked(readDir).mockResolvedValue([file('pack', true)])
+  const same = await loadUserTemplates(new Set(), { dir: 'C:\\App\\Data\\templates', skipWhenSameAs: 'c:/app/data/Templates/' })
+  expect(same).toMatchObject({ templates: [], themes: [], errors: [] })
+  expect(readDir).not.toHaveBeenCalled()
+
+  vi.mocked(readDir).mockImplementation(async (path) => String(path) === '/legacy' ? [file('loose.md')] : [])
+  const different = await loadUserTemplates(new Set(), { skipWhenSameAs: '/Mods/Templates' })
+  expect(different.templates.map((template) => template.id)).toEqual(['loose'])
+})

@@ -55,7 +55,7 @@ export const useModStore = create<ModState>((set, get) => {
     })
     // Legacy folders remain readable. A disabled modern package must not reappear via a duplicate legacy ID.
     const reserved = templateMods.map((mod) => mod.folder.split('/').at(-1)!)
-    const legacy = await loadUserTemplates(taken, { reservedIds: reserved })
+    const legacy = await loadUserTemplates(taken, { reservedIds: reserved, skipWhenSameAs: paths.templates })
     // Package folders run isolated from their own files; the trusted TSX loader never sees them.
     const pluginErrors = await reconcilePlugins(modFs, catalog.mods.filter((mod) => !mod.package))
     const sync = await syncLocalPackages(paths.plugins).catch((error) => {
