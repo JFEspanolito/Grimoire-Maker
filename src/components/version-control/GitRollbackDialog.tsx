@@ -192,7 +192,7 @@ export function GitRollbackDialog({
                   <table className={styles.table}>
                     <thead>
                       <tr>
-                        <th scope="col">Previous version</th>
+                        <th scope="col">Change List</th>
                         <th scope="col">
                           {selectedCommit
                             ? `Saved version at ${selectedCommit.timestamp} (${selectedCommit.shortHash})`
@@ -226,7 +226,7 @@ export function GitRollbackDialog({
                                     <span className={styles.chevron} aria-hidden="true">
                                       {isExpanded ? '▾' : '▸'}
                                     </span>
-                                    <span>{section.file}</span>
+                                    <span>{`${section.file} Previous Version`}</span>
                                   </button>
                                 </div>
                               </td>
@@ -234,9 +234,7 @@ export function GitRollbackDialog({
                                 className={styles.fileRowMeta}
                                 onClick={() => toggleExpanded(section.file)}
                               >
-                                {selectedCommit
-                                  ? `Saved version at ${selectedCommit.timestamp}`
-                                  : 'Saved version'}
+                                Current File
                               </td>
                             </tr>
                             {isExpanded &&
