@@ -8,7 +8,7 @@ import { resolveTheme, type ThemeInfo } from '../../lib/themes'
 import { deleteUserTheme, exportUserTheme } from '../../lib/themeEditor'
 import styles from './PreferencesDialog.module.css'
 import { ThemeCustomizer } from './ThemeCustomizer'
-import { EDITOR_SHORTCUTS, EXPLORER_SHORTCUTS, FILE_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
+import { EDITOR_SHORTCUTS, EXPLORER_SHORTCUTS, FILE_SHORTCUTS, FIND_SHORTCUTS, ZOOM_SHORTCUTS } from '../../lib/shortcuts'
 import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { ProjectSettings } from './ProjectSettings'
 import { AutoSaveSettings } from './AutoSaveSettings'
@@ -196,6 +196,7 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
         <thead><tr><th scope="col">Action</th><th scope="col">Shortcut</th></tr></thead>
         <tbody>{[
           ...Object.values(FILE_SHORTCUTS).map(({ label, key }) => ({ label, keys: ['Ctrl', key.toUpperCase()] })),
+          ...FIND_SHORTCUTS,
           ...EDITOR_SHORTCUTS,
           ...EXPLORER_SHORTCUTS,
           ...ZOOM_SHORTCUTS,

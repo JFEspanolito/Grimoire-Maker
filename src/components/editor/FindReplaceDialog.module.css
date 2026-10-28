@@ -1,14 +1,34 @@
-.dialog { position: fixed; inset: 5rem 1.5rem auto auto; margin: 0; width: min(21rem, calc(100vw - 2rem)); padding: 1rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; box-shadow: 0 .75rem 2rem #000a; display: none; }
-.dialog[open] { display: grid; gap: .6rem; }
-.dialog::backdrop { background: transparent; }
+/* A floating, non-modal panel: no backdrop, nothing behind it is made inert. */
+.dialog { position: fixed; inset: 5rem 1.5rem auto auto; z-index: 40; margin: 0; width: min(22rem, calc(100vw - 2rem)); max-height: calc(100vh - 7rem); overflow-y: auto; padding: .75rem; border: 1px solid #625c50; border-radius: .4rem; background: #272623; color: #f0eee9; font-size: .85rem; box-shadow: 0 .75rem 2rem #000a; display: none; }
+.dialog[open] { display: grid; gap: .5rem; }
 .dialog header { display: flex; align-items: center; justify-content: space-between; }
 .dialog h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+.dialog h3 { display: flex; align-items: center; gap: .4rem; margin: 0; font-size: .8rem; font-weight: 600; }
+.dialog h3 span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dialog h3 button { margin-left: auto; }
 .dialog label { display: grid; gap: .25rem; color: #bcb7ac; }
 .dialog input[type='text'], .dialog input:not([type]) { padding: .35rem .5rem; border-radius: .25rem; border: 1px solid #ffffff25; background: #1f1e1c; color: #f0eee9; }
-.dialog .check { display: flex; align-items: center; gap: .5rem; }
+.dialog .check { display: flex; align-items: center; gap: .35rem; }
 .dialog p { margin: 0; color: #bcb7ac; }
+.dialog .error { color: #f0a090; }
+.dialog .note { font-size: .75rem; }
+.scope { display: flex; gap: .25rem; }
+.scope button[aria-pressed='true'] { background: #cfb37c33; border-color: #cfb37c; }
+.fields { display: grid; grid-template-columns: auto 1fr; gap: .4rem; align-items: start; }
+.fields label { grid-column: 2; }
+.toggle { grid-row: 1; align-self: end; }
+.options { display: flex; flex-wrap: wrap; gap: .25rem .75rem; }
 .actions { display: flex; flex-wrap: wrap; gap: .4rem; }
-.dialog button { padding: .35rem .65rem; border-radius: .25rem; background: #ffffff10; color: #f0eee9; cursor: pointer; }
+.confirm { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; padding: .4rem; border-radius: .25rem; background: #ffffff10; }
+.confirm p { flex-basis: 100%; color: #f0eee9; }
+.results { display: grid; gap: .5rem; max-height: 40vh; overflow-y: auto; }
+.results ul { list-style: none; margin: .25rem 0 0; padding: 0; display: grid; gap: .15rem; }
+.results li { display: flex; align-items: center; gap: .3rem; }
+.results li[data-current='true'] { background: #cfb37c22; }
+.hit { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.hit span { margin-right: .4rem; color: #8f8a7e; }
+.hit mark { background: #f5c54299; color: inherit; }
+.dialog button { padding: .3rem .6rem; border: 1px solid transparent; border-radius: .25rem; background: #ffffff10; color: #f0eee9; cursor: pointer; }
 .dialog button:hover:not(:disabled) { background: #ffffff20; }
 .dialog button:disabled { opacity: .35; cursor: default; }
 .dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }

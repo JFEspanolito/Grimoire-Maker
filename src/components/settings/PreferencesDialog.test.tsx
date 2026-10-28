@@ -177,6 +177,8 @@ it('organizes preferences with a section index and a basic shortcut reference', 
     expect(container.querySelector<HTMLElement>('#preferences-appearance')!.hidden).toBe(true)
     const save = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Save All'))!
     expect(Array.from(save.querySelectorAll('kbd')).map(key => key.textContent)).toEqual(['Ctrl', 'S'])
+    const findRow = Array.from(panel.querySelectorAll('tr')).find(row => row.querySelector('td')?.textContent === 'Find and Replace')!
+    expect(Array.from(findRow.querySelectorAll('kbd')).map(key => key.textContent)).toEqual(['Ctrl', 'F'])
     expect(panel.textContent).toContain('Bold')
     for (const [label, direction] of [['Zoom In', 'Scroll Up'], ['Zoom Out', 'Scroll Down']]) {
       const row = Array.from(panel.querySelectorAll('tr')).find(item => item.textContent?.includes(label))!

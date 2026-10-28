@@ -11,7 +11,9 @@ import { ModManager } from '../mods/ModManager'
 import { CreateModDialog } from '../mods/CreateModDialog'
 import { useImportSection } from '../../stores/explorerStore'
 import { NewProjectDialog } from '../project/NewProjectDialog'
-import { fileShortcut } from '../../lib/shortcuts'
+import { fileShortcut, findShortcut } from '../../lib/shortcuts'
+import { useFindStore } from '../../stores/findStore'
+import { selectedSearchText } from '../editor/extensions/searchHighlight'
 import { useSessionStore } from '../../stores/sessionStore'
 import { AppInfoDialog, type InfoDialogKind } from '../settings/AppInfoDialog'
 import { StatisticsDialog } from './StatisticsDialog'
@@ -29,6 +31,9 @@ interface Props {
   onTogglePanel: (panel: Panel) => void
   editor?: Editor | null
 }
+
+/** Any open dialog except the floating Find panel, which never blocks the application shortcuts. */
+const MODAL_DIALOG = 'dialog[open]:not([data-find-panel])'
 
 export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) {
   const actions = useFileSystem()
@@ -77,11 +82,27 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
     setError('')
     try { await action() } catch (cause) { reportError('menu.action', cause); setError(friendlyErrorMessage(cause)) }
   }
+  const openFind = (replace = false) => {
+    useFindStore.getState().show({ replace, seed: editor ? selectedSearchText(editor) : undefined })
+  }
   const onFileShortcut = useEffectEvent((event: KeyboardEvent) => {
+    const find = findShortcut(event)
+    if (find === 'find' || find === 'replace') {
+      // Always ours: the webview's own find-in-page must never open.
+      event.preventDefault()
+      if (!document.querySelector(MODAL_DIALOG)) openFind(find === 'replace')
+      return
+    }
+    if (find) {
+      if (!useFindStore.getState().open) return
+      event.preventDefault()
+      useFindStore.getState().requestStep(find === 'next' ? 1 : -1)
+      return
+    }
     const shortcut = fileShortcut(event)
     if (!shortcut) return
     event.preventDefault()
-    if (event.repeat || document.querySelector('dialog[open]')) return
+    if (event.repeat || document.querySelector(MODAL_DIALOG)) return
     void run(() => actions[shortcut]())
   })
   useEffect(() => {
@@ -171,6 +192,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
           </select>
         </label>
         <hr />
+        <button type="button" aria-keyshortcuts="Control+F" onClick={() => { closeMenus(); openFind() }}>Find and Replace…<kbd style={{ float: 'right', marginLeft: '1.5rem', opacity: 0.7, font: 'inherit' }}>Ctrl+F</kbd></button>
         <button type="button" onClick={() => { closeMenus(); setPropertiesOpen(true) }}>Properties…</button>
         <button type="button" disabled={!workspace} onClick={() => { closeMenus(); setOrderOpen(true) }}>Document Order…</button>
         <button type="button" onClick={() => { closeMenus(); setStatisticsOpen(true) }}>Statistics…</button>

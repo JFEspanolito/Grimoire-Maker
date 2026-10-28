@@ -1,8 +1,9 @@
-import { Fragment, useState } from 'react'
+import { Fragment } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { ImageControls, type ImageAttrs } from './ImageControls'
 import { TableControls } from './TableControls'
-import { FindReplaceDialog } from './FindReplaceDialog'
+import { selectedSearchText } from './extensions/searchHighlight'
+import { useFindStore } from '../../stores/findStore'
 import { canChangeIndent, changeIndent } from './extensions/blockFormat'
 import { PluginSlot } from '../../plugins/PluginSlot'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -74,7 +75,6 @@ function computedStyleAtCaret(editor: Editor): CSSStyleDeclaration | null {
 
 /** Formatting controls for the active editor; each button reflects the current selection. */
 export function EditorToolbar({ editor }: { editor: Editor | null }) {
-  const [finding, setFinding] = useState(false)
   const { viewMode, setViewMode } = useSettingsStore()
   const active = useTabStore((state) => state.active)
   const documentTools = !active || /\.md$/i.test(active)
@@ -144,8 +144,8 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
     </div>,
     tools: <div className="flex items-center gap-1">
       <PluginSlot slot="editorTools" />
-      <button type="button" className={btn} disabled={!editor} title="Find and replace" aria-label="Find and replace"
-        onMouseDown={(e) => e.preventDefault()} onClick={() => setFinding(true)}>Find</button>
+      <button type="button" className={btn} title="Find and Replace (Ctrl+F)" aria-label="Find and Replace (Ctrl+F)"
+        onMouseDown={(e) => e.preventDefault()} onClick={() => useFindStore.getState().show({ seed: editor ? selectedSearchText(editor) : undefined })}>Find</button>
       <label className={toolbarStyles.zoom}>Page view
         <select aria-label="Page view" value={viewMode === 'spreads' ? 'spreads' : 'edit'} disabled={!documentTools}
           onChange={(event) => setViewMode(event.target.value === 'spreads' ? 'spreads' : 'edit')}>
@@ -173,7 +173,6 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
       {editor && state?.inTable && !state.image
         ? <TableControls editor={editor} />
         : <ImageControls editor={editor} attrs={state?.image ?? null} />}
-      {finding && editor && <FindReplaceDialog editor={editor} onClose={() => setFinding(false)} />}
     </>
   )
 }

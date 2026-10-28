@@ -2,24 +2,24 @@ import { Extension } from '@tiptap/react'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { buildMatcher, MAX_MATCHES, scanText, type SearchOptions } from '../../../lib/searchReplace'
 
-export interface SearchQuery { term: string; caseSensitive: boolean }
-export interface SearchMatch { from: number; to: number }
+export type SearchQuery = SearchOptions
+export interface SearchMatch { from: number; to: number; groups?: RegExpExecArray }
 
 export const searchKey = new PluginKey<SearchQuery>('grimoireSearch')
 const EMPTY: SearchQuery = { term: '', caseSensitive: false }
 
 /** Every occurrence inside a single text block; inline leaves count as one character, like positions do. */
-export function findMatches(doc: PMNode, { term, caseSensitive }: SearchQuery): SearchMatch[] {
-  if (!term) return []
-  const needle = caseSensitive ? term : term.toLowerCase()
+export function findMatches(doc: PMNode, query: SearchQuery): SearchMatch[] {
+  const matcher = buildMatcher(query)
+  if (!matcher.regex) return []
   const matches: SearchMatch[] = []
   doc.descendants((node, position) => {
-    if (!node.isTextblock) return true
+    if (!node.isTextblock || matches.length >= MAX_MATCHES) return true
     const text = node.textBetween(0, node.content.size, undefined, '￼')
-    const haystack = caseSensitive ? text : text.toLowerCase()
-    for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + needle.length)) {
-      matches.push({ from: position + 1 + at, to: position + 1 + at + needle.length })
+    for (const match of scanText(text, matcher.regex, { cap: MAX_MATCHES - matches.length }).matches) {
+      matches.push({ from: position + 1 + match.start, to: position + 1 + match.end, groups: match.groups })
     }
     return false
   })
@@ -64,3 +64,11 @@ export const SearchHighlight = Extension.create({
     })]
   },
 })
+
+/** The selected text when it is a sensible search term (one short line), to pre-fill the Find panel. */
+export function selectedSearchText(editor: { state: EditorState }): string | undefined {
+  const { from, to, empty } = editor.state.selection
+  if (empty || to - from > 200) return undefined
+  const text = editor.state.doc.textBetween(from, to, ' ', ' ')
+  return text.trim() && !/[\r\n]/.test(text) ? text : undefined
+}

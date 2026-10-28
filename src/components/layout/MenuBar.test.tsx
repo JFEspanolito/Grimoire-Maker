@@ -14,6 +14,7 @@ import { EditorToolbar } from '../editor/EditorToolbar'
 import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useFindStore } from '../../stores/findStore'
 import zoomPlugin from '../../assets/mods/Legacy/zoom/zoom'
 import { registerPlugin } from '../../plugins/plugin-manager'
 
@@ -373,4 +374,56 @@ describe('File > Export > Export as Template', () => {
     expect(container.querySelector('[data-testid="preferences"]')?.getAttribute('data-customizing')).toBe('true')
     await unmount()
   })
+})
+
+it('opens the one Find panel from the Document menu, Ctrl+F and Ctrl+H, and steps with F3 while it is open', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  const modal = document.createElement('dialog')
+  const press = async (key: string, modifiers: KeyboardEventInit = { ctrlKey: true }) => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...modifiers })
+    await act(async () => window.dispatchEvent(event))
+    return event
+  }
+  useTabStore.getState().reset(null)
+  useFindStore.setState({ open: false, term: '', focusToken: 0, step: { direction: 1, token: 0 } })
+  try {
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
+    const entry = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Document')!
+      .querySelector<HTMLButtonElement>('button[aria-keyshortcuts="Control+F"]')!
+    expect(entry.textContent).toBe('Find and Replace…Ctrl+F')
+    await act(async () => entry.click())
+    expect(useFindStore.getState().open).toBe(true)
+
+    useFindStore.getState().hide()
+    expect((await press('f')).defaultPrevented).toBe(true)
+    expect(useFindStore.getState().open).toBe(true)
+    expect(useFindStore.getState().focusTarget).toBe('find')
+    await press('h')
+    expect(useFindStore.getState().focusTarget).toBe('replace')
+
+    await press('F3', {})
+    await press('F3', { shiftKey: true })
+    expect(useFindStore.getState().step).toEqual({ direction: -1, token: 2 })
+
+    // An open panel does not stop the other shortcuts; a modal dialog does stop Find.
+    saveAll.mockClear()
+    const panel = document.createElement('dialog')
+    panel.setAttribute('data-find-panel', '')
+    panel.open = true
+    document.body.append(panel)
+    await press('s')
+    expect(saveAll).toHaveBeenCalledOnce()
+    panel.remove()
+    useFindStore.getState().hide()
+    modal.open = true; document.body.append(modal)
+    expect((await press('f')).defaultPrevented).toBe(true)
+    expect(useFindStore.getState().open).toBe(false)
+    modal.remove()
+
+    // F3 does nothing while the panel is closed.
+    const closed = await press('F3', {})
+    expect(closed.defaultPrevented).toBe(false)
+  } finally { modal.remove(); container.remove(); await act(async () => root.unmount()) }
 })
