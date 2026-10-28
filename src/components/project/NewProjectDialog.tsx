@@ -5,10 +5,11 @@ import { useEffect, useRef, useState } from 'react'
 interface Props {
   onCreate: (name: string) => Promise<boolean>
   onOpenExisting?: () => Promise<unknown>
-  onClose: () => void
+  onClose?: () => void
+  required?: boolean
 }
 
-export function NewProjectDialog({ onCreate, onOpenExisting, onClose }: Props) {
+export function NewProjectDialog({ onCreate, onOpenExisting, onClose, required = false }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const locked = useRef(false)
   const [name, setName] = useState('My Grimoire')
@@ -25,7 +26,7 @@ export function NewProjectDialog({ onCreate, onOpenExisting, onClose }: Props) {
     setBusy(true)
     setError('')
     try {
-      if (await onCreate(name.trim())) onClose()
+      if (await onCreate(name.trim())) onClose?.()
     } catch (cause) {
       reportError('project.create', cause)
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -41,7 +42,7 @@ export function NewProjectDialog({ onCreate, onOpenExisting, onClose }: Props) {
     setError('')
     try {
       await onOpenExisting()
-      if (useDocumentStore.getState().workspaceRoot) onClose()
+      if (useDocumentStore.getState().workspaceRoot) onClose?.()
     } catch (cause) {
       reportError('project.open', cause)
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -52,7 +53,7 @@ export function NewProjectDialog({ onCreate, onOpenExisting, onClose }: Props) {
   }
   return <dialog ref={dialog} aria-labelledby="new-project-title"
     className="m-auto w-96 max-w-[90vw] rounded-lg border border-white/20 bg-neutral-900 p-5 text-white shadow-xl backdrop:bg-black/60"
-    onCancel={(event) => { event.preventDefault(); if (!locked.current) onClose() }}>
+    onCancel={(event) => { event.preventDefault(); if (!required && !locked.current) onClose?.() }}>
     <form onSubmit={(event) => { event.preventDefault(); void create() }}>
       <h2 id="new-project-title" className="mb-3 text-lg font-semibold">New Project</h2>
       <label className="block text-sm">Project name
@@ -67,7 +68,9 @@ export function NewProjectDialog({ onCreate, onOpenExisting, onClose }: Props) {
             Open Existing Folder…
           </button>
         )}
-        <button type="button" disabled={busy} onClick={onClose} className="rounded px-3 py-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-30">Cancel</button>
+        {!required && onClose && (
+          <button type="button" disabled={busy} onClick={onClose} className="rounded px-3 py-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-30">Cancel</button>
+        )}
         <button type="submit" disabled={busy || !name.trim()} className="rounded bg-white/10 px-3 py-2 hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-30">
           {busy ? 'Creating…' : 'Choose Location & Create'}
         </button>

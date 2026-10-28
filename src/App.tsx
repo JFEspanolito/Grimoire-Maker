@@ -145,6 +145,7 @@ export default function App() {
         <FormulaDialog />
         {startupProjectOpen && !workspace && (
           <NewProjectDialog
+            required
             onCreate={createProject}
             onOpenExisting={openWorkspace}
             onClose={() => setStartupProjectOpen(false)}
