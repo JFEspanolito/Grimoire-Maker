@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { diffCommit } from '../../lib/versionControl'
 import type { GitCommit, GitDiff } from '../../lib/versionControl'
 import { friendlyErrorMessage } from '../../lib/errorLogging'
 import { splitDiff } from './splitDiff'
+import type { DiffRow } from './splitDiff'
 import styles from './GitDiffDialog.module.css'
 
 interface Props {
@@ -11,7 +12,45 @@ interface Props {
   activeRelativePath: string | null
   busy: boolean
   onClose: () => void
-  onRollback: (commit: GitCommit, path?: string) => void
+  onRollback: (commit: GitCommit, paths?: string[]) => void
+}
+
+interface FileSection {
+  file: string
+  rows: DiffRow[]
+}
+
+function groupRowsByFile(rows: DiffRow[], fallbackFile: string | null): FileSection[] {
+  const sections: FileSection[] = []
+  let current: FileSection | null = null
+
+  for (const row of rows) {
+    if (row.file !== undefined) {
+      current = { file: row.file, rows: [] }
+      sections.push(current)
+    } else {
+      if (!current) {
+        current = { file: fallbackFile ?? 'Modified file', rows: [] }
+        sections.push(current)
+      }
+      current.rows.push(row)
+    }
+  }
+  return sections
+}
+
+function formatRestoreSelectedLabel(checkedFiles: string[]): string {
+  if (checkedFiles.length === 0) {
+    return 'Restore "[0 Files]"'
+  }
+  if (checkedFiles.length === 1) {
+    return `Restore "${checkedFiles[0]}" only`
+  }
+  const topFolders = new Set(
+    checkedFiles.map((file) => (file.includes('/') ? file.split('/')[0] : 'Draft')),
+  )
+  const prefix = topFolders.size === 1 ? [...topFolders][0] : 'Draft'
+  return `Restore "${prefix}/**/[${checkedFiles.length} Files]"`
 }
 
 export function GitRollbackDialog({
@@ -27,6 +66,8 @@ export function GitRollbackDialog({
   const [diff, setDiff] = useState<GitDiff | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set())
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
 
   const selectedCommit = commits.find((c) => c.hash === selectedHash) ?? commits[0] ?? null
 
@@ -57,7 +98,38 @@ export function GitRollbackDialog({
     }
   }, [workspace, selectedCommit?.hash])
 
-  const rows = splitDiff(diff?.text ?? '')
+  const sections = useMemo(
+    () => groupRowsByFile(splitDiff(diff?.text ?? ''), activeRelativePath),
+    [diff?.text, activeRelativePath],
+  )
+
+  useEffect(() => {
+    // Auto-check all files in the version by default, and start all file sections collapsed (Expanded = false)
+    setCheckedFiles(new Set(sections.map((section) => section.file)))
+    setExpandedFiles(new Set())
+  }, [sections])
+
+  const toggleChecked = (file: string) => {
+    setCheckedFiles((prev) => {
+      const next = new Set(prev)
+      if (next.has(file)) next.delete(file)
+      else next.add(file)
+      return next
+    })
+  }
+
+  const toggleExpanded = (file: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev)
+      if (next.has(file)) next.delete(file)
+      else next.add(file)
+      return next
+    })
+  }
+
+  const orderedChecked = sections
+    .map((section) => section.file)
+    .filter((file) => checkedFiles.has(file))
 
   return (
     <dialog
@@ -73,7 +145,7 @@ export function GitRollbackDialog({
         <div>
           <h2 id="git-rollback-title">Restore previous version (Rollback)</h2>
           <p>
-            Choose a saved version from your history on the left to preview what will change before restoring.
+            Choose a saved version on the left, expand any file to inspect its changes, and uncheck files you want to ignore.
           </p>
         </div>
         <button type="button" aria-label="Close rollback dialog" onClick={onClose}>
@@ -129,49 +201,88 @@ export function GitRollbackDialog({
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((row, index) => (
-                        <tr key={index} className={row.file !== undefined ? styles.fileRow : undefined}>
-                          {row.file !== undefined ? (
-                            <>
-                              <td>{row.file}</td>
-                              <td className={styles.fileRowMeta}>
+                      {sections.map((section) => {
+                        const isChecked = checkedFiles.has(section.file)
+                        const isExpanded = expandedFiles.has(section.file)
+                        return (
+                          <Fragment key={section.file}>
+                            <tr className={styles.fileRow}>
+                              <td>
+                                <div className={styles.fileRowHeader}>
+                                  <input
+                                    type="checkbox"
+                                    className={styles.fileCheckbox}
+                                    checked={isChecked}
+                                    aria-label={`Include ${section.file} in rollback`}
+                                    onChange={() => toggleChecked(section.file)}
+                                  />
+                                  <button
+                                    type="button"
+                                    className={styles.fileCollapseBtn}
+                                    aria-expanded={isExpanded}
+                                    aria-label={`Toggle diff for ${section.file}`}
+                                    onClick={() => toggleExpanded(section.file)}
+                                  >
+                                    <span className={styles.chevron} aria-hidden="true">
+                                      {isExpanded ? '▾' : '▸'}
+                                    </span>
+                                    <span>{section.file}</span>
+                                  </button>
+                                </div>
+                              </td>
+                              <td
+                                className={styles.fileRowMeta}
+                                onClick={() => toggleExpanded(section.file)}
+                              >
                                 {selectedCommit
                                   ? `Saved version at ${selectedCommit.timestamp}`
                                   : 'Saved version'}
                               </td>
-                            </>
-                          ) : row.note !== undefined ? (
-                            <td colSpan={2} className={styles.note}>
-                              {row.note}
-                            </td>
-                          ) : (
-                            (['original', 'incoming'] as const).map((side) => {
-                              const line = row[side]
-                              const change = line?.changed
-                                ? side === 'original'
-                                  ? 'removed'
-                                  : 'added'
-                                : undefined
-                              const kindClass = styles[`kind_${line?.kind ?? 'body'}`] ?? ''
-                              return (
-                                <td key={side} data-change={change} className={change ? styles[change] : undefined}>
-                                  <div className={styles.line}>
-                                    <span className={styles.number}>{line?.number}</span>
-                                    <span className={styles.sign} aria-hidden="true">
-                                      {change === 'removed' ? '−' : change === 'added' ? '+' : ''}
-                                    </span>
-                                    <span className={`${styles.viewerText} ${kindClass}`}>{line?.text ?? ''}</span>
-                                  </div>
-                                </td>
-                              )
-                            })
-                          )}
-                        </tr>
-                      ))}
+                            </tr>
+                            {isExpanded &&
+                              section.rows.map((row, index) => (
+                                <tr key={`${section.file}-${index}`}>
+                                  {row.note !== undefined ? (
+                                    <td colSpan={2} className={styles.note}>
+                                      {row.note}
+                                    </td>
+                                  ) : (
+                                    (['original', 'incoming'] as const).map((side) => {
+                                      const line = row[side]
+                                      const change = line?.changed
+                                        ? side === 'original'
+                                          ? 'removed'
+                                          : 'added'
+                                        : undefined
+                                      const kindClass = styles[`kind_${line?.kind ?? 'body'}`] ?? ''
+                                      return (
+                                        <td
+                                          key={side}
+                                          data-change={change}
+                                          className={change ? styles[change] : undefined}
+                                        >
+                                          <div className={styles.line}>
+                                            <span className={styles.number}>{line?.number}</span>
+                                            <span className={styles.sign} aria-hidden="true">
+                                              {change === 'removed' ? '−' : change === 'added' ? '+' : ''}
+                                            </span>
+                                            <span className={`${styles.viewerText} ${kindClass}`}>
+                                              {line?.text ?? ''}
+                                            </span>
+                                          </div>
+                                        </td>
+                                      )
+                                    })
+                                  )}
+                                </tr>
+                              ))}
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
-                  {!rows.length && (
-                    <p style={{ padding: '.75rem', margin: 0 }}>No differences between your current files and this saved version.</p>
+                  {!sections.length && (
+                    <p style={{ padding: '.75rem', margin: 0 }}>No differences in this saved version.</p>
                   )}
                 </>
               )
@@ -185,14 +296,14 @@ export function GitRollbackDialog({
         <button type="button" onClick={onClose}>
           Cancel
         </button>
-        {selectedCommit && activeRelativePath && (
+        {selectedCommit && sections.length > 0 && (
           <button
             type="button"
             className={styles.primaryBtn}
-            disabled={busy}
-            onClick={() => onRollback(selectedCommit, activeRelativePath)}
+            disabled={busy || orderedChecked.length === 0}
+            onClick={() => onRollback(selectedCommit, orderedChecked)}
           >
-            {`Restore "${activeRelativePath}" only`}
+            {formatRestoreSelectedLabel(orderedChecked)}
           </button>
         )}
         {selectedCommit && (

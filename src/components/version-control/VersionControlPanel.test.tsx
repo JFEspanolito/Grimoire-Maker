@@ -55,6 +55,12 @@ describe('VersionControlPanel', () => {
         '@@ -16,1 +16,1 @@',
         '-<div><h1>broken draft</h1></div>',
         '+<div><h1>restored draft</h1></div>',
+        'diff --git a/Draft/notes.md b/Draft/notes.md',
+        '--- a/Draft/notes.md',
+        '+++ b/Draft/notes.md',
+        '@@ -1,1 +1,1 @@',
+        '-old note',
+        '+new note',
       ].join('\n'),
       binary: false,
       truncated: false,
@@ -242,6 +248,13 @@ describe('VersionControlPanel', () => {
     expect(rollbackModal).not.toBeNull()
     expect(rollbackModal.open).toBe(true)
     expect(actions.diffCommit).toHaveBeenCalledWith('/books', 'abc1234567890')
+
+    // File sections start collapsed (Expanded = false) and auto-checked
+    expect(rollbackModal.querySelector('[data-change="removed"]')).toBeNull()
+    expect(rollbackModal.textContent).toContain('Restore "Draft/**/[2 Files]"')
+
+    // Expand Draft/chapter.md to inspect its diff
+    await click('Toggle diff for Draft/chapter.md')
     expect(rollbackModal.querySelector('[data-change="removed"]')?.textContent).toContain('broken draft')
     expect(rollbackModal.querySelector('[data-change="removed"]')?.textContent).not.toContain('<div>')
     expect(rollbackModal.textContent).not.toContain('similarity index')
@@ -252,7 +265,11 @@ describe('VersionControlPanel', () => {
     await click('Rollback to def9876')
     expect(actions.diffCommit).toHaveBeenCalledWith('/books', 'def9876543210')
 
-    // Confirm rollback for the active file only
+    // Uncheck Draft/notes.md so only Draft/chapter.md remains checked
+    const notesCheckbox = rollbackModal.querySelector<HTMLInputElement>('input[aria-label="Include Draft/notes.md in rollback"]')!
+    await act(async () => notesCheckbox.click())
+
+    // Confirm rollback for the single checked file
     const restoreFileBtn = Array.from(rollbackModal.querySelectorAll('button')).find((b) => b.textContent === 'Restore "Draft/chapter.md" only')!
     await act(async () => restoreFileBtn.click())
     expect(actions.rollbackToCommit).toHaveBeenCalledExactlyOnceWith('/books', 'def9876543210', 'Draft/chapter.md')

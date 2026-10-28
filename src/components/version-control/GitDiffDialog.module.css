@@ -13,8 +13,13 @@
 .table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 32rem; }
 .table th { position: sticky; top: 0; z-index: 2; background: #33312d; padding: .6rem .75rem; text-align: left; width: 50%; border-bottom: 1px solid #ffffff20; }
 .table td { vertical-align: top; padding: 0; border-right: 1px solid #ffffff15; }
-.fileRow td { background: #2b2924; color: #e8d3a7; font-weight: 600; padding: .45rem .75rem; border-top: 1px solid #ffffff20; border-bottom: 1px solid #ffffff20; font-size: .78rem; }
-.fileRowMeta { color: #bcb7ac; font-weight: 500; font-size: .74rem; }
+.fileRow td { background: #2b2924; color: #e8d3a7; font-weight: 600; padding: .45rem .75rem; border-top: 1px solid #ffffff20; border-bottom: 1px solid #ffffff20; font-size: .78rem; user-select: none; }
+.fileRowHeader { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.fileCheckbox { width: .95rem; height: .95rem; accent-color: #5b966c; cursor: pointer; flex-shrink: 0; margin: 0; }
+.dialog .fileCollapseBtn { display: inline-flex; align-items: center; gap: .4rem; flex: 1; min-width: 0; border: 0; padding: 0; background: transparent; color: #e8d3a7; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.dialog .fileCollapseBtn:hover:not(:disabled) { background: transparent; color: #fff4dd; }
+.chevron { display: inline-block; width: 1.1ch; font-size: .75rem; color: #cfb37c; flex-shrink: 0; }
+.fileRowMeta { color: #bcb7ac; font-weight: 500; font-size: .74rem; cursor: pointer; }
 .line { display: flex; align-items: baseline; min-height: 1.65em; line-height: 1.55; padding: .1rem .5rem; font-family: Georgia, 'Times New Roman', serif; font-size: .85rem; }
 .viewerText { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; flex: 1; }
 .kind_h1 { font-size: 1.15rem; font-weight: 700; color: #fff6e0; padding: .2rem 0; }

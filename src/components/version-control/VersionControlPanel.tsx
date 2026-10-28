@@ -240,15 +240,23 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
           activeRelativePath={activeRelativePath}
           busy={busy}
           onClose={() => setRollbackOpen(false)}
-          onRollback={(commit, targetPath) => {
+          onRollback={(commit, targetPaths) => {
             setRollbackOpen(false)
             void run(
               async (project) => {
-                await rollbackToCommit(project, commit.hash, targetPath)
+                if (targetPaths && targetPaths.length > 0) {
+                  for (const targetPath of targetPaths) {
+                    await rollbackToCommit(project, commit.hash, targetPath)
+                  }
+                } else {
+                  await rollbackToCommit(project, commit.hash)
+                }
                 await reloadActiveDocumentFromDisk(project)
               },
-              targetPath
-                ? `Restored ${targetPath} from ${commit.shortHash}.`
+              targetPaths && targetPaths.length > 0
+                ? targetPaths.length === 1
+                  ? `Restored ${targetPaths[0]} from ${commit.shortHash}.`
+                  : `Restored ${targetPaths.length} files from ${commit.shortHash}.`
                 : `Rolled back project to ${commit.shortHash}.`,
             )
           }}
