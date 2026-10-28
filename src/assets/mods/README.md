@@ -136,13 +136,20 @@ are data: the application draws them and shows every label as plain text.
   at the cursor of the open Markdown document through the normal Markdown parser;
   the button is disabled when no Markdown document is open. The plugin runs no
   code for this. The text must be 1-8192 characters, may use only newline,
-  carriage return and tab as control characters, and may not contain zero-width or
-  direction-changing characters, remote or active content (`http:`, `https:`,
-  `ftp:`, `file:`, `data:` addresses, `javascript:`, `vbscript:`, `//host` link or
-  image targets), raw `<script>`, `<iframe>`, `<object>`, `<embed>`, `<link>`,
-  `<meta>`, `<style>`, `<base>` or `<form>` tags, or `on<event>=` attributes. These
-  are checked again after decoding HTML entities and percent escapes, so
-  `&#104;ttp://` is refused too. Relative links (`./a.md`) and anchors (`#a`) are fine.
+  carriage return and tab as control characters, may not contain zero-width or
+  direction-changing characters, and may only use plain Markdown (an allow-list,
+  checked on the text as written and again after decoding HTML entities, `%XX`
+  escapes and backslash escapes, so `&#104;ttp://` and `&#0000000104;ttp://` are
+  refused too): no raw HTML at all (a `<` followed by a letter, `/`, `!` or `?`
+  starts a tag, comment or autolink; `a < 3` is fine); every link, image and
+  `[label]: target` must be an anchor (`#a`) or a relative path (`./a.md`,
+  `../b.png`, `a/b.png`), never a target with a scheme (`mailto:`, `tel:`,
+  `asset:`, `blob:`, `c:`...), starting with `/` or `//`, or with a `:` before its
+  first `/`; and the words `http:`, `https:`, `ftp:`, `ftps:`, `file:`, `ws:`,
+  `wss:`, `data:`, `blob:`, `javascript:`, `vbscript:`, `asset:`, `tauri:`, `ipc:`,
+  `www.example.com` and `//host.tld` are refused anywhere in the text, even in
+  prose. Trade-off: ordinary text such as "data: 5", "File: notes" or code such as
+  `Vec<String>` is refused too; rephrase it.
 - `behaviors`: `{ "type": "wheelZoom", "editorSteps": [...], "previewSteps": [...] }`
   (whole percentages; Ctrl+wheel stepping drawn by the application; needs `editor:zoom:write`).
 - `overlays`: `{ "type": "ruler" }` (page measurements, margin and bleed boxes and draggable

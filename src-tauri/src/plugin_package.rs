@@ -214,7 +214,7 @@ pub struct Manifest {
 
 /// Zero-width, bidi and other invisible format characters.
 fn is_invisible(c: char) -> bool {
-    matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}')
+    matches!(c, '\u{AD}' | '\u{61C}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}' | '\u{2060}'..='\u{206F}' | '\u{FEFF}' | '\u{FFF9}'..='\u{FFFB}')
 }
 
 fn bounded(label: &str, value: &str, max: usize) -> Result<(), String> {
@@ -261,24 +261,45 @@ fn validate_steps(label: &str, steps: &[u32], min: u32, max: u32) -> Result<(), 
 }
 
 pub const MAX_INSERT_MARKDOWN_CHARS: usize = 8192;
-const FORBIDDEN_TAGS: &[&str] = &["script", "iframe", "object", "embed", "link", "meta", "style", "base", "form"];
-const FORBIDDEN_SCHEMES: &[&str] = &["http", "https", "ftp", "file", "javascript", "vbscript"];
+/// How many times character references and percent escapes are peeled off before the text counts as hostile.
+const MAX_DECODE_ROUNDS: usize = 10;
+/// Schemes whose appearance anywhere in the text (even outside link syntax) is refused.
+const URL_SCHEMES: &[&str] = &[
+    "http", "https", "ftp", "ftps", "file", "ws", "wss", "data", "blob", "javascript", "vbscript", "asset", "tauri", "ipc",
+];
 
-/// Named character references an attacker could use to hide a scheme or a tag.
+/// Named character references an attacker could use to hide a scheme or a tag (lower case).
 const NAMED_ENTITIES: &[(&str, char)] = &[
     ("colon", ':'), ("sol", '/'), ("bsol", '\\'), ("amp", '&'), ("lt", '<'), ("gt", '>'), ("quot", '"'), ("apos", '\''),
     ("tab", '\t'), ("newline", '\n'), ("lpar", '('), ("rpar", ')'), ("equals", '='), ("percnt", '%'), ("num", '#'),
     ("excl", '!'), ("comma", ','), ("period", '.'), ("lsqb", '['), ("rsqb", ']'), ("nbsp", ' '),
 ];
 
+/// White space as Unicode defines it (the same set JavaScript's `trim` uses, minus U+0085 and U+FEFF which are rejected earlier).
+fn is_space(c: char) -> bool {
+    matches!(c, '\t'..='\r' | ' ' | '\u{A0}' | '\u{1680}' | '\u{2000}'..='\u{200A}' | '\u{2028}' | '\u{2029}' | '\u{202F}' | '\u{205F}' | '\u{3000}')
+}
+
+/// Characters a browser drops or ignores inside an address.
+fn is_hidden(c: char) -> bool {
+    c.is_control() || is_invisible(c)
+}
+
+/// Full-width ASCII (`ｈｔｔｐ：`) becomes ASCII and ASCII letters become lower case; nothing else changes.
+fn fold(c: char) -> char {
+    let c = if ('\u{FF01}'..='\u{FF5E}').contains(&c) { char::from_u32(c as u32 - 0xFEE0).unwrap_or(c) } else { c };
+    c.to_ascii_lowercase()
+}
+
 /// One character reference at the start of `rest` (which begins with `&`): the character and the chars consumed.
+/// Numeric references take any number of digits and an optional `;`; named ones match by longest known prefix.
 fn entity_at(rest: &[char]) -> Option<(char, usize)> {
     if rest.get(1) == Some(&'#') {
         let (radix, start) = if matches!(rest.get(2), Some('x') | Some('X')) { (16, 3) } else { (10, 2) };
         let (mut end, mut value) = (start, 0u32);
-        while end < rest.len() && end - start < 8 {
+        while end < rest.len() {
             let Some(digit) = rest[end].to_digit(radix) else { break };
-            value = value.saturating_mul(radix).saturating_add(digit);
+            value = (value * radix + digit).min(0x11_0000);
             end += 1;
         }
         if end == start {
@@ -287,21 +308,18 @@ fn entity_at(rest: &[char]) -> Option<(char, usize)> {
         let used = if rest.get(end) == Some(&';') { end + 1 } else { end };
         return char::from_u32(value).map(|c| (c, used));
     }
-    let name: String = rest[1..].iter().take_while(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
-    let end = 1 + name.chars().count();
-    let terminated = rest.get(end) == Some(&';');
-    // Browsers accept these four without the semicolon.
-    let legacy = matches!(name.as_str(), "amp" | "lt" | "gt" | "quot");
-    if !terminated && !legacy {
-        return None;
-    }
-    let (_, decoded) = NAMED_ENTITIES.iter().find(|(known, _)| *known == name)?;
-    Some((*decoded, if terminated { end + 1 } else { end }))
+    let run: String = rest[1..].iter().take(16).take_while(|c| c.is_ascii_alphanumeric()).map(|c| c.to_ascii_lowercase()).collect();
+    let (name, decoded) = NAMED_ENTITIES
+        .iter()
+        .filter(|(known, _)| run.starts_with(known))
+        .max_by_key(|(known, _)| known.len())?;
+    let end = 1 + name.len();
+    let used = if run.len() == name.len() && rest.get(end) == Some(&';') { end + 1 } else { end };
+    Some((*decoded, used))
 }
 
-fn decode_entities(text: &str) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    let mut out = String::with_capacity(text.len());
+fn entity_decode(chars: &[char]) -> Vec<char> {
+    let mut out = Vec::with_capacity(chars.len());
     let mut i = 0;
     while i < chars.len() {
         if chars[i] == '&' {
@@ -317,83 +335,248 @@ fn decode_entities(text: &str) -> String {
     out
 }
 
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
+/// `%XX` escapes of ASCII characters; anything else stays as written.
+fn percent_decode(chars: &[char]) -> Vec<char> {
+    let mut out = Vec::with_capacity(chars.len());
     let mut i = 0;
-    while i < bytes.len() {
-        let hex = |b: u8| (b as char).to_digit(16);
-        if bytes[i] == b'%' && i + 2 < bytes.len() && hex(bytes[i + 1]).is_some() && hex(bytes[i + 2]).is_some() {
-            out.push((hex(bytes[i + 1]).unwrap() * 16 + hex(bytes[i + 2]).unwrap()) as u8);
-            i += 3;
+    while i < chars.len() {
+        if chars[i] == '%' && i + 2 < chars.len() {
+            if let (Some(hi), Some(lo)) = (chars[i + 1].to_digit(16), chars[i + 2].to_digit(16)) {
+                let value = hi * 16 + lo;
+                if value < 0x80 {
+                    out.push(char::from_u32(value).unwrap_or('%'));
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+/// A backslash before ASCII punctuation is an escape in Markdown: drop the backslash.
+fn unescape(chars: &[char]) -> Vec<char> {
+    let mut out = Vec::with_capacity(chars.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '\\' && i + 1 < chars.len() && chars[i + 1].is_ascii_punctuation() {
+            out.push(chars[i + 1]);
+            i += 2;
         } else {
-            out.push(bytes[i]);
+            out.push(chars[i]);
             i += 1;
         }
     }
-    String::from_utf8_lossy(&out).into_owned()
+    out
 }
 
-fn is_scheme_char(c: char) -> bool {
-    c.is_ascii_alphanumeric() || matches!(c, '+' | '.' | '-')
+/// Every stage of decoding `start` (character references, then percent escapes; backslash escapes too when
+/// `escapes`) until nothing changes, or None when it is still changing after `MAX_DECODE_ROUNDS`.
+fn decode_chain(start: Vec<char>, escapes: bool) -> Option<Vec<Vec<char>>> {
+    let step = |chars: &[char]| {
+        let base = if escapes { unescape(chars) } else { chars.to_vec() };
+        percent_decode(&entity_decode(&base))
+    };
+    let mut stages = vec![start];
+    for _ in 0..=MAX_DECODE_ROUNDS {
+        let next = step(stages.last().expect("one stage"));
+        if &next == stages.last().expect("one stage") {
+            return Some(stages);
+        }
+        stages.push(next);
+    }
+    None
 }
 
-/// Names the first remote or active construct in already lower-cased text, if any.
-fn active_content(s: &str) -> Option<&'static str> {
-    for scheme in FORBIDDEN_SCHEMES {
-        for (i, _) in s.match_indices(&format!("{scheme}:")) {
-            let boundary = s[..i].chars().next_back().is_none_or(|c| !is_scheme_char(c));
-            if boundary || matches!(*scheme, "javascript" | "vbscript") {
-                return Some("a remote, file or script address (http:, https:, ftp:, file:, javascript:, vbscript:)");
+/// A `<` followed (after optional white space) by a letter, `/`, `!` or `?` starts a tag, comment, declaration or autolink.
+fn has_html(view: &[char]) -> bool {
+    view.iter().enumerate().any(|(i, c)| {
+        *c == '<'
+            && view[i + 1..].iter().find(|n| !is_space(**n)).is_some_and(|n| n.is_ascii_alphabetic() || matches!(n, '/' | '!' | '?'))
+    })
+}
+
+fn skippable(c: char) -> bool {
+    is_space(c) || is_hidden(c) || c == '\\'
+}
+
+/// Matches `word` at `from` letting ignorable characters sit between its letters; the index after it.
+fn match_word(folded: &[char], from: usize, word: &str) -> Option<usize> {
+    let mut j = from;
+    for (k, expected) in word.chars().enumerate() {
+        if k > 0 {
+            while j < folded.len() && skippable(folded[j]) {
+                j += 1;
             }
         }
+        if folded.get(j) != Some(&expected) {
+            return None;
+        }
+        j += 1;
     }
-    for (i, _) in s.match_indices("data:") {
-        if !s[..i].chars().next_back().is_none_or(|c| !is_scheme_char(c)) {
+    Some(j)
+}
+
+/// A run of host characters that contains a dot followed by a letter or digit, e.g. `x.com`.
+fn looks_like_host(chars: &[char]) -> bool {
+    let run: Vec<char> = chars.iter().copied().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-')).collect();
+    run.windows(2).any(|pair| pair[0] == '.' && pair[1].is_ascii_alphanumeric())
+}
+
+/// A listed scheme followed by `:`, a `www.` host or a `//host.tld` target anywhere in the text.
+fn bare_address(view: &[char]) -> Option<&'static str> {
+    let folded: Vec<char> = view.iter().map(|c| fold(*c)).collect();
+    for i in 0..folded.len() {
+        if i > 0 && folded[i - 1].is_ascii_alphanumeric() {
             continue;
         }
-        let rest = s[i + 5..].trim_start();
-        let token = rest.bytes().take_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'-')).count();
-        if rest.starts_with(';') || rest.starts_with(',') || (token > 0 && rest.as_bytes().get(token) == Some(&b'/')) {
-            return Some("a data: address");
-        }
-    }
-    for (i, _) in s.match_indices('<') {
-        let rest = s[i + 1..].strip_prefix('/').unwrap_or(&s[i + 1..]);
-        for tag in FORBIDDEN_TAGS {
-            if rest.starts_with(tag) && !rest[tag.len()..].chars().next().is_some_and(|c| c.is_ascii_alphanumeric()) {
-                return Some("raw HTML script, frame, object, embed, link, meta, style, base or form tags");
+        for scheme in URL_SCHEMES {
+            if folded[i] != scheme.chars().next().unwrap_or(' ') {
+                continue;
+            }
+            if let Some(mut j) = match_word(&folded, i, scheme) {
+                while j < folded.len() && skippable(folded[j]) {
+                    j += 1;
+                }
+                if folded.get(j) == Some(&':') {
+                    return Some("a web, file, script or app address (http:, https:, data:, javascript:, asset:, tauri: ...)");
+                }
             }
         }
-    }
-    for (i, _) in s.match_indices("on") {
-        if s[..i].chars().next_back().is_some_and(|c| c.is_ascii_alphanumeric()) {
-            continue;
-        }
-        let rest = &s[i + 2..];
-        let letters = rest.bytes().take_while(|b| b.is_ascii_alphabetic()).count();
-        if (2..=20).contains(&letters) && rest[letters..].trim_start().starts_with('=') {
-            return Some("an on<event>= attribute");
-        }
-    }
-    // Protocol-relative targets; browsers read a backslash as a slash in a URL.
-    let slashed = s.replace('\\', "/");
-    for prefix in ["](", "]:", "=", "<", "url("] {
-        for (i, _) in slashed.match_indices(prefix) {
-            let mut rest = slashed[i + prefix.len()..].trim_start();
-            if let Some(stripped) = rest.strip_prefix(['<', '"', '\'']) {
-                rest = stripped;
+        if folded[i] == 'w' {
+            if let Some(j) = match_word(&folded, i, "www.") {
+                if looks_like_host(&folded[j..]) {
+                    return Some("a www. address");
+                }
             }
-            if rest.starts_with("//") {
-                return Some("a protocol-relative (//host) address");
-            }
+        }
+        let slash = |k: usize| matches!(folded.get(k), Some('/') | Some('\\'));
+        if slash(i) && slash(i + 1) && looks_like_host(&folded[i + 2..]) {
+            return Some("a //host address");
         }
     }
     None
 }
 
-/// Rules for text a button inserts into the page. Checked on the raw text and again after
-/// repeatedly decoding character references and percent escapes, so an encoded address is still found.
+/// The destination that starts at `start` (just after `](` or `]:`) and where it ended: `<...>` or a token that
+/// stops at white space or at the unbalanced `)` that closes the link.
+fn parse_destination(view: &[char], start: usize) -> (Vec<char>, usize) {
+    let n = view.len();
+    let mut j = start;
+    while j < n && is_space(view[j]) {
+        j += 1;
+    }
+    let mut dest = Vec::new();
+    if j < n && view[j] == '<' {
+        j += 1;
+        while j < n && view[j] != '>' {
+            dest.push(view[j]);
+            j += 1;
+        }
+        return (dest, j);
+    }
+    let mut depth = 0usize;
+    while j < n && !is_space(view[j]) {
+        match view[j] {
+            '(' => depth += 1,
+            ')' if depth == 0 => break,
+            ')' => depth -= 1,
+            _ => {}
+        }
+        dest.push(view[j]);
+        j += 1;
+    }
+    (dest, j)
+}
+
+/// Every inline `](dest)` (links and images) and every `[label]: dest` definition at the start of a line.
+fn destinations(view: &[char]) -> Vec<Vec<char>> {
+    let n = view.len();
+    let mut found = Vec::new();
+    let mut i = 0;
+    while i < n {
+        if i == 0 || matches!(view[i - 1], '\n' | '\r') {
+            let mut j = i;
+            while j < n && matches!(view[j], ' ' | '\t') {
+                j += 1;
+            }
+            if j < n && view[j] == '[' {
+                let mut k = j + 1;
+                while k + 1 < n && !matches!(view[k], '\n' | '\r') && !(view[k] == ']' && view[k + 1] == ':') {
+                    k += 1;
+                }
+                if k + 1 < n && view[k] == ']' && view[k + 1] == ':' {
+                    found.push(parse_destination(view, k + 2).0);
+                }
+            }
+        }
+        if view[i] == ']' && view.get(i + 1) == Some(&'(') {
+            let (dest, end) = parse_destination(view, i + 2);
+            found.push(dest);
+            i = end.max(i + 1);
+            continue;
+        }
+        i += 1;
+    }
+    found
+}
+
+/// One decoded stage of a destination is safe only when it is empty, an anchor or a relative path: it does not start
+/// with `/` (absolute or protocol-relative) and has no `:` before its first `/`, `?` or `#` (any scheme, `c:`...).
+fn stage_is_unsafe(stage: &[char]) -> bool {
+    let cleaned: Vec<char> = stage
+        .iter()
+        .filter(|c| !is_space(**c) && !is_hidden(**c))
+        .map(|c| fold(*c))
+        .map(|c| if c == '\\' { '/' } else { c })
+        .collect();
+    let start = cleaned.iter().position(|c| !matches!(c, '"' | '\'' | '<')).unwrap_or(cleaned.len());
+    let end = cleaned.iter().rposition(|c| !matches!(c, '"' | '\'' | '>')).map_or(start, |p| p + 1).max(start);
+    let cleaned = &cleaned[start..end];
+    if cleaned.first() == Some(&'/') {
+        return true;
+    }
+    cleaned.iter().find(|c| matches!(c, ':' | '/' | '?' | '#')) == Some(&':')
+}
+
+fn destination_is_unsafe(raw: &[char]) -> bool {
+    let trim = |c: &char| is_space(*c) || matches!(c, '"' | '\'');
+    let from = raw.iter().position(|c| !trim(c)).unwrap_or(raw.len());
+    let to = raw.iter().rposition(|c| !trim(c)).map_or(from, |p| p + 1);
+    match decode_chain(raw[from..to.max(from)].to_vec(), true) {
+        Some(stages) => stages.iter().any(|stage| stage_is_unsafe(stage)),
+        None => true,
+    }
+}
+
+/// Names the first construct of one decoded view that Markdown insertion must not carry, if any.
+fn view_problem(view: &[char]) -> Option<&'static str> {
+    if has_html(view) {
+        return Some("raw HTML (a < followed by a letter, /, ! or ?), including tags, comments and <https://...> links");
+    }
+    if let Some(found) = bare_address(view) {
+        return Some(found);
+    }
+    if destinations(view).iter().any(|dest| destination_is_unsafe(dest)) {
+        return Some("a link or image target that is not a relative path or an anchor (#...)");
+    }
+    None
+}
+
+/// Allow-list for text a button inserts into the page, judged on the raw text and on every further decoding of it
+/// (character references with any number of digits, percent escapes, backslash escapes), so an encoded address is still found.
+///
+/// Rules: 1..8192 characters, only `\n \r \t` as control characters, no invisible or direction characters, not blank;
+/// no raw HTML (a `<` followed by white space and then a letter, `/`, `!` or `?`); every Markdown link, image and
+/// `[label]: target` is an anchor or a relative path (no scheme of any kind, no leading `/`, no `//host`, no drive letter);
+/// and no bare `http:`/`https:`/`ftp:`/`ftps:`/`file:`/`ws:`/`wss:`/`data:`/`blob:`/`javascript:`/`vbscript:`/`asset:`/
+/// `tauri:`/`ipc:` scheme, `www.host.tld` or `//host.tld` anywhere, even in plain prose.
+///
+/// False positives, on purpose: prose such as "data: 5" or "File: notes", code or placeholders such as `Vec<String>` or
+/// `<name>`, and the words listed above followed by a colon are refused; rephrase them. A `<` before a digit, `=` or a space
+/// and a digit (`a < 3`) is fine.
 fn validate_insert_markdown(text: &str) -> Result<(), String> {
     let count = text.chars().count();
     if count == 0 || count > MAX_INSERT_MARKDOWN_CHARS {
@@ -402,21 +585,16 @@ fn validate_insert_markdown(text: &str) -> Result<(), String> {
     if text.chars().any(|c| (c.is_control() && !matches!(c, '\n' | '\r' | '\t')) || is_invisible(c)) {
         return Err("Inserted Markdown contains control, zero-width or direction-changing characters".into());
     }
-    let mut current = text.to_string();
-    for _ in 0..5 {
-        let lower = current.to_lowercase();
-        // Browsers drop tabs, newlines and invisible characters inside an address.
-        let squeezed: String = lower.chars().filter(|c| !c.is_control() && !is_invisible(*c)).collect();
-        for variant in [&lower, &squeezed] {
-            if let Some(found) = active_content(variant) {
-                return Err(format!("Inserted Markdown must not contain {found}"));
-            }
+    if text.chars().all(is_space) {
+        return Err("Inserted Markdown cannot be only blank space".into());
+    }
+    let Some(views) = decode_chain(text.chars().collect(), false) else {
+        return Err("Inserted Markdown is encoded too many times to be checked".into());
+    };
+    for view in &views {
+        if let Some(found) = view_problem(view) {
+            return Err(format!("Inserted Markdown must not contain {found}"));
         }
-        let next = percent_decode(&decode_entities(&current));
-        if next == current {
-            break;
-        }
-        current = next;
     }
     Ok(())
 }
@@ -798,7 +976,8 @@ mod tests {
             "A [relative link](./notes/a.md) and an [anchor](#section) and ![img](assets/map.png)",
             "The word http alone, or https without a colon, is only text",
             "Metadata: the field name data is not an address; neither is profile: or a // comment",
-            "Wizard's action = 3 and person=2 and a tag <b>bold</b> and <linkage>",
+            "Wizard's action = 3 and person=2 and 5 > 2 and a < 3 and x<3",
+            "Roll: 2d6 (data is not an address) and a [link](./a:b.md) or [x](<./a b.md>) or [top](#top) or [empty]()",
             "Fractions like 1/2 and a path a//b are text",
             &"x".repeat(MAX_INSERT_MARKDOWN_CHARS),
         ] {
@@ -839,16 +1018,72 @@ mod tests {
     }
 
     #[test]
-    fn rejects_each_forbidden_tag_and_scheme_individually() {
-        for tag in FORBIDDEN_TAGS {
-            for text in [format!("<{tag}>"), format!("<{} x=1>", tag.to_uppercase()), format!("</{tag}>")] {
+    fn rejects_each_tag_and_scheme_individually() {
+        // Any `<` followed by a letter is raw HTML now; the old tag list is only a subset of that.
+        for tag in ["script", "iframe", "object", "embed", "link", "meta", "style", "base", "form", "b", "img", "svg", "a", "div"] {
+            for text in [format!("<{tag}>"), format!("<{} x=1>", tag.to_uppercase()), format!("</{tag}>"), format!("< {tag}>")] {
                 assert!(parse_insert(&text).is_err(), "{text:?} should be rejected");
             }
         }
-        for scheme in FORBIDDEN_SCHEMES {
-            for text in [format!("{scheme}:x"), format!("[a]({}:x)", scheme.to_uppercase())] {
+        for scheme in URL_SCHEMES {
+            for text in [format!("{scheme}:x"), format!("[a]({}:x)", scheme.to_uppercase()), format!("[a]: {scheme} :x")] {
                 assert!(parse_insert(&text).is_err(), "{text:?} should be rejected");
             }
+        }
+        for text in ["[a](mailto:x@y.z)", "[a](tel:+1)", "[a](c:/x.png)", "[a](/abs.png)", "[a](a:b)", "www.x.com", "//host.example/a.png"] {
+            assert!(parse_insert(text).is_err(), "{text:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn rejects_the_verified_bypasses() {
+        for text in [
+            "<img src=\"&#0000000104;ttp://evil.example/p.png\">",
+            "![x](&#0000000104;ttp://evil.example/p.png)",
+            "<a href=\"&#0000000104;ttp://evil.example/x\">x</a>",
+            "&#0000000047;&#0000000047;evil.example/p.png",
+            "<img src=\" //evil.example/p.png\">",
+            "<img src=\"&#32;//evil.example/p.png\">",
+        ] {
+            assert!(parse_insert(text).is_err(), "{text:?} should be rejected");
+        }
+    }
+
+    fn corpus(key: &str) -> Vec<String> {
+        let corpus: serde_json::Value = serde_json::from_str(include_str!("../../src/lib/fixtures/insert-corpus.json")).unwrap();
+        corpus[key].as_array().unwrap().iter().map(|entry| entry.as_str().unwrap().to_string()).collect()
+    }
+
+    #[test]
+    fn the_shared_corpus_has_the_expected_verdicts() {
+        let (accept, reject) = (corpus("accept"), corpus("reject"));
+        assert!(accept.len() >= 40 && reject.len() >= 120, "{} accept, {} reject", accept.len(), reject.len());
+        for text in &accept {
+            assert!(parse_insert(text).is_ok(), "{text:?} should be accepted: {:?}", parse_insert(text).err());
+        }
+        for text in &reject {
+            assert!(parse_insert(text).is_err(), "{text:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn adversarial_inputs_are_checked_quickly() {
+        let mut inputs: Vec<String> = ["&", "[", "(", "<", "](", "](<", "&#", "%", "\\", "//", "www.", "< ", "h t t p ", "[a]:
+", "&amp;", "'", "\""]
+            .iter()
+            .map(|unit| unit.repeat(MAX_INSERT_MARKDOWN_CHARS / unit.chars().count()))
+            .collect();
+        inputs.push(format!("&{}", "amp;".repeat(2000)));
+        inputs.push(format!("{}{}", "&#".repeat(2000), "0".repeat(4000)));
+        inputs.push(format!("{}{}", "[x](".repeat(1000), ")".repeat(4000)));
+        inputs.push("%25".repeat(2730));
+        inputs.push(format!("[a]({}", "(".repeat(8000)));
+        for text in inputs {
+            let text: String = text.chars().take(MAX_INSERT_MARKDOWN_CHARS).collect();
+            let started = std::time::Instant::now();
+            let _ = parse_insert(&text);
+            let elapsed = started.elapsed();
+            assert!(elapsed < std::time::Duration::from_millis(100), "{:?}... took {elapsed:?}", text.chars().take(12).collect::<String>());
         }
     }
 

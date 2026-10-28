@@ -22,6 +22,7 @@ const fixtureInput: PluginInput = {
   description: 'Buttons that insert encounter tables.',
   buttons: [{ label: 'Encounter table', markdown: MARKDOWN }],
 }
+const corpus = JSON.parse(readFileSync(resolve(process.cwd(), 'src/lib/fixtures/insert-corpus.json'), 'utf8')) as { accept: string[]; reject: string[] }
 const fixtureText = readFileSync(resolve(process.cwd(), 'src/lib/fixtures/insert-plugin.manifest.json'), 'utf8')
 
 const withMarkdown = (markdown: string): PluginInput => ({ name: 'P', buttons: [{ label: 'B', markdown }] })
@@ -155,8 +156,42 @@ describe('validatePluginInput', () => {
   })
 
   it('accepts relative links, anchors and plain markdown', () => {
-    for (const fine of ['[a](notes/page.md)', '[top](#top)', '![map](images/map.png)', '**bold** `code` > quote', '<b>bold</b> <br>', 'a // comment mid-line', '[x](../up.md)']) {
+    for (const fine of ['[a](notes/page.md)', '[top](#top)', '![map](images/map.png)', '**bold** `code` > quote', 'a < 3 and 5 > 2', 'a // comment mid-line', '[x](../up.md)', '[x]()']) {
       expect(markdownError(fine), fine).toBeUndefined()
+    }
+  })
+
+  it('gives the shared corpus the verdicts the Rust check gives', () => {
+    expect(corpus.accept.length).toBeGreaterThanOrEqual(40)
+    expect(corpus.reject.length).toBeGreaterThanOrEqual(120)
+    for (const text of corpus.accept) expect(markdownError(text), JSON.stringify(text)).toBeUndefined()
+    for (const text of corpus.reject) expect(markdownError(text), JSON.stringify(text)).toBeTruthy()
+  })
+
+  it('rejects the verified bypasses', () => {
+    for (const text of [
+      '<img src="&#0000000104;ttp://evil.example/p.png">',
+      '![x](&#0000000104;ttp://evil.example/p.png)',
+      '<a href="&#0000000104;ttp://evil.example/x">x</a>',
+      '&#0000000047;&#0000000047;evil.example/p.png',
+      '<img src=" //evil.example/p.png">',
+      '<img src="&#32;//evil.example/p.png">',
+    ]) expect(markdownError(text), text).toBeTruthy()
+  })
+
+  it('counts characters, not UTF-16 units, against the limit', () => {
+    expect(markdownError('\u{1F409}'.repeat(8192))).toBeUndefined()
+    expect(markdownError('\u{1F409}'.repeat(8193))).toContain('8192')
+  })
+
+  it('checks adversarial inputs quickly', () => {
+    const inputs = ['&', '[', '(', '<', '](', '](<', '&#', '%', '\\', '//', 'www.', '< ', 'h t t p ', '[a]:\n', '&amp;', "'", '"']
+      .map((unit) => unit.repeat(Math.floor(8192 / unit.length)))
+    inputs.push(`&${'amp;'.repeat(2000)}`, `${'&#'.repeat(2000)}${'0'.repeat(4000)}`, `${'[x]('.repeat(1000)}${')'.repeat(4000)}`, '%25'.repeat(2730), `[a](${'('.repeat(8000)}`)
+    for (const text of inputs) {
+      const started = performance.now()
+      markdownError(text.slice(0, 8192))
+      expect(performance.now() - started, text.slice(0, 12)).toBeLessThan(100)
     }
   })
 
@@ -207,7 +242,7 @@ describe('validatePluginInput', () => {
 
 /* ---- createPluginFromInput ------------------------------------------------------------------ */
 
-function memoryFs(options: { failOn?: RegExp; folders?: Record<string, string> } = {}) {
+function memoryFs(options: { failOn?: RegExp; folders?: Record<string, string>; hiddenFromExists?: string[]; unlisted?: string[] } = {}) {
   const dirs = new Set<string>(['/lib'])
   const files = new Map<string, string>()
   for (const [folder, id] of Object.entries(options.folders ?? {})) {
@@ -216,15 +251,24 @@ function memoryFs(options: { failOn?: RegExp; folders?: Record<string, string> }
   }
   const calls: string[] = []
   const io: PluginFs = {
-    exists: async (path) => dirs.has(path) || files.has(path),
+    exists: async (path) => !options.hiddenFromExists?.includes(path) && (dirs.has(path) || files.has(path)),
     mkdir: async (path) => {
       const parts = path.split('/')
       for (let i = 2; i <= parts.length; i++) dirs.add(parts.slice(0, i).join('/'))
+    },
+    createDir: async (path) => {
+      if (dirs.has(path)) throw new Error('already exists')
+      const parent = path.slice(0, path.lastIndexOf('/'))
+      if (!dirs.has(parent)) throw new Error('missing parent')
+      dirs.add(path)
     },
     readDir: async (path) => {
       const names = new Set<string>()
       for (const entry of [...dirs, ...files.keys()]) {
         if (entry.startsWith(`${path}/`) && entry !== path) names.add(entry.slice(path.length + 1).split('/')[0])
+      }
+      for (const hidden of options.unlisted ?? []) {
+        if (hidden.startsWith(`${path}/`)) names.delete(hidden.slice(path.length + 1))
       }
       return [...names].map((name) => ({ name, isDirectory: dirs.has(`${path}/${name}`), isSymlink: false }))
     },
@@ -311,6 +355,34 @@ describe('createPluginFromInput', () => {
     expect([...fs.files.keys()].filter((path) => path.startsWith('/lib/encounter-tools'))).toEqual([])
     expect(fs.dirs.has('/lib/other')).toBe(true)
     expect(fs.files.has('/lib/other/manifest.json')).toBe(true)
+  })
+
+  it('never deletes a folder that already exists even when exists() misses it', async () => {
+    const fs = memoryFs({ hiddenFromExists: ['/lib/encounter-tools'], unlisted: ['/lib/encounter-tools'] })
+    fs.dirs.add('/lib/encounter-tools')
+    fs.files.set('/lib/encounter-tools/precious.txt', 'mine')
+    const removed: string[] = []
+    const remove = fs.io.remove
+    fs.io.remove = async (path) => { removed.push(path); await remove(path) }
+    await expect(createPluginFromInput(fixtureInput, fs.io)).rejects.toThrow('already exists')
+    expect(removed).toEqual([])
+    expect(fs.dirs.has('/lib/encounter-tools')).toBe(true)
+    expect(fs.files.get('/lib/encounter-tools/precious.txt')).toBe('mine')
+    expect(fs.calls).toEqual([])
+  })
+
+  it('moves on to the next name when createDir reports a folder exists() missed once', async () => {
+    const fs = memoryFs({ unlisted: ['/lib/encounter-tools'] })
+    fs.dirs.add('/lib/encounter-tools')
+    const exists = fs.io.exists
+    let first = true
+    fs.io.exists = async (path) => {
+      if (path === '/lib/encounter-tools' && first) { first = false; return false }
+      return exists(path)
+    }
+    const result = await createPluginFromInput(fixtureInput, fs.io)
+    expect(result.folder).toBe('encounter-tools-2')
+    expect(fs.dirs.has('/lib/encounter-tools')).toBe(true)
   })
 
   it('cleans up when the first write fails', async () => {

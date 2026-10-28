@@ -54,63 +54,327 @@ const HIDDEN_OR_CONTROL = /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\
 /** The same set minus the three control characters Markdown text may keep. */
 const HIDDEN_OR_CONTROL_TEXT = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/
 
-const NAMED_ENTITIES: Record<string, string> = {
-  colon: ':', sol: '/', bsol: '\\', lt: '<', gt: '>', amp: '&', quot: '"', apos: "'", equals: '=',
-  lpar: '(', rpar: ')', tab: '\t', newline: '\n', nbsp: ' ',
-}
+/* ---- Inserted text: allow-list (mirror of validate_insert_markdown in src-tauri/src/plugin_package.rs) ---- */
 
-/** Decodes numeric and the few named HTML entities that matter for the content check (semicolon optional). */
-function decodeEntities(text: string): string {
-  return text
-    .replace(/&#x([0-9a-f]{1,6});?/gi, (whole, hex: string) => codePoint(parseInt(hex, 16), whole))
-    .replace(/&#(\d{1,7});?/g, (whole, dec: string) => codePoint(parseInt(dec, 10), whole))
-    .replace(/&([a-z]+);?/gi, (whole, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? whole)
-}
-function codePoint(value: number, fallback: string): string {
-  try { return String.fromCodePoint(value) } catch { return fallback }
-}
-/** Decodes %XX escapes of ASCII characters; anything else stays as written. */
-function decodePercent(text: string): string {
-  return text.replace(/%([0-9a-f]{2})/gi, (whole, hex: string) => {
-    const value = parseInt(hex, 16)
-    return value < 0x80 ? String.fromCharCode(value) : whole
-  })
-}
+/*
+ * The Rust check is authoritative; this copy gives instant feedback and must give the same verdict
+ * (src/lib/fixtures/insert-corpus.json is run by both). Rules, judged on the raw text and on every further
+ * decoding of it (character references with any number of digits, percent escapes, backslash escapes):
+ *  - no raw HTML: a `<` followed (after white space) by a letter, `/`, `!` or `?`;
+ *  - every Markdown link, image and `[label]: target` is an anchor or a relative path: no scheme of any kind,
+ *    no leading `/`, no `//host`, no drive letter, no `:` before the first `/`, `?` or `#`;
+ *  - no bare http: https: ftp: ftps: file: ws: wss: data: blob: javascript: vbscript: asset: tauri: ipc: scheme,
+ *    `www.host.tld` or `//host.tld` anywhere, even in plain prose.
+ * False positives on purpose: "data: 5", "File: notes", `Vec<String>` and `<name>` are refused.
+ */
 
-/** The raw text plus every further entity/percent decoding of it, and a copy without whitespace (`java\tscript:`). */
-function checkVariants(text: string): string[] {
-  const seen = new Set<string>()
-  const queue = [text]
-  for (let round = 0; round < 4; round++) {
-    const next: string[] = []
-    for (const item of queue) {
-      if (seen.has(item)) continue
-      seen.add(item)
-      next.push(decodeEntities(item), decodePercent(item), decodePercent(decodeEntities(item)))
-    }
-    queue.splice(0, queue.length, ...next)
-  }
-  for (const item of [...seen]) seen.add(item.replace(/[\s\u0000-\u001f]+/g, ''))
-  return [...seen]
-}
-
-const SCHEME = /(?<![a-z0-9+.-])(?:https?|ftp|data|file|javascript|vbscript):/i
-const PROTOCOL_RELATIVE = [
-  /\]\(\s*<?\s*[/\\]{2}/,
-  /\]:\s*<?\s*[/\\]{2}/,
-  /=\s*["']?\s*[/\\]{2}/,
-  /<\s*[/\\]{2}/,
+const MAX_DECODE_ROUNDS = 10
+const URL_SCHEMES = ['http', 'https', 'ftp', 'ftps', 'file', 'ws', 'wss', 'data', 'blob', 'javascript', 'vbscript', 'asset', 'tauri', 'ipc']
+const NAMED_ENTITIES: [string, string][] = [
+  ['colon', ':'], ['sol', '/'], ['bsol', '\\'], ['amp', '&'], ['lt', '<'], ['gt', '>'], ['quot', '"'], ['apos', "'"],
+  ['tab', '\t'], ['newline', '\n'], ['lpar', '('], ['rpar', ')'], ['equals', '='], ['percnt', '%'], ['num', '#'],
+  ['excl', '!'], ['comma', ','], ['period', '.'], ['lsqb', '['], ['rsqb', ']'], ['nbsp', ' '],
 ]
-const ACTIVE_TAG = /<\s*(?:script|iframe|object|embed|link|meta|style|base|form)(?![a-z0-9])/i
-const EVENT_HANDLER = /(?<![a-z0-9_])on[a-z]{3,}\s*=/i
 
-/** A plain-English reason when the text carries remote or active content, or '' when it is fine. */
+/** White space as Unicode defines it (the same set as the Rust check). */
+function isSpace(c: string): boolean {
+  const n = c.codePointAt(0)!
+  return (n >= 9 && n <= 13) || n === 32 || n === 0xa0 || n === 0x1680 || (n >= 0x2000 && n <= 0x200a)
+    || n === 0x2028 || n === 0x2029 || n === 0x202f || n === 0x205f || n === 0x3000
+}
+function isInvisibleCode(n: number): boolean {
+  return n === 0xad || n === 0x61c || n === 0x180e || (n >= 0x200b && n <= 0x200f) || (n >= 0x2028 && n <= 0x202e)
+    || (n >= 0x2060 && n <= 0x206f) || n === 0xfeff || (n >= 0xfff9 && n <= 0xfffb)
+}
+/** Control, zero-width and direction characters: a browser drops or ignores them inside an address. */
+function isHidden(c: string): boolean {
+  const n = c.codePointAt(0)!
+  return n <= 0x1f || (n >= 0x7f && n <= 0x9f) || isInvisibleCode(n)
+}
+const isAsciiAlpha = (c: string | undefined): boolean => {
+  if (c === undefined || c.length !== 1) return false
+  const n = c.charCodeAt(0)
+  return (n >= 65 && n <= 90) || (n >= 97 && n <= 122)
+}
+const isAsciiAlnum = (c: string | undefined): boolean => {
+  if (c === undefined || c.length !== 1) return false
+  const n = c.charCodeAt(0)
+  return (n >= 48 && n <= 57) || isAsciiAlpha(c)
+}
+const isAsciiPunct = (c: string): boolean => {
+  if (c.length !== 1) return false
+  const n = c.charCodeAt(0)
+  return (n >= 33 && n <= 47) || (n >= 58 && n <= 64) || (n >= 91 && n <= 96) || (n >= 123 && n <= 126)
+}
+/** Full-width ASCII becomes ASCII and ASCII letters become lower case; nothing else changes. */
+function fold(c: string): string {
+  let n = c.codePointAt(0)!
+  if (n >= 0xff01 && n <= 0xff5e) n -= 0xfee0
+  if (n >= 65 && n <= 90) n += 32
+  return String.fromCodePoint(n)
+}
+const skippable = (c: string): boolean => isSpace(c) || isHidden(c) || c === '\\'
+const sameChars = (a: string[], b: string[]): boolean => a.length === b.length && a.every((c, i) => c === b[i])
+
+function digitValue(c: string | undefined, radix: number): number {
+  if (c === undefined || c.length !== 1) return -1
+  const n = c.charCodeAt(0)
+  let value = -1
+  if (n >= 48 && n <= 57) value = n - 48
+  else if (n >= 97 && n <= 102) value = n - 87
+  else if (n >= 65 && n <= 70) value = n - 55
+  return value >= 0 && value < radix ? value : -1
+}
+
+/** One character reference at `at` (a `&`): the character and the chars consumed. Numeric references take any number of digits and an optional `;`; named ones match by longest known prefix. */
+function entityAt(chars: string[], at: number): [string, number] | null {
+  if (chars[at + 1] === '#') {
+    const hex = chars[at + 2] === 'x' || chars[at + 2] === 'X'
+    const radix = hex ? 16 : 10
+    const start = at + (hex ? 3 : 2)
+    let end = start
+    let value = 0
+    while (end < chars.length) {
+      const digit = digitValue(chars[end], radix)
+      if (digit < 0) break
+      value = Math.min(value * radix + digit, 0x110000)
+      end++
+    }
+    if (end === start) return null
+    if (value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) return null
+    return [String.fromCodePoint(value), (chars[end] === ';' ? end + 1 : end) - at]
+  }
+  let run = ''
+  for (let k = at + 1; k < chars.length && run.length < 16 && isAsciiAlnum(chars[k]); k++) run += fold(chars[k])
+  let best: [string, string] | null = null
+  for (const entry of NAMED_ENTITIES) {
+    if (run.startsWith(entry[0]) && (best === null || entry[0].length > best[0].length)) best = entry
+  }
+  if (best === null) return null
+  const end = at + 1 + best[0].length
+  return [best[1], (run.length === best[0].length && chars[end] === ';' ? end + 1 : end) - at]
+}
+
+function entityDecode(chars: string[]): string[] {
+  const out: string[] = []
+  let i = 0
+  while (i < chars.length) {
+    if (chars[i] === '&') {
+      const found = entityAt(chars, i)
+      if (found) {
+        out.push(found[0])
+        i += found[1]
+        continue
+      }
+    }
+    out.push(chars[i])
+    i++
+  }
+  return out
+}
+
+/** `%XX` escapes of ASCII characters; anything else stays as written. */
+function percentDecode(chars: string[]): string[] {
+  const out: string[] = []
+  let i = 0
+  while (i < chars.length) {
+    if (chars[i] === '%' && i + 2 < chars.length) {
+      const hi = digitValue(chars[i + 1], 16)
+      const lo = digitValue(chars[i + 2], 16)
+      if (hi >= 0 && lo >= 0 && hi * 16 + lo < 0x80) {
+        out.push(String.fromCharCode(hi * 16 + lo))
+        i += 3
+        continue
+      }
+    }
+    out.push(chars[i])
+    i++
+  }
+  return out
+}
+
+/** A backslash before ASCII punctuation is an escape in Markdown: drop the backslash. */
+function unescapeChars(chars: string[]): string[] {
+  const out: string[] = []
+  let i = 0
+  while (i < chars.length) {
+    if (chars[i] === '\\' && i + 1 < chars.length && isAsciiPunct(chars[i + 1])) {
+      out.push(chars[i + 1])
+      i += 2
+    } else {
+      out.push(chars[i])
+      i++
+    }
+  }
+  return out
+}
+
+/** Every stage of decoding `start` until nothing changes, or null when it still changes after MAX_DECODE_ROUNDS rounds. */
+function decodeChain(start: string[], escapes: boolean): string[][] | null {
+  const stages = [start]
+  for (let round = 0; round <= MAX_DECODE_ROUNDS; round++) {
+    const last = stages[stages.length - 1]
+    const next = percentDecode(entityDecode(escapes ? unescapeChars(last) : last))
+    if (sameChars(next, last)) return stages
+    stages.push(next)
+  }
+  return null
+}
+
+/** A `<` followed (after optional white space) by a letter, `/`, `!` or `?` starts a tag, comment, declaration or autolink. */
+function hasHtml(view: string[]): boolean {
+  for (let i = 0; i < view.length; i++) {
+    if (view[i] !== '<') continue
+    let j = i + 1
+    while (j < view.length && isSpace(view[j])) j++
+    const next = view[j]
+    if (next !== undefined && (isAsciiAlpha(next) || next === '/' || next === '!' || next === '?')) return true
+  }
+  return false
+}
+
+/** Matches `word` at `from` letting ignorable characters sit between its letters; the index after it, or -1. */
+function matchWord(folded: string[], from: number, word: string): number {
+  let j = from
+  const letters = Array.from(word)
+  for (let k = 0; k < letters.length; k++) {
+    if (k > 0) while (j < folded.length && skippable(folded[j])) j++
+    if (folded[j] !== letters[k]) return -1
+    j++
+  }
+  return j
+}
+
+/** A run of host characters that contains a dot followed by a letter or digit, e.g. `x.com`. */
+function looksLikeHost(chars: string[], from: number): boolean {
+  let k = from
+  while (k < chars.length && (isAsciiAlnum(chars[k]) || chars[k] === '.' || chars[k] === '-')) {
+    if (chars[k] === '.' && isAsciiAlnum(chars[k + 1])) return true
+    k++
+  }
+  return false
+}
+
+const ADDRESS_PROBLEM = 'Web, file, script and app addresses (http:, https:, ftp:, file:, data:, blob:, javascript:, asset:, tauri: ...) and www. addresses are not allowed, even in plain text.'
+const HOST_PROBLEM = 'Addresses that start with // are not allowed, even in plain text.'
+const HTML_PROBLEM = 'Raw HTML is not allowed: a < followed by a letter, /, ! or ? starts a tag, comment or link. Put a space and a number after a < instead.'
+const TARGET_PROBLEM = 'Links and images can only point to a relative file (./notes.md) or an anchor (#top); a target that starts with /, or has a : before its first /, is not allowed.'
+const DEEP_PROBLEM = 'This text is encoded too many times to be checked and is not allowed.'
+
+/** A listed scheme followed by `:`, a `www.` host or a `//host.tld` target anywhere in the text. */
+function bareAddress(view: string[]): string {
+  const folded = view.map(fold)
+  for (let i = 0; i < folded.length; i++) {
+    if (i > 0 && isAsciiAlnum(folded[i - 1])) continue
+    for (const scheme of URL_SCHEMES) {
+      if (folded[i] !== scheme[0]) continue
+      let j = matchWord(folded, i, scheme)
+      if (j < 0) continue
+      while (j < folded.length && skippable(folded[j])) j++
+      if (folded[j] === ':') return ADDRESS_PROBLEM
+    }
+    if (folded[i] === 'w') {
+      const j = matchWord(folded, i, 'www.')
+      if (j >= 0 && looksLikeHost(folded, j)) return ADDRESS_PROBLEM
+    }
+    const slash = (k: number) => folded[k] === '/' || folded[k] === '\\'
+    if (slash(i) && slash(i + 1) && looksLikeHost(folded, i + 2)) return HOST_PROBLEM
+  }
+  return ''
+}
+
+/** The destination that starts at `start` (just after `](` or `]:`) and where it ended: `<...>` or a token that stops at white space or at the unbalanced `)` that closes the link. */
+function parseDestination(view: string[], start: number): [string[], number] {
+  const n = view.length
+  let j = start
+  while (j < n && isSpace(view[j])) j++
+  const dest: string[] = []
+  if (j < n && view[j] === '<') {
+    j++
+    while (j < n && view[j] !== '>') dest.push(view[j++])
+    return [dest, j]
+  }
+  let depth = 0
+  while (j < n && !isSpace(view[j])) {
+    if (view[j] === '(') depth++
+    else if (view[j] === ')') {
+      if (depth === 0) break
+      depth--
+    }
+    dest.push(view[j++])
+  }
+  return [dest, j]
+}
+
+/** Every inline `](dest)` (links and images) and every `[label]: dest` definition at the start of a line. */
+function destinations(view: string[]): string[][] {
+  const n = view.length
+  const found: string[][] = []
+  let i = 0
+  while (i < n) {
+    if (i === 0 || view[i - 1] === '\n' || view[i - 1] === '\r') {
+      let j = i
+      while (j < n && (view[j] === ' ' || view[j] === '\t')) j++
+      if (j < n && view[j] === '[') {
+        let k = j + 1
+        while (k + 1 < n && view[k] !== '\n' && view[k] !== '\r' && !(view[k] === ']' && view[k + 1] === ':')) k++
+        if (k + 1 < n && view[k] === ']' && view[k + 1] === ':') found.push(parseDestination(view, k + 2)[0])
+      }
+    }
+    if (view[i] === ']' && view[i + 1] === '(') {
+      const [dest, end] = parseDestination(view, i + 2)
+      found.push(dest)
+      i = Math.max(end, i + 1)
+      continue
+    }
+    i++
+  }
+  return found
+}
+
+/** One decoded stage of a destination is safe only when it is empty, an anchor or a relative path. */
+function stageIsUnsafe(stage: string[]): boolean {
+  const cleaned = stage.filter((c) => !isSpace(c) && !isHidden(c)).map(fold).map((c) => (c === '\\' ? '/' : c))
+  let start = cleaned.findIndex((c) => c !== '"' && c !== "'" && c !== '<')
+  if (start < 0) start = cleaned.length
+  let last = -1
+  for (let k = cleaned.length - 1; k >= 0; k--) {
+    if (cleaned[k] !== '"' && cleaned[k] !== "'" && cleaned[k] !== '>') { last = k; break }
+  }
+  const end = Math.max(last < 0 ? start : last + 1, start)
+  const trimmed = cleaned.slice(start, end)
+  if (trimmed[0] === '/') return true
+  return trimmed.find((c) => c === ':' || c === '/' || c === '?' || c === '#') === ':'
+}
+
+function destinationIsUnsafe(raw: string[]): boolean {
+  const trim = (c: string) => isSpace(c) || c === '"' || c === "'"
+  let from = raw.findIndex((c) => !trim(c))
+  if (from < 0) from = raw.length
+  let to = from
+  for (let k = raw.length - 1; k >= 0; k--) {
+    if (!trim(raw[k])) { to = k + 1; break }
+  }
+  const stages = decodeChain(raw.slice(from, Math.max(to, from)), true)
+  return stages === null || stages.some(stageIsUnsafe)
+}
+
+/** The first construct of one decoded view that Markdown insertion must not carry, or ''. */
+function viewProblem(view: string[]): string {
+  if (hasHtml(view)) return HTML_PROBLEM
+  const address = bareAddress(view)
+  if (address) return address
+  if (destinations(view).some(destinationIsUnsafe)) return TARGET_PROBLEM
+  return ''
+}
+
+/** A plain-English reason when the text carries remote, active or non-relative content, or '' when it is fine. */
 export function activeContentProblem(markdown: string): string {
-  for (const variant of checkVariants(markdown)) {
-    if (SCHEME.test(variant)) return 'Links and images that point to the internet, to files or to scripts (http:, https:, ftp:, data:, file:, javascript:) are not allowed. Relative links and anchors are fine.'
-    if (PROTOCOL_RELATIVE.some((pattern) => pattern.test(variant))) return 'Links that start with // point to the internet and are not allowed. Relative links and anchors are fine.'
-    if (ACTIVE_TAG.test(variant)) return 'HTML tags that run code or load other content (script, iframe, object, embed, link, meta, style, base, form) are not allowed.'
-    if (EVENT_HANDLER.test(variant)) return 'HTML event attributes such as onclick= are not allowed.'
+  const views = decodeChain(Array.from(markdown), false)
+  if (views === null) return DEEP_PROBLEM
+  for (const view of views) {
+    const problem = viewProblem(view)
+    if (problem) return problem
   }
   return ''
 }
@@ -149,7 +413,7 @@ export function validatePluginInput(input: PluginInput): PluginInputErrors {
 
 function markdownProblem(markdown: string): string {
   if (!markdown.trim()) return 'Enter the text this button inserts.'
-  if (markdown.length > PLUGIN_LIMITS.markdown) return `The text must be ${PLUGIN_LIMITS.markdown} characters or fewer.`
+  if (Array.from(markdown).length > PLUGIN_LIMITS.markdown) return `The text must be ${PLUGIN_LIMITS.markdown} characters or fewer.`
   if (HIDDEN_OR_CONTROL_TEXT.test(markdown)) return 'The text cannot contain control or invisible characters (line breaks and tabs are fine).'
   return activeContentProblem(markdown)
 }
@@ -224,7 +488,7 @@ Delete this folder (or use **Remove** on its card in Mod Manager > Plugins), the
 
 The plugin can only insert the text you wrote when you press one of its buttons. It cannot read your pages, files or network.
 
-For safety, the text cannot contain links to the internet, to files or to scripts (http, https, ftp, data, file, javascript), links that start with //, or HTML that runs code (script, iframe, object, embed, link, meta, style, base, form, and attributes such as onclick). Relative links and anchors are fine.
+For safety, the text may only use plain Markdown. It cannot contain HTML (a < followed by a letter, /, ! or ?), addresses such as http:, https:, ftp:, file:, data:, blob:, javascript:, asset: or www.example.com, or links and images that point anywhere but a relative file (./notes.md, ../map.png) or an anchor (#top). Words like data: or file: are refused even in plain text.
 `
 }
 
@@ -274,6 +538,8 @@ export function buildPluginPackage(
 /** The file system the creator needs: the mod file system plus a recursive remove for its own cleanup. */
 export interface PluginFs extends ModFs {
   remove(path: string): Promise<void>
+  /** Creates ONE folder and fails when it already exists (never recursive, never a no-op on an existing folder). */
+  createDir(path: string): Promise<void>
 }
 
 const tauriPluginFs: PluginFs = {
@@ -284,6 +550,7 @@ const tauriPluginFs: PluginFs = {
   mkdir: (path) => mkdir(path, { recursive: true }),
   // Exclusive creation: an existing file is never replaced, even if it appears after the check.
   writeTextFile: (path, text) => writeTextFile(path, text, { createNew: true }),
+  createDir: (path) => mkdir(path, { recursive: false }),
   remove: (path) => remove(path, { recursive: true }),
 }
 
@@ -304,7 +571,8 @@ async function packageIds(io: PluginFs, root: string, folders: { name: string; i
  * Writes `{Plugins library}/{slug}/` and returns where it went. Never replaces anything: a taken folder name
  * gets `-2`, `-3`... and the id is made unique against every package folder and the managed registry.
  * `dist/index.js` and `index.md` are written first and `manifest.json` last, so a folder only counts as a plugin
- * once it is complete; if a write fails, the folder this call created is removed (and nothing else).
+ * once it is complete; if a write fails, the folder this call created is removed (and nothing else: the folder is
+ * made with a non-recursive create, so only a folder this call really created is ever removed).
  */
 export async function createPluginFromInput(input: PluginInput, io: PluginFs = tauriPluginFs, pluginsRoot?: string): Promise<{ folder: string; id: string; path: string }> {
   const errors = validatePluginInput(input)
@@ -321,7 +589,13 @@ export async function createPluginFromInput(input: PluginInput, io: PluginFs = t
     const path = `${root}/${pack.folder}`
     // Lost a race (or a hidden name): skip it and look for the next free one.
     if (await io.exists(path)) { taken.push(pack.folder); continue }
-    await io.mkdir(path)
+    // Non-recursive: a folder that already exists (even if `exists` missed it) fails here, before cleanup is armed.
+    try {
+      await io.createDir(path)
+    } catch (error) {
+      if (await io.exists(path).catch(() => false)) { taken.push(pack.folder); continue }
+      throw error
+    }
     try {
       await io.mkdir(`${path}/dist`)
       await io.writeTextFile(`${path}/dist/index.js`, pack.files['dist/index.js'])
