@@ -23,6 +23,7 @@ import { useTabStore } from './stores/tabStore'
 import { useUnsavedClose } from './hooks/useUnsavedClose'
 import { MenuBar } from './components/layout/MenuBar'
 import { FindReplaceDialog } from './components/editor/FindReplaceDialog'
+import { FormulaDialog } from './components/editor/FormulaDialog'
 import styles from './App.module.css'
 import { VersionControlPanel } from './components/version-control/VersionControlPanel'
 import { useDocumentStore } from './stores/documentStore'
@@ -133,6 +134,7 @@ export default function App() {
           </aside>
         </div>
         <FindReplaceDialog editor={activeEditor} />
+        <FormulaDialog />
         <ToastHost />
       </div>
     </PluginProvider>

@@ -50,7 +50,7 @@ describe('snippet palette', () => {
     expect(container.querySelector('summary')?.textContent).toContain('My Notes')
     expect(container.querySelector('button')?.textContent).toBe('Custom note')
   })
-  it('renders each group as an initially expanded, collapsible section', () => {
+  it('renders each group as an initially collapsed, collapsible section', () => {
     const container = document.createElement('div')
     container.innerHTML = renderToStaticMarkup(<SnippetPalette editor={null} />)
 
@@ -61,14 +61,36 @@ describe('snippet palette', () => {
       const name = SNIPPET_GROUPS[index]
       const summary = group.querySelector('summary')
       expect(summary?.textContent).toContain(name)
-      expect(group.open).toBe(true)
+      expect(group.open).toBe(false)
       expect(group.querySelectorAll('button')).toHaveLength(SNIPPETS.filter((snippet) => snippet.group === name).length)
 
       summary?.click()
-      expect(group.open).toBe(false)
-      summary?.click()
       expect(group.open).toBe(true)
+      summary?.click()
+      expect(group.open).toBe(false)
     })
+  })
+
+  it('renders nested subfolders as initially collapsed internal groups inside a category', async () => {
+    useModStore.setState({
+      ready: true,
+      snippets: [
+        { id: 'mod:rol/read-aloud', label: 'Read-aloud box', group: 'Rol Adventures', markdown: 'Scene' },
+        { id: 'mod:rol/cs/dnd', label: 'Character Sheet (D&D)', group: 'Rol Adventures', subgroup: 'Character Sheets', markdown: '### Sheet' },
+        { id: 'mod:rol/sb/dnd', label: 'Statblock (D&D)', group: 'Rol Adventures', subgroup: 'Statblocks', markdown: '### Monster' },
+      ],
+    })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<SnippetPalette editor={null} />))
+
+    const topGroup = container.querySelector('details[aria-label="Rol Adventures"]') as HTMLDetailsElement
+    expect(topGroup).not.toBeNull()
+    expect(topGroup.open).toBe(false)
+
+    const subGroups = Array.from(topGroup.querySelectorAll('details'))
+    expect(subGroups.map((el) => el.getAttribute('aria-label'))).toEqual(['Character Sheets', 'Statblocks'])
+    expect(subGroups.every((el) => el.open === false)).toBe(true)
   })
 
   it('adds imported Markdown snippets under a collapsible package group', async () => {
@@ -83,8 +105,8 @@ describe('snippet palette', () => {
     const custom = Array.from(container.querySelectorAll('details')).find((group) =>
       group.querySelector('summary')?.textContent?.includes('Custom'))
     expect(custom?.querySelector('button')?.textContent).toBe('Encounter')
-    expect(custom?.open).toBe(true)
-    custom?.querySelector('summary')?.click()
     expect(custom?.open).toBe(false)
+    custom?.querySelector('summary')?.click()
+    expect(custom?.open).toBe(true)
   })
 })

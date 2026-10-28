@@ -1,4 +1,5 @@
 import { MAX_THEME_BYTES } from './themeDecorations'
+import { invoke } from '@tauri-apps/api/core'
 import { join } from '@tauri-apps/api/path'
 import { configRoot } from './configRoot'
 import { exists, mkdir, readDir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
@@ -59,6 +60,8 @@ export function installBuiltinThemes(overrides: readonly string[] = []): void {
 }
 
 const exampleJobs = new Map<string, Promise<void>>()
+const V2_NEW_THEMES = new Set(['classic-novel', 'minimal-print', 'editorial-magazine'])
+const LEGACY_MODERN_HEADER = '/* @name: Modern */'
 const EXAMPLE_GUIDE = `# Theme examples
 
 These CSS files are editable examples shipped with Grimoire Maker.
@@ -81,14 +84,22 @@ function seedThemeExamples(dir: string): Promise<void> {
   const existing = exampleJobs.get(dir)
   if (existing) return existing
   const job = (async () => {
-    const marker = `${dir}/.grimoire-theme-examples-v1`
-    if (await exists(marker)) return
-    const examples = [...builtins.map(b => ({ name: `${b.info.id}.css`, text: b.css })), { name: 'README.md', text: EXAMPLE_GUIDE }]
+    const v1Marker = `${dir}/.grimoire-theme-examples-v1`
+    const v2Marker = `${dir}/.grimoire-theme-examples-v2`
+    const hasV1 = await exists(v1Marker)
+    if (hasV1 && await exists(v2Marker)) return
+    if (await exists(`${dir}/themetest-2.css`)) {
+      await invoke<void>('delete_user_theme', { id: 'themetest-2' }).catch(() => undefined)
+    }
+    const examples = hasV1
+      ? builtins.filter((b) => V2_NEW_THEMES.has(b.info.id)).map((b) => ({ name: `${b.info.id}.css`, text: b.css }))
+      : [...builtins.map((b) => ({ name: `${b.info.id}.css`, text: b.css })), { name: 'README.md', text: EXAMPLE_GUIDE }]
     for (const example of examples) {
       const path = `${dir}/${example.name}`
       if (!(await exists(path))) await writeTextFile(path, example.text, { createNew: true })
     }
-    await writeTextFile(marker, '1\n', { createNew: true })
+    if (!hasV1) await writeTextFile(v1Marker, '1\n', { createNew: true })
+    if (!(await exists(v2Marker))) await writeTextFile(v2Marker, '1\n', { createNew: true })
   })().finally(() => { exampleJobs.delete(dir) })
   exampleJobs.set(dir, job)
   return job
@@ -135,6 +146,7 @@ export async function loadUserThemes(disabledIds: ReadonlySet<string> = new Set(
 
   for (const entry of entries) {
     const id = fileId(entry.name)
+    if (id === 'themetest-2') continue
     if (!ID_PATTERN.test(id)) {
       errors.push(`${entry.name}: file name may only use letters, numbers, "-" and "_"`)
       continue
@@ -148,7 +160,10 @@ export async function loadUserThemes(disabledIds: ReadonlySet<string> = new Set(
       continue
     }
     try {
-      const css = await readTextFile(`${dir}/${entry.name}`)
+      const rawCss = await readTextFile(`${dir}/${entry.name}`)
+      const css = id === 'modern' && rawCss.trimStart().startsWith(LEGACY_MODERN_HEADER) && !rawCss.includes('grimoire-colors:start')
+        ? (builtinThemeCss('modern') ?? rawCss)
+        : rawCss
       if (new TextEncoder().encode(css).length > MAX_THEME_BYTES) throw new Error('file is larger than 24 MB')
       if (!hasThemeSelector(css, id)) {
         throw new Error(`no [data-theme='${id}'] selector found`)

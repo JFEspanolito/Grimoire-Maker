@@ -4,6 +4,8 @@ export interface TemplateSnippet {
   id: string
   label: string
   group: string
+  /** Nested subfolder path inside the snippet category (e.g. `Character Sheets` or `Tables & Utilities`). */
+  subgroup?: string
   markdown: string
 }
 

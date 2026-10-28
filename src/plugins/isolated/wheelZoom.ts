@@ -10,14 +10,16 @@ export function mountWheelZoom(
   steps: { editor: readonly number[]; preview: readonly number[] },
 ): () => void {
   const stops = (surface.kind === 'preview' ? steps.preview : steps.editor).map((percent) => percent / 100)
+  const target = element.closest<HTMLElement>('[data-active-editor]') ?? element
   const wheel = (event: WheelEvent) => {
-    if (!event.ctrlKey || !event.deltaY || event.defaultPrevented || document.querySelector('dialog[open]')) return
+    const modal = document.querySelector('dialog[open]:not([data-find-panel])')
+    if (!event.ctrlKey || !event.deltaY || event.defaultPrevented || element.closest('[hidden]') || (modal && !modal.contains(element))) return
     event.preventDefault()
     const next = event.deltaY < 0
       ? stops.find((value) => value > surface.zoom)
       : stops.findLast((value) => value < surface.zoom)
     if (next !== undefined) surface.setZoom(next)
   }
-  element.addEventListener('wheel', wheel, { passive: false })
-  return () => element.removeEventListener('wheel', wheel)
+  target.addEventListener('wheel', wheel, { passive: false })
+  return () => target.removeEventListener('wheel', wheel)
 }

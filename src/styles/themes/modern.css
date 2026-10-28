@@ -1,4 +1,4 @@
-/* @name: Modern */
+/* @name: Executive / Modern Doc */
 [data-theme='modern'] {
   --page-bg: #ffffff;
   --page-fg: #1c1c1e;
@@ -8,4 +8,22 @@
   --accent: #1f6feb;
   --statblock-bg: #f3f6fb;
   --readaloud-bg: #eef2f7;
+}
+[data-theme='modern'] .grimoire-content table {
+  border-collapse: collapse;
+  width: 100%;
+}
+[data-theme='modern'] .grimoire-content th,
+[data-theme='modern'] .grimoire-content td {
+  border: 1px solid #e1e4e8;
+  padding: 0.4em 0.65em;
+}
+[data-theme='modern'] .grimoire-content th {
+  background: #f6f8fa;
+  color: #0f3d6b;
+  font-weight: 600;
+}
+[data-theme='modern'] .grimoire-content ul,
+[data-theme='modern'] .grimoire-content ol {
+  padding-left: 1.4em;
 }

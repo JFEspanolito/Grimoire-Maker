@@ -14,5 +14,6 @@
 .word p { margin: 0 0 .75rem; white-space: pre-wrap; }
 .word table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
 .word td { border: 1px solid #aaa; padding: .5rem; vertical-align: top; }
+.text { margin: 1rem; padding: 1.5rem 2rem; background: #1c1c1c; border: 1px solid #ffffff1a; border-radius: .3rem; color: #e8e4dc; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pdf { padding: 1rem; overflow: auto; }
 .pdf canvas { display: block; margin: auto; background: white; }

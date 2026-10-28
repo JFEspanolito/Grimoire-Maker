@@ -21,7 +21,7 @@ import { ExportPdfDialog, type Book } from './ExportPdfDialog'
 import { DocumentOrderDialog } from '../settings/DocumentOrderDialog'
 import { PropertiesDialog } from '../settings/PropertiesDialog'
 import type { Editor } from '@tiptap/react'
-import { insertDivider, insertFloatingBox, insertImage, insertQuote, insertSectionBreak, insertTable } from '../../lib/insertActions'
+import { insertDivider, insertFloatingBox, insertFormula, insertImage, insertQuote, insertSectionBreak, insertTable } from '../../lib/insertActions'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
@@ -174,6 +174,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <button disabled={!editor} onClick={() => void run(() => insertDivider(editor!))}>Horizontal Rule</button>
         <button disabled={!editor} onClick={() => void run(() => insertQuote(editor!))}>Quote</button>
         <button disabled={!editor} onClick={() => void run(() => insertFloatingBox(editor!))}>Floating Box</button>
+        <button disabled={!editor} onClick={() => void run(() => insertFormula(editor!))}>Insert Formula</button>
         <button disabled={!editor} onClick={() => void run(() => insertSectionBreak(editor!))}>Section Break</button>
       </div>
     </details>}

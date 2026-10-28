@@ -1,0 +1,15 @@
+/* @name: Editorial Magazine */
+[data-theme='editorial-magazine'] {
+  --page-bg: #f8f9fa;
+  --page-fg: #212529;
+  --page-font: 'Merriweather', 'Georgia', serif;
+  --heading-font: 'Helvetica Neue', Arial, sans-serif;
+  --heading-color: #a82020;
+  --accent: #d90429;
+  --statblock-bg: #e9ecef;
+  --readaloud-bg: #dee2e6;
+}
+[data-theme='editorial-magazine'] .grimoire-content h1 {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}

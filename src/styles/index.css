@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'katex/dist/katex.min.css';
 @import './print.css';
 @import './page-text.css';
 
@@ -359,6 +360,16 @@ body,
 /* Find dialog highlights */
 .grimoire-content .search-match { background: #f5c54299; border-radius: 2px; }
 .grimoire-content .search-current { background: #f08a24; color: #1c1b19; }
+
+/* Mathematical formulas (KaTeX) */
+.grimoire-content .grimoire-formula { cursor: pointer; border-radius: 3px; }
+.grimoire-content .grimoire-formula[data-display='inline'] { display: inline-block; padding: 0 2px; vertical-align: middle; }
+.grimoire-content .grimoire-formula[data-display='block'] { display: block; margin: 0.6em 0; text-align: center; overflow-x: auto; break-inside: avoid; }
+.grimoire-content .grimoire-formula[data-selected='true'] { outline: 2px solid #f59e0b; background: rgb(245 158 11 / 0.12); }
+.page-preview .grimoire-formula { outline: none !important; background: transparent !important; }
+@media print {
+  .grimoire-content .grimoire-formula { outline: none !important; background: transparent !important; }
+}
 
 /* Every section owns its column rows; the flow only stacks them, one run of sheets each. */
 [data-paginated='true'] .grimoire-section {

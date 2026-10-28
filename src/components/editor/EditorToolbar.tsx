@@ -4,6 +4,7 @@ import { ImageControls, type ImageAttrs } from './ImageControls'
 import { TableControls } from './TableControls'
 import { selectedSearchText } from './extensions/searchHighlight'
 import { useFindStore } from '../../stores/findStore'
+import { insertFormula } from '../../lib/insertActions'
 import { canChangeIndent, changeIndent } from './extensions/blockFormat'
 import { PluginSlot } from '../../plugins/PluginSlot'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -42,6 +43,7 @@ const ACTION_LIST: Action[] = [
   { id: 'indent', label: '⇥', title: 'Increase indent', run: (e) => changeIndent(e, 1), canRun: (e) => canChangeIndent(e, 1) },
   { id: 'bullet', label: '• List', title: 'Bulleted list', run: (e) => e.chain().focus().toggleBulletList().run(), isActive: (e) => e.isActive('bulletList') },
   { id: 'ordered', label: '1. List', title: 'Numbered list', run: (e) => e.chain().focus().toggleOrderedList().run(), isActive: (e) => e.isActive('orderedList') },
+  { id: 'formula', label: '∑ Formula', title: 'Insert Formula', run: (e) => insertFormula(e), isActive: (e) => e.isActive('mathFormula') },
 ]
 const ACTIONS: Record<string, Action> = Object.fromEntries(ACTION_LIST.map((action) => [action.id, action]))
 
@@ -50,7 +52,7 @@ const ALIGNMENTS = [['left', 'Left'], ['center', 'Centered'], ['right', 'Right']
 
 type Group = string[] | 'format' | 'structure' | 'tools'
 /** Groups in order; a thin divider separates them. Controls with their own widget sit in named groups. */
-const LAYOUT: Group[] = [['undo', 'redo'], ['bold', 'italic', 'underline', 'strike'], 'format', 'structure', ['outdent', 'indent', 'bullet', 'ordered'], 'tools']
+const LAYOUT: Group[] = [['undo', 'redo'], ['bold', 'italic', 'underline', 'strike'], 'format', 'structure', ['outdent', 'indent', 'bullet', 'ordered', 'formula'], 'tools']
 
 const btn = 'min-w-8 rounded px-2 py-1 text-sm hover:bg-white/10 disabled:opacity-30'
 const control = 'rounded bg-white/10 px-1 py-0.5 text-sm text-white'

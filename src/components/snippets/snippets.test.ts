@@ -38,10 +38,10 @@ describe('snippet catalog', () => {
     expect(e.commands.insertContent('## Custom encounter\n\nRoll 1d6.')).toBe(true)
     expect(markdownOf(e)).toContain('## Custom encounter')
   })
-  it('groups the built-in snippets under Dungeons and Dragons', () => {
-    expect(SNIPPET_GROUPS).toContain('Dungeons and Dragons')
+  it('groups the built-in snippets under Rol Adventures', () => {
+    expect(SNIPPET_GROUPS).toContain('Rol Adventures')
     expect(SNIPPETS.every((snippet) => SNIPPET_GROUPS.includes(snippet.group))).toBe(true)
-    expect(SNIPPETS.filter((snippet) => snippet.group === 'Dungeons and Dragons').map((snippet) => snippet.id)).toEqual([
+    expect(SNIPPETS.filter((snippet) => snippet.group === 'Rol Adventures').map((snippet) => snippet.id)).toEqual([
       'character-sheet',
       'statblock',
       'read-aloud',

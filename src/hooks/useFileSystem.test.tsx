@@ -68,12 +68,13 @@ beforeEach(async () => {
   vi.mocked(updateAppState).mockImplementation(async (change) => (state = change(state)))
   vi.mocked(exists).mockImplementation(async (path) => directories.has(String(path)))
   vi.mocked(mkdir).mockImplementation(async (path) => { directories.add(String(path)) })
-  vi.mocked(readDir).mockImplementation(async (path) =>
-    String(path) === '/workspace'
-      ? ['Draft', 'Research', 'Trash'].filter((name) => directories.has(`/workspace/${name}`))
-          .map((name) => ({ name, isDirectory: true, isFile: false, isSymlink: false }))
-      : [],
-  )
+  vi.mocked(readDir).mockImplementation(async (path) => {
+    if (String(path) === '/workspace') {
+      return ['Draft', 'Research', 'Trash'].filter((name) => directories.has(`/workspace/${name}`))
+        .map((name) => ({ name, isDirectory: true, isFile: false, isSymlink: false }))
+    }
+    return []
+  })
   root = createRoot(document.createElement('div'))
   await act(async () => root?.render(<Harness onReady={(value) => { actions = value }} />))
 })
@@ -136,6 +137,38 @@ describe('new files and projects', () => {
     await actions.createNewFile()
     expect(writeTextFile).not.toHaveBeenCalled()
     expect(useTabStore.getState().paths).toEqual([])
+  })
+
+  it('saves an untitled document directly to Draft/untitled.md without Save As when a project is open', async () => {
+    directories.add('/workspace/Draft')
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().loadFromRaw(null, '')
+    useTabStore.getState().reset(null)
+    useDocumentStore.getState().setBody('# Written with all tabs closed')
+
+    await actions.saveFile()
+
+    expect(save).not.toHaveBeenCalled()
+    expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/untitled.md', '# Written with all tabs closed')
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/untitled.md')
+    expect(useDocumentStore.getState().document.dirty).toBe(false)
+    expect(useTabStore.getState().active).toBe('/workspace/Draft/untitled.md')
+  })
+
+  it('increments to Draft/untitled-1.md when Draft/untitled.md already exists', async () => {
+    directories.add('/workspace/Draft')
+    directories.add('/workspace/Draft/untitled.md')
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().loadFromRaw(null, '')
+    useTabStore.getState().reset(null)
+    useDocumentStore.getState().setBody('# Second untitled note')
+
+    await actions.saveFile()
+
+    expect(save).not.toHaveBeenCalled()
+    expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/untitled-1.md', '# Second untitled note')
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/untitled-1.md')
+    expect(useTabStore.getState().active).toBe('/workspace/Draft/untitled-1.md')
   })
 })
 
@@ -513,12 +546,54 @@ describe('applying templates', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
-  it('does not create files when saving an edited unsaved document is cancelled', async () => {
+  it('moves the existing Draft into Trash before applying a replacement template', async () => {
+    directories.add('/workspace/Draft')
+    directories.add('/workspace/Trash')
+    vi.mocked(readDir).mockImplementation(async (path) => {
+      if (String(path) === '/workspace/Draft') {
+        return [{ name: 'Chapter 1.md', isDirectory: false, isFile: true, isSymlink: false }]
+      }
+      if (String(path) === '/workspace') {
+        return ['Draft', 'Research', 'Trash'].filter((name) => directories.has(`/workspace/${name}`))
+          .map((name) => ({ name, isDirectory: true, isFile: false, isSymlink: false }))
+      }
+      return []
+    })
     useDocumentStore.getState().setWorkspace('/workspace', [])
+    const oldDocument = '/workspace/Draft/Chapter 1.md'
+    useDocumentStore.getState().loadFromRaw(oldDocument, '# Existing draft')
+    useTabStore.getState().reset(oldDocument)
+    vi.mocked(rename).mockResolvedValue(undefined)
+
+    expect(await actions.applyTemplate(template, { replaceExisting: true })).toBe(true)
+
+    expect(rename).toHaveBeenCalledWith('/workspace/Draft', expect.stringMatching(/^\/workspace\/Trash\/Replaced Draft /))
+    expect(mkdir).toHaveBeenCalledWith('/workspace/Draft')
+    expect(applyTemplateFiles).toHaveBeenCalledWith(template, '/workspace')
+    expect(useTabStore.getState().paths).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^\/workspace\/Trash\/Replaced Draft .*\/Chapter 1\.md$/),
+    ]))
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/pack/index.md')
+  })
+
+  it('does not move an empty Draft to Trash when replacing it', async () => {
+    directories.add('/workspace/Draft')
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+
+    expect(await actions.applyTemplate(template, { replaceExisting: true })).toBe(true)
+
+    expect(rename).not.toHaveBeenCalled()
+    expect(mkdir).not.toHaveBeenCalledWith('/workspace/Trash')
+    expect(mkdir).not.toHaveBeenCalledWith('/workspace/Draft')
+    expect(applyTemplateFiles).toHaveBeenCalledWith(template, '/workspace')
+  })
+
+  it('does not create files when saving an edited unsaved document outside a project is cancelled', async () => {
+    useDocumentStore.getState().setWorkspace(null, [])
     useDocumentStore.getState().setBody('# Personal notes')
     vi.mocked(save).mockResolvedValueOnce(null)
 
-    expect(await actions.applyTemplate(template)).toBe(false)
+    expect(await actions.applyTemplate({ ...template, requiresProject: false })).toBe(false)
 
     expect(applyTemplateFiles).not.toHaveBeenCalled()
     expect(useDocumentStore.getState().document.body).toBe('# Personal notes')

@@ -6,6 +6,7 @@ import { renderBook } from '../../lib/exportPdf'
 import { useDocumentStore } from '../../stores/documentStore'
 import { EMPTY_ENTRY, useProjectStore } from '../../stores/projectStore'
 import { draftDocuments, includedDocuments, resolveDocumentOrder, toDocumentOrder, type OrderItem } from '../../lib/documentOrder'
+import { usePluginSurface } from '../../plugins/usePluginSurface'
 import { DocumentOrderList } from './DocumentOrderList'
 import styles from './ExportPdfDialog.module.css'
 
@@ -25,6 +26,8 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
   const book = useRef<Book | undefined>(undefined)
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   const [zoom, setZoom] = useState(0.35)
+  const previewRef = usePluginSurface('preview', zoom, setZoom)
+  const zoomOptions = ZOOMS.includes(zoom) ? ZOOMS : [...ZOOMS, zoom].sort((a, b) => a - b)
   const theme = pageRequest().theme
   const root = useDocumentStore((state) => state.workspaceRoot)
   const tree = useDocumentStore((state) => state.tree)
@@ -85,7 +88,7 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
       <h2 id="export-pdf-title">Export PDF</h2>
       <label className={styles.zoom}>Zoom
         <select aria-label="Preview zoom" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
-          {ZOOMS.map((value) => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}
+          {zoomOptions.map((value) => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}
         </select>
       </label>
       <button type="button" className={styles.dismiss} aria-label="Close Export PDF" onClick={onClose}>×</button>
@@ -97,7 +100,7 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
         <DocumentOrderList items={items} onChange={reorder} disabled={entry.busy} />
         {entry.error && <p role="alert">{entry.error}</p>}
       </details>}
-    <div className={styles.preview} data-theme={theme}>
+    <div ref={previewRef} className={styles.preview} data-theme={theme}>
       {status.kind === 'loading' && <p role="status">Preparing preview…</p>}
       {status.kind === 'empty' && <p role="status">No documents are selected. Check some in Document Order.</p>}
       {status.kind === 'error' && <p role="alert">Preview failed: {status.message}</p>}

@@ -10,7 +10,7 @@ const write = vi.hoisted(() => vi.fn(async (path: string, text: string, options:
 }))
 vi.mock('./preferences', () => ({ loadLibraryPaths: async () => ({ themes: '/themes', templates: '/templates' }) }))
 vi.mock('@tauri-apps/plugin-fs', () => ({
-  exists: async (path: string) => path === '/themes' || disk.has(path), mkdir: vi.fn(),
+  exists: async (path: string) => path === '/themes' || disk.has(path), mkdir: vi.fn(), stat: vi.fn(async () => ({ size: 10 })),
   writeTextFile: write, rename: vi.fn(),
   readTextFile: async (path: string) => { if (!disk.has(path)) throw new Error('Missing file'); return disk.get(path)! },
   readDir: async () => [...disk.keys()].filter(path => path.startsWith('/themes/')).map(path => ({ name: path.slice(8), isFile: true, isSymlink: false, isDirectory: false })),

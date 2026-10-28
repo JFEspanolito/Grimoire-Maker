@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { useDocumentStore } from '../stores/documentStore'
+import { useFormulaStore, type FormulaDisplay } from '../stores/formulaStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { PAGE_SIZES } from '../types/document'
 import { insertContentBox } from './contentBoxes'
@@ -10,6 +11,20 @@ export const insertQuote = (editor: Editor) => editor.chain().focus().toggleBloc
 export const insertDivider = (editor: Editor) => editor.chain().focus().setHorizontalRule().run()
 export const insertSectionBreak = (editor: Editor) => editor.chain().focus().insertSectionBreak().run()
 export const insertTable = (editor: Editor) => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+
+/** Opens the mathematical formula builder for the active editor. */
+export function insertFormula(editor: Editor) {
+  useFormulaStore.getState().show(editor)
+}
+
+/** Inserts a new `mathFormula` node at the caret, or updates the existing formula at `editPos`. */
+export function applyFormula(editor: Editor, latex: string, display: FormulaDisplay = 'block', editPos: number | null = null) {
+  if (editor.isDestroyed) return false
+  if (editPos !== null && editor.state.doc.nodeAt(editPos)?.type.name === 'mathFormula') {
+    return editor.chain().focus().setNodeSelection(editPos).updateAttributes('mathFormula', { latex, display }).run()
+  }
+  return editor.chain().focus().insertContent({ type: 'mathFormula', attrs: { latex, display } }).run()
+}
 
 /**
  * A box of its own: 2 px black border, free to drag anywhere on the page. It starts beside the caret,

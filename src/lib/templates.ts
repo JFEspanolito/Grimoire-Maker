@@ -10,6 +10,7 @@ import {
 } from './themes'
 import type { Frontmatter } from '../types/document'
 import { readTemplateSnippets, type TemplateSnippet } from './templateSnippets'
+import { readThemeHeaderFooter } from './themeHeaderFooter'
 
 export interface Template {
   id: string
@@ -30,24 +31,59 @@ const MAX_FILE_BYTES = 512 * 1024
 
 export const OFFICIAL_TEMPLATES: Template[] = [
   {
-    id: 'classic-fantasy',
-    label: 'Classic Fantasy',
-    frontmatter: { title: 'Untitled Adventure', pageSize: 'a4', columns: 2, theme: 'parchment' },
-    body: '# Chapter One\n\nBegin here.\n',
+    id: 'poetry-collection',
+    label: 'Poetry Collection',
+    frontmatter: { title: 'Untitled Poetry Collection', pageSize: 'b5', columns: 1, theme: 'parchment' },
+    body: '# Poetry Collection\n\nBegin your anthology here.\n',
     builtin: true,
   },
   {
-    id: 'quick-one-shot',
-    label: 'Quick One-Shot (5 pages)',
-    frontmatter: { title: 'Untitled One-Shot', pageSize: 'letter', columns: 2, theme: 'modern' },
-    body: '# The Hook\n\n# The Location\n\n# The Encounter\n\n# The Reward\n',
+    id: 'three-act-novel',
+    label: 'Novel - Three Acts',
+    frontmatter: { title: 'Untitled Novel', pageSize: 'a4', columns: 1, theme: 'parchment' },
+    body: '# Novel - Three Acts\n\nBegin your manuscript here.\n',
     builtin: true,
   },
   {
-    id: 'a5-zine',
-    label: 'A5 Folded Zine',
-    frontmatter: { title: 'Untitled Zine', pageSize: 'b5', columns: 1, theme: 'dark-fantasy' },
-    body: '# Zine Title\n',
+    id: 'executive-report',
+    label: 'Executive Report',
+    frontmatter: { title: 'Untitled Executive Report', pageSize: 'a4', columns: 1, theme: 'modern' },
+    body: '# Executive Report\n\nSummarize key findings here.\n',
+    builtin: true,
+  },
+  {
+    id: 'family-cookbook',
+    label: 'Family Cookbook',
+    frontmatter: { title: 'Untitled Family Cookbook', pageSize: 'a4', columns: 1, theme: 'parchment' },
+    body: '# Family Cookbook\n\nCollect your recipes here.\n',
+    builtin: true,
+  },
+  {
+    id: 'independent-zine',
+    label: 'Independent Zine',
+    frontmatter: { title: 'Untitled Independent Zine', pageSize: 'b5', columns: 1, theme: 'dark-fantasy' },
+    body: '# Independent Zine\n\nAssemble your issue here.\n',
+    builtin: true,
+  },
+  {
+    id: 'operations-manual',
+    label: 'Operations Manual',
+    frontmatter: { title: 'Untitled Operations Manual', pageSize: 'a4', columns: 1, theme: 'modern' },
+    body: '# Operations Manual\n\nDocument your procedures here.\n',
+    builtin: true,
+  },
+  {
+    id: 'rpg-adventure-module',
+    label: 'RPG Adventure - Complete Module',
+    frontmatter: { title: 'Untitled RPG Adventure Module', pageSize: 'letter', columns: 2, theme: 'parchment' },
+    body: '# RPG Adventure - Complete Module\n\nPrepare your adventure here.\n',
+    builtin: true,
+  },
+  {
+    id: 'ttrpg-core-rulebook',
+    label: 'TTRPG Core Rulebook / Homebrew Manual',
+    frontmatter: { title: 'Untitled TTRPG Rulebook', pageSize: 'letter', columns: 2, theme: 'parchment' },
+    body: '# TTRPG Core Rulebook / Homebrew Manual\n\nBegin your rulebook here.\n',
     builtin: true,
   },
 ]
@@ -168,4 +204,3 @@ export async function loadUserTemplates(takenThemeIds: Set<string>, options: Tem
   applyStyle(options.styleId ?? 'grimoire-template-themes', css.join('\n'))
   return { dir, templates, themes, errors }
 }
-import { readThemeHeaderFooter } from './themeHeaderFooter'

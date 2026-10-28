@@ -1,5 +1,5 @@
 export const FILE_KIND = {
-  markdown: 'markdown', image: 'image', pdf: 'pdf', word: 'word', unsupported: 'unsupported',
+  markdown: 'markdown', image: 'image', pdf: 'pdf', word: 'word', text: 'text', unsupported: 'unsupported',
 } as const
 export type FileKind = (typeof FILE_KIND)[keyof typeof FILE_KIND]
 
@@ -19,5 +19,6 @@ export function classifyFile(path: string): FileKind {
   if (Object.hasOwn(IMAGE_MIME, extension)) return FILE_KIND.image
   if (extension === 'pdf') return FILE_KIND.pdf
   if (extension === 'docx' || extension === 'doc') return FILE_KIND.word
+  if (extension === 'txt') return FILE_KIND.text
   return FILE_KIND.unsupported
 }

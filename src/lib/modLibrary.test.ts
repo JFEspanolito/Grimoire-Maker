@@ -2,15 +2,24 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { exists, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
 import { LEGACY_PLUGINS, MOD_EXAMPLES, OFFICIAL_PLUGINS, readDisabledMods, writeDisabledMods } from './modLibrary'
 
-vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn(), mkdir: vi.fn(), readDir: vi.fn(), readTextFile: vi.fn(), rename: vi.fn(), stat: vi.fn(), writeTextFile: vi.fn() }))
+vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn(), mkdir: vi.fn(), readDir: vi.fn(), readTextFile: vi.fn(), remove: vi.fn(), rename: vi.fn(), stat: vi.fn(), writeTextFile: vi.fn() }))
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(stat).mockResolvedValue({ size: 100 } as Awaited<ReturnType<typeof stat>>) })
 
 it('ships declarative content plus complete executable Zoom and Ruler packages', () => {
-  for (const id of ['classic-fantasy', 'quick-one-shot', 'a5-zine']) {
+  for (const id of [
+    'poetry-collection',
+    'three-act-novel',
+    'executive-report',
+    'family-cookbook',
+    'independent-zine',
+    'operations-manual',
+    'rpg-adventure-module',
+    'ttrpg-core-rulebook',
+  ]) {
     expect(MOD_EXAMPLES[`Templates/${id}/README.md`]).toContain('Create your own')
-    expect(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`Templates/${id}/chapters/`)).length).toBeGreaterThanOrEqual(3)
+    expect(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`Templates/${id}/chapters/`)).length).toBeGreaterThanOrEqual(7)
   }
-  expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Snippets/'))).toHaveLength(5)
+  expect(Object.keys(MOD_EXAMPLES).filter((path) => path.startsWith('Snippets/'))).toHaveLength(50)
   expect(Object.keys(MOD_EXAMPLES).filter(path => !path.startsWith('Plugins/')).every(path => path.endsWith('.md'))).toBe(true)
   for (const folder of ['zoom', 'pixel-ruler']) {
     expect(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`Plugins/${folder}/`)).sort())

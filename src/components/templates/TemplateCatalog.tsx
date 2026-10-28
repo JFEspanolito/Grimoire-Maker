@@ -4,6 +4,8 @@ import { useTemplateStore } from '../../stores/templateStore'
 import { exportTemplateZip, importTemplateZip } from '../../lib/templateActions'
 import type { Template } from '../../lib/templates'
 import { isTauri, useFileSystem } from '../../hooks/useFileSystem'
+import { useDocumentStore } from '../../stores/documentStore'
+import { ConfirmDialog } from '../layout/ConfirmDialog'
 
 function TemplateList({
   items,
@@ -42,9 +44,11 @@ type Notice = { kind: 'ok' | 'error'; text: string }
 /** Browser presets plus enabled folder templates, including compatible legacy packages. */
 export function TemplateCatalog() {
   const { applyTemplate } = useFileSystem()
+  const hasProject = useDocumentStore((state) => state.workspaceRoot !== null)
   const { templates, dir, errors, reload } = useTemplateStore()
   const [open, setOpen] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [pendingTemplate, setPendingTemplate] = useState<Template | null>(null)
 
   const official = templates.filter((t) => t.builtin)
   const community = templates.filter((t) => !t.builtin)
@@ -71,8 +75,13 @@ export function TemplateCatalog() {
   const exportZip = (t: Template) =>
     run(async () => ((await exportTemplateZip(t)) ? `Exported "${t.label}"` : null))
 
-  const apply = (t: Template) => void run(async () =>
-    (await applyTemplate(t)) ? `Applied "${t.label}"` : null)
+  const apply = (template: Template, replaceExisting = false) => {
+    setPendingTemplate(null)
+    void run(async () =>
+      (await applyTemplate(template, { replaceExisting }))
+        ? replaceExisting ? `Replaced Draft with "${template.label}"` : `Applied "${template.label}"`
+        : null)
+  }
 
   return (
     <div className="border-t border-white/10 p-3">
@@ -87,11 +96,11 @@ export function TemplateCatalog() {
       </button>
       {open && (
         <div className="mt-2 flex flex-col gap-2">
-          <TemplateList items={official} onApply={apply} onExport={(t) => void exportZip(t)} />
+          <TemplateList items={official} onApply={setPendingTemplate} onExport={(t) => void exportZip(t)} />
           {community.length > 0 && (
             <>
               <h3 className="text-xs uppercase tracking-wide text-white/40">Installed</h3>
-              <TemplateList items={community} onApply={apply} onExport={(t) => void exportZip(t)} />
+              <TemplateList items={community} onApply={setPendingTemplate} onExport={(t) => void exportZip(t)} />
             </>
           )}
           {isTauri() && (
@@ -110,6 +119,22 @@ export function TemplateCatalog() {
             </p>
           )}
         </div>
+      )}
+      {pendingTemplate && (
+        <ConfirmDialog
+          title={`Usar "${pendingTemplate.label}"`}
+          message={hasProject
+            ? 'Añadir conserva los documentos actuales. Reemplazar mueve todo Draft a Trash antes de aplicar la plantilla.'
+            : 'No hay un proyecto abierto. Puedes usar la plantilla en el editor; abre un proyecto para reemplazar su Draft.'}
+          cancelLabel="Cancelar"
+          secondaryLabel={hasProject ? 'Añadir esto al proyecto actual' : 'Usar plantilla sin proyecto'}
+          confirmLabel="Reemplazar existente"
+          danger
+          confirmDisabled={!hasProject}
+          onCancel={() => setPendingTemplate(null)}
+          onSecondary={() => apply(pendingTemplate)}
+          onConfirm={() => apply(pendingTemplate, true)}
+        />
       )}
     </div>
   )
