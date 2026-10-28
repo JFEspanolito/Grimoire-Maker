@@ -158,10 +158,22 @@ fn valid_component(part: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Decodes the hint bytes: UTF-8 (BOM tolerated) or, as the NSIS installer writes it, UTF-16LE with a BOM.
+fn decode_hint_text(bytes: &[u8]) -> Result<String, String> {
+    if let Some(body) = bytes.strip_prefix(&[0xff, 0xfe]) {
+        if body.len() % 2 != 0 {
+            return Err("the hint is not valid UTF-16".into());
+        }
+        let units: Vec<u16> = body.chunks_exact(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]])).collect();
+        return String::from_utf16(&units).map_err(|_| "the hint is not valid UTF-16".to_string());
+    }
+    std::str::from_utf8(bytes).map(str::to_owned).map_err(|_| "the hint is not valid UTF-8".to_string())
+}
+
 /// Validates the hint text and returns the normalized root. Only the first line may carry a path.
 pub fn parse_hint(bytes: &[u8], config: &Path) -> Result<String, String> {
-    let text = std::str::from_utf8(bytes).map_err(|_| "the hint is not valid UTF-8")?;
-    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let decoded = decode_hint_text(bytes)?;
+    let text = decoded.strip_prefix('\u{feff}').unwrap_or(&decoded);
     let mut lines = text.split('\n').map(|line| line.strip_suffix('\r').unwrap_or(line));
     let first = lines.next().unwrap_or_default().trim();
     if first.is_empty() {
@@ -307,6 +319,24 @@ mod tests {
         assert_eq!(hint("\u{feff}C:\\Content").unwrap(), "C:/Content");
         assert_eq!(hint("\\\\server\\share\\Grimoire").unwrap(), "//server/share/Grimoire");
         assert_eq!(hint("C:\\").unwrap(), "C:");
+    }
+
+    #[test]
+    fn utf16le_hints_with_a_bom_are_accepted() {
+        let utf16 = |text: &str| -> Vec<u8> {
+            let mut bytes = vec![0xff, 0xfe];
+            bytes.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+            bytes
+        };
+        let config = config();
+        assert_eq!(
+            parse_hint(&utf16("C:\\Users\\José Ñandú\\Док\\Grimoire Maker\r\n"), &config).unwrap(),
+            "C:/Users/José Ñandú/Док/Grimoire Maker"
+        );
+        assert!(parse_hint(&utf16("Relative"), &config).is_err());
+        // Unpaired surrogate and truncated code unit.
+        assert!(parse_hint(&[0xff, 0xfe, 0x00, 0xd8], &config).is_err());
+        assert!(parse_hint(&[0xff, 0xfe, b'C', 0x00, b':'], &config).is_err());
     }
 
     #[test]
