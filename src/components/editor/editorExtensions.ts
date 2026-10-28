@@ -7,6 +7,7 @@ import { GrimoireImageNode } from './extensions/imageNode'
 import { TableExtensions } from './extensions/tables'
 import { ContentBox } from './extensions/ContentBox'
 import { BlockFormat } from './extensions/blockFormat'
+import { MathFormula } from './extensions/formula'
 import { Section, SectionDocument } from './extensions/section'
 import { SearchHighlight } from './extensions/searchHighlight'
 
@@ -21,6 +22,7 @@ export const EDITOR_EXTENSIONS = [
   FontSize,
   GrimoireImageNode,
   ContentBox,
+  MathFormula,
   ...TableExtensions,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
   Statblock,
