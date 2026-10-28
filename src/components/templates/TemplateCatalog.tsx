@@ -43,7 +43,7 @@ type Notice = { kind: 'ok' | 'error'; text: string }
 
 /** Browser presets plus enabled folder templates, including compatible legacy packages. */
 export function TemplateCatalog() {
-  const { applyTemplate } = useFileSystem()
+  const { applyTemplate, createProject } = useFileSystem()
   const hasProject = useDocumentStore((state) => state.workspaceRoot !== null)
   const { templates, dir, errors, reload } = useTemplateStore()
   const [manualOpen, setManualOpen] = useState<{ hasProject: boolean; open: boolean } | null>(null)
@@ -78,10 +78,18 @@ export function TemplateCatalog() {
 
   const apply = (template: Template, replaceExisting = false) => {
     setPendingTemplate(null)
-    void run(async () =>
-      (await applyTemplate(template, { replaceExisting }))
+    void run(async () => {
+      if (!hasProject && template.location?.kind === 'package' && template.requiresProject !== false) {
+        const folderName = template.label.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() || 'My Grimoire'
+        if (!(await createProject(folderName))) return null
+        return (await applyTemplate(template, { replaceExisting: true }))
+          ? `Created project with "${template.label}"`
+          : null
+      }
+      return (await applyTemplate(template, { replaceExisting }))
         ? replaceExisting ? `Replaced Draft with "${template.label}"` : `Applied "${template.label}"`
-        : null)
+        : null
+    })
   }
 
   return (
@@ -89,7 +97,7 @@ export function TemplateCatalog() {
       <button
         className="flex w-full items-center gap-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:text-white/80"
         aria-expanded={open}
-        title={dir ? `Community templates folder: ${dir}` : undefined}
+        title={dir ? 'Empty project structures created by the community.' : undefined}
         onClick={() => setManualOpen({ hasProject, open: !open })}
       >
         <span aria-hidden>{open ? '▾' : '▸'}</span>
@@ -126,9 +134,9 @@ export function TemplateCatalog() {
           title={`Usar "${pendingTemplate.label}"`}
           message={hasProject
             ? 'Añadir conserva los documentos actuales. Reemplazar mueve todo Draft a Trash antes de aplicar la plantilla.'
-            : 'No hay un proyecto abierto. Puedes usar la plantilla en el editor; abre un proyecto para reemplazar su Draft.'}
+            : 'No hay un proyecto abierto. Elige una carpeta donde crear el proyecto para aplicar esta plantilla.'}
           cancelLabel="Cancelar"
-          secondaryLabel={hasProject ? 'Añadir esto al proyecto actual' : 'Usar plantilla sin proyecto'}
+          secondaryLabel={hasProject ? 'Añadir esto al proyecto actual' : 'Elegir carpeta y crear proyecto'}
           confirmLabel="Reemplazar existente"
           danger
           confirmDisabled={!hasProject}

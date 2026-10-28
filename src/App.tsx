@@ -22,6 +22,7 @@ import { watchSettings } from './lib/appState'
 import { useTabStore } from './stores/tabStore'
 import { useUnsavedClose } from './hooks/useUnsavedClose'
 import { MenuBar } from './components/layout/MenuBar'
+import { NewProjectDialog } from './components/project/NewProjectDialog'
 import { FindReplaceDialog } from './components/editor/FindReplaceDialog'
 import { FormulaDialog } from './components/editor/FormulaDialog'
 import styles from './App.module.css'
@@ -40,6 +41,7 @@ export default function App() {
   const [snippetsWidth, setSnippetsWidth] = useState(256)
   const sidebarCollapsed = !visiblePanels.files && !visiblePanels.templates && !visiblePanels.git
   const [sessionReady, setSessionReady] = useState(false)
+  const [startupProjectOpen, setStartupProjectOpen] = useState(false)
   useAutoSave(sessionReady)
   useAutoCommit(sessionReady)
   const workspace = useDocumentStore((s) => s.workspaceRoot)
@@ -51,7 +53,7 @@ export default function App() {
   const themes = useThemeStore((s) => s.themes)
   const reloadThemes = useThemeStore((s) => s.reload)
   const reloadTemplates = useTemplateStore((s) => s.reload)
-  const { restoreSession } = useFileSystem()
+  const { restoreSession, createProject, openWorkspace } = useFileSystem()
   const activeTab = useTabStore((s) => s.active)
   const hasTabs = useTabStore((s) => s.paths.length > 0)
   const activeEditor = hasTabs && (!activeTab || !/\.md$/i.test(activeTab)) ? null : editor
@@ -64,7 +66,13 @@ export default function App() {
     let cancelled = false
     let unwatch = () => {}
     void restoreSession()
-      .then(() => { if (!cancelled) setSessionReady(true) })
+      .then(() => {
+        if (cancelled) return
+        setSessionReady(true)
+        if (!useDocumentStore.getState().workspaceRoot && !useSessionStore.getState().workspaceError) {
+          setStartupProjectOpen(true)
+        }
+      })
       .catch((e) => useSessionStore.getState().setWorkspaceError(`Could not restore session: ${e instanceof Error ? e.message : String(e)}`))
       .finally(() => {
         if (!cancelled) unwatch = watchSettings()
@@ -135,6 +143,14 @@ export default function App() {
         </div>
         <FindReplaceDialog editor={activeEditor} />
         <FormulaDialog />
+        {startupProjectOpen && !workspace && (
+          <NewProjectDialog
+            required
+            onCreate={createProject}
+            onOpenExisting={openWorkspace}
+            onClose={() => setStartupProjectOpen(false)}
+          />
+        )}
         <ToastHost />
       </div>
     </PluginProvider>

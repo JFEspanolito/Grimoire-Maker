@@ -173,8 +173,11 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
     {busy && <p className={styles.hint} role="status">Working…</p>}
     {notice && <p className={styles.hint} role="status">{notice}</p>}
     {workspace && status && !status.isRepository && <div className={styles.empty}>
-      <p>This project has no Git repository.</p>
-      <button disabled={busy} onClick={() => void run(initializeRepository)}>Initialize Git repository</button>
+      <p>This project has no Git repository yet.</p>
+      <button className={styles.initButton} disabled={busy} onClick={() => void run(initializeRepository)}>Initialize Git repository</button>
+      <p className={styles.hint}>
+        Version control keeps a local timeline of your manuscript so you can save checkpoints (commits), compare changes side by side, and safely restore earlier drafts whenever you need.
+      </p>
     </div>}
     {status?.isRepository && <>
       <p className={styles.branch} title={status.branch}>Branch: {status.branch}</p>

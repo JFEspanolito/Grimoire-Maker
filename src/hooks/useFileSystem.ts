@@ -171,13 +171,14 @@ export function useFileSystem() {
       : tree)
     const markdown = initial && /\.md$/i.test(initial)
     const raw = markdown ? await readTextFile(initial) : ''
+    await remember((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
     setWorkspace(root, tree)
     useDocumentStore.getState().resetDocuments()
     if (!initial || markdown) loadFromRaw(initial, raw)
     useTabStore.getState().reset(initial)
     useExplorerStore.getState().selectPath(null)
     useSessionStore.getState().setWorkspaceError(null)
-    await remember((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
+    notifyRepositoryChanged()
   }, [loadFromRaw, saveAllDocuments, remember, setWorkspace])
 
   const openWorkspace = useCallback(async () => {
