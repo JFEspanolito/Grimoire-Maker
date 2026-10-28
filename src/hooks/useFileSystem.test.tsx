@@ -68,12 +68,13 @@ beforeEach(async () => {
   vi.mocked(updateAppState).mockImplementation(async (change) => (state = change(state)))
   vi.mocked(exists).mockImplementation(async (path) => directories.has(String(path)))
   vi.mocked(mkdir).mockImplementation(async (path) => { directories.add(String(path)) })
-  vi.mocked(readDir).mockImplementation(async (path) =>
-    String(path) === '/workspace'
-      ? ['Draft', 'Research', 'Trash'].filter((name) => directories.has(`/workspace/${name}`))
-          .map((name) => ({ name, isDirectory: true, isFile: false, isSymlink: false }))
-      : [],
-  )
+  vi.mocked(readDir).mockImplementation(async (path) => {
+    if (String(path) === '/workspace') {
+      return ['Draft', 'Research', 'Trash'].filter((name) => directories.has(`/workspace/${name}`))
+        .map((name) => ({ name, isDirectory: true, isFile: false, isSymlink: false }))
+    }
+    return []
+  })
   root = createRoot(document.createElement('div'))
   await act(async () => root?.render(<Harness onReady={(value) => { actions = value }} />))
 })
@@ -511,6 +512,48 @@ describe('applying templates', () => {
     expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/pack/index.md')
     expect(useDocumentStore.getState().document.body).toBe('# Starting chapter')
     expect(save).not.toHaveBeenCalled()
+  })
+
+  it('moves the existing Draft into Trash before applying a replacement template', async () => {
+    directories.add('/workspace/Draft')
+    directories.add('/workspace/Trash')
+    vi.mocked(readDir).mockImplementation(async (path) => {
+      if (String(path) === '/workspace/Draft') {
+        return [{ name: 'Chapter 1.md', isDirectory: false, isFile: true, isSymlink: false }]
+      }
+      if (String(path) === '/workspace') {
+        return ['Draft', 'Research', 'Trash'].filter((name) => directories.has(`/workspace/${name}`))
+          .map((name) => ({ name, isDirectory: true, isFile: false, isSymlink: false }))
+      }
+      return []
+    })
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    const oldDocument = '/workspace/Draft/Chapter 1.md'
+    useDocumentStore.getState().loadFromRaw(oldDocument, '# Existing draft')
+    useTabStore.getState().reset(oldDocument)
+    vi.mocked(rename).mockResolvedValue(undefined)
+
+    expect(await actions.applyTemplate(template, { replaceExisting: true })).toBe(true)
+
+    expect(rename).toHaveBeenCalledWith('/workspace/Draft', expect.stringMatching(/^\/workspace\/Trash\/Replaced Draft /))
+    expect(mkdir).toHaveBeenCalledWith('/workspace/Draft')
+    expect(applyTemplateFiles).toHaveBeenCalledWith(template, '/workspace')
+    expect(useTabStore.getState().paths).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^\/workspace\/Trash\/Replaced Draft .*\/Chapter 1\.md$/),
+    ]))
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/pack/index.md')
+  })
+
+  it('does not move an empty Draft to Trash when replacing it', async () => {
+    directories.add('/workspace/Draft')
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+
+    expect(await actions.applyTemplate(template, { replaceExisting: true })).toBe(true)
+
+    expect(rename).not.toHaveBeenCalled()
+    expect(mkdir).not.toHaveBeenCalledWith('/workspace/Trash')
+    expect(mkdir).not.toHaveBeenCalledWith('/workspace/Draft')
+    expect(applyTemplateFiles).toHaveBeenCalledWith(template, '/workspace')
   })
 
   it('does not create files when saving an edited unsaved document is cancelled', async () => {

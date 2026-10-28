@@ -1,6 +1,7 @@
 import { configRoot } from './configRoot'
 import { exists, mkdir, readDir, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
 import { ensureModDirectory, seedExamples, type ModFs } from './modCatalog'
+import { deleteModFiles } from './modDelete'
 import { loadLibraryPaths, type LibraryPaths } from './preferences'
 import { installOfficialPlugin, listOfficialPlugins } from './officialPlugins'
 import type { MigrationFs } from './migratedPlugins'
@@ -35,7 +36,11 @@ export function prepareModLibrary(): Promise<ModLibraryPaths> {
 /** Libraries that ship examples: the folder name inside a library root and the matching key of the configured paths. */
 const SEEDED = [['Snippets', 'snippets'], ['Plugins', 'plugins'], ['Templates', 'templates']] as const
 /** Per-library markers that let an upgrade add newer examples without replacing edited ones. */
-const UPGRADE_MARKERS = [['Templates', 'templates', '.complete-templates-v2-seeded'], ['Plugins', 'plugins', '.executable-plugins-v1-seeded'], ['Snippets', 'snippets', '.editorial-snippets-v2-seeded']] as const
+const UPGRADE_MARKERS = [['Templates', 'templates', '.editorial-templates-v1-seeded'], ['Plugins', 'plugins', '.executable-plugins-v1-seeded'], ['Snippets', 'snippets', '.rol-adventures-snippets-v2-seeded']] as const
+const RETIRED_FOLDERS: Partial<Record<(typeof SEEDED)[number][1], readonly string[]>> = {
+  snippets: ['Dungeons and Dragons', 'Rol', 'Rol Adventures'],
+  templates: ['classic-fantasy', 'quick-one-shot', 'a5-zine'],
+}
 
 async function initializeLibrary(): Promise<ModLibraryPaths> {
   const config = (await configRoot()).replaceAll('\\', '/').replace(/\/$/, '')
@@ -66,6 +71,19 @@ async function initializeLibrary(): Promise<ModLibraryPaths> {
   for (const [folder, key, marker] of UPGRADE_MARKERS) {
     const base = seedBase(folder, key)
     if (!base || await exists(`${paths[key]}/${marker}`)) continue
+    for (const retired of RETIRED_FOLDERS[key] ?? []) {
+      const retiredPath = `${paths[key]}/${retired}`
+      if (await exists(retiredPath)) {
+        await deleteModFiles({
+          id: `${folder}/${retired.toLowerCase()}`,
+          kind: folder,
+          label: retired,
+          folder: retiredPath,
+          enabled: true,
+          errors: [],
+        }).catch(() => undefined)
+      }
+    }
     const upgrade = Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith(`${folder}/`))
     for (const [relative, contents] of upgrade) {
       const segments = relative.split('/')

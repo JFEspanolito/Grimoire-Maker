@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { DndContext, DragOverlay, PointerSensor, useDraggable, useSensor, useSensors, type DragEndEvent, type DragMoveEvent } from '@dnd-kit/core'
 import type { Editor } from '@tiptap/react'
@@ -10,6 +10,29 @@ import { findSnippetDropTarget } from '../../lib/snippetDrop'
 import { insertContentBox } from '../../lib/contentBoxes'
 
 type PaletteSnippet = Snippet | TemplateSnippet
+
+interface SnippetFolderNode {
+  items: PaletteSnippet[]
+  children: Map<string, SnippetFolderNode>
+}
+
+function buildFolderTree(items: PaletteSnippet[]): SnippetFolderNode {
+  const root: SnippetFolderNode = { items: [], children: new Map() }
+  for (const snippet of items) {
+    const segments = snippet.subgroup?.split('/').map((s) => s.trim()).filter(Boolean) ?? []
+    let cursor = root
+    for (const segment of segments) {
+      let child = cursor.children.get(segment)
+      if (!child) {
+        child = { items: [], children: new Map() }
+        cursor.children.set(segment, child)
+      }
+      cursor = child
+    }
+    cursor.items.push(snippet)
+  }
+  return root
+}
 
 function DraggableSnippet({ snippet, onInsert }: { snippet: PaletteSnippet; onInsert: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: snippet.id })
@@ -48,6 +71,25 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
     if (editor) insertContentBox(editor, 'markdown' in snippet ? snippet.markdown : snippet.node)
   }
 
+  const renderTree = (node: SnippetFolderNode): ReactNode => (
+    <>
+      {node.items.map((snippet) => (
+        <DraggableSnippet key={snippet.id} snippet={snippet} onInsert={() => insert(snippet)} />
+      ))}
+      {Array.from(node.children.entries()).map(([folderName, childNode]) => (
+        <details key={folderName} aria-label={folderName} className="pl-2 [&[open]>summary>span:first-child]:rotate-90">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded px-1 py-1 text-xs font-semibold tracking-wide text-white/60 hover:bg-white/5 [&::-webkit-details-marker]:hidden">
+            <span aria-hidden="true" className="inline-block transition-transform">▸</span>
+            {folderName}
+          </summary>
+          <div className="mt-1.5 flex flex-col gap-1.5 pl-2">
+            {renderTree(childNode)}
+          </div>
+        </details>
+      ))}
+    </>
+  )
+
   const resolveDrop = ({ activatorEvent, delta }: DragMoveEvent | DragEndEvent) => {
     if (!(activatorEvent instanceof MouseEvent)) return null
     return findSnippetDropTarget(activatorEvent.clientX + delta.x, activatorEvent.clientY + delta.y)
@@ -73,19 +115,20 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
       }}>
       <div className="flex flex-col gap-2 p-3">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Snippets</h2>
-        {groups.map((group) => (
-          <details key={group} className="group" aria-label={group}>
-            <summary className="flex cursor-pointer list-none items-center gap-2 rounded px-1 py-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:bg-white/5 [&::-webkit-details-marker]:hidden">
-              <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-90">▸</span>
-              {group}
-            </summary>
-            <div className="mt-2 flex flex-col gap-2">
-              {snippets.filter((s) => s.group === group).map((snippet) => (
-                <DraggableSnippet key={snippet.id} snippet={snippet} onInsert={() => insert(snippet)} />
-              ))}
-            </div>
-          </details>
-        ))}
+        {groups.map((group) => {
+          const tree = buildFolderTree(snippets.filter((s) => s.group === group))
+          return (
+            <details key={group} className="group [&[open]>summary>span:first-child]:rotate-90" aria-label={group}>
+              <summary className="flex cursor-pointer list-none items-center gap-2 rounded px-1 py-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:bg-white/5 [&::-webkit-details-marker]:hidden">
+                <span aria-hidden="true" className="inline-block transition-transform">▸</span>
+                {group}
+              </summary>
+              <div className="mt-2 flex flex-col gap-2">
+                {renderTree(tree)}
+              </div>
+            </details>
+          )
+        })}
       </div>
       {dragged && createPortal(<>
         <DragOverlay dropAnimation={null} style={{ pointerEvents: 'none' }}>

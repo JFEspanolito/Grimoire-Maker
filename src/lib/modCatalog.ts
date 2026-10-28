@@ -101,7 +101,8 @@ export async function discoverMods(io: ModFs, root: string, disabled: string[], 
               try {
                 const { frontmatter, body } = parseDocument(await read(`${dir}/${file.name}`))
                 if (!body.trim()) throw new Error('Empty snippet')
-                if (mod.enabled) snippets.push({ id: `mod:${id}/${name}`, group: entry.name,
+                const subgroup = relative ? relative.replace(/\/$/, '') : undefined
+                if (mod.enabled) snippets.push({ id: `mod:${id}/${name}`, group: entry.name, ...(subgroup && { subgroup }),
                   label: String(frontmatter.snippetName ?? file.name.replace(/\.md$/i, '')), markdown: body })
               } catch (error) { mod.errors.push(`${name}: ${message(error)}`) }
             }

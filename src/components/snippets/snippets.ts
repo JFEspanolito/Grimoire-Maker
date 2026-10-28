@@ -1,13 +1,14 @@
 import { READ_ALOUD_TEMPLATE, STATBLOCK_TEMPLATE } from '../editor/extensions/blocks'
 import { buildTable } from '../editor/extensions/tables'
 
-export const SNIPPET_GROUPS = ['Dungeons and Dragons'] as const
+export const SNIPPET_GROUPS = ['Rol Adventures'] as const
 export type SnippetGroup = (typeof SNIPPET_GROUPS)[number]
 
 export interface Snippet {
   id: string
   label: string
   group: SnippetGroup
+  subgroup?: string
   /** Editor JSON (one node or several) inserted at the drop point or cursor. */
   node: object | object[]
 }
@@ -48,13 +49,13 @@ const CHARACTER_SHEET = {
 }
 
 export const SNIPPETS: Snippet[] = [
-  { id: 'character-sheet', label: 'Character sheet', group: 'Dungeons and Dragons', node: CHARACTER_SHEET },
-  { id: 'statblock', label: 'Statblock', group: 'Dungeons and Dragons', node: STATBLOCK_TEMPLATE },
-  { id: 'read-aloud', label: 'Read-aloud box', group: 'Dungeons and Dragons', node: READ_ALOUD_TEMPLATE },
+  { id: 'character-sheet', label: 'Character Sheet (D&D)', group: 'Rol Adventures', node: CHARACTER_SHEET },
+  { id: 'statblock', label: 'Statblock (D&D)', group: 'Rol Adventures', node: STATBLOCK_TEMPLATE },
+  { id: 'read-aloud', label: 'Read-aloud box', group: 'Rol Adventures', node: READ_ALOUD_TEMPLATE },
   {
     id: 'encounter-table',
-    label: 'Encounter table (d6)',
-    group: 'Dungeons and Dragons',
+    label: 'Encounter Table (d6)',
+    group: 'Rol Adventures',
     node: [
       heading('Random Encounters'),
       buildTable(['d6', 'Encounter', 'Notes'], 6, [['1'], ['2'], ['3'], ['4'], ['5'], ['6']]),
@@ -62,8 +63,8 @@ export const SNIPPETS: Snippet[] = [
   },
   {
     id: 'loot-table',
-    label: 'Loot table (d100)',
-    group: 'Dungeons and Dragons',
+    label: 'Loot Table (d100)',
+    group: 'Rol Adventures',
     node: [
       heading('Treasure'),
       buildTable(['d100', 'Treasure', 'Value'], 4, [['01–50'], ['51–80'], ['81–95'], ['96–00']]),

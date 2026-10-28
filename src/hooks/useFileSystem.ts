@@ -78,6 +78,34 @@ function validateName(name: string): string {
   return trimmed
 }
 
+async function archiveDraft(root: string): Promise<{ from: string; to: string } | null> {
+  const draft = `${root}/Draft`
+  const trash = `${root}/Trash`
+  if (!(await exists(draft))) {
+    await mkdir(draft)
+    return null
+  }
+  if ((await readDir(draft)).length === 0) return null
+  if (!(await exists(trash))) await mkdir(trash)
+
+  const base = `Replaced Draft ${new Date().toISOString().replace(/[:.]/g, '-')}`
+  let archive = `${trash}/${base}`
+  for (let suffix = 1; await exists(archive); suffix++) archive = `${trash}/${base} (${suffix})`
+
+  await rename(draft, archive)
+  try {
+    await mkdir(draft)
+  } catch (error) {
+    try {
+      await rename(archive, draft)
+    } catch (rollbackError) {
+      throw new AggregateError([error, rollbackError], 'Could not create a new Draft or restore the previous Draft')
+    }
+    throw error
+  }
+  return { from: draft, to: archive }
+}
+
 export function useFileSystem() {
   const { loadFromRaw, setWorkspace } = useDocumentStore.getState()
 
@@ -357,13 +385,21 @@ export function useFileSystem() {
     await refreshTree()
   }), [loadFromRaw, refreshTree])
 
-  const applyTemplate = useCallback((template: Template) => runFileAction(async (): Promise<boolean> => {
+  const applyTemplate = useCallback((template: Template, options: { replaceExisting?: boolean } = {}) => runFileAction(async (): Promise<boolean> => {
     const root = useDocumentStore.getState().workspaceRoot
     if (!root && template.location?.kind === 'package' && template.requiresProject !== false) {
       throw new Error('Open a project folder to apply a package template')
     }
     if (useDocumentStore.getState().document.dirty && !(await persistCurrentDocument())) return false
 
+    if (root && options.replaceExisting) {
+      const archived = await archiveDraft(root)
+      if (archived) {
+        useDocumentStore.getState().remapDocuments(archived.from, archived.to)
+        useTabStore.getState().remap(archived.from, archived.to)
+        await refreshTree()
+      }
+    }
     const path = root ? await applyTemplateFiles(template, root) : null
     const raw = serializeDocument(template.frontmatter, template.body)
     loadFromRaw(path, raw)

@@ -71,6 +71,28 @@ describe('snippet palette', () => {
     })
   })
 
+  it('renders nested subfolders as initially collapsed internal groups inside a category', async () => {
+    useModStore.setState({
+      ready: true,
+      snippets: [
+        { id: 'mod:rol/read-aloud', label: 'Read-aloud box', group: 'Rol Adventures', markdown: 'Scene' },
+        { id: 'mod:rol/cs/dnd', label: 'Character Sheet (D&D)', group: 'Rol Adventures', subgroup: 'Character Sheets', markdown: '### Sheet' },
+        { id: 'mod:rol/sb/dnd', label: 'Statblock (D&D)', group: 'Rol Adventures', subgroup: 'Statblocks', markdown: '### Monster' },
+      ],
+    })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<SnippetPalette editor={null} />))
+
+    const topGroup = container.querySelector('details[aria-label="Rol Adventures"]') as HTMLDetailsElement
+    expect(topGroup).not.toBeNull()
+    expect(topGroup.open).toBe(false)
+
+    const subGroups = Array.from(topGroup.querySelectorAll('details'))
+    expect(subGroups.map((el) => el.getAttribute('aria-label'))).toEqual(['Character Sheets', 'Statblocks'])
+    expect(subGroups.every((el) => el.open === false)).toBe(true)
+  })
+
   it('adds imported Markdown snippets under a collapsible package group', async () => {
     useTemplateStore.setState({ templates: [...OFFICIAL_TEMPLATES, {
       id: 'custom', label: 'Custom', builtin: false, frontmatter: {}, body: '# Start',
