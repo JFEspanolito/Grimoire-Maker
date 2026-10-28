@@ -5,11 +5,29 @@
 ;   * A "Content folders" wizard page (path field + Browse button, default "$DOCUMENTS\Grimoire Maker").
 ;     This file is included near the top of the generated script, so the page is declared before the
 ;     template's own pages and appears FIRST in the wizard. It is skipped on upgrades/reinstalls (when
-;     "%APPDATA%\GriomoireMaker\setting.json" exists) and in passive/update mode.
+;     "setting.json" or the legacy "library-paths.json" already exists in "%APPDATA%\GriomoireMaker" or in
+;     the pre-rename "%APPDATA%\app.grimoiremaker.desktop") and in passive/update mode.
 ;   * After the files are copied (NSIS_HOOK_POSTINSTALL): creates <path>\Plugins, Snippets, Templates,
 ;     Themes and Logs, and writes the hint file "%APPDATA%\GriomoireMaker\install-content-root.txt"
 ;     (UTF-16LE with a BOM, one line, the path) that the app reads on its first run.
 ;   * Silent installs (/S) read "/CONTENTDIR=<path>" and otherwise use "$DOCUMENTS\Grimoire Maker".
+;
+; Path rules (GmNormalizeContentDir). They MUST stay identical to the hint validator in
+; src-tauri/src/portable.rs (parse_hint), otherwise the app silently ignores the folder the user chose.
+; src-tauri/nsis/hint-path-cases.json is checked against both (cargo test and scripts/nsis-hints.test.ts).
+;   R1  Surrounding spaces are trimmed; empty or longer than 240 characters is rejected.
+;   R2  "/" becomes "\". The characters < > " | ? * and tab, CR, LF are rejected anywhere. A colon is
+;       only accepted at index 1 (the drive colon). (The app also rejects other control characters; those
+;       cannot be typed into the field and are not mirrored here.)
+;   R3  Trailing separators are dropped, but a drive root such as "C:\" is kept.
+;   R4  The path must be "X:\..." (X a letter) or "\\host\share[\...]". "C:", "C:dir" and "\dir" are rejected.
+;   R5  Every segment (for a network path also host and share) must be non-empty (no "\\" inside the
+;       path), must not be "." or "..", must not end with a dot or a space, and its stem (text before the
+;       first dot, trailing spaces removed) must not be a Windows device name (list below).
+;   R6  A network path needs host and share; a share ending in "$" (administrative share) is rejected.
+;       "\\?\" and "\\.\" fail through R2 and R5.
+;   R7  A path equal to or inside "%APPDATA%\GriomoireMaker" is rejected (the app configuration folder).
+; Comparisons use NSIS "==", which is case-insensitive, like the Rust check on Windows.
 ;
 ; The uninstaller is not customised: the content folders, setting.json and the hint files are never
 ; touched. (The template's optional "Delete app data" checkbox only removes %APPDATA%\<identifier> and
@@ -29,17 +47,31 @@ LangString GmBrowse 1033 "Browse..."
 LangString GmBrowse 1034 "Examinar..."
 LangString GmBrowsePrompt 1033 "Select the folder for your content"
 LangString GmBrowsePrompt 1034 "Seleccione la carpeta para su contenido"
-LangString GmBadPath 1033 "Enter a full folder path such as C:\Users\you\Documents\Grimoire Maker (or a network path like \\server\share\folder). It cannot contain the characters < > : $\" | ? *"
-LangString GmBadPath 1034 "Escriba una ruta completa de carpeta, por ejemplo C:\Users\usted\Documents\Grimoire Maker (o una ruta de red como \\servidor\recurso\carpeta). No puede contener los caracteres < > : $\" | ? *"
+LangString GmBadPath 1033 "Enter a full folder path such as C:\Users\you\Documents\Grimoire Maker (or a network path like \\server\share\folder), at most 240 characters.$\r$\n$\r$\nIt cannot contain the characters < > : $\" | ? * (a colon is only allowed after the drive letter), empty parts such as \\ inside the path, parts named . or .., names ending in a dot or a space, Windows device names (CON, NUL, COM1, LPT1...), administrative shares such as \\server\C$$, or the Grimoire Maker settings folder in %APPDATA%."
+LangString GmBadPath 1034 "Escriba una ruta completa de carpeta, por ejemplo C:\Users\usted\Documents\Grimoire Maker (o una ruta de red como \\servidor\recurso\carpeta), de 240 caracteres como máximo.$\r$\n$\r$\nNo puede contener los caracteres < > : $\" | ? * (los dos puntos solo se permiten tras la letra de la unidad), partes vacías como \\ dentro de la ruta, partes llamadas . o .., nombres que terminen en punto o espacio, nombres de dispositivo de Windows (CON, NUL, COM1, LPT1...), recursos administrativos como \\servidor\C$$, ni la carpeta de configuración de Grimoire Maker en %APPDATA%."
 
 Var GmContentDir
 Var GmContentEdit
 Var GmDirOk
+Var GmExisting
 
 Page custom GmContentPageCreate GmContentPageLeave
 
-; Normalizes and validates $GmContentDir in place. Sets $GmDirOk to 1 when the result is a usable
-; absolute path (drive letter or \\server\share), 0 otherwise.
+; Sets $GmExisting to 1 when settings of an earlier installation exist (current or legacy file, current or
+; pre-rename folder). Such an installation keeps its settings: no page, no folders, no hint.
+; The identifier is literal because the template defines BUNDLEID after this file is included.
+Function GmDetectExisting
+  StrCpy $GmExisting 0
+  ${If} ${FileExists} "$APPDATA\GriomoireMaker\setting.json"
+  ${OrIf} ${FileExists} "$APPDATA\GriomoireMaker\library-paths.json"
+  ${OrIf} ${FileExists} "$APPDATA\app.grimoiremaker.desktop\setting.json"
+  ${OrIf} ${FileExists} "$APPDATA\app.grimoiremaker.desktop\library-paths.json"
+    StrCpy $GmExisting 1
+  ${EndIf}
+FunctionEnd
+
+; Normalizes and validates $GmContentDir in place (rules R1-R7 above). Sets $GmDirOk to 1 when the result
+; is accepted, 0 otherwise. Registers $R0-$R9 are saved and restored.
 Function GmNormalizeContentDir
   Push $R0
   Push $R1
@@ -49,10 +81,12 @@ Function GmNormalizeContentDir
   Push $R5
   Push $R6
   Push $R7
+  Push $R8
+  Push $R9
   StrCpy $GmDirOk 0
   StrCpy $R0 $GmContentDir
 
-  ; Trim surrounding spaces.
+  ; R1: trim surrounding spaces.
   gm_trim_left:
     StrCpy $R1 $R0 1
     StrCmp $R1 " " 0 gm_trim_right
@@ -71,8 +105,8 @@ Function GmNormalizeContentDir
     Goto gm_done
   ${EndIf}
 
-  ; Copy character by character: "/" becomes "\", characters Windows forbids are rejected, and the
-  ; drive colon is only accepted at index 1.
+  ; R2: copy character by character: "/" becomes "\", forbidden characters are rejected, and the drive
+  ; colon is only accepted at index 1.
   StrCpy $R2 ""
   StrCpy $R3 0
   gm_scan:
@@ -89,6 +123,9 @@ Function GmNormalizeContentDir
     ${OrIf} $R5 == "|"
     ${OrIf} $R5 == "?"
     ${OrIf} $R5 == "*"
+    ${OrIf} $R5 == "$\t"
+    ${OrIf} $R5 == "$\r"
+    ${OrIf} $R5 == "$\n"
       Goto gm_done
     ${EndIf}
     ${If} $R5 == ":"
@@ -100,7 +137,7 @@ Function GmNormalizeContentDir
     Goto gm_scan
   gm_scanned:
 
-  ; Drop trailing separators but keep a drive root such as "C:\".
+  ; R3: drop trailing separators but keep a drive root such as "C:\".
   gm_strip:
     StrLen $R4 $R2
     ${If} $R4 <= 3
@@ -114,34 +151,24 @@ Function GmNormalizeContentDir
     Goto gm_strip
   gm_stripped:
 
-  ; No relative segments.
-  StrCpy $R6 "$R2\"
-  ${StrLoc} $R7 $R6 "\..\" ">"
-  ${If} $R7 != ""
-    Goto gm_done
-  ${EndIf}
-
-  StrCpy $R5 $R2 2
-  ${If} $R5 == "\\"
-    ; UNC path: \\host\share[\...]
-    StrCpy $R6 $R2 "" 2
-    StrCpy $R5 $R6 1
-    ${If} $R5 == "\"
-    ${OrIf} $R5 == ""
-      Goto gm_done
-    ${EndIf}
-    ${StrLoc} $R7 $R6 "\" ">"
-    ${If} $R7 == ""
-      Goto gm_done
-    ${EndIf}
-    IntOp $R7 $R7 + 1
-    StrCpy $R5 $R6 1 $R7
+  ; R7: not the application configuration folder or anything inside it.
+  StrLen $R6 "$APPDATA\GriomoireMaker"
+  StrCpy $R5 $R2 $R6
+  ${If} $R5 == "$APPDATA\GriomoireMaker"
+    StrCpy $R5 $R2 1 $R6
     ${If} $R5 == ""
     ${OrIf} $R5 == "\"
       Goto gm_done
     ${EndIf}
+  ${EndIf}
+
+  ; R4: pick the prefix; $R1 = 1 for a network path, $R8 = the segments after the prefix.
+  StrCpy $R5 $R2 2
+  ${If} $R5 == "\\"
+    StrCpy $R1 1
+    StrCpy $R8 $R2 "" 2
   ${Else}
-    ; Drive path: X:\...
+    StrCpy $R1 0
     StrCpy $R5 $R2 1 1
     ${If} $R5 != ":"
       Goto gm_done
@@ -155,16 +182,108 @@ Function GmNormalizeContentDir
     gm_letter:
       StrCpy $R6 "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 1 $R3
       StrCmp $R6 "" gm_done
-      StrCmp $R5 $R6 gm_ok
+      StrCmp $R5 $R6 gm_letter_ok
       IntOp $R3 $R3 + 1
       Goto gm_letter
+    gm_letter_ok:
+    StrCpy $R8 $R2 "" 3
   ${EndIf}
 
-  gm_ok:
+  ; R5/R6: validate every segment. $R6 counts them, $R9 is the current one.
+  StrCpy $R6 0
+  gm_seg_next:
+    StrCmp $R8 "" gm_segs_done
+    StrCpy $R9 ""
+    StrCpy $R3 0
+    gm_seg_scan:
+      StrCpy $R5 $R8 1 $R3
+      StrCmp $R5 "" gm_seg_cut
+      StrCmp $R5 "\" gm_seg_cut
+      StrCpy $R9 "$R9$R5"
+      IntOp $R3 $R3 + 1
+      Goto gm_seg_scan
+    gm_seg_cut:
+    IntOp $R3 $R3 + 1
+    StrLen $R7 $R8
+    ${If} $R3 >= $R7
+      StrCpy $R8 ""
+    ${Else}
+      StrCpy $R8 $R8 "" $R3
+    ${EndIf}
+    IntOp $R6 $R6 + 1
+
+    StrCmp $R9 "" gm_done
+    StrCmp $R9 "." gm_done
+    StrCmp $R9 ".." gm_done
+    StrCpy $R5 $R9 1 -1
+    StrCmp $R5 "." gm_done
+    StrCmp $R5 " " gm_done
+    ; R6: the share of a network path must not be administrative.
+    ${If} $R1 = 1
+    ${AndIf} $R6 = 2
+    ${AndIf} $R5 == "$$"
+      Goto gm_done
+    ${EndIf}
+    ; Stem = text before the first dot, trailing spaces removed.
+    StrCpy $R5 ""
+    StrCpy $R3 0
+    gm_stem:
+      StrCpy $R7 $R9 1 $R3
+      StrCmp $R7 "" gm_stem_end
+      StrCmp $R7 "." gm_stem_end
+      StrCpy $R5 "$R5$R7"
+      IntOp $R3 $R3 + 1
+      Goto gm_stem
+    gm_stem_end:
+    gm_stem_trim:
+      StrCpy $R7 $R5 1 -1
+      StrCmp $R7 " " 0 gm_stem_ready
+      StrCpy $R5 $R5 -1
+      Goto gm_stem_trim
+    gm_stem_ready:
+    ; GM-DEVICE-NAMES-BEGIN (scripts/nsis-hints.test.ts compares this list with portable.rs)
+    ${If} $R5 == "CON"
+    ${OrIf} $R5 == "PRN"
+    ${OrIf} $R5 == "AUX"
+    ${OrIf} $R5 == "NUL"
+    ${OrIf} $R5 == "CONIN$$"
+    ${OrIf} $R5 == "CONOUT$$"
+    ${OrIf} $R5 == "COM1"
+    ${OrIf} $R5 == "COM2"
+    ${OrIf} $R5 == "COM3"
+    ${OrIf} $R5 == "COM4"
+    ${OrIf} $R5 == "COM5"
+    ${OrIf} $R5 == "COM6"
+    ${OrIf} $R5 == "COM7"
+    ${OrIf} $R5 == "COM8"
+    ${OrIf} $R5 == "COM9"
+    ${OrIf} $R5 == "LPT1"
+    ${OrIf} $R5 == "LPT2"
+    ${OrIf} $R5 == "LPT3"
+    ${OrIf} $R5 == "LPT4"
+    ${OrIf} $R5 == "LPT5"
+    ${OrIf} $R5 == "LPT6"
+    ${OrIf} $R5 == "LPT7"
+    ${OrIf} $R5 == "LPT8"
+    ${OrIf} $R5 == "LPT9"
+      Goto gm_done
+    ${EndIf}
+    ; GM-DEVICE-NAMES-END
+    Goto gm_seg_next
+  gm_segs_done:
+
+  ; R6: a network path needs a host and a share.
+  ${If} $R1 = 1
+  ${AndIf} $R6 < 2
+    Goto gm_done
+  ${EndIf}
+
   StrCpy $GmContentDir $R2
   StrCpy $GmDirOk 1
 
   gm_done:
+  Pop $R9
+  Pop $R8
   Pop $R7
   Pop $R6
   Pop $R5
@@ -197,7 +316,8 @@ Function GmContentPageCreate
     Abort
   ${EndIf}
   ; An existing installation keeps its settings: no page.
-  ${If} ${FileExists} "$APPDATA\GriomoireMaker\setting.json"
+  Call GmDetectExisting
+  ${If} $GmExisting = 1
     Abort
   ${EndIf}
 
@@ -248,10 +368,15 @@ FunctionEnd
 
 ; Creates the content folders and writes the hint file. Failures never abort the install: the app then
 ; simply starts with its normal defaults; silent installs report exit code 2.
+; $0 is saved and restored so the surrounding template code never sees it changed.
 Function GmApplyContentDir
-  ${If} ${FileExists} "$APPDATA\GriomoireMaker\setting.json"
+  Push $0
+
+  ; An earlier installation (settings.json, or only the legacy library-paths.json) keeps its settings.
+  Call GmDetectExisting
+  ${If} $GmExisting = 1
     DetailPrint "Existing settings found: content folders unchanged."
-    Return
+    Goto gm_apply_end
   ${EndIf}
 
   ; No page was shown (silent or passive install): /CONTENTDIR=<path> or the default.
@@ -272,7 +397,7 @@ Function GmApplyContentDir
     ${IfNot} ${Silent}
       MessageBox MB_ICONEXCLAMATION|MB_OK "$(GmBadPath)"
     ${EndIf}
-    Return
+    Goto gm_apply_end
   ${EndIf}
 
   CreateDirectory "$GmContentDir"
@@ -287,7 +412,7 @@ Function GmApplyContentDir
     ${IfNot} ${Silent}
       MessageBox MB_ICONEXCLAMATION|MB_OK "Could not create the content folders in $GmContentDir"
     ${EndIf}
-    Return
+    Goto gm_apply_end
   ${EndIf}
 
   CreateDirectory "$APPDATA\GriomoireMaker"
@@ -302,6 +427,9 @@ Function GmApplyContentDir
     DetailPrint "Could not write the install-content-root.txt hint."
     SetErrorLevel 2
   ${EndIf}
+
+  gm_apply_end:
+  Pop $0
 FunctionEnd
 
 !macro NSIS_HOOK_POSTINSTALL

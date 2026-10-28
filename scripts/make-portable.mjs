@@ -47,7 +47,8 @@ export function readmeText(version) {
     '',
     'GOOD TO KNOW',
     '  The folder must be writable. If it is not (for example Program Files or a read-only drive),',
-    '  the app shows an error and does not fall back to %APPDATA%. Use a normal folder or a USB drive.',
+    '  the app shows a message box explaining the problem and closes; it does not fall back to %APPDATA%.',
+    '  Use a normal folder or a USB drive.',
     '  There is no automatic update: download a newer zip and replace the exe, keeping Data and portable.flag.',
     '',
   ].join('\r\n')

@@ -266,12 +266,50 @@ fn default_paths(config: &Path) -> Result<LibraryPaths, String> {
     default_paths_for(config, &Defaults::Standard)
 }
 
-/// A valid installer hint wins for a first run; an invalid one is ignored and reported.
-fn choose_defaults(config: &Path, mode: Mode) -> (Defaults, Option<String>) {
-    let base = match mode {
+fn base_defaults(mode: Mode) -> Defaults {
+    match mode {
         Mode::Portable => Defaults::Portable,
         Mode::Normal => Defaults::Standard,
-    };
+    }
+}
+
+thread_local! {
+    /// Set while the "hint unusable" report is written: logging reads the preferences again.
+    static REPORTING_HINT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+/// Config roots already reported in this process, so a repeated read does not repeat the log entry.
+static REPORTED_HINTS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+/// The hint's folders could not be created (for example an unplugged drive). Caller holds CHANGES.
+/// The hint stays in place and nothing is persisted, so a later start with the drive back uses it.
+fn report_unusable_hint(config: &Path, error: &str) {
+    eprintln!("could not create the installer content folders: {error}");
+    if REPORTING_HINT.with(|flag| flag.get()) {
+        return;
+    }
+    {
+        let Ok(mut reported) = REPORTED_HINTS.lock() else { return };
+        if reported.iter().any(|seen| seen == config) {
+            return;
+        }
+        reported.push(config.to_path_buf());
+    }
+    REPORTING_HINT.with(|flag| flag.set(true));
+    // Logging resolves the log folder through the preferences, which lands back here: the flag stops that.
+    let _ = super::error_logs::append_locked(
+        config,
+        "native.install-hint",
+        &format!(
+            "Could not create the content folders chosen by the installer ({error}). Using the default folders for now; {} is kept and will be tried again on the next start.",
+            portable::HINT_FILE
+        ),
+    );
+    REPORTING_HINT.with(|flag| flag.set(false));
+}
+
+/// A valid installer hint wins for a first run; an invalid one is ignored and reported.
+fn choose_defaults(config: &Path, mode: Mode) -> (Defaults, Option<String>) {
+    let base = base_defaults(mode);
     match portable::read_hint(config) {
         Hint::Valid(root) => (Defaults::ContentRoot(root), None),
         Hint::Invalid(reason) => (base, Some(reason)),
@@ -333,6 +371,7 @@ fn read_preferences_as(config: &Path, mode: Mode) -> Result<Preferences, String>
     }
     let mut applied_hint = None;
     let mut hint_problem = None;
+    let mut hint_unusable = None;
     let paths = match read_json(&config.join("library-paths.json"))? {
         Some(mut raw) => {
             backfill_logs(&mut raw, config)?;
@@ -342,10 +381,20 @@ fn read_preferences_as(config: &Path, mode: Mode) -> Result<Preferences, String>
             // First run: nothing is saved yet, so the mode and an installer hint pick the defaults.
             let (defaults, problem) = choose_defaults(config, mode);
             hint_problem = problem;
-            if let Defaults::ContentRoot(root) = &defaults {
-                applied_hint = Some(root.clone());
+            match default_paths_for(config, &defaults) {
+                Ok(paths) => {
+                    if let Defaults::ContentRoot(root) = &defaults {
+                        applied_hint = Some(root.clone());
+                    }
+                    paths
+                }
+                // The chosen folders cannot be created now: use the normal defaults for this run only.
+                Err(error) if matches!(defaults, Defaults::ContentRoot(_)) => {
+                    hint_unusable = Some(error);
+                    default_paths_for(config, &base_defaults(mode))?
+                }
+                Err(error) => return Err(error),
             }
-            default_paths_for(config, &defaults)?
         }
     };
     let settings =
@@ -370,6 +419,11 @@ fn read_preferences_as(config: &Path, mode: Mode) -> Result<Preferences, String>
         extra,
     };
     preferences.settings.validate()?;
+    if let Some(error) = hint_unusable {
+        // Not persisted and the hint is not consumed: the next read or start tries the hint again.
+        report_unusable_hint(config, &error);
+        return Ok(preferences);
+    }
     publish_preferences(config, &preferences)?;
     // Read the authoritative file back before reporting a successful migration.
     let saved = read_preferences_as(config, mode)?;
@@ -1550,15 +1604,24 @@ mod preferences_tests {
     }
 
     #[test]
-    fn a_failure_before_the_paths_are_saved_leaves_the_hint_for_the_next_start() {
+    fn a_hint_whose_folders_cannot_be_created_falls_back_to_defaults_and_keeps_the_hint() {
         let config = scratch("hint-failure");
         let content = scratch("hint-failure-content");
         fs::write(content.join("blocker"), "a file").unwrap();
         write_hint(&config, &content.join("blocker/Grimoire"));
-        assert!(read_preferences_as(&config, Mode::Normal).is_err());
+        // Startup is not blocked: the normal defaults are used for this run only.
+        let fallback = read_preferences_as(&config, Mode::Normal).unwrap();
+        assert_eq!(fallback.paths, default_paths(&config).unwrap());
+        assert!(fallback.extra.get(CONTENT_ROOT).is_none());
         assert!(config.join(portable::HINT_FILE).is_file());
         assert!(!config.join(portable::HINT_APPLIED_FILE).exists());
         assert!(!config.join(PREFERENCES_FILE).exists());
+        // The failure is logged once, in the default log folder.
+        let log = fs::read_to_string(config.join("logs/errors-0001.txt")).unwrap();
+        assert!(log.contains("native.install-hint") && log.contains("tried again"), "{log}");
+        read_preferences_as(&config, Mode::Normal).unwrap();
+        let log = fs::read_to_string(config.join("logs/errors-0001.txt")).unwrap();
+        assert_eq!(log.matches("native.install-hint").count(), 1, "{log}");
         // Once the problem is gone, the very same hint is applied.
         fs::remove_file(content.join("blocker")).unwrap();
         let saved = read_preferences_as(&config, Mode::Normal).unwrap();

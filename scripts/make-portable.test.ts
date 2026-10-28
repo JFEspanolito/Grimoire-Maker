@@ -29,7 +29,7 @@ describe('make-portable', () => {
 
   it('documents the portable behaviour in the readme', () => {
     const text = readmeText('0.1.0')
-    for (const needle of ['Data\\', 'WebView2', 'https://developer.microsoft.com/microsoft-edge/webview2/', 'portable.flag', 'writable', 'There is no automatic update']) {
+    for (const needle of ['Data\\', 'WebView2', 'https://developer.microsoft.com/microsoft-edge/webview2/', 'portable.flag', 'writable', 'message box', 'does not fall back to %APPDATA%', 'There is no automatic update']) {
       expect(text.toLowerCase()).toContain(needle.toLowerCase())
     }
   })

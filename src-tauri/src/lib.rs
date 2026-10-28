@@ -23,9 +23,23 @@ pub fn run() {
     }
     tauri::Builder::default()
         .setup(move |app| {
-            config_root::initialize(app.handle()).map_err(std::io::Error::other)?;
-            if portable {
-                create_portable_windows(app).map_err(std::io::Error::other)?;
+            let started = config_root::initialize(app.handle()).and_then(|()| {
+                if portable {
+                    create_portable_windows(app)
+                } else {
+                    Ok(())
+                }
+            });
+            if let Err(error) = started {
+                let mode = if portable { portable::Mode::Portable } else { portable::Mode::Normal };
+                return match portable::startup_failure_dialog(mode, &error) {
+                    // A portable run has no console and no window yet: say what is wrong, then quit.
+                    Some((title, text)) => {
+                        show_startup_failure(app.handle().clone(), title, text);
+                        Ok(())
+                    }
+                    None => Err(std::io::Error::other(error).into()),
+                };
             }
             if let Err(error) = commands::preferences::rebase_portable(app.handle()) {
                 eprintln!("could not move portable library paths: {error}");
@@ -85,6 +99,20 @@ pub fn run() {
         ])
         .run(context)
         .expect("error while running Grimoire Maker");
+}
+
+/// Shows a native error box without blocking the event loop, then exits the app with a failure code.
+/// `blocking_show` must not run on the main thread, so the exit happens in the dialog callback.
+fn show_startup_failure(handle: tauri::AppHandle, title: &'static str, text: String) {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+    eprintln!("{title}: {text}");
+    let exit = handle.clone();
+    handle
+        .dialog()
+        .message(text)
+        .title(title)
+        .kind(MessageDialogKind::Error)
+        .show(move |_| exit.exit(1));
 }
 
 /// Builds the configured windows with the WebView2 user data folder inside the portable `Data` folder.

@@ -92,6 +92,22 @@ pub fn prepare_data_dir(exe_dir: &Path) -> Result<PathBuf, String> {
     Ok(data)
 }
 
+/// Pure decision for a failed startup: a portable run must tell the user why it stopped, because a
+/// `windows_subsystem = "windows"` build has no console and would otherwise just disappear. A normal
+/// run keeps its existing behaviour (`None`: the error is returned to Tauri as before).
+/// Returns the message box `(title, text)`.
+pub fn startup_failure_dialog(mode: Mode, error: &str) -> Option<(&'static str, String)> {
+    (mode == Mode::Portable).then(|| {
+        (
+            "Grimoire Maker cannot start",
+            format!(
+                "Grimoire Maker could not start in portable mode.\n\n{}\n\nNothing was stored in %APPDATA%. Move the Grimoire Maker folder to a place you can write to (for example your Documents folder or a USB drive) and start it again.",
+                error.trim()
+            ),
+        )
+    })
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Hint {
     Absent,
@@ -309,6 +325,37 @@ mod tests {
         let error = prepare_data_dir(&exe.join("missing/deeper")).unwrap_err();
         assert!(error.contains("writable"), "{error}");
         assert!(!exe.join("missing").exists());
+    }
+
+    #[test]
+    fn a_failed_portable_startup_gets_a_plain_message_box_and_a_normal_one_does_not() {
+        let (title, text) = startup_failure_dialog(Mode::Portable, "  Data cannot be used: access denied \n").unwrap();
+        assert_eq!(title, "Grimoire Maker cannot start");
+        assert!(text.contains("Data cannot be used: access denied"), "{text}");
+        assert!(text.contains("portable mode") && text.contains("%APPDATA%"), "{text}");
+        assert!(startup_failure_dialog(Mode::Normal, "anything").is_none());
+    }
+
+    /// Shared with the NSIS rule test (`scripts/nsis-hints.test.ts`): both sides must agree.
+    #[derive(serde::Deserialize)]
+    struct PathCases {
+        valid: Vec<String>,
+        invalid: Vec<String>,
+    }
+
+    #[test]
+    fn shared_hint_path_cases_match_the_installer_rules() {
+        let cases: PathCases = serde_json::from_str(include_str!("../nsis/hint-path-cases.json")).unwrap();
+        assert!(cases.valid.len() >= 8 && cases.invalid.len() >= 25);
+        for ok in &cases.valid {
+            assert!(hint(ok).is_ok(), "{ok:?} must be accepted");
+        }
+        for bad in &cases.invalid {
+            assert!(hint(bad).is_err(), "{bad:?} must be rejected");
+        }
+        // Length limit (240 characters) is checked on both sides with generated input.
+        assert!(hint(&format!("C:\\{}", "a".repeat(237))).is_ok());
+        assert!(hint(&format!("C:\\{}", "a".repeat(238))).is_err());
     }
 
     #[test]
