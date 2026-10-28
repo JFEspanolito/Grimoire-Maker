@@ -106,8 +106,8 @@ export function GitRollbackDialog({
 
         <div className={styles.diffPane}>
           <p className={styles.legend}>
-            <span className={styles.removed}>− Current version (will be replaced)</span>
-            <span className={styles.added}>+ Saved version (will be restored)</span>
+            <span className={styles.removed}>− Removed</span>
+            <span className={styles.added}>+ Added</span>
           </p>
           <div className={styles.scroll} tabIndex={0} aria-label="Version diff preview">
             {loading && <p role="status" style={{ padding: '.75rem', margin: 0 }}>Loading version preview…</p>}

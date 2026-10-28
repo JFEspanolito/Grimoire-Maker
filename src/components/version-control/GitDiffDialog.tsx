@@ -20,7 +20,7 @@ export function GitDiffDialog({ path, staged, diff, loading, error, onClose }: P
       <div><h2 id="git-diff-title">{path}</h2><p>{staged ? 'Saved version → Staged changes' : 'Saved version → Current file'} · Read-only comparison</p></div>
       <button type="button" aria-label="Close diff" onClick={onClose}>Close</button>
     </header>
-    <p className={styles.legend}><span className={styles.removed}>− Deleted</span><span className={styles.added}>+ Added</span> Changes and surrounding context</p>
+    <p className={styles.legend}><span className={styles.removed}>− Removed</span><span className={styles.added}>+ Added</span></p>
     {loading && <p role="status">Loading diff…</p>}
     {error && <p role="alert">{error}</p>}
     {diff?.binary ? <p>Binary file: text diff unavailable.</p> : <div className={styles.scroll} tabIndex={0} aria-label="Side-by-side file diff">
