@@ -42,6 +42,14 @@ it('shows Word text without injecting markup and keeps legacy DOC explicit', asy
   expect(fs.readFile).toHaveBeenCalledTimes(1)
 })
 
+it('shows plain text files without interpreting HTML markup', async () => {
+  fs.readFile.mockResolvedValue(strToU8('Line 1\n<script>alert(1)</script>'))
+  await show('H:/Research/notes.txt')
+  const pre = host.querySelector('pre[aria-label="Text file content"]')
+  expect(pre?.textContent).toBe('Line 1\n<script>alert(1)</script>')
+  expect(host.querySelector('script')).toBeNull()
+})
+
 it('rejects oversized files before reading and reports unreadable images', async () => {
   fs.stat.mockResolvedValue({ size: 65 * 1024 * 1024 })
   await show('H:/Research/large.png')

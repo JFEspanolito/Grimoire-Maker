@@ -247,7 +247,7 @@ export function useFileSystem() {
   const openFile = useCallback(
     (path?: string, newTab = false) => runFileAction(async () => {
       if (!isTauri()) return
-      const selected = path ?? (await open({ filters: [{ name: 'Documents and images', extensions: ['md', 'pdf', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'] }] }))
+      const selected = path ?? (await open({ filters: [{ name: 'Documents and images', extensions: ['md', 'txt', 'pdf', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'ico'] }] }))
       if (typeof selected !== 'string') return
       const target = selected.replaceAll('\\', '/')
       const current = useDocumentStore.getState().document

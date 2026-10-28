@@ -34,6 +34,7 @@ function LoadedPreview({ path }: { path: string }) {
   const [bytes, setBytes] = useState<Uint8Array | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [word, setWord] = useState<WordBlock[] | null>(null)
+  const [text, setText] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [actualSize, setActualSize] = useState(false)
   useEffect(() => {
@@ -51,6 +52,7 @@ function LoadedPreview({ path }: { path: string }) {
         url = URL.createObjectURL(new Blob([new Uint8Array(data).buffer], { type: IMAGE_MIME[extension] }))
         setImageUrl(url)
       } else if (kind === 'word') setWord(readDocx(data))
+      else if (kind === 'text') setText(new TextDecoder('utf-8').decode(data))
       else setBytes(data)
     })().catch((failure: unknown) => {
       if (!cancelled) { reportError('preview.file', failure); setError(failure instanceof Error ? failure.message : String(failure)) }
@@ -69,8 +71,9 @@ function LoadedPreview({ path }: { path: string }) {
               alt={path.replaceAll('\\', '/').split('/').at(-1)} onError={() => { const message = 'The image is damaged or its format is not supported by this system.'; reportError('preview.image', message); setError(message) }} /></div>
           </>
             : word ? <WordPreview blocks={word} />
-              : bytes ? <Suspense fallback={<p role="status">Loading PDF viewer…</p>}><PdfPreview bytes={bytes} /></Suspense>
-                : <p className={styles.notice} role="status">Loading preview…</p>}
+              : text !== null ? <pre className={styles.text} aria-label="Text file content">{text}</pre>
+                : bytes ? <Suspense fallback={<p role="status">Loading PDF viewer…</p>}><PdfPreview bytes={bytes} /></Suspense>
+                  : <p className={styles.notice} role="status">Loading preview…</p>}
   </div>
 }
 
