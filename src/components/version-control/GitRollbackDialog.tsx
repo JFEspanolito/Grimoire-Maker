@@ -120,7 +120,7 @@ export function GitRollbackDialog({
                   <table className={styles.table}>
                     <thead>
                       <tr>
-                        <th scope="col">Current files</th>
+                        <th scope="col">Previous version</th>
                         <th scope="col">
                           {selectedCommit
                             ? `Saved version at ${selectedCommit.timestamp} (${selectedCommit.shortHash})`
