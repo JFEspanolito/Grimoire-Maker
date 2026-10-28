@@ -5,6 +5,8 @@ import { ExportPdfDialog } from './ExportPdfDialog'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useProjectStore } from '../../stores/projectStore'
 import { EMPTY_PROJECT } from '../../lib/projectSettings'
+import { registerPlugin } from '../../plugins/plugin-manager'
+import { mountWheelZoom } from '../../plugins/isolated/wheelZoom'
 
 const mocks = vi.hoisted(() => ({ renderBook: vi.fn(), loadBookContents: vi.fn() }))
 vi.mock('../../lib/exportPdf', () => ({ renderBook: mocks.renderBook }))
@@ -15,13 +17,14 @@ afterEach(() => { useDocumentStore.getState().setWorkspace(null, []); useProject
 
 async function mount(onExport = vi.fn()) {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
-  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: vi.fn() })
-  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: vi.fn() })
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', '') }) })
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: vi.fn(function (this: HTMLDialogElement) { this.removeAttribute('open') }) })
   const container = document.createElement('div')
+  document.body.append(container)
   const root = createRoot(container)
   await act(async () => root.render(<ExportPdfDialog onClose={() => {}} onExport={onExport} />))
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-  return { container, onExport, unmount: () => act(async () => root.unmount()) }
+  return { container, onExport, unmount: async () => { await act(async () => root.unmount()); container.remove() } }
 }
 
 it('previews the ordered book from the project and hands it to the export', async () => {
@@ -99,4 +102,28 @@ it('has no list when the project has no Draft documents', async () => {
   const { container, unmount } = await mount()
   expect(container.querySelector('ol')).toBeNull()
   await unmount()
+})
+
+it('steps the preview zoom with Ctrl+wheel inside the open Export PDF dialog', async () => {
+  seed(['Draft/A.md'])
+  const dispose = registerPlugin({
+    id: 'test.zoom', name: 'Zoom', version: '1',
+    activate: (api) => api.registerPageBehavior({
+      id: 'test.zoom.wheel',
+      mount: (element, surface) => mountWheelZoom(element, surface, { editor: [50, 100], preview: [40, 50, 60, 75, 100] }),
+    }),
+  })
+  const { container, unmount } = await mount()
+  try {
+    const preview = container.querySelector('[data-theme]')!
+    const select = container.querySelector<HTMLSelectElement>('select[aria-label="Preview zoom"]')!
+    expect(select.value).toBe('0.35')
+    await act(async () => {
+      preview.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -10, bubbles: true, cancelable: true }))
+    })
+    expect(select.value).toBe('0.4')
+  } finally {
+    await unmount()
+    dispose()
+  }
 })
