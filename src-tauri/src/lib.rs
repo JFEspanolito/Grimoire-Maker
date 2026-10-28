@@ -5,15 +5,32 @@ mod plugin_install;
 mod plugin_local;
 mod plugin_package;
 mod plugin_registry;
+mod portable;
 mod safe_copy;
 mod ipc;
 mod pdf;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let mut context = tauri::generate_context!();
+    let portable = config_root::portable_exe_dir().is_some();
+    if portable {
+        // Tauri would create these windows before `setup` with the webview data folder under
+        // %LOCALAPPDATA%. A portable run creates them itself, once the Data folder exists.
+        for window in &mut context.config_mut().app.windows {
+            window.create = false;
+        }
+    }
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             config_root::initialize(app.handle()).map_err(std::io::Error::other)?;
+            if portable {
+                create_portable_windows(app).map_err(std::io::Error::other)?;
+            }
+            if let Err(error) = commands::preferences::rebase_portable(app.handle()) {
+                eprintln!("could not move portable library paths: {error}");
+                commands::error_logs::best_effort("native.startup", &error);
+            }
             commands::plugins::protect_managed_root(app.handle()).map_err(std::io::Error::other)?;
             commands::error_logs::initialize(app.handle());
             config::ensure(app.handle());
@@ -66,6 +83,23 @@ pub fn run() {
             commands::preferences::save_settings,
             commands::error_logs::append_error_log,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running Grimoire Maker");
+}
+
+/// Builds the configured windows with the WebView2 user data folder inside the portable `Data` folder.
+fn create_portable_windows(app: &tauri::App) -> Result<(), String> {
+    let handle = app.handle();
+    let config = config_root::path(handle)?;
+    let data = portable::webview_data_dir(config_root::mode(handle), &config)
+        .ok_or("Portable mode is not active")?;
+    let windows = app.config().app.windows.clone();
+    for window in &windows {
+        tauri::WebviewWindowBuilder::from_config(handle, window)
+            .map_err(|error| error.to_string())?
+            .data_directory(data.clone())
+            .build()
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }

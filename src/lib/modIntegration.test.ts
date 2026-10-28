@@ -3,8 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { LibraryPaths } from './preferences'
-const scope = vi.hoisted(() => ({ root: '', rejectRename: false, picked: '', saved: '', reads: [] as string[], paths: null as LibraryPaths | null }))
+import type { LoadedLibraryPaths } from './preferences'
+const scope = vi.hoisted(() => ({ root: '', rejectRename: false, picked: '', saved: '', reads: [] as string[], paths: null as LoadedLibraryPaths | null }))
 vi.mock('./preferences', async (original) => {
   const actual = await original<typeof import('./preferences')>()
   return { ...actual, loadLibraryPaths: () => scope.paths ? Promise.resolve(scope.paths) : actual.loadLibraryPaths() }
@@ -97,6 +97,52 @@ it('configured paths survive reload, keep disabled IDs and legacy templates, and
   await (await import('./templateActions')).importTemplateZip()
   expect(await fs.readFile(`${scope.paths.templates}/configured/index.md`, 'utf8')).toBe('# Configured')
   expect(scope.reads.some(path => path.endsWith('.js'))).toBe(false)
+})
+
+const exampleKeys = (folder: string) => Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`${folder}/`)).map(path => path.slice(folder.length + 1))
+const present = (path: string) => fs.access(path).then(() => true, () => false)
+it('seeds the shipped examples into native-managed folders (portable Data or installer content root) exactly once', async () => {
+  const content = `${scope.root}/Data`
+  const managedPaths = { plugins: `${content}/Plugins`, snippets: `${content}/Snippets`, templates: `${content}/Templates`, themes: `${content}/Themes`, logs: `${content}/Logs` }
+  for (const folder of Object.values(managedPaths)) await fs.mkdir(folder, { recursive: true })
+  scope.paths = { ...managedPaths, managed: { plugins: true, snippets: true, templates: true } }
+  const library = await prepareModLibrary()
+  expect(library).not.toHaveProperty('managed')
+  expect(library.templates).toBe(managedPaths.templates)
+  for (const relative of exampleKeys('Templates')) expect(await present(`${managedPaths.templates}/${relative}`)).toBe(true)
+  for (const relative of exampleKeys('Snippets')) expect(await present(`${managedPaths.snippets}/${relative}`)).toBe(true)
+  for (const relative of exampleKeys('Plugins')) expect(await present(`${managedPaths.plugins}/${relative}`)).toBe(true)
+  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.complete-templates-v1-seeded`, `${managedPaths.plugins}/.executable-plugins-v1-seeded`]) expect(await present(marker)).toBe(true)
+  expect(await present(`${managedPaths.themes}/.examples-seeded`)).toBe(false)
+  // A removed or edited example is never restored or replaced on the next start.
+  const removed = exampleKeys('Templates')[0]
+  await fs.rm(`${managedPaths.templates}/${removed}`)
+  await fs.writeFile(`${managedPaths.plugins}/zoom/index.md`, '# Mine')
+  await prepareModLibrary()
+  expect(await present(`${managedPaths.templates}/${removed}`)).toBe(false)
+  expect(await fs.readFile(`${managedPaths.plugins}/zoom/index.md`, 'utf8')).toBe('# Mine')
+})
+it('seeds only the libraries the native side reports as managed and never a custom folder', async () => {
+  const content = `${scope.root}/Installed`
+  const custom = `${scope.root}/Custom`
+  scope.paths = { plugins: `${content}/Plugins`, snippets: `${custom}/Snippets`, templates: `${custom}/Templates`, themes: `${content}/Themes`, logs: `${content}/Logs`, managed: { plugins: true } }
+  for (const folder of [scope.paths.plugins, scope.paths.snippets, scope.paths.templates]) await fs.mkdir(folder, { recursive: true })
+  await prepareModLibrary()
+  expect(await present(`${scope.paths.plugins}/zoom/manifest.json`)).toBe(true)
+  expect(await fs.readdir(scope.paths.snippets)).toEqual([])
+  expect(await fs.readdir(scope.paths.templates)).toEqual([])
+  // A flagged library whose folder does not carry the library name is not guessed at.
+  scope.paths = { ...scope.paths, snippets: `${content}/MySnippets`, managed: { snippets: true } }
+  await fs.mkdir(scope.paths.snippets, { recursive: true })
+  await prepareModLibrary()
+  expect(await fs.readdir(scope.paths.snippets)).toEqual([])
+})
+it('without a managed flag the original Mods library keeps seeding exactly as before', async () => {
+  for (const relative of exampleKeys('Templates')) expect(await present(`${scope.root}/Mods/Templates/${relative}`)).toBe(true)
+  for (const relative of exampleKeys('Plugins')) expect(await present(`${scope.root}/Mods/Plugins/${relative}`)).toBe(true)
+  expect(await present(`${scope.root}/Mods/.examples-seeded`)).toBe(true)
+  expect(await present(`${scope.root}/Mods/Templates/.complete-templates-v1-seeded`)).toBe(true)
+  expect(await present(`${scope.root}/Mods/Plugins/.executable-plugins-v1-seeded`)).toBe(true)
 })
 
 it('upgrades old descriptor installations without overwriting edited executable files', async () => {

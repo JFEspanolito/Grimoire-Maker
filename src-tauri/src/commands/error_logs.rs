@@ -166,6 +166,11 @@ pub(super) fn append_in(config: &Path, source: &str, message: &str) -> Result<()
     append_directory(&logs_directory_locked(config)?, source, message)
 }
 
+/// For callers that already hold `CHANGES` (for example while preferences are being written).
+pub(super) fn append_locked(config: &Path, source: &str, message: &str) -> Result<(), String> {
+    append_directory(&logs_directory_locked(config)?, source, message)
+}
+
 #[tauri::command]
 pub async fn append_error_log(
     app: AppHandle,

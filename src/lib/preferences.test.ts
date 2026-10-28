@@ -16,6 +16,18 @@ it('reloads native persisted preferences on every load, including startup', asyn
   expect(await loadLibraryPaths()).toEqual({ themes: '/custom/themes' })
   expect(invoke).toHaveBeenCalledWith('load_library_paths')
 })
+it('passes the native managed-folder report through to the library setup', async () => {
+  vi.mocked(isTauri).mockReturnValue(true)
+  const loaded = { plugins: 'D:/Data/Plugins', snippets: 'D:/Data/Snippets', templates: 'D:/Data/Templates', themes: 'D:/Data/Themes', logs: 'D:/Data/Logs', managed: { plugins: true, snippets: true, templates: true } }
+  vi.mocked(invoke).mockResolvedValue(loaded)
+  expect(await loadLibraryPaths()).toEqual(loaded)
+})
+it('keeps the browser fallback on the unchanged normal-mode layout with no managed folders', async () => {
+  const paths = await loadLibraryPaths()
+  expect(paths).not.toHaveProperty('managed')
+  expect(Object.values(paths).every(path => path.startsWith('C:/Config/GriomoireMaker/'))).toBe(true)
+  expect([paths.plugins, paths.snippets, paths.templates]).toEqual(['Plugins', 'Snippets', 'Templates'].map(name => `C:/Config/GriomoireMaker/Mods/${name}`))
+})
 it('passes only a category to the native-owned picker and preserves cancellation', async () => {
   vi.mocked(isTauri).mockReturnValue(true)
   vi.mocked(invoke).mockResolvedValue(null)

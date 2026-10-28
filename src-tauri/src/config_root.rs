@@ -1,4 +1,5 @@
 //! One prepared configuration root, independent of the application identifier.
+use crate::portable::{self, Mode};
 use crate::safe_copy::{copy_entries, inventory, lock_ancestors, open_checked};
 use std::{
     fs::{self, File},
@@ -16,6 +17,7 @@ static PREPARATION: Mutex<()> = Mutex::new(());
 
 struct PreparedRoot {
     path: PathBuf,
+    mode: Mode,
     // Prevent replacement of the authoritative root while the application is running on Windows.
     _directory: File,
 }
@@ -25,22 +27,47 @@ pub fn initialize(app: &AppHandle) -> Result<(), String> {
     if app.try_state::<PreparedRoot>().is_some() {
         return Ok(());
     }
-    let old = app
-        .path()
-        .app_config_dir()
-        .map_err(|error| error.to_string())?;
-    let root = prepare_in(&old)?;
+    // The mode is decided before anything asks Tauri for the per-user configuration directory.
+    let (root, mode) = match portable_exe_dir() {
+        Some(exe_dir) => (portable::prepare_data_dir(&exe_dir)?, Mode::Portable),
+        None => {
+            let old = app
+                .path()
+                .app_config_dir()
+                .map_err(|error| error.to_string())?;
+            (prepare_in(&old)?, Mode::Normal)
+        }
+    };
+    portable::set_active(mode);
     let directory = open_checked(&root, true)?;
     app.fs_scope()
         .allow_directory(&root, true)
         .map_err(|error| error.to_string())?;
     if !app.manage(PreparedRoot {
         path: root,
+        mode,
         _directory: directory,
     }) {
         return Err("Application configuration was already initialized".into());
     }
     Ok(())
+}
+
+/// The executable's folder when a regular `portable.flag` sits next to it, otherwise `None`.
+pub fn portable_exe_dir() -> Option<PathBuf> {
+    portable::exe_dir().filter(|dir| portable::detect(dir) == Mode::Portable)
+}
+
+/// How this run resolved its configuration root. `Normal` until `initialize` has run.
+pub fn mode(app: &AppHandle) -> Mode {
+    app.try_state::<PreparedRoot>()
+        .map(|root| root.mode)
+        .unwrap_or(Mode::Normal)
+}
+
+/// Whether `value` is `root` itself or lies under it (case-insensitive on Windows).
+pub(crate) fn is_inside(value: &str, root: &Path) -> bool {
+    rebased_path(value, root, root).is_some()
 }
 
 pub fn path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -158,7 +185,7 @@ fn rebase_preferences(
     Ok(Some(bytes))
 }
 
-fn rebased_path(value: &str, old: &Path, new: &Path) -> Option<String> {
+pub(crate) fn rebased_path(value: &str, old: &Path, new: &Path) -> Option<String> {
     fn normalized(value: &str) -> String {
         let value = value.replace('\\', "/");
         #[cfg(windows)]

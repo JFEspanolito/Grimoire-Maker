@@ -32,43 +32,49 @@ export function prepareModLibrary(): Promise<ModLibraryPaths> {
   return preparation
 }
 
+/** Libraries that ship examples: the folder name inside a library root and the matching key of the configured paths. */
+const SEEDED = [['Snippets', 'snippets'], ['Plugins', 'plugins'], ['Templates', 'templates']] as const
+/** Per-library markers that let an upgrade add newer examples without replacing edited ones. */
+const UPGRADE_MARKERS = [['Templates', 'templates', '.complete-templates-v1-seeded'], ['Plugins', 'plugins', '.executable-plugins-v1-seeded']] as const
+
 async function initializeLibrary(): Promise<ModLibraryPaths> {
   const config = (await configRoot()).replaceAll('\\', '/').replace(/\/$/, '')
-  const paths = await loadLibraryPaths()
+  const { managed, ...paths } = await loadLibraryPaths()
   if (!(await exists(config))) await mkdir(config, { recursive: true })
   const root = await ensureModDirectory(modFs, config, 'Mods')
-  await ensureModDirectory(modFs, root, 'Snippets')
-  await ensureModDirectory(modFs, root, 'Plugins')
-  await ensureModDirectory(modFs, root, 'Templates')
-  // Seed only the original default library. Never populate a user's custom directory implicitly.
-  const examples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => {
-    if (path.startsWith('Templates/')) return paths.templates === `${root}/Templates`
-    if (path.startsWith('Snippets/')) return paths.snippets === `${root}/Snippets`
-    if (path.startsWith('Plugins/')) return paths.plugins === `${root}/Plugins`
-    return false
-  }))
-  await seedExamples(modFs, root, examples)
-  if (paths.templates === `${root}/Templates` && !(await exists(`${root}/Templates/.complete-templates-v1-seeded`))) {
-    const templateExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Templates/')))
-    for (const [relative, contents] of Object.entries(templateExamples)) {
-      const segments = relative.split('/')
-      let parent = root
-      for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(modFs, parent, name)
-      const path = `${parent}/${segments.at(-1)}`
-      if (!(await exists(path))) await modFs.writeTextFile(path, contents)
-    }
-    await modFs.writeTextFile(`${root}/Templates/.complete-templates-v1-seeded`, '1\n')
+  const isManaged = (key: (typeof SEEDED)[number][1]) => managed?.[key] === true
+  // Folders the app picked itself (portable Data, installer content root) are created natively; Mods only keeps its own.
+  for (const [folder, key] of SEEDED) if (!isManaged(key)) await ensureModDirectory(modFs, root, folder)
+  /**
+   * The folder that holds `<Library>/...` examples for this library, or null for a user-chosen folder:
+   * never populate a custom directory implicitly. A default is either the original `Mods` library or
+   * a folder the native side reports as managed (portable defaults, installer content root).
+   */
+  const seedBase = (folder: string, key: (typeof SEEDED)[number][1]): string | null => {
+    if (paths[key] === `${root}/${folder}`) return root
+    if (!isManaged(key)) return null
+    const cut = paths[key].lastIndexOf('/')
+    return cut > 0 && paths[key].slice(cut + 1).toLowerCase() === folder.toLowerCase() ? paths[key].slice(0, cut) : null
   }
-  if (paths.plugins === `${root}/Plugins` && !(await exists(`${root}/Plugins/.executable-plugins-v1-seeded`))) {
-    const pluginExamples = Object.fromEntries(Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith('Plugins/')))
-    for (const [relative, contents] of Object.entries(pluginExamples)) {
+  const grouped = new Map<string, Record<string, string>>([[root, {}]])
+  for (const [path, text] of Object.entries(MOD_EXAMPLES)) {
+    const entry = SEEDED.find(([folder]) => path.startsWith(`${folder}/`))
+    const base = entry && seedBase(entry[0], entry[1])
+    if (base) grouped.set(base, { ...grouped.get(base), [path]: text })
+  }
+  for (const [base, examples] of grouped) await seedExamples(modFs, base, examples)
+  for (const [folder, key, marker] of UPGRADE_MARKERS) {
+    const base = seedBase(folder, key)
+    if (!base || await exists(`${paths[key]}/${marker}`)) continue
+    const upgrade = Object.entries(MOD_EXAMPLES).filter(([path]) => path.startsWith(`${folder}/`))
+    for (const [relative, contents] of upgrade) {
       const segments = relative.split('/')
-      let parent = root
+      let parent = base
       for (const name of segments.slice(0, -1)) parent = await ensureModDirectory(modFs, parent, name)
       const path = `${parent}/${segments.at(-1)}`
       if (!(await exists(path))) await modFs.writeTextFile(path, contents)
     }
-    await modFs.writeTextFile(`${root}/Plugins/.executable-plugins-v1-seeded`, '1\n')
+    await modFs.writeTextFile(`${paths[key]}/${marker}`, '1\n')
   }
   return { root, ...paths, preferences: `${config}/mods.json` }
 }
