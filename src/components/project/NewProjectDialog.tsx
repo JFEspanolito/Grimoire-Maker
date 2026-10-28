@@ -1,12 +1,14 @@
 import { reportError } from '../../lib/errorLogging'
+import { useDocumentStore } from '../../stores/documentStore'
 import { useEffect, useRef, useState } from 'react'
 
 interface Props {
   onCreate: (name: string) => Promise<boolean>
+  onOpenExisting?: () => Promise<unknown>
   onClose: () => void
 }
 
-export function NewProjectDialog({ onCreate, onClose }: Props) {
+export function NewProjectDialog({ onCreate, onOpenExisting, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null)
   const locked = useRef(false)
   const [name, setName] = useState('My Grimoire')
@@ -32,6 +34,22 @@ export function NewProjectDialog({ onCreate, onClose }: Props) {
       setBusy(false)
     }
   }
+  const openExisting = async () => {
+    if (locked.current || !onOpenExisting) return
+    locked.current = true
+    setBusy(true)
+    setError('')
+    try {
+      await onOpenExisting()
+      if (useDocumentStore.getState().workspaceRoot) onClose()
+    } catch (cause) {
+      reportError('project.open', cause)
+      setError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      locked.current = false
+      setBusy(false)
+    }
+  }
   return <dialog ref={dialog} aria-labelledby="new-project-title"
     className="m-auto w-96 max-w-[90vw] rounded-lg border border-white/20 bg-neutral-900 p-5 text-white shadow-xl backdrop:bg-black/60"
     onCancel={(event) => { event.preventDefault(); if (!locked.current) onClose() }}>
@@ -43,7 +61,12 @@ export function NewProjectDialog({ onCreate, onClose }: Props) {
       </label>
       <p className="my-3 text-sm text-white/60">Choose where to create this folder next. It will contain Draft, Research, Trash, and a Chapter 1 demo.</p>
       {error && <p role="alert" className="mb-3 text-sm text-red-400">{error}</p>}
-      <div className="flex justify-end gap-2 text-sm">
+      <div className="flex flex-wrap justify-end gap-2 text-sm">
+        {onOpenExisting && (
+          <button type="button" disabled={busy} onClick={() => void openExisting()} className="mr-auto rounded px-3 py-2 text-white/80 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-30">
+            Open Existing Folder…
+          </button>
+        )}
         <button type="button" disabled={busy} onClick={onClose} className="rounded px-3 py-2 hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-30">Cancel</button>
         <button type="submit" disabled={busy || !name.trim()} className="rounded bg-white/10 px-3 py-2 hover:bg-white/20 focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-30">
           {busy ? 'Creating…' : 'Choose Location & Create'}
