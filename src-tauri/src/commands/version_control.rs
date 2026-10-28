@@ -651,7 +651,10 @@ fn commit_in(root: &Path, message: &str, expected_index: &str) -> Result<(), Str
         .iter()
         .any(|entry| ![" ", "?", "!"].contains(&entry.index_status.as_str()))
     {
-        return Err("No staged changes to commit".into());
+        if status.entries.is_empty() {
+            return Err("No changes to save.".into());
+        }
+        return auto_commit_in(root, message).map(|_| ());
     }
     // Git commit can rewrite the index tree cache before discovering a missing identity.
     // Validate both identities first so this rejection leaves the index byte-for-byte intact.

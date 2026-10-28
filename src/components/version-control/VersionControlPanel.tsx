@@ -216,14 +216,14 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
       </div>
       <form className={styles.commit} onSubmit={(event) => {
         event.preventDefault()
-        if (!message.trim() || !staged.length) return
-        void run((project) => commitChanges(project, message, status.indexFingerprint), 'Staged changes committed.')
+        const commitMessage = message.trim() || 'Saved version'
+        void run((project) => commitChanges(project, commitMessage, status.indexFingerprint), 'Staged changes committed.')
       }}>
         <label htmlFor="git-commit-message">Commit message</label>
         <textarea id="git-commit-message" value={message} maxLength={4096} disabled={busy}
-          onChange={(event) => setMessage(event.target.value)} rows={2} placeholder="Describe the staged changes" />
-        <button type="submit" disabled={busy || !staged.length || !message.trim()}>Commit staged ({staged.length})</button>
-        <p className={styles.hint}>Commits all staged files only. Git hooks and signing are bypassed. No remote operations.</p>
+          onChange={(event) => setMessage(event.target.value)} rows={2} placeholder="Describe the changes (optional)" />
+        <button type="submit" disabled={busy}>Save version</button>
+        <p className={styles.hint}>Saves staged files (+), or all changed files automatically if none are staged.</p>
       </form>
       {(status.commits?.length ?? 0) > 0 && (
         <button type="button" className={styles.rollbackTrigger} disabled={busy}
