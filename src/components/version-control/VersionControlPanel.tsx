@@ -227,9 +227,9 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
       </form>
       {(status.commits?.length ?? 0) > 0 && (
         <button type="button" className={styles.rollbackTrigger} disabled={busy}
-          aria-label="Recent checkpoints (Rollback)"
+          aria-label="Restore previous version (Rollback)"
           onClick={() => setRollbackOpen(true)}>
-          <span>↺ Recent checkpoints (Rollback)</span>
+          <span>↺ Restore previous version (Rollback)</span>
           <span>{status.commits!.length}</span>
         </button>
       )}

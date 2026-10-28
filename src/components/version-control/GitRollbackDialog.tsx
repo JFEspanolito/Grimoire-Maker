@@ -47,7 +47,7 @@ export function GitRollbackDialog({
         if (active) setDiff(result)
       })
       .catch((err: unknown) => {
-        if (active) setError(friendlyErrorMessage(err, 'Could not load checkpoint diff.'))
+        if (active) setError(friendlyErrorMessage(err, 'Could not load version preview.'))
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -71,9 +71,9 @@ export function GitRollbackDialog({
     >
       <header className={styles.header}>
         <div>
-          <h2 id="git-rollback-title">Recent checkpoints (Rollback)</h2>
+          <h2 id="git-rollback-title">Restore previous version (Rollback)</h2>
           <p>
-            Select a checkpoint to preview differences between your current files and that version before restoring.
+            Choose a saved version from your history on the left to preview what will change before restoring.
           </p>
         </div>
         <button type="button" aria-label="Close rollback dialog" onClick={onClose}>
@@ -82,7 +82,7 @@ export function GitRollbackDialog({
       </header>
 
       <div className={styles.rollbackBody}>
-        <ul className={styles.checkpointList} aria-label="Checkpoints">
+        <ul className={styles.checkpointList} aria-label="Saved versions">
           {commits.map((commit) => {
             const isSelected = commit.hash === selectedCommit?.hash
             return (
@@ -106,25 +106,25 @@ export function GitRollbackDialog({
 
         <div className={styles.diffPane}>
           <p className={styles.legend}>
-            <span className={styles.removed}>− Current (will be replaced)</span>
-            <span className={styles.added}>+ Checkpoint (will be restored)</span>
+            <span className={styles.removed}>− Current version (will be replaced)</span>
+            <span className={styles.added}>+ Saved version (will be restored)</span>
             {selectedCommit && (
               <span>
-                Comparing working tree → <strong>{selectedCommit.shortHash}</strong> ({selectedCommit.subject})
+                Comparing current files → <strong>{selectedCommit.shortHash}</strong> ({selectedCommit.subject})
               </span>
             )}
           </p>
-          {loading && <p role="status">Loading checkpoint diff…</p>}
+          {loading && <p role="status">Loading version preview…</p>}
           {error && <p role="alert">{error}</p>}
           {diff?.binary ? (
-            <p>Binary file changes: text diff unavailable.</p>
+            <p>Binary file changes: text preview unavailable.</p>
           ) : (
-            <div className={styles.scroll} tabIndex={0} aria-label="Checkpoint diff preview">
+            <div className={styles.scroll} tabIndex={0} aria-label="Version diff preview">
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th scope="col">Current working tree</th>
-                    <th scope="col">Checkpoint ({selectedCommit?.shortHash ?? ''})</th>
+                    <th scope="col">Current files</th>
+                    <th scope="col">Saved version ({selectedCommit?.shortHash ?? ''})</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -160,7 +160,7 @@ export function GitRollbackDialog({
                 </tbody>
               </table>
               {!loading && !error && !rows.length && (
-                <p style={{ padding: '.75rem' }}>No differences between current files and this checkpoint.</p>
+                <p style={{ padding: '.75rem' }}>No differences between your current files and this saved version.</p>
               )}
             </div>
           )}
@@ -175,6 +175,7 @@ export function GitRollbackDialog({
         {selectedCommit && activeRelativePath && (
           <button
             type="button"
+            className={styles.primaryBtn}
             disabled={busy}
             onClick={() => onRollback(selectedCommit, activeRelativePath)}
           >

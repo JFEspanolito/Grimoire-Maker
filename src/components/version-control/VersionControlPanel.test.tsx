@@ -227,8 +227,8 @@ describe('VersionControlPanel', () => {
     await act(async () => revertBtn.click())
     expect(actions.revertChange).toHaveBeenCalledExactlyOnceWith('/books', 'new.md')
 
-    // Click the Recent checkpoints (Rollback) button to open the rollback modal
-    await click('Recent checkpoints (Rollback)')
+    // Click the Restore previous version (Rollback) button to open the rollback modal
+    await click('Restore previous version (Rollback)')
     const rollbackModal = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="git-rollback-title"]')!
     expect(rollbackModal).not.toBeNull()
     expect(rollbackModal.open).toBe(true)
