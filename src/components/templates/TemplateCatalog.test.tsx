@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   export: vi.fn().mockResolvedValue(true),
   import: vi.fn().mockResolvedValue('classic-fantasy'),
   reload: vi.fn(),
+  dir: '/mods/Templates',
   workspaceRoot: '/project' as string | null,
   template: {
     id: 'classic-fantasy',
@@ -21,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   },
 }))
 vi.mock('../../hooks/useFileSystem', () => ({ isTauri: () => true, useFileSystem: () => ({ applyTemplate: mocks.apply, createProject: mocks.createProject }) }))
-vi.mock('../../stores/templateStore', () => ({ useTemplateStore: () => ({ templates: [mocks.template], errors: [], reload: mocks.reload }) }))
+vi.mock('../../stores/templateStore', () => ({ useTemplateStore: () => ({ templates: [mocks.template], dir: mocks.dir, errors: [], reload: mocks.reload }) }))
 vi.mock('../../stores/documentStore', () => ({ useDocumentStore: (selector: (state: { workspaceRoot: string | null }) => unknown) => selector({ workspaceRoot: mocks.workspaceRoot }) }))
 vi.mock('../../lib/templateActions', () => ({ exportTemplateZip: mocks.export, importTemplateZip: mocks.import }))
 
@@ -33,6 +34,9 @@ it('is expanded by default when no project is open and collapsed by default when
     mocks.workspaceRoot = null
     await act(async () => root.render(<TemplateCatalog />))
     expect(container.querySelector('button')?.getAttribute('aria-expanded')).toBe('true')
+    expect(container.querySelector('button')?.getAttribute('title')).toBe(
+      'Empty project structures created by the community.',
+    )
     expect(container.textContent).toContain('Classic Fantasy')
 
     mocks.workspaceRoot = '/project'

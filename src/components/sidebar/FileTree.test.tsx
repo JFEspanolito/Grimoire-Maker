@@ -37,6 +37,42 @@ afterEach(async () => {
 })
 
 describe('project explorer', () => {
+  it('shows descriptions only on the four default folders', async () => {
+    useDocumentStore.getState().setWorkspace('/book', [
+      { name: 'Draft', path: '/book/Draft', isDirectory: true, children: [] },
+      { name: 'Research', path: '/book/Research', isDirectory: true, children: [] },
+      { name: 'Trash', path: '/book/Trash', isDirectory: true, children: [] },
+      { name: 'Assets', path: '/book/Assets', isDirectory: true, children: [] },
+      {
+        name: 'Research',
+        path: '/book/Draft/Research',
+        isDirectory: true,
+        children: [],
+      },
+    ])
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+
+    expect(container.querySelector('[data-tree-path="/book/Draft"]')?.getAttribute('title')).toBe(
+      'Files and folders for your project.',
+    )
+    expect(container.querySelector('[data-tree-path="/book/Research"]')?.getAttribute('title')).toBe(
+      'Inspiration and reference sources.',
+    )
+    expect(container.querySelector('[data-tree-path="/book/Trash"]')?.getAttribute('title')).toBe(
+      'Deleted files.',
+    )
+    expect(container.querySelector('[data-tree-path="/book/Assets"]')?.getAttribute('title')).toBe(
+      'Images and other resources used in your project.',
+    )
+    expect(
+      container
+        .querySelector('[data-tree-path="/book/Draft/Research"]')
+        ?.getAttribute('title'),
+    ).toBeNull()
+  })
+
   it('renames the selected image with F2 and commits its hidden extension on blur', async () => {
     renameEntryMock.mockClear()
     useDocumentStore.getState().setWorkspace('/book', [{ name: 'cover.JPG', path: '/book/cover.JPG', isDirectory: false }])

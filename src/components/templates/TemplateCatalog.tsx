@@ -97,7 +97,7 @@ export function TemplateCatalog() {
       <button
         className="flex w-full items-center gap-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:text-white/80"
         aria-expanded={open}
-        title={dir ? `Community templates folder: ${dir}` : undefined}
+        title={dir ? 'Empty project structures created by the community.' : undefined}
         onClick={() => setManualOpen({ hasProject, open: !open })}
       >
         <span aria-hidden>{open ? '▾' : '▸'}</span>

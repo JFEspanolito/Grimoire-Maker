@@ -27,6 +27,13 @@ import { newImageAttrs } from "../../lib/insertActions";
 const fileLabel = (name: string, isDirectory = false): string =>
   isDirectory ? name : name.replace(/(?<=.)\.[^.]+$/, "");
 
+const defaultFolderDescriptions: Record<string, string> = {
+  draft: "Files and folders for your project.",
+  research: "Inspiration and reference sources.",
+  trash: "Deleted files.",
+  assets: "Images and other resources used in your project.",
+};
+
 type Editing =
   | { kind: "new-file" | "new-folder"; dir: string }
   | { kind: "rename"; path: string; extension: string };
@@ -97,6 +104,11 @@ function InlineInput({
 
 function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
   const label = fileLabel(node.name, node.isDirectory);
+  const defaultFolderTooltip =
+    node.isDirectory &&
+    node.path.toLowerCase() === `${ctx.root}/${node.name}`.toLowerCase()
+      ? defaultFolderDescriptions[node.name.toLowerCase()]
+      : undefined;
   const sectionRoot = ["Draft", "Research", "Trash"].some(
     (section) =>
       node.path.toLowerCase() === `${ctx.root}/${section}`.toLowerCase(),
@@ -135,6 +147,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
         drop.setNodeRef(element);
       }}
       data-tree-path={node.path}
+      title={defaultFolderTooltip}
       {...drag.listeners}
       {...drag.attributes}
       className={[
