@@ -32,3 +32,7 @@
 .warnings ul { margin: .3rem 0 0; padding-left: 1.1rem; }
 .block { display: flex; flex-direction: column; gap: .6rem; padding-bottom: .9rem; border-bottom: 1px solid #ffffff12; }
 .block h4 { margin: 0; font-size: .85rem; font-weight: 600; color: #cfb37c; }
+.buttonList { display: flex; flex-direction: column; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+.buttonItem { display: flex; flex-direction: column; gap: .5rem; padding: .6rem .7rem; border: 1px solid #ffffff20; border-radius: .25rem; background: #ffffff06; }
+.buttonHeader { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .8rem; color: #e8cf9a; }
+.summary { margin: 0; padding: .5rem .65rem; border: 1px solid #cfb37c40; border-radius: .25rem; background: #cfb37c10; color: #d1c5ad; font-size: .78rem; line-height: 1.5; }

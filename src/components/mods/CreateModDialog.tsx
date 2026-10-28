@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { CreateModPlugins } from './CreateModPlugins'
 import { CreateModSnippets } from './CreateModSnippets'
 import { CreateModTemplates } from './CreateModTemplates'
 import { CreateModThemes } from './CreateModThemes'
 import styles from './CreateMod.module.css'
 
-export const CREATE_MOD_TABS = ['Themes', 'Snippets', 'Templates'] as const
+export const CREATE_MOD_TABS = ['Themes', 'Snippets', 'Templates', 'Plugins'] as const
 export type CreateModTab = (typeof CREATE_MOD_TABS)[number]
 
 interface Props {
@@ -59,6 +60,9 @@ export function CreateModDialog({ initialTab = 'Themes', onClose, onOpenThemeCus
       </div>
       <div role="tabpanel" id="create-mod-panel-Templates" aria-labelledby="create-mod-tab-Templates" hidden={tab !== 'Templates'}>
         <CreateModTemplates />
+      </div>
+      <div role="tabpanel" id="create-mod-panel-Plugins" aria-labelledby="create-mod-tab-Plugins" hidden={tab !== 'Plugins'}>
+        <CreateModPlugins />
       </div>
     </dialog>
   )
