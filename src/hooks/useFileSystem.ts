@@ -121,17 +121,28 @@ export function useFileSystem() {
   }, [])
 
   const persistDocument = useCallback(async (snapshot: GrimoireDocument): Promise<boolean> => {
+    const root = useDocumentStore.getState().workspaceRoot
+    const createdInDraft = !snapshot.path && !!root
     let path = snapshot.path
+    if (!path && root) {
+      const draft = splitBinder(useDocumentStore.getState().tree)?.draft?.path ?? `${root}/Draft`
+      if (!(await exists(draft))) await mkdir(draft, { recursive: true })
+      path = `${draft}/untitled.md`
+      for (let suffix = 1; await exists(path); suffix++) path = `${draft}/untitled-${suffix}.md`
+    }
     path ??= await save({ filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (!path) return false
     await writeTextFile(path, serializeDocument(snapshot.frontmatter, snapshot.body))
     useDocumentStore.getState().markSnapshotSaved(path, snapshot)
     if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path, true)
+    if (createdInDraft && useDocumentStore.getState().workspaceRoot === root) {
+      setWorkspace(root, await readTree(root))
+    }
     emitPluginEvent('document:saved')
     notifyRepositoryChanged()
     await remember((s) => ({ ...s, lastFile: useTabStore.getState().active }))
     return true
-  }, [remember])
+  }, [remember, setWorkspace])
 
   const persistCurrentDocument = useCallback(() => persistDocument(useDocumentStore.getState().document), [persistDocument])
 

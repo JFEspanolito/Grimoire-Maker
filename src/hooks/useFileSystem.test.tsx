@@ -138,6 +138,38 @@ describe('new files and projects', () => {
     expect(writeTextFile).not.toHaveBeenCalled()
     expect(useTabStore.getState().paths).toEqual([])
   })
+
+  it('saves an untitled document directly to Draft/untitled.md without Save As when a project is open', async () => {
+    directories.add('/workspace/Draft')
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().loadFromRaw(null, '')
+    useTabStore.getState().reset(null)
+    useDocumentStore.getState().setBody('# Written with all tabs closed')
+
+    await actions.saveFile()
+
+    expect(save).not.toHaveBeenCalled()
+    expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/untitled.md', '# Written with all tabs closed')
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/untitled.md')
+    expect(useDocumentStore.getState().document.dirty).toBe(false)
+    expect(useTabStore.getState().active).toBe('/workspace/Draft/untitled.md')
+  })
+
+  it('increments to Draft/untitled-1.md when Draft/untitled.md already exists', async () => {
+    directories.add('/workspace/Draft')
+    directories.add('/workspace/Draft/untitled.md')
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    useDocumentStore.getState().loadFromRaw(null, '')
+    useTabStore.getState().reset(null)
+    useDocumentStore.getState().setBody('# Second untitled note')
+
+    await actions.saveFile()
+
+    expect(save).not.toHaveBeenCalled()
+    expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/untitled-1.md', '# Second untitled note')
+    expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/untitled-1.md')
+    expect(useTabStore.getState().active).toBe('/workspace/Draft/untitled-1.md')
+  })
 })
 
 describe('switching Markdown files', () => {
@@ -556,12 +588,12 @@ describe('applying templates', () => {
     expect(applyTemplateFiles).toHaveBeenCalledWith(template, '/workspace')
   })
 
-  it('does not create files when saving an edited unsaved document is cancelled', async () => {
-    useDocumentStore.getState().setWorkspace('/workspace', [])
+  it('does not create files when saving an edited unsaved document outside a project is cancelled', async () => {
+    useDocumentStore.getState().setWorkspace(null, [])
     useDocumentStore.getState().setBody('# Personal notes')
     vi.mocked(save).mockResolvedValueOnce(null)
 
-    expect(await actions.applyTemplate(template)).toBe(false)
+    expect(await actions.applyTemplate({ ...template, requiresProject: false })).toBe(false)
 
     expect(applyTemplateFiles).not.toHaveBeenCalled()
     expect(useDocumentStore.getState().document.body).toBe('# Personal notes')

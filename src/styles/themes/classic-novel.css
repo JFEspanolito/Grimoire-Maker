@@ -1,0 +1,20 @@
+/* @name: Book / Classic Novel */
+[data-theme='classic-novel'] {
+  --page-bg: #fcfbf7;
+  --page-fg: #2c2a29;
+  --page-font: 'Baskerville', 'Garamond', 'Times New Roman', serif;
+  --heading-font: 'Garamond', 'Georgia', serif;
+  --heading-color: #1a1918;
+  --accent: #5e4934;
+  --statblock-bg: #f4f1ea;
+  --readaloud-bg: #f7f5ef;
+}
+[data-theme='classic-novel'] .grimoire-content p {
+  line-height: 1.65;
+  text-indent: 1.25em;
+}
+[data-theme='classic-novel'] .grimoire-content h1,
+[data-theme='classic-novel'] .grimoire-content h2 {
+  text-align: center;
+  font-weight: normal;
+}

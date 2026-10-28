@@ -1,0 +1,14 @@
+/* @name: Minimal Monochrome */
+[data-theme='minimal-print'] {
+  --page-bg: #ffffff;
+  --page-fg: #000000;
+  --page-font: 'Courier New', monospace;
+  --heading-font: 'Arial Black', Impact, sans-serif;
+  --heading-color: #000000;
+  --accent: #333333;
+  --statblock-bg: #f0f0f0;
+  --readaloud-bg: #e6e6e6;
+}
+[data-theme='minimal-print'] .grimoire-content hr {
+  border: 1px dashed #000000;
+}

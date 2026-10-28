@@ -14,6 +14,7 @@ it('ships declarative content plus complete executable Zoom and Ruler packages',
     'independent-zine',
     'operations-manual',
     'rpg-adventure-module',
+    'ttrpg-core-rulebook',
   ]) {
     expect(MOD_EXAMPLES[`Templates/${id}/README.md`]).toContain('Create your own')
     expect(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`Templates/${id}/chapters/`)).length).toBeGreaterThanOrEqual(7)

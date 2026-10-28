@@ -54,7 +54,7 @@ afterEach(async () => {
 })
 it('seeds executable plugins but keeps snippets declarative and isolates broken packages', async () => {
  await prepareModLibrary()
- expect(Object.keys(MOD_EXAMPLES).filter(p => /^Templates\/[^/]+\/index.md$/.test(p))).toHaveLength(7)
+ expect(Object.keys(MOD_EXAMPLES).filter(p => /^Templates\/[^/]+\/index.md$/.test(p))).toHaveLength(8)
  await put('Mods/Snippets/Community/nested/01-note.md', '---\nsnippetName: Custom note\n---\n## Custom')
  await put('Mods/Snippets/Community/ignored.js', 'throw Error("must not run")')
  await put('Mods/Plugins/probe/index.js', 'throw Error("must not run")')
@@ -68,7 +68,7 @@ it('seeds executable plugins but keeps snippets declarative and isolates broken 
  expect(scope.reads.some(p => p.endsWith('/Snippets/Community/ignored.js'))).toBe(false)
  expect(scope.reads.some(p => p.endsWith('/Plugins/bookmarks/bookmarks.tsx'))).toBe(true)
  expect(useModStore.getState().errors.join()).toContain('Plugins/probe')
- expect(useTemplateStore.getState().templates).toHaveLength(7)
+ expect(useTemplateStore.getState().templates).toHaveLength(8)
 })
 it('configured paths survive reload, keep disabled IDs and legacy templates, and receive ZIP imports without reseeding', async () => {
   await useModStore.getState().setEnabled('Snippets/community', false)
@@ -112,7 +112,7 @@ it('seeds the shipped examples into native-managed folders (portable Data or ins
   for (const relative of exampleKeys('Templates')) expect(await present(`${managedPaths.templates}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Snippets')) expect(await present(`${managedPaths.snippets}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Plugins')) expect(await present(`${managedPaths.plugins}/${relative}`)).toBe(true)
-  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.editorial-templates-v1-seeded`, `${managedPaths.plugins}/.executable-plugins-v1-seeded`, `${managedPaths.snippets}/.rol-adventures-snippets-v2-seeded`]) expect(await present(marker)).toBe(true)
+  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.editorial-templates-v2-seeded`, `${managedPaths.plugins}/.executable-plugins-v1-seeded`, `${managedPaths.snippets}/.rol-adventures-snippets-v2-seeded`]) expect(await present(marker)).toBe(true)
   expect(await present(`${managedPaths.themes}/.examples-seeded`)).toBe(false)
   // A removed or edited example is never restored or replaced on the next start.
   const removed = exampleKeys('Templates')[0]
@@ -141,7 +141,7 @@ it('without a managed flag the original Mods library keeps seeding exactly as be
   for (const relative of exampleKeys('Templates')) expect(await present(`${scope.root}/Mods/Templates/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Plugins')) expect(await present(`${scope.root}/Mods/Plugins/${relative}`)).toBe(true)
   expect(await present(`${scope.root}/Mods/.examples-seeded`)).toBe(true)
-  expect(await present(`${scope.root}/Mods/Templates/.editorial-templates-v1-seeded`)).toBe(true)
+  expect(await present(`${scope.root}/Mods/Templates/.editorial-templates-v2-seeded`)).toBe(true)
   expect(await present(`${scope.root}/Mods/Plugins/.executable-plugins-v1-seeded`)).toBe(true)
 })
 
@@ -216,7 +216,7 @@ it('ZIP import routes into Mods, export round-trips, application preserves prior
 })
 
 it('upgrades legacy template examples without replacing edits and applies every chapter', async () => {
-  const marker = `${scope.root}/Mods/Templates/.editorial-templates-v1-seeded`
+  const marker = `${scope.root}/Mods/Templates/.editorial-templates-v2-seeded`
   await fs.rm(marker, { force: true })
   await put('Mods/Templates/rpg-adventure-module/index.md', '---\ntemplateName: My edited adventure\n---\n# Keep my edits')
   await fs.rm(`${scope.root}/Mods/Templates/rpg-adventure-module/chapters`, { recursive: true, force: true })

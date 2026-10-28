@@ -79,6 +79,13 @@ export const OFFICIAL_TEMPLATES: Template[] = [
     body: '# RPG Adventure - Complete Module\n\nPrepare your adventure here.\n',
     builtin: true,
   },
+  {
+    id: 'ttrpg-core-rulebook',
+    label: 'TTRPG Core Rulebook / Homebrew Manual',
+    frontmatter: { title: 'Untitled TTRPG Rulebook', pageSize: 'letter', columns: 2, theme: 'parchment' },
+    body: '# TTRPG Core Rulebook / Homebrew Manual\n\nBegin your rulebook here.\n',
+    builtin: true,
+  },
 ]
 
 export interface UserTemplates {
