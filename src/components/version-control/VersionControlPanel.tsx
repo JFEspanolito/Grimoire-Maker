@@ -255,8 +255,8 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
               },
               targetPaths && targetPaths.length > 0
                 ? targetPaths.length === 1
-                  ? `Restored ${targetPaths[0]} from ${commit.shortHash}.`
-                  : `Restored ${targetPaths.length} files from ${commit.shortHash}.`
+                  ? `Restored ${targetPaths[0]} to its version before ${commit.shortHash}.`
+                  : `Restored ${targetPaths.length} files to their versions before ${commit.shortHash}.`
                 : `Rolled back project to ${commit.shortHash}.`,
             )
           }}

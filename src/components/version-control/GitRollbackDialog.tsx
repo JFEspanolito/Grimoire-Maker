@@ -146,6 +146,7 @@ export function GitRollbackDialog({
           <h2 id="git-rollback-title">Restore previous version (Rollback)</h2>
           <p>
             Choose a saved version on the left, expand any file to inspect its changes, and uncheck files you want to ignore.
+            {' '}Restore selected files returns them to the Previous Version shown on the left. Restore entire project uses the selected saved version.
           </p>
         </div>
         <button type="button" aria-label="Close rollback dialog" onClick={onClose}>

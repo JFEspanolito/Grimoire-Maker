@@ -874,7 +874,16 @@ fn rollback_in(root: &Path, commit: &str, path: Option<&str>) -> Result<(), Stri
     match path {
         Some(rel) => {
             guard_path(root, rel)?;
-            checked(root, &["restore", "--staged", "--worktree", &source, "--", rel])?;
+            // The selected-file button restores the left side of `git show`:
+            // the version before this commit, not the commit's resulting snapshot.
+            let ancestry = checked(root, &["rev-list", "--parents", "-n", "1", commit])?;
+            let ancestry = String::from_utf8_lossy(&ancestry.stdout);
+            let parents: Vec<_> = ancestry.split_whitespace().skip(1).collect();
+            if parents.len() != 1 {
+                return Err("This saved version has no unambiguous previous version. Select a non-initial, non-merge version.".into());
+            }
+            let previous_source = format!("--source={}", parents[0]);
+            checked(root, &["restore", "--staged", "--worktree", &previous_source, "--", rel])?;
         }
         None => {
             checked(root, &["restore", "--staged", "--worktree", &source, "--", "."])?;
@@ -933,6 +942,39 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn rollback_selected_file_restores_previous_version_only() {
+        let root = repo("rollback-previous");
+        raw(&root, &["config", "core.autocrlf", "false"]);
+        let path = "Draft/Chapter 1/Welcome.md";
+        fs::create_dir_all(root.join("Draft/Chapter 1")).unwrap();
+        fs::write(root.join(path), "# D&D\n").unwrap();
+        fs::write(root.join("other.md"), "original\n").unwrap();
+        raw(&root, &["add", "."]);
+        raw(&root, &["commit", "-m", "Initial"]);
+        let initial = raw(&root, &["rev-parse", "HEAD"]).trim().to_string();
+        fs::write(root.join(path), "# D&D Section\n").unwrap();
+        raw(&root, &["add", "."]);
+        raw(&root, &["commit", "-m", "Rename heading"]);
+        let selected = raw(&root, &["rev-parse", "HEAD"]).trim().to_string();
+        fs::write(root.join("other.md"), "keep local edit\n").unwrap();
+        let preview = commit_diff_in(&root, &selected, Some(path)).unwrap();
+        assert!(preview.text.contains("-# D&D\n"));
+        rollback_in(&root, &selected, Some(path)).unwrap();
+        assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "# D&D\n");
+        assert_eq!(raw(&root, &["show", &format!(":{path}")]), "# D&D\n");
+        assert_eq!(fs::read_to_string(root.join("other.md")).unwrap(), "keep local edit\n");
+        assert_eq!(raw(&root, &["rev-parse", "HEAD"]).trim(), selected);
+        let index = fs::read(root.join(".git/index")).unwrap();
+        assert!(rollback_in(&root, &initial, Some(path)).unwrap_err().contains("previous version"));
+        assert_eq!(fs::read(root.join(".git/index")).unwrap(), index);
+        assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "# D&D\n");
+        // Entire-project restoration continues to use the selected snapshot itself.
+        rollback_in(&root, &selected, None).unwrap();
+        assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "# D&D Section\n");
+        assert_eq!(fs::read_to_string(root.join("other.md")).unwrap(), "original\n");
+    }
 
     #[test]
     fn auto_commit_missing_git_skips_but_other_failures_propagate() {
