@@ -1,4 +1,4 @@
-import { createDocument, type Content, type Editor } from '@tiptap/react'
+import { createDocument, type Content, type Editor, type JSONContent } from '@tiptap/react'
 import { Fragment, Slice, type Node as PMNode } from '@tiptap/pm/model'
 import { NodeSelection, TextSelection } from '@tiptap/pm/state'
 import { closeHistory } from '@tiptap/pm/history'
@@ -40,7 +40,7 @@ export function insertContentBox(editor: Editor, content: Content, position?: nu
   const document = createDocument(html, editor.schema)
   // The page is made of sections; a box holds only the blocks inside them.
   const blocks = (document.toJSON().content as { type: string; content?: unknown[] }[]).flatMap((node) => node.type === 'section' ? node.content ?? [] : [node])
-  const box = { type: 'standardContentBox', attrs, content: blocks }
+  const box = { type: 'standardContentBox', attrs, content: blocks as JSONContent[] }
   let insertion = position
   const resolved = editor.state.doc.resolve(position ?? editor.state.selection.from)
   // New groups are siblings, even when the caret/drop point is inside an existing group.

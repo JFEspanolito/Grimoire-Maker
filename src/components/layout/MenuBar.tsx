@@ -3,7 +3,7 @@ import { lazy, Suspense, useEffect, useEffectEvent, useRef, useState } from 'rea
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
 import { useDocumentStore } from '../../stores/documentStore'
-import { useSettingsStore } from '../../stores/settingsStore'
+import { useSettingsStore, type PanelId } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
 import { PAGE_SIZES, type PageSizeId } from '../../types/document'
 import styles from './MenuBar.module.css'

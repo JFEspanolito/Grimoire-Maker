@@ -44,7 +44,7 @@ export async function loadImageUrl(src: string, documentPath: string | null): Pr
     bytes = await readFile(path)
   }
   const ext = path.slice(path.lastIndexOf('.') + 1).toLowerCase()
-  return URL.createObjectURL(new Blob([bytes], { type: MIME[ext] ?? 'application/octet-stream' }))
+  return URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: MIME[ext] ?? 'application/octet-stream' }))
 }
 
 export const revokeImageUrl = (url: string): void => {

@@ -19,7 +19,7 @@ it('shows an image insertion caret and clears it outside the page, on cancellati
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   useDocumentStore.getState().setWorkspace('/book', [])
   const root = createRoot(document.createElement('div'))
-  const move = { active: { id: '/book/Assets/Chapter 1/file.jpg' }, activatorEvent: new MouseEvent('pointerdown', { clientX: 10, clientY: 20 }), delta: { x: 30, y: 40 } } as DragMoveEvent
+  const move = { active: { id: '/book/Assets/Chapter 1/file.jpg' }, activatorEvent: new MouseEvent('pointerdown', { clientX: 10, clientY: 20 }), delta: { x: 30, y: 40 } } as unknown as DragMoveEvent
   mocks.target.mockReturnValue({ position: 4, editor: { view: { coordsAtPos: () => ({ left: 100, top: 200, bottom: 224 }) } } })
   try {
     await act(async () => root.render(<FileTree />))

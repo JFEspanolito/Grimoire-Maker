@@ -15,7 +15,7 @@ it('resolves the editor under the drop, inserts at that point, and unregisters c
     return new Editor({ element: host, extensions: [StarterKit], content: '<p>First</p><p>Last</p>',
       editorProps: { handleScrollToSelection: () => true } })
   })
-  const unregister = pages.map(registerSnippetDropTarget)
+  const unregister = pages.map((page) => registerSnippetDropTarget(page))
   try {
     const target = pages[1]
     Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: vi.fn(() => target.view.dom) })
