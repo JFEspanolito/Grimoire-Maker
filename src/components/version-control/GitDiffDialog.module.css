@@ -1,4 +1,4 @@
-.dialog { position: fixed; inset: 0; margin: auto; width: min(76rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); padding: 1rem; border: 1px solid #625c50; border-radius: .5rem; background: #272623; color: #f0eee9; font-size: .8rem; box-shadow: 0 16px 48px #000c; box-sizing: border-box; }
+.dialog { position: fixed; inset: 0; margin: auto; width: min(76rem, calc(100vw - 2rem)); height: min(44rem, calc(100vh - 2rem)); max-height: calc(100vh - 2rem); padding: 1rem; border: 1px solid #625c50; border-radius: .5rem; background: #272623; color: #f0eee9; font-size: .8rem; box-shadow: 0 16px 48px #000c; box-sizing: border-box; }
 .dialog[open] { display: flex; flex-direction: column; overflow: hidden; }
 .dialog::backdrop { background: #000b; }
 .header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex-shrink: 0; }
@@ -9,7 +9,7 @@
 .dialog .header button:active:not(:disabled) { background: #cfb37c40; border-color: #ffe2a6; }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: .6rem 0; color: #bcb7ac; flex-shrink: 0; }
 .legend span { padding: .15rem .4rem; border-radius: .2rem; }
-.scroll { overflow: auto; flex: 1; min-height: 0; max-height: 70vh; border: 1px solid #ffffff20; background: #1e1d1b; }
+.scroll { overflow: auto; flex: 1; min-height: 0; border: 1px solid #ffffff20; background: #1e1d1b; }
 .table { border-collapse: separate; border-spacing: 0; table-layout: fixed; width: 100%; min-width: 32rem; }
 .table th { position: sticky; top: 0; z-index: 1; background: #33312d; padding: .6rem; text-align: left; width: 50%; }
 .table td { vertical-align: top; padding: 0; border-right: 1px solid #ffffff15; }
@@ -22,7 +22,7 @@
 .table .note { background: #ffffff08; color: #bcb7ac; padding: .35rem .6rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: monospace; }
 .warning { color: #e1bd78; margin-top: .5rem; flex-shrink: 0; }
 .dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: -2px; }
-.rollbackBody { display: grid; grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: .85rem; margin-top: .65rem; flex: 1; min-height: 18rem; height: 60vh; max-height: calc(100vh - 12rem); overflow: hidden; }
+.rollbackBody { display: grid; grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: .85rem; margin-top: .65rem; flex: 1; min-height: 0; overflow: hidden; }
 .checkpointList { list-style: none; margin: 0; padding: .4rem; min-height: 0; height: 100%; box-sizing: border-box; overflow: auto; border: 1px solid #ffffff20; border-radius: .35rem; background: #1c1b18; }
 .checkpointList li { margin-bottom: .35rem; }
 .checkpointList li:last-child { margin-bottom: 0; }
@@ -32,7 +32,7 @@
 .checkpointTitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .checkpointMeta { font-size: .7rem; color: #bcb7ac; font-family: monospace; }
 .diffPane { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden; }
-.diffPane .scroll { flex: 1; min-height: 0; max-height: none; overflow: auto; }
+.diffPane .scroll { flex: 1; min-height: 0; overflow: auto; }
 .footer { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: .6rem; margin-top: .85rem; padding-top: .75rem; border-top: 1px solid #ffffff24; background: #272623; flex-shrink: 0; }
 .dialog .footer button { padding: .45rem .9rem; border: 1px solid #756e60; border-radius: .35rem; background: #35332e; color: #f0eee9; font-weight: 500; cursor: pointer; }
 .dialog .footer button:hover:not(:disabled) { background: #46433c; border-color: #cfb37c; color: #fff4dd; }

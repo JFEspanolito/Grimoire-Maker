@@ -114,56 +114,60 @@ export function GitRollbackDialog({
               </span>
             )}
           </p>
-          {loading && <p role="status">Loading version preview…</p>}
-          {error && <p role="alert">{error}</p>}
-          {diff?.binary ? (
-            <p>Binary file changes: text preview unavailable.</p>
-          ) : (
-            <div className={styles.scroll} tabIndex={0} aria-label="Version diff preview">
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th scope="col">Current files</th>
-                    <th scope="col">Saved version ({selectedCommit?.shortHash ?? ''})</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, index) => (
-                    <tr key={index}>
-                      {row.note !== undefined ? (
-                        <td colSpan={2} className={styles.note}>
-                          {row.note}
-                        </td>
-                      ) : (
-                        (['original', 'incoming'] as const).map((side) => {
-                          const line = row[side]
-                          const change = line?.changed
-                            ? side === 'original'
-                              ? 'removed'
-                              : 'added'
-                            : undefined
-                          return (
-                            <td key={side} data-change={change} className={change ? styles[change] : undefined}>
-                              <div className={styles.line}>
-                                <span className={styles.number}>{line?.number}</span>
-                                <span className={styles.sign} aria-hidden="true">
-                                  {change === 'removed' ? '−' : change === 'added' ? '+' : ''}
-                                </span>
-                                <code>{line?.text ?? ''}</code>
-                              </div>
+          <div className={styles.scroll} tabIndex={0} aria-label="Version diff preview">
+            {loading && <p role="status" style={{ padding: '.75rem', margin: 0 }}>Loading version preview…</p>}
+            {error && <p role="alert" style={{ padding: '.75rem', margin: 0 }}>{error}</p>}
+            {diff?.binary ? (
+              <p style={{ padding: '.75rem', margin: 0 }}>Binary file changes: text preview unavailable.</p>
+            ) : (
+              !loading && !error && (
+                <>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th scope="col">Current files</th>
+                        <th scope="col">Saved version ({selectedCommit?.shortHash ?? ''})</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, index) => (
+                        <tr key={index}>
+                          {row.note !== undefined ? (
+                            <td colSpan={2} className={styles.note}>
+                              {row.note}
                             </td>
-                          )
-                        })
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {!loading && !error && !rows.length && (
-                <p style={{ padding: '.75rem' }}>No differences between your current files and this saved version.</p>
-              )}
-            </div>
-          )}
+                          ) : (
+                            (['original', 'incoming'] as const).map((side) => {
+                              const line = row[side]
+                              const change = line?.changed
+                                ? side === 'original'
+                                  ? 'removed'
+                                  : 'added'
+                                : undefined
+                              return (
+                                <td key={side} data-change={change} className={change ? styles[change] : undefined}>
+                                  <div className={styles.line}>
+                                    <span className={styles.number}>{line?.number}</span>
+                                    <span className={styles.sign} aria-hidden="true">
+                                      {change === 'removed' ? '−' : change === 'added' ? '+' : ''}
+                                    </span>
+                                    <code>{line?.text ?? ''}</code>
+                                  </div>
+                                </td>
+                              )
+                            })
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {!rows.length && (
+                    <p style={{ padding: '.75rem', margin: 0 }}>No differences between your current files and this saved version.</p>
+                  )}
+                </>
+              )
+            )}
+          </div>
           {diff?.truncated && <p className={styles.warning}>Preview truncated. The full diff is not shown.</p>}
         </div>
       </div>
