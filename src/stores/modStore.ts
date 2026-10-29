@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { discoverMods, MOD_KIND, type ModEntry } from '../lib/modCatalog'
-import { LEGACY_PLUGINS, migrationFs, modFs, OFFICIAL_PLUGINS, prepareModLibrary, readDisabledMods, restoreOfficialPlugin, writeDisabledMods } from '../lib/modLibrary'
+import { modFs, OFFICIAL_PLUGINS, prepareModLibrary, readDisabledMods, restoreOfficialPlugin, writeDisabledMods } from '../lib/modLibrary'
 import { missingOfficialPlugins, type OfficialPlugin } from '../lib/officialPlugins'
 import { loadUserTemplates } from '../lib/templates'
 import { BUILTIN_THEMES } from '../lib/themes'
@@ -8,8 +8,7 @@ import type { TemplateSnippet } from '../lib/templateSnippets'
 import { useTemplateStore } from './templateStore'
 import { useThemeStore } from './themeStore'
 import { reconcilePlugins } from '../plugins/plugin-loader'
-import { migrateLegacyFolders } from '../lib/migratedPlugins'
-import { folderName, sameFolder, syncLocalPackages } from '../lib/localPackages'
+import { officialPlugin } from '../plugins/officialRegistry'
 import { reportError } from '../lib/errorLogging'
 import { deleteModFiles } from '../lib/modDelete'
 
@@ -41,9 +40,6 @@ export const useModStore = create<ModState>((set, get) => {
     const paths = await prepareModLibrary()
     set({ root: paths.root })
     const disabled = await readDisabledMods(paths.preferences)
-    // Convert untouched old Zoom / Pixel Ruler copies into packages before anything reads the folders.
-    const migration = await migrateLegacyFolders(migrationFs, paths.plugins, LEGACY_PLUGINS, OFFICIAL_PLUGINS)
-      .catch((error): { converted: string[]; errors: string[] } => ({ converted: [], errors: [`Plugins: ${error instanceof Error ? error.message : String(error)}`] }))
     const catalog = await discoverMods(modFs, paths.root, disabled, { Snippets: paths.snippets, Templates: paths.templates, Themes: paths.themes, Plugins: paths.plugins })
     await useThemeStore.getState().reload().catch(() => undefined)
     const themeStore = useThemeStore.getState()
@@ -56,27 +52,15 @@ export const useModStore = create<ModState>((set, get) => {
     // Legacy folders remain readable. A disabled modern package must not reappear via a duplicate legacy ID.
     const reserved = templateMods.map((mod) => mod.folder.split('/').at(-1)!)
     const legacy = await loadUserTemplates(taken, { reservedIds: reserved, skipWhenSameAs: paths.templates })
-    // Package folders run isolated from their own files; the trusted TSX loader never sees them.
-    const pluginErrors = await reconcilePlugins(modFs, catalog.mods.filter((mod) => !mod.package))
-    const sync = await syncLocalPackages(paths.plugins).catch((error) => {
-      reportError('plugin.local.sync', error)
-      return null
-    })
-    const syncErrors = sync?.errors ?? []
-    const mods = catalog.mods.map((mod) => {
-      const own = mod.package ? syncErrors.filter((item) => sameFolder(item.folder, folderName(mod.folder))) : []
-      return own.length ? { ...mod, errors: [...mod.errors, ...own.map((item) => item.message)] } : mod
-    })
+    // Installed folders select only compiled official implementations, never their mutable source.
+    const mods = catalog.mods.filter(mod => mod.kind !== MOD_KIND.PLUGINS || officialPlugin(mod))
+      .map(mod => { const plugin = officialPlugin(mod); return plugin ? { ...mod, label: plugin.name } : mod })
+    const pluginErrors = await reconcilePlugins(modFs, mods)
     const errors = [
-      ...migration.errors, ...catalog.errors, ...modern.errors, ...legacy.errors, ...pluginErrors,
-      ...syncErrors.map((item) => `Plugins/${item.folder}: ${item.message}`),
+      ...catalog.errors.filter(error => !error.startsWith('Plugins/')),
+      ...mods.filter(mod => mod.kind === MOD_KIND.PLUGINS).flatMap(mod => mod.errors.map(error => `${mod.id}: ${error}`)),
+      ...modern.errors, ...legacy.errors, ...pluginErrors,
     ]
-    if (sync) {
-      // Activation must not hold up the scan; failures are logged.
-      void import('../plugins/isolated/externalHost')
-        .then((host) => host.applyLocalPackages(mods, sync))
-        .catch((error) => reportError('plugin.external.local', error))
-    }
     themeStore.setTemplateThemes([...modern.themes, ...legacy.themes])
     useTemplateStore.setState({ templates: [...modern.templates, ...legacy.templates], dir: paths.templates, errors })
     set({ mods, missingOfficial: missingOfficialPlugins(OFFICIAL_PLUGINS, mods), snippets: catalog.snippets, ready: true, errors })

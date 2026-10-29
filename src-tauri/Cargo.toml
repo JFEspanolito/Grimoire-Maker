@@ -1,6 +1,6 @@
 [package]
 name = "grimoire-maker"
-version = "0.1.2"
+version = "0.1.3"
 description = "Local-first layout tool for tabletop RPG manuals"
 edition = "2021"
 

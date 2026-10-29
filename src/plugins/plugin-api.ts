@@ -1,4 +1,4 @@
-/** Version-one host bridge for trusted local plugins, not a security sandbox. */
+/** Internal host bridge for compiled official plugins, not a third-party execution API. */
 export { useSettingsStore as usePageSettings } from '../stores/settingsStore'
 export { PAGE_SIZES } from '../types/document'
 export { GUIDE_AXIS } from '../types/ruler'

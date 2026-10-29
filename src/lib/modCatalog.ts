@@ -15,7 +15,7 @@ export interface ModEntry {
   folder: string
   enabled: boolean
   errors: string[]
-  /** A Plugins folder with a regular `manifest.json`: an isolated plugin package, never loaded as trusted code. */
+  /** A folder with a regular manifest. Its contents are not executed; only compiled official plugins run. */
   package?: boolean
 }
 export interface ModFileEntry { name: string; isDirectory: boolean; isSymlink?: boolean }

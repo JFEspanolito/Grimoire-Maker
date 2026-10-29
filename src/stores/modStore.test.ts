@@ -90,25 +90,20 @@ it('retains the active catalog when a preference write is rejected', async () =>
   expect(state.disabled).toEqual([])
 })
 
-it('never hands a package folder to the trusted loader', async () => {
+it('loads only official entries through the compiled loader, including manifest-backed folders', async () => {
   await useModStore.getState().reload()
   const ids = vi.mocked(reconcilePlugins).mock.calls[0][1].map((mod) => mod.id)
-  expect(ids).toContain('Plugins/mine')
-  expect(ids).not.toContain('Plugins/zoom')
+  expect(ids).toContain('Plugins/zoom')
+  expect(ids).not.toContain('Plugins/mine')
+  expect(useModStore.getState().mods.some(mod => mod.id === 'Plugins/mine')).toBe(false)
 })
-it('migrates old copies before discovery and lists migration and sync problems with the folder', async () => {
-  state.migrationErrors = ['Plugins/zoom: moving the old files to legacy/ failed: locked']
-  state.sync = { packages: [{ folder: 'zoom', id: 'builtin.zoom', version: '2.0.0', fingerprint: 'f', changed: false }], errors: [{ folder: 'zoom', message: 'manifest.json is invalid' }] }
+it('never migrates editable sources or activates local external packages', async () => {
+  state.migrationErrors = ['would mutate local source']
+  state.sync = { packages: [], errors: [{ folder: 'zoom', message: 'untrusted manifest' }] }
   await useModStore.getState().reload()
-  expect(vi.mocked(migrateLegacyFolders).mock.calls[0][1]).toBe('/Mods/Plugins')
-  const { errors, mods } = useModStore.getState()
-  expect(errors).toEqual(expect.arrayContaining(['Plugins/zoom: moving the old files to legacy/ failed: locked', 'Plugins/zoom: manifest.json is invalid']))
-  expect(mods.find((mod) => mod.id === 'Plugins/zoom')?.errors).toEqual(['manifest.json is invalid'])
-})
-it('activates package folders after the scan without waiting for them', async () => {
-  await useModStore.getState().reload()
-  await vi.waitFor(() => expect(applyLocalPackages).toHaveBeenCalledTimes(1))
-  expect(vi.mocked(applyLocalPackages).mock.calls[0][0].some((mod) => mod.package)).toBe(true)
+  expect(migrateLegacyFolders).not.toHaveBeenCalled()
+  expect(applyLocalPackages).not.toHaveBeenCalled()
+  expect(useModStore.getState().errors).toEqual([])
 })
 it('skips activation outside the desktop application', async () => {
   state.sync = null

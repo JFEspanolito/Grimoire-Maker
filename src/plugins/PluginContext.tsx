@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-/** Plugin activation belongs to the configured mod catalog, not bundled imports. */
+/** The configured catalog controls which compiled official plugins are active. */
 export function PluginProvider({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
