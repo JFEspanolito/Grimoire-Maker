@@ -184,20 +184,22 @@ export function ImageControls({ editor, attrs: selection }: { editor: Editor | n
           onChange={(e) => update({ alt: e.target.value })}
         />
       </label>
-      <button
-        type="button"
-        className="ml-auto rounded px-2 py-1 text-xs text-red-400 hover:bg-red-500/20"
-        title={t('image.delete')}
-        aria-label={t('image.delete')}
-        onPointerDown={(e) => e.preventDefault()}
-        onClick={() => {
-          if (editor) {
-            editor.chain().focus().deleteSelection().run()
-          }
-        }}
-      >
-        🗑 {t('common.delete')}
-      </button>
+      {active && (
+        <button
+          type="button"
+          className="ml-auto rounded px-2 py-1 text-xs text-red-400 hover:bg-white/10"
+          title={t('image.delete')}
+          aria-label={t('image.delete')}
+          onPointerDown={(e) => e.preventDefault()}
+          onClick={() => {
+            if (editor) {
+              editor.chain().focus().deleteSelection().run()
+            }
+          }}
+        >
+          {t('common.delete')}
+        </button>
+      )}
     </div>
   )
 }
