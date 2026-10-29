@@ -102,8 +102,34 @@ describe('installer path rules (hooks.nsh) agree with the Rust hint validator', 
 })
 
 describe('hooks.nsh structure', () => {
+  it('places optional content after the native install location, not before Welcome', () => {
+    const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'))
+    expect(config.bundle.windows.nsis.template).toBe('nsis/installer.nsi')
+    const template = readFileSync('src-tauri/nsis/installer.nsi', 'utf8')
+    const pages = [
+      '!insertmacro MUI_PAGE_WELCOME',
+      '!insertmacro MUI_PAGE_DIRECTORY',
+      'Page custom GmContentPageCreate GmContentPageLeave',
+      '!insertmacro MUI_PAGE_STARTMENU',
+    ].map((page) => template.indexOf(page))
+    expect(pages.every((position) => position >= 0)).toBe(true)
+    expect(pages).toEqual([...pages].sort((a, b) => a - b))
+    expect(template.match(/Page custom GmContentPageCreate GmContentPageLeave/g)).toHaveLength(1)
+    expect(hooks).not.toContain('Page custom GmContentPageCreate GmContentPageLeave')
+  })
   const functionBody = (name: string) => hooks.split(`Function ${name}\n`)[1].split('\nFunctionEnd')[0]
   const count = (text: string, pattern: RegExp) => (text.match(pattern) ?? []).length
+
+  it('makes interactive content configuration opt-in without writing a new request when skipped', () => {
+    expect(functionBody('GmContentPageCreate')).toContain('${NSD_CreateCheckbox}')
+    expect(functionBody('GmContentPageCreate')).toContain('Call GmContentToggle')
+    expect(functionBody('GmContentPageLeave')).toContain('${If} $GmCustomize <> ${BST_CHECKED}')
+    const apply = functionBody('GmApplyContentDir')
+    expect(apply.indexOf('$GmContentPageShown = 1')).toBeGreaterThan(-1)
+    expect(apply.indexOf('$GmContentPageShown = 1')).toBeLessThan(apply.indexOf('Call GmNormalizeContentDir'))
+    expect(apply).toContain('${AndIf} $GmCustomize <> ${BST_CHECKED}')
+    expect(hooks).toContain('program installation folder selected on the previous page')
+  })
 
   it('saves and restores the registers it uses', () => {
     const normalize = functionBody('GmNormalizeContentDir')

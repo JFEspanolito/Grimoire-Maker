@@ -1,7 +1,7 @@
 ﻿; Grimoire Maker NSIS installer hooks (included by the Tauri NSIS template, see tauri.conf.json
 ; bundle.windows.nsis.installerHooks).
 ;
-; Interactive installs, including reinstalls, ask for one content root.
+; Interactive installs optionally customize one content root.
 ; Creates Mods/Plugins, Mods/Snippets, Mods/Templates, Mods/Themes and logs without moving old files.
 ; An explicit v2 request updates only paths on next startup; legacy hints remain first-run only.
 ; Silent/passive upgrades preserve paths unless /CONTENTDIR is explicitly provided.
@@ -37,6 +37,10 @@ LangString GmPageSubtitle 1034 "Elija dónde guarda Grimoire Maker su contenido.
 LangString GmPageText 1033 "Creates Mods/Plugins, Mods/Snippets, Mods/Templates, Mods/Themes and logs inside this folder. Existing files are not moved or deleted. Selecting a folder updates the five paths on next launch."
 LangString GmPageText 1034 "Crea Mods/Plugins, Mods/Snippets, Mods/Templates, Mods/Themes y logs dentro de esta carpeta. No mueve ni elimina archivos existentes. La selección actualiza las cinco rutas al iniciar la aplicación."
 LangString GmBrowse 1033 "Browse..."
+LangString GmCustomizeLabel 1033 "Customize content folders (optional)"
+LangString GmCustomizeLabel 1034 "Configurar carpetas de contenido (opcional)"
+LangString GmOptionalText 1033 "Leave unchecked to keep existing paths or use defaults. This does not change the program installation folder selected on the previous page."
+LangString GmOptionalText 1034 "Sin marcar conserva las rutas existentes o usa las predeterminadas. Esto no cambia la carpeta de instalación del programa seleccionada en la página anterior."
 LangString GmBrowse 1034 "Examinar..."
 LangString GmBrowsePrompt 1033 "Select the folder for your content"
 LangString GmBrowsePrompt 1034 "Seleccione la carpeta para su contenido"
@@ -47,8 +51,12 @@ Var GmContentDir
 Var GmContentEdit
 Var GmDirOk
 Var GmExisting
+Var GmCustomize
+Var GmCustomizeCheckbox
+Var GmContentBrowseButton
+Var GmContentPageShown
 
-Page custom GmContentPageCreate GmContentPageLeave
+; Page order is declared in installer.nsi, after MUI_PAGE_DIRECTORY.
 
 ; Sets $GmExisting to 1 when settings of an earlier installation exist (current or legacy file, current or
 ; pre-rename folder). Unattended upgrades keep these settings unless explicitly overridden.
@@ -347,16 +355,41 @@ Function GmContentPageCreate
 
   ${NSD_CreateLabel} 0 0 100% 36u "$(GmPageText)"
   Pop $0
-  ${NSD_CreateText} 0 46u 78% 12u "$GmContentDir"
-  Pop $GmContentEdit
-  ${NSD_CreateButton} 80% 45u 20% 14u "$(GmBrowse)"
+  ${NSD_CreateLabel} 0 40u 100% 28u "$(GmOptionalText)"
   Pop $0
-  ${NSD_OnClick} $0 GmContentBrowse
+  ${NSD_CreateCheckbox} 0 74u 100% 12u "$(GmCustomizeLabel)"
+  Pop $GmCustomizeCheckbox
+  ${If} $GmCustomize == ${BST_CHECKED}
+    ${NSD_Check} $GmCustomizeCheckbox
+  ${EndIf}
+  ${NSD_OnClick} $GmCustomizeCheckbox GmContentToggleClick
+  ${NSD_CreateText} 0 94u 78% 12u "$GmContentDir"
+  Pop $GmContentEdit
+  ${NSD_CreateButton} 80% 93u 20% 14u "$(GmBrowse)"
+  Pop $GmContentBrowseButton
+  ${NSD_OnClick} $GmContentBrowseButton GmContentBrowse
+  Call GmContentToggle
+  StrCpy $GmContentPageShown 1
 
   nsDialogs::Show
 FunctionEnd
 
+Function GmContentToggleClick
+  Pop $0
+  Call GmContentToggle
+FunctionEnd
+
+Function GmContentToggle
+  ${NSD_GetState} $GmCustomizeCheckbox $GmCustomize
+  EnableWindow $GmContentEdit $GmCustomize
+  EnableWindow $GmContentBrowseButton $GmCustomize
+FunctionEnd
+
 Function GmContentPageLeave
+  ${NSD_GetState} $GmCustomizeCheckbox $GmCustomize
+  ${If} $GmCustomize <> ${BST_CHECKED}
+    Return
+  ${EndIf}
   ${NSD_GetText} $GmContentEdit $GmContentDir
   Call GmNormalizeContentDir
   ${If} $GmDirOk <> 1
@@ -370,6 +403,13 @@ FunctionEnd
 ; $0 is saved and restored so the surrounding template code never sees it changed.
 Function GmApplyContentDir
   Push $0
+
+  ; Merely displaying a prefilled root is not consent to change saved paths.
+  ${If} $GmContentPageShown = 1
+  ${AndIf} $GmCustomize <> ${BST_CHECKED}
+    DetailPrint "Content configuration skipped: existing paths or app defaults retained."
+    Goto gm_apply_end
+  ${EndIf}
 
   ; Only an explicit unattended override may change an existing installation.
   ${If} $GmContentDir == ""
