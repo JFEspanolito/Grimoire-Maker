@@ -229,7 +229,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
         <button type="button" className={styles.rollbackTrigger} disabled={busy}
           aria-label="Restore previous version (Rollback)"
           onClick={() => setRollbackOpen(true)}>
-          <span>↺ Restore previous version (Rollback)</span>
+          <span>↺ {t('git.rollback.title')}</span>
           <span>{status.commits!.length}</span>
         </button>
       )}

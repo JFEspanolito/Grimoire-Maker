@@ -74,6 +74,23 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
 
   useEffect(() => () => stopDrag.current?.(), [])
 
+  useEffect(() => {
+    if (!selected) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
+      const target = event.target
+      if (target instanceof Element && target.closest('input, textarea, select')) return
+      const position = getPos()
+      if (typeof position === 'number') {
+        event.preventDefault()
+        event.stopPropagation()
+        editor.chain().focus().deleteRange({ from: position, to: position + node.nodeSize }).run()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selected, editor, getPos, node.nodeSize])
+
   const startDrag = (event: ReactPointerEvent<HTMLImageElement>) => {
     if (event.button !== 0) return
     const image = event.currentTarget
@@ -90,7 +107,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     event.stopPropagation()
     stopDrag.current?.()
     const nodePosition = getPos()
-    if (typeof nodePosition === 'number') editor.commands.setNodeSelection(nodePosition)
+    if (typeof nodePosition === 'number') { editor.chain().focus().setNodeSelection(nodePosition).run() }
     image.setPointerCapture?.(event.pointerId)
     const { widthMm: pageWidthMm, heightMm: pageHeightMm } = PAGE_SIZES[useSettingsStore.getState().pageSize]
     const startX = event.clientX
@@ -392,6 +409,15 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
           style={{ position: 'fixed', left: `${corner.left}px`, top: `${corner.top}px`, zIndex: 20 }}
           onPointerDown={startResize}
           onKeyDown={(event) => {
+            if (event.key === 'Delete' || event.key === 'Backspace') {
+              event.preventDefault()
+              event.stopPropagation()
+              const position = getPos()
+              if (typeof position === 'number') {
+                editor.chain().focus().deleteRange({ from: position, to: position + node.nodeSize }).run()
+              }
+              return
+            }
             if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
             event.preventDefault()
             event.stopPropagation()

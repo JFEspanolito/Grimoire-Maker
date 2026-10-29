@@ -3,6 +3,7 @@ import { applyFormula } from '../../lib/insertActions'
 import { useFormulaStore, type FormulaDisplay } from '../../stores/formulaStore'
 import { validateAndRenderFormula } from './extensions/formula'
 import styles from './FormulaDialog.module.css'
+import { useTranslation } from '../../lib/i18n'
 
 interface Preset {
   label: string
@@ -60,6 +61,7 @@ const SYMBOLS: Preset[] = [
 ]
 
 export function FormulaDialog() {
+  const { t } = useTranslation()
   const { open, editor, latex: initialLatex, display: initialDisplay, editPos, hide } = useFormulaStore()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -121,12 +123,12 @@ export function FormulaDialog() {
       onCancel={(event) => { event.preventDefault(); hide() }}
     >
       <header className={styles.header}>
-        <h2 id="insert-formula-title">{editPos !== null ? 'Edit Formula' : 'Insert Formula'}</h2>
-        <button type="button" className={styles.dismiss} aria-label="Close Insert Formula" onClick={hide}>×</button>
+        <h2 id="insert-formula-title">{editPos !== null ? t('formula.editTitle') : t('formula.insertTitle')}</h2>
+        <button type="button" className={styles.dismiss} aria-label={t('formula.close')} onClick={hide}>×</button>
       </header>
       <div className={styles.body}>
         <div>
-          <p className={styles.sectionLabel}>Structures &amp; Templates</p>
+          <p className={styles.sectionLabel}>{t('formula.structures')}</p>
           <div className={styles.presets} role="group" aria-label="Formula structures">
             {PRESETS.map((preset) => (
               <button
@@ -141,7 +143,7 @@ export function FormulaDialog() {
           </div>
         </div>
         <div>
-          <p className={styles.sectionLabel}>Mathematical Symbols &amp; Greek Letters</p>
+          <p className={styles.sectionLabel}>{t('formula.symbols')}</p>
           <div className={styles.symbols} role="group" aria-label="Formula symbols">
             {SYMBOLS.map((symbol) => (
               <button
@@ -157,7 +159,7 @@ export function FormulaDialog() {
           </div>
         </div>
         <div className={styles.modeRow} role="radiogroup" aria-label="Formula display mode">
-          <span className={styles.sectionLabel} style={{ margin: 0 }}>Layout:</span>
+          <span className={styles.sectionLabel} style={{ margin: 0 }}>{t('formula.layout')}</span>
           <label>
             <input
               type="radio"
@@ -165,7 +167,7 @@ export function FormulaDialog() {
               checked={display === 'block'}
               onChange={() => setDisplay('block')}
             />
-            Block equation (centered)
+            {t('formula.block')}
           </label>
           <label>
             <input
@@ -174,17 +176,17 @@ export function FormulaDialog() {
               checked={display === 'inline'}
               onChange={() => setDisplay('inline')}
             />
-            Inline formula (in text)
+            {t('formula.inline')}
           </label>
         </div>
         <div>
           <label htmlFor="formula-latex-input" className={styles.sectionLabel} style={{ display: 'block' }}>
-            LaTeX Expression
+            {t('formula.latex')}
           </label>
           <textarea
             id="formula-latex-input"
             ref={inputRef}
-            aria-label="LaTeX Expression"
+            aria-label={t('formula.latex')}
             className={styles.input}
             value={latex}
             placeholder="e.g. \int_{a}^{b} f(x)\,dx = F(b) - F(a)"
@@ -199,7 +201,7 @@ export function FormulaDialog() {
           {error && <p role="alert" className={styles.error}>{error}</p>}
         </div>
         <div>
-          <p className={styles.sectionLabel}>Live Preview</p>
+          <p className={styles.sectionLabel}>{t('formula.preview')}</p>
           <div
             className={styles.preview}
             aria-label="Formula preview"
@@ -208,9 +210,9 @@ export function FormulaDialog() {
         </div>
       </div>
       <footer className={styles.footer}>
-        <button type="button" onClick={hide}>Cancel</button>
+        <button type="button" onClick={hide}>{t('common.cancel')}</button>
         <button type="button" className={styles.primary} disabled={!canSubmit} onClick={submit}>
-          {editPos !== null ? 'Update Formula' : 'Insert Formula'}
+          {editPos !== null ? t('formula.update') : t('formula.insert')}
         </button>
       </footer>
     </dialog>

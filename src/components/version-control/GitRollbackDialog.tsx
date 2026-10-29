@@ -5,6 +5,7 @@ import { friendlyErrorMessage } from '../../lib/errorLogging'
 import { splitDiff } from './splitDiff'
 import type { DiffRow } from './splitDiff'
 import styles from './GitDiffDialog.module.css'
+import { useTranslation } from '../../lib/i18n'
 
 interface Props {
   workspace: string
@@ -61,6 +62,7 @@ export function GitRollbackDialog({
   onClose,
   onRollback,
 }: Props) {
+  const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
   const [selectedHash, setSelectedHash] = useState<string>(commits[0]?.hash ?? '')
   const [diff, setDiff] = useState<GitDiff | null>(null)
@@ -143,14 +145,11 @@ export function GitRollbackDialog({
     >
       <header className={styles.header}>
         <div>
-          <h2 id="git-rollback-title">Restore previous version (Rollback)</h2>
-          <p>
-            Choose a saved version on the left, expand any file to inspect its changes, and uncheck files you want to ignore.
-            {' '}Restore selected files returns them to the Previous Version shown on the left. Restore entire project uses the selected saved version.
-          </p>
+          <h2 id="git-rollback-title">{t('git.rollback.title')}</h2>
+          <p>{t('git.rollback.desc')}</p>
         </div>
-        <button type="button" aria-label="Close rollback dialog" onClick={onClose}>
-          Close
+        <button type="button" aria-label={t('git.rollback.close')} onClick={onClose}>
+          {t('common.close')}
         </button>
       </header>
 
@@ -179,11 +178,11 @@ export function GitRollbackDialog({
 
         <div className={styles.diffPane}>
           <p className={styles.legend}>
-            <span className={styles.removed}>− Removed</span>
-            <span className={styles.added}>+ Added</span>
+            <span className={styles.removed}>{t('git.diff.removed')}</span>
+            <span className={styles.added}>{t('git.diff.added')}</span>
           </p>
           <div className={styles.scroll} tabIndex={0} aria-label="Version diff preview">
-            {loading && <p role="status" style={{ padding: '.75rem', margin: 0 }}>Loading version preview…</p>}
+            {loading && <p role="status" style={{ padding: '.75rem', margin: 0 }}>{t('git.rollback.loading')}</p>}
             {error && <p role="alert" style={{ padding: '.75rem', margin: 0 }}>{error}</p>}
             {diff?.binary ? (
               <p style={{ padding: '.75rem', margin: 0 }}>Binary file changes: text preview unavailable.</p>
@@ -193,7 +192,7 @@ export function GitRollbackDialog({
                   <table className={styles.table}>
                     <thead>
                       <tr>
-                        <th scope="col">Change List</th>
+                        <th scope="col">{t('git.rollback.changeList')}</th>
                         <th scope="col">
                           {selectedCommit
                             ? `Saved version at ${selectedCommit.timestamp} (${selectedCommit.shortHash})`
@@ -227,7 +226,7 @@ export function GitRollbackDialog({
                                     <span className={styles.chevron} aria-hidden="true">
                                       {isExpanded ? '▾' : '▸'}
                                     </span>
-                                    <span>{`${section.file} Previous Version`}</span>
+                                    <span>{`${section.file} ${t('git.rollback.previousVersion')}`}</span>
                                   </button>
                                 </div>
                               </td>
@@ -235,7 +234,7 @@ export function GitRollbackDialog({
                                 className={styles.fileRowMeta}
                                 onClick={() => toggleExpanded(section.file)}
                               >
-                                Current File
+                                {t('git.rollback.currentFile')}
                               </td>
                             </tr>
                             {isExpanded &&
@@ -281,7 +280,7 @@ export function GitRollbackDialog({
                     </tbody>
                   </table>
                   {!sections.length && (
-                    <p style={{ padding: '.75rem', margin: 0 }}>No differences in this saved version.</p>
+                    <p style={{ padding: '.75rem', margin: 0 }}>{t('git.rollback.noDiff')}</p>
                   )}
                 </>
               )
@@ -293,7 +292,7 @@ export function GitRollbackDialog({
 
       <footer className={styles.footer}>
         <button type="button" onClick={onClose}>
-          Cancel
+          {t('common.cancel')}
         </button>
         {selectedCommit && sections.length > 0 && (
           <button
@@ -312,7 +311,7 @@ export function GitRollbackDialog({
             disabled={busy}
             onClick={() => onRollback(selectedCommit)}
           >
-            Restore entire project
+            {t('git.rollback.restoreEntire')}
           </button>
         )}
       </footer>
