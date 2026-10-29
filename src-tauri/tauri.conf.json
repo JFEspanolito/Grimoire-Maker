@@ -25,14 +25,28 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
+    "publisher": "JFEspanolito",
+    "copyright": "©2026 JFEspanolito",
+    "shortDescription": "Grimoire Maker",
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
       "nsis": {
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico",
-        "languages": ["English", "Spanish"],
+        "languages": [
+          "English",
+          "Spanish"
+        ],
         "installerHooks": "nsis/hooks.nsh"
       }
     }

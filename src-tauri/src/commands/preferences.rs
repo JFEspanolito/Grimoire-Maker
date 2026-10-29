@@ -198,11 +198,11 @@ fn read_json(path: &Path) -> Result<Option<serde_json::Value>, String> {
 
 /// Where the first-run library folders go.
 enum Defaults {
-    /// Today's layout: `<config>/Mods/{Plugins,Snippets,Templates}`, `<config>/themes`, `<config>/logs`.
+    /// Installed layout: `<root>/Mods/{Plugins,Snippets,Templates,Themes}`, `<root>/logs`.
     Standard,
     /// Portable layout: `<config>/{Plugins,Snippets,Templates,Themes,Logs}`.
     Portable,
-    /// Installer layout: `<content root>/{Plugins,Snippets,Templates,Themes,Logs}`.
+    /// Legacy installer hint layout: `<content root>/{Plugins,Snippets,Templates,Themes,Logs}`.
     ContentRoot(String),
 }
 
@@ -244,7 +244,7 @@ fn default_paths_for(config: &Path, defaults: &Defaults) -> Result<LibraryPaths,
                 "Mods/Plugins",
                 "Mods/Snippets",
                 "Mods/Templates",
-                "themes",
+                "Mods/Themes",
                 "logs",
             ] {
                 create_checked(&config.join(relative), &mut locks)?;
@@ -253,7 +253,7 @@ fn default_paths_for(config: &Path, defaults: &Defaults) -> Result<LibraryPaths,
                 plugins: text(&config.join("Mods/Plugins"))?,
                 snippets: text(&config.join("Mods/Snippets"))?,
                 templates: text(&config.join("Mods/Templates"))?,
-                themes: text(&config.join("themes"))?,
+                themes: text(&config.join("Mods/Themes"))?,
                 logs: text(&config.join("logs"))?,
             })
         }
@@ -354,6 +354,22 @@ fn read_preferences(config: &Path) -> Result<Preferences, String> {
 }
 
 fn read_preferences_as(config: &Path, mode: Mode) -> Result<Preferences, String> {
+    let mut preferences = read_preferences_base(config, mode)?;
+    if mode == Mode::Normal {
+        if let Some((root, identity)) = portable::read_install_request(config)? {
+            if preferences.extra.get("installerRequest").and_then(serde_json::Value::as_str) != Some(&identity) {
+                // Explicit selection replaces paths only: no file moves and no settings reset.
+                preferences.paths = default_paths_for(Path::new(&root), &Defaults::Standard)?;
+                preferences.extra.insert(CONTENT_ROOT.into(), root.into());
+                preferences.extra.insert("installerRequest".into(), identity.into());
+                publish_preferences(config, &preferences)?;
+            }
+        }
+    }
+    Ok(preferences)
+}
+
+fn read_preferences_base(config: &Path, mode: Mode) -> Result<Preferences, String> {
     let mut locks = Vec::new();
     lock_ancestors(config, &mut locks)?;
     if let Some(mut raw) = read_json(&config.join(PREFERENCES_FILE))? {
@@ -426,7 +442,7 @@ fn read_preferences_as(config: &Path, mode: Mode) -> Result<Preferences, String>
     }
     publish_preferences(config, &preferences)?;
     // Read the authoritative file back before reporting a successful migration.
-    let saved = read_preferences_as(config, mode)?;
+    let saved = read_preferences_base(config, mode)?;
     // Only now that the paths are persisted is the hint consumed; a failure above leaves it for the next start.
     if applied_hint.is_some() {
         if let Err(error) = portable::mark_hint_applied(config) {
@@ -650,7 +666,10 @@ fn managed_in(config: &Path, preferences: &Preferences, mode: Mode) -> Managed {
         None if mode == Mode::Portable => text(config).unwrap_or_default(),
         None => return Managed::default(),
     };
-    let is_default = |path: &str, name: &str| same_path(path, &format!("{}/{name}", root.trim_end_matches('/')));
+    let is_default = |path: &str, name: &str| {
+        same_path(path, &format!("{}/{name}", root.trim_end_matches('/')))
+            || (mode == Mode::Normal && same_path(path, &format!("{}/Mods/{name}", root.trim_end_matches('/'))))
+    };
     Managed {
         plugins: is_default(&preferences.paths.plugins, "Plugins"),
         snippets: is_default(&preferences.paths.snippets, "Snippets"),
@@ -1506,6 +1525,46 @@ mod preferences_tests {
     }
 
     #[test]
+    fn installer_request_updates_existing_paths_once_without_moving_content() {
+        let config = scratch("installer-request");
+        let mut original = read_preferences_as(&config, Mode::Normal).unwrap();
+        original.extra.insert("keep".into(), "value".into());
+        publish_preferences(&config, &original).unwrap();
+        fs::write(Path::new(&original.paths.plugins).join("keep.txt"), "original").unwrap();
+        let content = scratch("installer-content");
+        fs::write(config.join("install-content-root-v2.txt"), text(&content).unwrap()).unwrap();
+        let saved = read_preferences_as(&config, Mode::Normal).unwrap();
+        for (actual, relative) in [
+            (&saved.paths.plugins, "Mods/Plugins"), (&saved.paths.snippets, "Mods/Snippets"),
+            (&saved.paths.templates, "Mods/Templates"), (&saved.paths.themes, "Mods/Themes"), (&saved.paths.logs, "logs"),
+        ] {
+            assert_eq!(*actual, text(&content.join(relative)).unwrap());
+            assert!(content.join(relative).is_dir());
+        }
+        assert_eq!(saved.extra["keep"], "value");
+        assert_eq!(serde_json::to_value(&saved.settings).unwrap(), serde_json::to_value(&original.settings).unwrap());
+        assert_eq!(fs::read_to_string(Path::new(&original.paths.plugins).join("keep.txt")).unwrap(), "original");
+        assert_eq!(managed_in(&config, &saved, Mode::Normal), Managed { plugins: true, snippets: true, templates: true });
+        let mut custom = saved;
+        custom.paths.plugins = original.paths.plugins;
+        publish_preferences(&config, &custom).unwrap();
+        assert_eq!(read_preferences_as(&config, Mode::Normal).unwrap().paths, custom.paths);
+        // An explicit new selection may choose the configuration root itself.
+        fs::write(config.join("install-content-root-v2.txt"), text(&config).unwrap()).unwrap();
+        let selected_config = read_preferences_as(&config, Mode::Normal).unwrap();
+        assert_eq!(selected_config.paths, default_paths(&config).unwrap());
+        // A rejected request never changes the previously published preferences.
+        let before = fs::read(config.join(PREFERENCES_FILE)).unwrap();
+        fs::write(config.join("install-content-root-v2.txt"), "relative/path").unwrap();
+        assert!(read_preferences_as(&config, Mode::Normal).is_err());
+        assert_eq!(fs::read(config.join(PREFERENCES_FILE)).unwrap(), before);
+        let portable_config = scratch("request-portable");
+        fs::write(portable_config.join("install-content-root-v2.txt"), text(&content).unwrap()).unwrap();
+        let portable = read_preferences_as(&portable_config, Mode::Portable).unwrap();
+        assert_eq!(portable.paths.plugins, text(&portable_config.join("Plugins")).unwrap());
+    }
+
+    #[test]
     fn normal_mode_without_a_hint_keeps_todays_defaults_and_adds_no_markers() {
         let config = scratch("normal-defaults");
         let loaded = read_preferences_as(&config, Mode::Normal).unwrap();
@@ -1514,7 +1573,7 @@ mod preferences_tests {
             (&saved.plugins, "Mods/Plugins"),
             (&saved.snippets, "Mods/Snippets"),
             (&saved.templates, "Mods/Templates"),
-            (&saved.themes, "themes"),
+            (&saved.themes, "Mods/Themes"),
             (&saved.logs, "logs"),
         ] {
             assert_eq!(*actual, text(&config.join(relative)).unwrap());

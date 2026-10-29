@@ -504,7 +504,7 @@ it.each([
 it('ignores clicks on the confirmation buttons for 300 ms after it opens, then reacts', async () => {
   const deleteMod = vi.fn(async () => {})
   const { container, details, close } = await openExternal({ current: localVersion.dir, state: 'active' }, false, localVersion, [packageMod()])
-  useModStore.setState({ deleteMod })
+  await act(async () => useModStore.setState({ deleteMod }))
   await details('Zoom')
   vi.useFakeTimers()
   try {

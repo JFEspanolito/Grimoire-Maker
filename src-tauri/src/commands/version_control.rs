@@ -24,12 +24,22 @@ pub struct GitEntry {
     worktree_status: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitCommit {
+    hash: String,
+    short_hash: String,
+    subject: String,
+    timestamp: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RepositoryStatus {
     is_repository: bool,
     branch: String,
     entries: Vec<GitEntry>,
+    commits: Vec<GitCommit>,
     index_fingerprint: String,
 }
 
@@ -350,6 +360,47 @@ fn fingerprint(root: &Path) -> Result<String, String> {
     Ok(format!("{:016x}", hasher.finish()))
 }
 
+fn recent_commits(root: &Path) -> Result<Vec<GitCommit>, String> {
+    let head = git(root, &["rev-parse", "--verify", "HEAD"])?;
+    if !head.success {
+        return Ok(vec![]);
+    }
+    let log = checked(
+        root,
+        &[
+            "log",
+            "-n",
+            "10",
+            "--date=format:%Y-%m-%d %H:%M",
+            "--format=%H\x1f%h\x1f%cd\x1f%s%x00",
+        ],
+    )?;
+    let mut commits = Vec::new();
+    for record in log.stdout.split(|byte| *byte == 0) {
+        if record.is_empty() {
+            continue;
+        }
+        let text = std::str::from_utf8(record)
+            .map_err(|_| "Non-UTF-8 commit history")?
+            .trim_start_matches(['\r', '\n']);
+        let mut parts = text.splitn(4, '\x1f');
+        if let (Some(hash), Some(short_hash), Some(timestamp), Some(subject)) = (
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+        ) {
+            commits.push(GitCommit {
+                hash: hash.to_string(),
+                short_hash: short_hash.to_string(),
+                timestamp: timestamp.to_string(),
+                subject: subject.trim().to_string(),
+            });
+        }
+    }
+    Ok(commits)
+}
+
 fn status_in(root: &Path) -> Result<RepositoryStatus, String> {
     checked(root, &["--version"])?;
     if !repository(root)? {
@@ -357,6 +408,7 @@ fn status_in(root: &Path) -> Result<RepositoryStatus, String> {
             is_repository: false,
             branch: String::new(),
             entries: vec![],
+            commits: vec![],
             index_fingerprint: String::new(),
         });
     }
@@ -375,6 +427,7 @@ fn status_in(root: &Path) -> Result<RepositoryStatus, String> {
         return Err("Too many changes to display safely. Use an external Git client.".into());
     }
     let entries = parse_status(&output.stdout)?;
+    let commits = recent_commits(root)?;
     let branch = git(root, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
     let branch = if branch.success {
         String::from_utf8_lossy(&branch.stdout).trim().to_string()
@@ -388,6 +441,7 @@ fn status_in(root: &Path) -> Result<RepositoryStatus, String> {
         is_repository: true,
         branch,
         entries,
+        commits,
         index_fingerprint,
     })
 }
@@ -597,7 +651,10 @@ fn commit_in(root: &Path, message: &str, expected_index: &str) -> Result<(), Str
         .iter()
         .any(|entry| ![" ", "?", "!"].contains(&entry.index_status.as_str()))
     {
-        return Err("No staged changes to commit".into());
+        if status.entries.is_empty() {
+            return Err("No changes to save.".into());
+        }
+        return auto_commit_in(root, message).map(|_| ());
     }
     // Git commit can rewrite the index tree cache before discovering a missing identity.
     // Validate both identities first so this rejection leaves the index byte-for-byte intact.
@@ -735,9 +792,122 @@ pub async fn git_unstage(app: AppHandle, workspace: String, path: String) -> Res
     in_project(app, workspace, move |root| unstage_in(root, &path)).await
 }
 
+fn commit_diff_in(root: &Path, commit: &str, path: Option<&str>) -> Result<GitDiff, String> {
+    require_repository(root)?;
+    if commit.len() < 7
+        || commit.len() > 40
+        || !commit.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err("Invalid commit identifier".into());
+    }
+    checked(root, &["rev-parse", "--verify", &format!("{commit}^{{commit}}")])?;
+    let _args = vec![
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        "--ignore-submodules=all",
+        "--no-renames",
+    ];
+    let _ = [
+        "show",
+        "--format=",
+        "--root",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        "--ignore-submodules=all",
+        "--no-renames",
+        commit,
+    ];
+    let mut args = vec![
+        "show",
+        "--format=",
+        "--root",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--no-color",
+        "--ignore-submodules=all",
+        "--no-renames",
+        commit,
+    ];
+    if let Some(rel) = path {
+        guard_path(root, rel)?;
+        args.extend(["--", rel]);
+    }
+    let output = checked(root, &args)?;
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    let binary = output.stdout.contains(&0)
+        || text
+            .lines()
+            .any(|line| line.starts_with("Binary files ") || line == "GIT binary patch");
+    Ok(GitDiff {
+        text,
+        binary,
+        truncated: output.truncated,
+    })
+}
+
+#[tauri::command]
+pub async fn git_commit_diff(
+    app: AppHandle,
+    workspace: String,
+    commit: String,
+    path: Option<String>,
+) -> Result<GitDiff, String> {
+    in_project(app, workspace, move |root| {
+        commit_diff_in(root, &commit, path.as_deref())
+    })
+    .await
+}
+
+fn rollback_in(root: &Path, commit: &str, path: Option<&str>) -> Result<(), String> {
+    require_repository(root)?;
+    if commit.len() < 7
+        || commit.len() > 40
+        || !commit.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return Err("Invalid commit identifier".into());
+    }
+    checked(root, &["rev-parse", "--verify", &format!("{commit}^{{commit}}")])?;
+    let source = format!("--source={commit}");
+    match path {
+        Some(rel) => {
+            guard_path(root, rel)?;
+            // The selected-file button restores the left side of `git show`:
+            // the version before this commit, not the commit's resulting snapshot.
+            let ancestry = checked(root, &["rev-list", "--parents", "-n", "1", commit])?;
+            let ancestry = String::from_utf8_lossy(&ancestry.stdout);
+            let parents: Vec<_> = ancestry.split_whitespace().skip(1).collect();
+            if parents.len() != 1 {
+                return Err("This saved version has no unambiguous previous version. Select a non-initial, non-merge version.".into());
+            }
+            let previous_source = format!("--source={}", parents[0]);
+            checked(root, &["restore", "--staged", "--worktree", &previous_source, "--", rel])?;
+        }
+        None => {
+            checked(root, &["restore", "--staged", "--worktree", &source, "--", "."])?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn git_revert(app: AppHandle, workspace: String, path: String) -> Result<(), String> {
     in_project(app, workspace, move |root| revert_in(root, &path)).await
+}
+
+#[tauri::command]
+pub async fn git_rollback(
+    app: AppHandle,
+    workspace: String,
+    commit: String,
+    path: Option<String>,
+) -> Result<(), String> {
+    in_project(app, workspace, move |root| {
+        rollback_in(root, &commit, path.as_deref())
+    })
+    .await
 }
 
 #[tauri::command]
@@ -772,6 +942,39 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT: AtomicUsize = AtomicUsize::new(0);
+
+    #[test]
+    fn rollback_selected_file_restores_previous_version_only() {
+        let root = repo("rollback-previous");
+        raw(&root, &["config", "core.autocrlf", "false"]);
+        let path = "Draft/Chapter 1/Welcome.md";
+        fs::create_dir_all(root.join("Draft/Chapter 1")).unwrap();
+        fs::write(root.join(path), "# D&D\n").unwrap();
+        fs::write(root.join("other.md"), "original\n").unwrap();
+        raw(&root, &["add", "."]);
+        raw(&root, &["commit", "-m", "Initial"]);
+        let initial = raw(&root, &["rev-parse", "HEAD"]).trim().to_string();
+        fs::write(root.join(path), "# D&D Section\n").unwrap();
+        raw(&root, &["add", "."]);
+        raw(&root, &["commit", "-m", "Rename heading"]);
+        let selected = raw(&root, &["rev-parse", "HEAD"]).trim().to_string();
+        fs::write(root.join("other.md"), "keep local edit\n").unwrap();
+        let preview = commit_diff_in(&root, &selected, Some(path)).unwrap();
+        assert!(preview.text.contains("-# D&D\n"));
+        rollback_in(&root, &selected, Some(path)).unwrap();
+        assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "# D&D\n");
+        assert_eq!(raw(&root, &["show", &format!(":{path}")]), "# D&D\n");
+        assert_eq!(fs::read_to_string(root.join("other.md")).unwrap(), "keep local edit\n");
+        assert_eq!(raw(&root, &["rev-parse", "HEAD"]).trim(), selected);
+        let index = fs::read(root.join(".git/index")).unwrap();
+        assert!(rollback_in(&root, &initial, Some(path)).unwrap_err().contains("previous version"));
+        assert_eq!(fs::read(root.join(".git/index")).unwrap(), index);
+        assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "# D&D\n");
+        // Entire-project restoration continues to use the selected snapshot itself.
+        rollback_in(&root, &selected, None).unwrap();
+        assert_eq!(fs::read_to_string(root.join(path)).unwrap(), "# D&D Section\n");
+        assert_eq!(fs::read_to_string(root.join("other.md")).unwrap(), "original\n");
+    }
 
     #[test]
     fn auto_commit_missing_git_skips_but_other_failures_propagate() {

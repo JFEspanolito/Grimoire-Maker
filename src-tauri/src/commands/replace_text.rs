@@ -208,6 +208,8 @@ mod tests {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
+        fs::create_dir_all(&base).unwrap();
+        let base = PathBuf::from(portable(&fs::canonicalize(&base).unwrap()).unwrap());
         let root = base.join("project");
         for dir in ["Draft/sub", "Research", "Trash", ".hidden", "Draft/.cache"] {
             fs::create_dir_all(root.join(dir)).unwrap();

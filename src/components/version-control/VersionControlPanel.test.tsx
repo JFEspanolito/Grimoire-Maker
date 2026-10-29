@@ -3,10 +3,12 @@ import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { VersionControlPanel } from './VersionControlPanel'
+import { useDocumentStore } from '../../stores/documentStore'
 
 const actions = vi.hoisted(() => ({
   getRepositoryStatus: vi.fn(), initializeRepository: vi.fn(), stageChange: vi.fn(),
-  unstageChange: vi.fn(), revertChange: vi.fn(), diffChange: vi.fn(), commitChanges: vi.fn(),
+  unstageChange: vi.fn(), revertChange: vi.fn(), rollbackToCommit: vi.fn(),
+  diffCommit: vi.fn(), diffChange: vi.fn(), commitChanges: vi.fn(),
 }))
 vi.mock('../../lib/versionControl', () => actions)
 
@@ -15,6 +17,10 @@ const repository = {
   entries: [
     { path: 'chapter.md', originalPath: null, indexStatus: 'M', worktreeStatus: 'M' },
     { path: 'new.md', originalPath: null, indexStatus: '?', worktreeStatus: '?' },
+  ],
+  commits: [
+    { hash: 'abc1234567890', shortHash: 'abc1234', subject: 'Auto-commit: 2026-10-28', timestamp: '2026-10-28' },
+    { hash: 'def9876543210', shortHash: 'def9876', subject: 'Initial draft', timestamp: '2026-10-27' },
   ],
 }
 
@@ -39,6 +45,27 @@ describe('VersionControlPanel', () => {
     HTMLDialogElement.prototype.close = function () { this.open = false }
     actions.getRepositoryStatus.mockResolvedValue(repository)
     actions.diffChange.mockResolvedValue({ text: '+new text', binary: false, truncated: false })
+    actions.diffCommit.mockResolvedValue({
+      text: [
+        'diff --git a/Draft/chapter.md b/Draft/chapter.md',
+        'similarity index 99%',
+        'index 88f1c5d..7c9ff7f 100644',
+        '--- a/Draft/chapter.md',
+        '+++ b/Draft/chapter.md',
+        '@@ -16,1 +16,1 @@',
+        '-<div><h1>broken draft</h1></div>',
+        '+<div><h1>restored draft</h1></div>',
+        'diff --git a/Draft/notes.md b/Draft/notes.md',
+        '--- a/Draft/notes.md',
+        '+++ b/Draft/notes.md',
+        '@@ -1,1 +1,1 @@',
+        '-old note',
+        '+new note',
+      ].join('\n'),
+      binary: false,
+      truncated: false,
+    })
+    useDocumentStore.getState().resetDocuments()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -201,5 +228,50 @@ describe('VersionControlPanel', () => {
     const confirmBtn = Array.from(confirmDialog.querySelectorAll('button')).find((b) => b.textContent === 'Revert')!
     await act(async () => confirmBtn.click())
     expect(actions.revertChange).toHaveBeenCalledExactlyOnceWith('/books', 'chapter.md')
+  })
+
+  it('reverts a file directly from the inline Revert button and opens the Rollback modal with diff preview', async () => {
+    useDocumentStore.getState().loadFromRaw('/books/Draft/chapter.md', '# Draft')
+    await render('/books')
+
+    // Click inline Revert button on new.md
+    await click('Revert new.md')
+    const revertDialog = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="confirm-title"]')!
+    expect(revertDialog.textContent).toContain('Delete "new.md"?')
+    const revertBtn = Array.from(revertDialog.querySelectorAll('button')).find((b) => b.textContent === 'Revert')!
+    await act(async () => revertBtn.click())
+    expect(actions.revertChange).toHaveBeenCalledExactlyOnceWith('/books', 'new.md')
+
+    // Click the Restore previous version (Rollback) button to open the rollback modal
+    await click('Restore previous version (Rollback)')
+    const rollbackModal = container.querySelector<HTMLDialogElement>('dialog[aria-labelledby="git-rollback-title"]')!
+    expect(rollbackModal).not.toBeNull()
+    expect(rollbackModal.open).toBe(true)
+    expect(actions.diffCommit).toHaveBeenCalledWith('/books', 'abc1234567890')
+
+    // File sections start collapsed (Expanded = false) and auto-checked
+    expect(rollbackModal.querySelector('[data-change="removed"]')).toBeNull()
+    expect(rollbackModal.textContent).toContain('Restore "Draft/**/[2 Files]"')
+
+    // Expand Draft/chapter.md to inspect its diff
+    await click('Toggle diff for Draft/chapter.md')
+    expect(rollbackModal.querySelector('[data-change="removed"]')?.textContent).toContain('broken draft')
+    expect(rollbackModal.querySelector('[data-change="removed"]')?.textContent).not.toContain('<div>')
+    expect(rollbackModal.textContent).not.toContain('similarity index')
+    expect(rollbackModal.textContent).toContain('Draft/chapter.md')
+    expect(rollbackModal.querySelector('[data-change="added"]')?.textContent).toContain('restored draft')
+
+    // Select the second checkpoint in the list and verify its diff is fetched
+    await click('Rollback to def9876')
+    expect(actions.diffCommit).toHaveBeenCalledWith('/books', 'def9876543210')
+
+    // Uncheck Draft/notes.md so only Draft/chapter.md remains checked
+    const notesCheckbox = rollbackModal.querySelector<HTMLInputElement>('input[aria-label="Include Draft/notes.md in rollback"]')!
+    await act(async () => notesCheckbox.click())
+
+    // Confirm rollback for the single checked file
+    const restoreFileBtn = Array.from(rollbackModal.querySelectorAll('button')).find((b) => b.textContent === 'Restore "Draft/chapter.md" only')!
+    await act(async () => restoreFileBtn.click())
+    expect(actions.rollbackToCommit).toHaveBeenCalledExactlyOnceWith('/books', 'def9876543210', 'Draft/chapter.md')
   })
 })

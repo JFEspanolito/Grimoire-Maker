@@ -68,6 +68,8 @@ pub fn run() {
             commands::version_control::git_stage,
             commands::version_control::git_unstage,
             commands::version_control::git_revert,
+            commands::version_control::git_commit_diff,
+            commands::version_control::git_rollback,
             commands::version_control::git_commit,
             commands::version_control::git_auto_commit,
             commands::version_control::git_init,

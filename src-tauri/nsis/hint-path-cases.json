@@ -11,7 +11,9 @@
     "C:\\books\\file.name",
     "C:\\Users\\José Ñandú\\Док\\Grimoire Maker",
     "C:\\Users\\test\\AppData\\Roaming\\GriomoireMaker2",
-    "C:\\Users\\test\\Documents"
+    "C:\\Users\\test\\Documents",
+    "C:\\Users\\test\\AppData\\Roaming\\GriomoireMaker",
+    "c:/users/test/appdata/roaming/griomoiremaker/Content"
   ],
   "invalid": [
     "",
@@ -40,8 +42,6 @@
     "C:\\trailing.",
     "D:\\Rol.",
     "C:\\mid \\x",
-    "C:\\first\nD:\\second",
-    "C:\\Users\\test\\AppData\\Roaming\\GriomoireMaker",
-    "c:/users/test/appdata/roaming/griomoiremaker/Content"
+    "C:\\first\nD:\\second"
   ]
 }

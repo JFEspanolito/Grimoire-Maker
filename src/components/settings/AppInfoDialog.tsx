@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import configSource from '../../../src-tauri/tauri.conf.json?raw'
 import packageSource from '../../../package.json?raw'
 import styles from './AppInfoDialog.module.css'
+import { localContributors, urlGithubRepo } from '../../data/contributors'
 
 const INFO_DIALOG = { ABOUT: 'about', TUTORIAL: 'tutorial' } as const
 export type InfoDialogKind = (typeof INFO_DIALOG)[keyof typeof INFO_DIALOG]
@@ -9,8 +10,30 @@ interface Props { kind: InfoDialogKind; onClose: () => void }
 const { productName } = JSON.parse(configSource) as { productName: string }
 /** package.json is the one place the app version is set; Tauri and the crate follow it. */
 const { version } = JSON.parse(packageSource) as { version: string }
-const PROJECT_URL = 'https://github.com/JFEspanolito/Grimoire-Maker'
-const CONTRIBUTORS_URL = `${PROJECT_URL}/Contributors`
+const PROJECT_URL = urlGithubRepo
+
+async function fetchContributors(signal: AbortSignal): Promise<typeof localContributors> {
+  const contributors: typeof localContributors = []
+  for (let page = 1; page <= 10; page++) {
+    const response = await fetch(`https://api.github.com/repos/JFEspanolito/Grimoire-Maker/contributors?per_page=100&page=${page}`, {
+      signal, credentials: 'omit', headers: { Accept: 'application/vnd.github+json' },
+    })
+    if (!response.ok) throw new Error('GitHub contributors unavailable')
+    const data: unknown = await response.json()
+    if (!Array.isArray(data)) throw new Error('Invalid contributors response')
+    for (const item of data) {
+      if (!item || typeof item !== 'object' || !('login' in item) || typeof item.login !== 'string' || !item.login.trim()) {
+        throw new Error('Invalid contributor')
+      }
+      contributors.push({ name: item.login, url: `https://github.com/${encodeURIComponent(item.login)}` })
+    }
+    if (!response.headers.get('link')?.includes('rel="next"')) {
+      if (!contributors.length) throw new Error('Empty contributors response')
+      return contributors
+    }
+  }
+  throw new Error('Contributors response exceeds the supported page limit')
+}
 
 interface TourStep {
   title: string
@@ -111,8 +134,42 @@ export function AppInfoDialog({ kind, onClose }: Props) {
   const [stepIndex, setStepIndex] = useState(0)
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null)
   const isTutorial = kind === INFO_DIALOG.TUTORIAL
+  const [contributors, setContributors] = useState<typeof localContributors>([])
+  const [creditsLoading, setCreditsLoading] = useState(true)
+  const [localCredits, setLocalCredits] = useState(false)
   const title = isTutorial ? 'Interactive Tutorial' : 'About'
   const currentStep = TUTORIAL_STEPS[stepIndex] ?? TUTORIAL_STEPS[0]
+
+  useEffect(() => {
+    if (isTutorial) return
+    const controller = new AbortController()
+    let active = true
+    setCreditsLoading(true)
+    setLocalCredits(false)
+    setContributors([])
+    const fallback = () => {
+      if (!active) return
+      setContributors(localContributors)
+      setLocalCredits(true)
+      setCreditsLoading(false)
+    }
+    const timeout = window.setTimeout(() => { fallback(); controller.abort() }, 8000)
+    // Defer until effect replay settles so StrictMode does not send a duplicate request.
+    void Promise.resolve().then(() => {
+      if (!active) return
+      return fetchContributors(controller.signal).then((result) => {
+        if (active && !controller.signal.aborted) {
+          setContributors(result)
+          setCreditsLoading(false)
+        }
+      }).catch(fallback).finally(() => window.clearTimeout(timeout))
+    })
+    return () => {
+      active = false
+      window.clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [isTutorial])
 
   useEffect(() => {
     const element = dialog.current
@@ -246,8 +303,16 @@ export function AppInfoDialog({ kind, onClose }: Props) {
       </section>
       <section aria-labelledby="app-credits-title">
         <h3 id="app-credits-title">Credits</h3>
-        <button type="button" data-credits disabled title={CONTRIBUTORS_URL} aria-describedby="app-credits-note">Contributors (coming soon)</button>
-        <p id="app-credits-note" className={styles.muted}>Contributor credits will be available when the repository is public.</p>
+        <div id="app-contributors">
+          <p role="status" className={styles.muted}>{creditsLoading
+            ? 'Loading contributors from GitHub…'
+            : localCredits ? 'GitHub is unavailable. Showing bundled credits.' : 'Contributors from GitHub.'}</p>
+          {!creditsLoading && <ul aria-label="Contributors">
+            {contributors.map((contributor) => <li key={contributor.url}>
+              <a href={contributor.url} target="_blank" rel="noopener noreferrer">{contributor.name}</a>
+            </li>)}
+          </ul>}
+        </div>
       </section>
     </div>
     <footer className={styles.footer}><button type="button" onClick={onClose}>Close</button></footer>
