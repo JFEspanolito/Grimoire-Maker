@@ -30,6 +30,7 @@ import { useAutoSave } from './hooks/useAutoSave'
 import { useAutoCommit } from './hooks/useAutoCommit'
 import { useRepositoryStatus } from './hooks/useRepositoryStatus'
 import { PanelResizeHandle } from './components/layout/PanelResizeHandle'
+import { ConfirmDialog } from './components/layout/ConfirmDialog'
 import { useTranslation } from './lib/i18n'
 
 export default function App() {
@@ -58,6 +59,41 @@ export default function App() {
   const hasTabs = useTabStore((s) => s.paths.length > 0)
   const activeEditor = hasTabs && (!activeTab || !/\.md$/i.test(activeTab)) ? null : editor
   const togglePanel = useSettingsStore((s) => s.togglePanel)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [pendingReload, setPendingReload] = useState(false)
+
+  const requestReload = () => {
+    setContextMenu(null)
+    const state = useDocumentStore.getState()
+    const hasUnsaved = state.document.dirty || Object.values(state.buffers).some((d) => d.dirty)
+    if (hasUnsaved) {
+      setPendingReload(true)
+    } else {
+      window.location.reload()
+    }
+  }
+
+  useEffect(() => {
+    const onContextMenu = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea')) return
+      if (event.defaultPrevented) return
+      event.preventDefault()
+      setContextMenu({ x: event.clientX, y: event.clientY })
+    }
+    const onPointerDown = () => setContextMenu(null)
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
+
+    window.addEventListener('contextmenu', onContextMenu)
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      window.removeEventListener('contextmenu', onContextMenu)
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [])
 
   // Reopen last session first, then start saving page-setup changes: subscribing
   // earlier would overwrite the saved settings with the defaults.
@@ -148,6 +184,38 @@ export default function App() {
           />
         )}
         <ToastHost />
+        {contextMenu && (
+          <div
+            role="menu"
+            aria-label={t('common.reload')}
+            className="fixed z-50 min-w-36 rounded border border-white/20 bg-neutral-800 p-1 shadow-xl text-sm"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="block w-full rounded px-2 py-1 text-left text-white hover:bg-white/10"
+              onClick={requestReload}
+            >
+              ↻ {t('common.reload')}
+            </button>
+          </div>
+        )}
+        {pendingReload && (
+          <ConfirmDialog
+            title={t('common.confirmReloadTitle')}
+            message={t('common.confirmReloadMessage')}
+            confirmLabel={t('common.reload')}
+            cancelLabel={t('common.cancel')}
+            danger
+            onCancel={() => setPendingReload(false)}
+            onConfirm={() => {
+              setPendingReload(false)
+              window.location.reload()
+            }}
+          />
+        )}
       </div>
     </PluginProvider>
   )

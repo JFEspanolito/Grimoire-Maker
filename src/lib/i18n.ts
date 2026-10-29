@@ -22,6 +22,9 @@ export const DICTIONARY = {
     'common.default': 'Default',
     'common.of': 'of',
     'common.error': 'Error',
+    'common.reload': 'Reload',
+    'common.confirmReloadTitle': 'Reload application?',
+    'common.confirmReloadMessage': 'You have unsaved changes. If you reload now, any unsaved work will be lost.',
 
     // Menu bar top-level
     'menu.file': 'File',
@@ -577,6 +580,9 @@ export const DICTIONARY = {
     'common.default': 'Por defecto',
     'common.of': 'de',
     'common.error': 'Error',
+    'common.reload': 'Recargar',
+    'common.confirmReloadTitle': '¿Recargar la aplicación?',
+    'common.confirmReloadMessage': 'Tienes cambios sin guardar. Si recargas ahora, se perderán las modificaciones no guardadas.',
 
     // Menu bar top-level
     'menu.file': 'Archivo',
