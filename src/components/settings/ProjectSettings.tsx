@@ -44,9 +44,9 @@ function ProjectFields({ root }: { root: string }) {
       }}
         onChange={event => { setSaved(false); setDraft({ ...draft, [key]: event.target.value }) }} /></label>)}
     <div className={styles.creditLinks}>{(Object.keys(CONTRIBUTOR_GROUPS) as ContributorGroup[]).map(group =>
-      <button key={group} type="button" className={styles.creditLink} aria-label={CONTRIBUTOR_GROUPS[group]} aria-haspopup="dialog" data-contributors
+      <button key={group} type="button" className={styles.creditLink} aria-label={t(group === 'coAuthors' ? 'project.coAuthors' : 'project.artists')} aria-haspopup="dialog" data-contributors
         disabled={!entry.ready || entry.busy} onClick={async () => { if (await persist()) setEditingGroup(group) }}>
-        {CONTRIBUTOR_GROUPS[group]} ({entry.settings[group]?.length ?? (group === 'coAuthors' && entry.settings.coAuthor ? 1 : 0)})
+        {t(group === 'coAuthors' ? 'project.coAuthors' : 'project.artists')} ({entry.settings[group]?.length ?? (group === 'coAuthors' && entry.settings.coAuthor ? 1 : 0)})
       </button>)}
       <button type="button" className={styles.creditLink} aria-haspopup="dialog" disabled={!entry.ready || entry.busy}
         onClick={async () => { if (await persist()) setOrderOpen(true) }}>{t('menu.document.documentOrder')}</button></div>
@@ -56,7 +56,7 @@ function ProjectFields({ root }: { root: string }) {
     {saved && <p role="status">{t('project.saved')}</p>}
   </form>
     {orderOpen && <DocumentOrderDialog root={root} onClose={() => setOrderOpen(false)} />}
-    {editingGroup && <ContributorsDialog title={CONTRIBUTOR_GROUPS[editingGroup]}
+    {editingGroup && <ContributorsDialog title={t(editingGroup === 'coAuthors' ? 'project.coAuthors' : 'project.artists')} group={editingGroup}
       initial={entry.settings[editingGroup] ?? (editingGroup === 'coAuthors' && entry.settings.coAuthor
         ? [{ name: entry.settings.coAuthor, socialMedia: '', platform: '' }] : [])}
       busy={entry.busy} error={entry.error} onClose={() => setEditingGroup(null)}

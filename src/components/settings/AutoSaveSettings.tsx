@@ -57,7 +57,7 @@ function AutoCommitSettings() {
     <p className={styles.description}>{t('pref.autocommit.description')}</p>
     <label className={styles.autoCommitToggle}><input aria-label="Enable auto commits" type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setSaved(false) }} />{t('pref.autocommit.enable')}</label>
     <div className={styles.autoSave}>
-      <label>Minutes<input aria-label="Auto commit minutes" type="number" min="1" max="1440" step="1" required value={minutes} onChange={event => { setMinutes(event.target.value); setSaved(false) }} /></label>
+      <label>{t('pref.autosave.minutes')}<input aria-label="Auto commit minutes" type="number" min="1" max="1440" step="1" required value={minutes} onChange={event => { setMinutes(event.target.value); setSaved(false) }} /></label>
     </div>
     <label className={styles.autoCommitMessage}>{t('pref.autocommit.message')}<input aria-label="Auto commit message" required value={message} onChange={event => { setMessage(event.target.value); setSaved(false) }} /></label>
     <button type="submit">{t('common.save')}</button>

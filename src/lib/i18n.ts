@@ -21,6 +21,7 @@ export const DICTIONARY = {
     'common.working': 'Working…',
     'common.default': 'Default',
     'common.of': 'of',
+    'common.error': 'Error',
 
     // Menu bar top-level
     'menu.file': 'File',
@@ -93,6 +94,10 @@ export const DICTIONARY = {
     'preferences.appearance.language': 'Language',
     'preferences.appearance.theme': 'Select Theme',
     'preferences.appearance.customizeTheme': 'Customize Theme',
+    'preferences.exportTheme': 'Export Theme',
+    'preferences.deleteTheme': 'Delete Theme',
+    'preferences.deleteThemeTitle': 'Delete custom theme',
+    'preferences.deleteThemeWarning': 'This cannot be undone.',
 
     // StatisticsDialog
     'stats.title': 'Statistics',
@@ -151,6 +156,19 @@ export const DICTIONARY = {
     'project.retry': 'Retry project settings',
     'project.saveSettings': 'Save project settings',
     'project.saved': 'Project settings saved.',
+    'project.coAuthors': 'Co-Author',
+    'project.artists': 'Artist',
+    'contributors.cancelAria': 'Cancel contributors',
+    'contributors.description': 'Project credits. Add a name, social media handle or URL, and platform.',
+    'contributors.name': 'Name',
+    'contributors.socialMedia': 'Social media',
+    'contributors.platform': 'Platform',
+    'contributors.actions': 'Actions',
+    'contributors.remove': 'Remove',
+    'contributors.empty': 'No contributors yet.',
+    'contributors.addArtist': 'Add artist',
+    'contributors.addCoAuthor': 'Add co-author',
+    'contributors.saving': 'Saving…',
     // ExportPdfDialog
     'exportPdf.title': 'Export PDF',
     'exportPdf.zoom': 'Zoom',
@@ -364,6 +382,7 @@ export const DICTIONARY = {
     'common.working': 'Procesando…',
     'common.default': 'Por defecto',
     'common.of': 'de',
+    'common.error': 'Error',
 
     // Menu bar top-level
     'menu.file': 'Archivo',
@@ -436,6 +455,10 @@ export const DICTIONARY = {
     'preferences.appearance.language': 'Idioma',
     'preferences.appearance.theme': 'Seleccionar Tema',
     'preferences.appearance.customizeTheme': 'Personalizar Tema',
+    'preferences.exportTheme': 'Exportar tema',
+    'preferences.deleteTheme': 'Eliminar tema',
+    'preferences.deleteThemeTitle': 'Eliminar tema personalizado',
+    'preferences.deleteThemeWarning': 'Esta acción no se puede deshacer.',
 
     // StatisticsDialog
     'stats.title': 'Estadísticas',
@@ -494,6 +517,19 @@ export const DICTIONARY = {
     'project.retry': 'Reintentar configuración del proyecto',
     'project.saveSettings': 'Guardar configuración del proyecto',
     'project.saved': 'Configuración del proyecto guardada.',
+    'project.coAuthors': 'Coautores',
+    'project.artists': 'Artistas',
+    'contributors.cancelAria': 'Cancelar colaboradores',
+    'contributors.description': 'Créditos del proyecto. Añade un nombre, red social o URL, y la plataforma.',
+    'contributors.name': 'Nombre',
+    'contributors.socialMedia': 'Red social',
+    'contributors.platform': 'Plataforma',
+    'contributors.actions': 'Acciones',
+    'contributors.remove': 'Eliminar',
+    'contributors.empty': 'Sin colaboradores aún.',
+    'contributors.addArtist': 'Añadir artista',
+    'contributors.addCoAuthor': 'Añadir coautor',
+    'contributors.saving': 'Guardando…',
     // ExportPdfDialog
     'exportPdf.title': 'Exportar PDF',
     'exportPdf.zoom': 'Zoom',

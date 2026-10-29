@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { useTranslation } from '../../lib/i18n'
 import styles from './ModManager.module.css'
 
 interface Props {
@@ -14,6 +15,7 @@ const ARM_DELAY_MS = 300
 
 /** A small Delete button that never deletes without a confirmation dialog (Cancel is focused first). */
 export function DeleteModButton({ name, disabled, onConfirm }: Props) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const cancel = useRef<HTMLButtonElement>(null)
@@ -44,19 +46,19 @@ export function DeleteModButton({ name, disabled, onConfirm }: Props) {
 
   return (
     <>
-      <button ref={trigger} type="button" className={styles.danger} disabled={disabled} aria-label={`Delete ${name}`} onClick={() => setOpen(true)}>Delete</button>
+      <button ref={trigger} type="button" className={styles.danger} disabled={disabled} aria-label={`${t('common.delete')} ${name}`} onClick={() => setOpen(true)}>{t('common.delete')}</button>
       {open && (
         <div className={styles.modalBackdrop} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); close() } }}>
           <div className={styles.modalCard} role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={textId}>
             <header className={styles.modalHeader}>
-              <h3 id={titleId}>Delete {name}?</h3>
+              <h3 id={titleId}>{t('mods.deleteTitle')} {name}?</h3>
             </header>
             <p id={textId}>
-              {name} will be deleted permanently. It cannot be recovered. To use it again you will have to install it again.
+              {name} {t('mods.deleteDesc')}
             </p>
             <footer className={styles.modalActions}>
-              <button ref={cancel} type="button" onClick={cancelClick}>Cancel</button>
-              <button type="button" className={styles.danger} onClick={confirm}>Delete</button>
+              <button ref={cancel} type="button" onClick={cancelClick}>{t('common.cancel')}</button>
+              <button type="button" className={styles.danger} onClick={confirm}>{t('common.delete')}</button>
             </footer>
           </div>
         </div>

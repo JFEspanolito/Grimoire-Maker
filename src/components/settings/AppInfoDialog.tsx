@@ -243,7 +243,7 @@ export function AppInfoDialog({ kind, onClose }: Props) {
               <span className={styles.stepBadge} role="status">{t('tutorial.step')} {stepIndex + 1} {t('common.of')} {TUTORIAL_STEPS.length}</span>
               <h2 id="app-info-title" className={styles.stepTitle}>{currentStep.title}</h2>
             </div>
-            <button type="button" className={styles.dismiss} aria-label="Close Tutorial" onClick={onClose}>×</button>
+            <button type="button" className={styles.dismiss} aria-label={`${t('common.close')} ${title}`} onClick={onClose}>×</button>
           </header>
           <p className={styles.tutorial}>{currentStep.description}</p>
           <p className={styles.howToUse}><strong>{t('tutorial.howToUse')}</strong> {currentStep.usage}</p>
@@ -309,9 +309,9 @@ export function AppInfoDialog({ kind, onClose }: Props) {
         <h3 id="app-credits-title">{t('about.credits')}</h3>
         <div id="app-contributors">
           <p role="status" className={styles.muted}>{creditsLoading
-            ? 'Loading contributors from GitHub…'
-            : localCredits ? 'GitHub is unavailable. Showing bundled credits.' : 'Contributors from GitHub.'}</p>
-          {!creditsLoading && <ul aria-label="Contributors">
+            ? t('about.loadingContributors')
+            : localCredits ? t('about.fallbackContributors') : t('about.onlineContributors')}</p>
+          {!creditsLoading && <ul aria-label={t('about.contributorsAria')}>
             {contributors.map((contributor) => <li key={contributor.url}>
               <a href={contributor.url} target="_blank" rel="noopener noreferrer">{contributor.name}</a>
             </li>)}

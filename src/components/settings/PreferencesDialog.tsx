@@ -168,8 +168,8 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
         </select>
         <button type="button" disabled={busy} onClick={() => setCustomizing(true)}>{t('preferences.appearance.customizeTheme')}</button>
         {activeCustomTheme && <>
-          <button type="button" disabled={busy || !desktop} onClick={() => void handleExportTheme()}>Export Theme</button>
-          <button type="button" className={styles.dangerButton} disabled={busy || !desktop} onClick={() => setPendingDeleteTheme(activeCustomTheme)}>Delete Theme</button>
+          <button type="button" disabled={busy || !desktop} onClick={() => void handleExportTheme()}>{t('preferences.exportTheme')}</button>
+          <button type="button" className={styles.dangerButton} disabled={busy || !desktop} onClick={() => setPendingDeleteTheme(activeCustomTheme)}>{t('preferences.deleteTheme')}</button>
         </>}
         </div>
       </div>
@@ -188,7 +188,7 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
     <section className={styles.section} role="tabpanel" id="preferences-folders" aria-labelledby="preferences-tab-folders" hidden={section !== 'folders'}>
       <h3 id="libraries-title">{t('preferences.section.folders')}</h3>
       <p className={styles.description}>{t('pref.folders.description')}</p>
-      {!desktop && <p className={styles.description}>Folder preferences are available in the desktop app.</p>}
+      {!desktop && <p className={styles.description}>{t('pref.folders.desktopOnly')}</p>}
       {loading && <p role="status">{t('pref.folders.loading')}</p>}
       {PATH_FIELDS.map(({ kind, labelKey }) => <label key={kind} className={styles.path}>
         <span>{t(labelKey)}</span>
@@ -197,8 +197,8 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
           <button type="button" aria-label={`${t('common.edit')} ${t(labelKey)}`} disabled={!desktop || loading || busy || !paths} onClick={() => void changePath(kind)}>{t('common.change')}</button>
         </span>
       </label>)}
-      <p className={styles.description}>External executable plugins are reserved for stage 2. Changing Plugin Path does not enable them.</p>
-      <p className={styles.description}>Errors are recorded as .txt files in Logs Path. Check logs for private information before sharing them.</p>
+      <p className={styles.description}>{t('pref.folders.pluginsNotice')}</p>
+      <p className={styles.description}>{t('pref.folders.logsNotice')}</p>
     </section>
     <section className={styles.section} role="tabpanel" id="preferences-shortcuts" aria-labelledby="preferences-tab-shortcuts" hidden={section !== 'shortcuts'}>
       <h3>{t('preferences.section.shortcuts')}</h3>
@@ -219,21 +219,21 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
       <AutoSaveSettings />
     </section>
     <section className={styles.section} role="tabpanel" id="preferences-project" aria-labelledby="preferences-tab-project" hidden={section !== 'project'}>
-      <h3>Project properties</h3>
+      <h3>{t('properties.projectProperties')}</h3>
       {section === 'project' && <ProjectSettings />}
     </section>
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    {!paths && desktop && !loading && <button type="button" onClick={() => { setLoading(true); setError(''); setAttempt((value) => value + 1) }}>Retry loading folders</button>}
+    {!paths && desktop && !loading && <button type="button" onClick={() => { setLoading(true); setError(''); setAttempt((value) => value + 1) }}>{t('pref.folders.retry')}</button>}
       </div>
     </div>
     {!customizing && <footer className={styles.footer}>
       <span>{t('preferences.footerNotice')}</span>
       <button type="button" disabled={busy} onClick={onClose}>{t('preferences.done')}</button>
     </footer>}
-    {pendingDeleteTheme && <ConfirmDialog title="Delete custom theme"
-      message={`Delete custom theme "${pendingDeleteTheme.name}"? This cannot be undone.`}
-      confirmLabel="Delete" danger onCancel={() => setPendingDeleteTheme(null)}
+    {pendingDeleteTheme && <ConfirmDialog title={t('preferences.deleteThemeTitle')}
+      message={`${t('preferences.deleteThemeTitle')} "${pendingDeleteTheme.name}"? ${t('preferences.deleteThemeWarning')}`}
+      confirmLabel={t('common.delete')} danger onCancel={() => setPendingDeleteTheme(null)}
       onConfirm={() => { const target = pendingDeleteTheme; setPendingDeleteTheme(null); void handleDeleteTheme(target) }} />}
   </dialog>
 }
