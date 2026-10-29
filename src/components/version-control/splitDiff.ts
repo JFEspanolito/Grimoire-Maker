@@ -135,7 +135,8 @@ export function splitDiff(text: string): DiffRow[] {
       continue
     }
 
-    if (GIT_METADATA_LINE.test(line)) {
+    // Inside a hunk, --- / +++ can be actual removed or added content.
+    if (GIT_METADATA_LINE.test(line) && !(inHunk && /^[+-]/.test(line))) {
       continue
     }
 

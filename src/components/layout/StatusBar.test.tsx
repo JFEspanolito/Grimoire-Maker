@@ -1,5 +1,6 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import type { Root } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { StatusBar } from './StatusBar'
 import { useDocumentStore } from '../../stores/documentStore'
@@ -8,7 +9,14 @@ import { useSettingsStore } from '../../stores/settingsStore'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
-afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks() })
+let root: Root | undefined
+
+afterEach(async () => {
+  await act(async () => root?.unmount())
+  root = undefined
+  document.body.innerHTML = ''
+  vi.restoreAllMocks()
+})
 
 async function mount() {
   HTMLDialogElement.prototype.showModal = vi.fn()
@@ -17,7 +25,8 @@ async function mount() {
   useLayoutStore.getState().setSheets('/a.md', 3)
   const container = document.createElement('div')
   document.body.append(container)
-  await act(async () => createRoot(container).render(<StatusBar />))
+  root = createRoot(container)
+  await act(async () => root!.render(<StatusBar />))
   return container
 }
 
