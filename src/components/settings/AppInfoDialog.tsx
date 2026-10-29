@@ -3,6 +3,7 @@ import configSource from '../../../src-tauri/tauri.conf.json?raw'
 import packageSource from '../../../package.json?raw'
 import styles from './AppInfoDialog.module.css'
 import { localContributors, urlGithubRepo } from '../../data/contributors'
+import { AboutUpdates } from './AboutUpdates'
 
 const INFO_DIALOG = { ABOUT: 'about', TUTORIAL: 'tutorial' } as const
 export type InfoDialogKind = (typeof INFO_DIALOG)[keyof typeof INFO_DIALOG]
@@ -291,6 +292,7 @@ export function AppInfoDialog({ kind, onClose }: Props) {
         <h3 className={styles.appName}>{productName}</h3>
         <p className={styles.muted}>Version {version}</p>
       </section>
+      <AboutUpdates />
       <section aria-labelledby="app-contact-title">
         <h3 id="app-contact-title">Contact</h3>
         <a href="mailto:apps@jfespanolito.dev">apps@jfespanolito.dev</a>

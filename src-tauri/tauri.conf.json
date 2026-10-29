@@ -47,7 +47,8 @@
           "English",
           "Spanish"
         ],
-        "installerHooks": "nsis/hooks.nsh"
+        "installerHooks": "nsis/hooks.nsh",
+        "template": "nsis/installer.nsi"
       }
     }
   }

@@ -13,18 +13,24 @@ Both scripts run `tauri build`, which builds the frontend first (`pnpm build`, i
 
 * Per-user install (`installMode: currentUser`): no administrator rights, default folder
   `%LOCALAPPDATA%\Grimoire Maker`. English and Spanish; the language follows Windows.
-* Wizard pages, in order: **Content folders** (ours), Welcome, (reinstall/maintenance page on upgrades),
-  install folder, Start Menu folder, installing, finish.
-  The page comes first because the Tauri hooks file is included before the template's own pages.
-* **Content folders** is shown on interactive first installs and reinstalls. Choose one root;
+* Wizard pages, in order: **Welcome**, (reinstall/maintenance page on upgrades), **install folder**,
+  **Content folders** (optional), Start Menu folder, installing, finish.
+  `src-tauri/nsis/installer.nsi` vendors the [Tauri CLI 2.12.4 template](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.12.4/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi).
+  Its only upstream delta inserts our custom page after `MUI_PAGE_DIRECTORY`. Keep that insertion when
+  updating the template with Tauri; declaring a page in the early hooks include puts it before Welcome.
+* **Content folders** is shown on interactive first installs and reinstalls. **Customize content folders**
+  is unchecked by default: continue without selecting it to preserve existing paths (or app defaults on
+  a fresh install), without writing a new content request. Select it to choose one root;
   the installer derives `Mods/Plugins`, `Mods/Snippets`, `Mods/Templates`, `Mods/Themes`, and `logs` beneath it.
   The default is `%APPDATA%\GriomoireMaker`; a previous installer selection is pre-filled when available.
   This is separate from the executable installation directory.
+  The preceding native **Choose Install Location** page requires confirming the program destination
+  before installation; a previous destination is prefilled, not a reason to skip this page.
 * Absolute drive and ordinary network-share paths are accepted, including the configuration root itself.
   Paths are limited to 240 characters. Relative paths, device names, administrative shares, control characters,
   invalid Windows characters and ambiguous path segments remain rejected. Rules are shared through
   `src-tauri/nsis/hint-path-cases.json` and checked by Rust and `scripts/nsis-hints.test.ts`.
-* After copying the app, setup creates those five folders and writes a UTF-16LE/BOM root selection to
+* After an explicit interactive selection and copying the app, setup creates those five folders and writes a UTF-16LE/BOM root selection to
   `%APPDATA%\GriomoireMaker\install-content-root-v2.txt`. On next launch the app atomically updates only the
   five saved paths, retaining other settings. Existing content is **not moved or deleted**. If selecting another
   root, old content stays at its original location. Individual folders can still be changed in Preferences.

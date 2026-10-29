@@ -6,6 +6,9 @@ import packageSource from '../../../package.json?raw'
 import { AppInfoDialog, TUTORIAL_STEPS } from './AppInfoDialog'
 import { localContributors } from '../../data/contributors'
 
+// Update-check behavior is covered independently in AboutUpdates.test.tsx.
+vi.mock('./AboutUpdates', () => ({ AboutUpdates: () => <section aria-label="Updates" /> }))
+
 const config = { ...(JSON.parse(configSource) as { productName: string }), ...(JSON.parse(packageSource) as { version: string }) }
 let root: Root
 let container: HTMLDivElement
@@ -39,6 +42,7 @@ it('uses application identity, contact, and an accessible GitHub icon link and l
     expect(container.querySelector('dialog')?.open).toBe(true)
     expect(container.textContent).toContain(config.productName)
     expect(container.textContent).toContain(`Version ${config.version}`)
+    expect(container.querySelector('[aria-label="Updates"]')).not.toBeNull()
     expect(container.querySelector('a[href="mailto:apps@jfespanolito.dev"]')?.textContent).toBe('apps@jfespanolito.dev')
     const github = container.querySelector<HTMLAnchorElement>('[aria-label="Grimoire Maker on GitHub"]')!
     expect(github.href).toBe('https://github.com/JFEspanolito/Grimoire-Maker')
@@ -126,6 +130,7 @@ it('runs the 6-step spotlight tutorial with Next, Back, Skip Tour, X, Escape, an
   try {
     await act(async () => root.render(<AppInfoDialog kind="tutorial" onClose={close} />))
     expect(TUTORIAL_STEPS).toHaveLength(6)
+    expect(container.querySelector('[aria-label="Updates"]')).toBeNull()
     expect(container.textContent).toContain('Step 1 of 6')
     expect(container.textContent).toContain('Project Files, Templates & Git')
     expect(container.querySelector('[data-tour-spotlight]')).not.toBeNull()
