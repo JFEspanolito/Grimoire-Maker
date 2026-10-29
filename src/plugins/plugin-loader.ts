@@ -26,9 +26,15 @@ export function reconcilePlugins(_io: ModFs, mods: ModEntry[]): Promise<string[]
         const plugin = officialPlugin(mod)
         if (!plugin) throw new Error('Only shipped official plugins are supported')
         const current = loaded.get(mod.id)
-        if (current && usePluginRegistry.getState().plugins.some(item => item.id === current.pluginId)) continue
+        if (usePluginRegistry.getState().plugins.some(item => item.id === plugin.id)) {
+          if (!current || current.folder === mod.folder) {
+            loaded.set(mod.id, { folder: mod.folder, pluginId: plugin.id })
+            continue
+          }
+          unload(mod.id)
+          unregisterPlugin(plugin.id)
+        }
         unload(mod.id)
-        if (usePluginRegistry.getState().plugins.some(item => item.id === plugin.id)) throw new Error(`Duplicate plugin id: ${plugin.id}`)
         registerPlugin(plugin)
         loaded.set(mod.id, { folder: mod.folder, pluginId: plugin.id })
       } catch (error) {
