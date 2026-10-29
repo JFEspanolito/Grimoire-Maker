@@ -30,8 +30,10 @@ import { useAutoSave } from './hooks/useAutoSave'
 import { useAutoCommit } from './hooks/useAutoCommit'
 import { useRepositoryStatus } from './hooks/useRepositoryStatus'
 import { PanelResizeHandle } from './components/layout/PanelResizeHandle'
+import { useTranslation } from './lib/i18n'
 
 export default function App() {
+  const { t } = useTranslation()
   useUnsavedClose()
   const [editor, setEditor] = useState<Editor | null>(null)
   const visiblePanels = useSettingsStore((s) => s.panels)
@@ -130,7 +132,7 @@ export default function App() {
             <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
             <div className={styles.sourceControl}>
               <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
-                onClick={() => togglePanel('properties')}>Properties</button>
+                onClick={() => togglePanel('properties')}>{t('properties.title')}</button>
               {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /><ExportPageSnippetButton /></div>}
             </div>
           </aside>

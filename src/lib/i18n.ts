@@ -453,6 +453,46 @@ export const DICTIONARY = {
     'table.addColRight': 'Add column right',
     'table.deleteCol': 'Delete column',
     'table.deleteTable': 'Delete table',
+
+    // File Tree & Explorer
+    'files.title': 'Files',
+    'files.newFile': '+ File',
+    'files.newFileTitle': 'New file',
+    'files.newFolder': '+ Folder',
+    'files.newFolderTitle': 'New folder',
+    'files.refresh': 'Refresh file list',
+    'files.desc.draft': 'Files and folders for your project.',
+    'files.desc.research': 'Inspiration and reference sources.',
+    'files.desc.trash': 'Deleted files.',
+    'files.desc.assets': 'Images and other resources used in your project.',
+    'files.rename': 'Rename',
+    'files.collapse': 'Collapse',
+    'files.expand': 'Expand',
+    'files.openFolder': 'Open Folder',
+    'files.openFile': 'Open File',
+    'files.openInNewTab': 'Open in new Tab',
+    'files.copyPath': 'Copy file path',
+    'files.deletePrompt': 'Delete…',
+    'files.moveToTrash': 'Move to Trash',
+    'files.deletePermanently': 'Delete permanently',
+    'files.openFolderNotice': 'Open a folder to manage files.',
+
+    // Templates Sidebar
+    'templates.title': 'Templates',
+    'templates.hint': 'Empty project structures created by the community.',
+    'templates.installed': 'Installed',
+    'templates.import': 'Import…',
+    'templates.export': 'Export template',
+
+    // Snippets Sidebar
+    'snippets.title': 'Snippets',
+    'snippets.dragTooltip': 'Drag onto the page to choose a position, or double-click to insert at the cursor',
+    'snippets.exportPage': 'Export Page Content as Snippet',
+    'snippets.saveTitle': 'Save as Snippet',
+    'snippets.name': 'Snippet Name',
+    'snippets.category': 'Category / Folder',
+    'snippets.saveAction': 'Save to Snippets',
+    'snippets.saving': 'Saving…',
   },
   es: {
     // Common
@@ -897,6 +937,46 @@ export const DICTIONARY = {
     'table.addColRight': 'Añadir columna a la derecha',
     'table.deleteCol': 'Eliminar columna',
     'table.deleteTable': 'Eliminar tabla',
+
+    // File Tree & Explorer
+    'files.title': 'Archivos',
+    'files.newFile': '+ Archivo',
+    'files.newFileTitle': 'Nuevo archivo',
+    'files.newFolder': '+ Carpeta',
+    'files.newFolderTitle': 'Nueva carpeta',
+    'files.refresh': 'Actualizar lista de archivos',
+    'files.desc.draft': 'Archivos y carpetas de tu proyecto.',
+    'files.desc.research': 'Fuentes de inspiración y referencia.',
+    'files.desc.trash': 'Archivos eliminados.',
+    'files.desc.assets': 'Imágenes y otros recursos usados en tu proyecto.',
+    'files.rename': 'Renombrar',
+    'files.collapse': 'Plegar',
+    'files.expand': 'Desplegar',
+    'files.openFolder': 'Abrir carpeta',
+    'files.openFile': 'Abrir archivo',
+    'files.openInNewTab': 'Abrir en nueva pestaña',
+    'files.copyPath': 'Copiar ruta del archivo',
+    'files.deletePrompt': 'Eliminar…',
+    'files.moveToTrash': 'Mover a la papelera',
+    'files.deletePermanently': 'Eliminar permanentemente',
+    'files.openFolderNotice': 'Abre una carpeta para gestionar archivos.',
+
+    // Templates Sidebar
+    'templates.title': 'Plantillas',
+    'templates.hint': 'Estructuras de proyecto vacías creadas por la comunidad.',
+    'templates.installed': 'Instaladas',
+    'templates.import': 'Importar…',
+    'templates.export': 'Exportar plantilla',
+
+    // Snippets Sidebar
+    'snippets.title': 'Fragmentos',
+    'snippets.dragTooltip': 'Arrastra a la página para elegir la posición o haz doble clic para insertar en el cursor',
+    'snippets.exportPage': 'Exportar contenido de la página como fragmento',
+    'snippets.saveTitle': 'Guardar como fragmento',
+    'snippets.name': 'Nombre del fragmento',
+    'snippets.category': 'Categoría / Carpeta',
+    'snippets.saveAction': 'Guardar en fragmentos',
+    'snippets.saving': 'Guardando…',
   },
 } as const
 
