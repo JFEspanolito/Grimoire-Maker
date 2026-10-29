@@ -32,6 +32,7 @@ import { useRepositoryStatus } from './hooks/useRepositoryStatus'
 import { PanelResizeHandle } from './components/layout/PanelResizeHandle'
 import { ConfirmDialog } from './components/layout/ConfirmDialog'
 import { useTranslation } from './lib/i18n'
+import { useAppUpdateStore } from './stores/appUpdateStore'
 
 export default function App() {
   const { t } = useTranslation()
@@ -93,6 +94,10 @@ export default function App() {
       window.removeEventListener('pointerdown', onPointerDown)
       window.removeEventListener('keydown', onKeyDown)
     }
+  }, [])
+
+  useEffect(() => {
+    void useAppUpdateStore.getState().checkUpdates()
   }, [])
 
   // Reopen last session first, then start saving page-setup changes: subscribing
