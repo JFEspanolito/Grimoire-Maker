@@ -8,6 +8,7 @@ import { GitDiffDialog } from './GitDiffDialog'
 import { GitRollbackDialog } from './GitRollbackDialog'
 import { ConfirmDialog } from '../layout/ConfirmDialog'
 import { useDocumentStore } from '../../stores/documentStore'
+import { useTranslation } from '../../lib/i18n'
 
 async function reloadActiveDocumentFromDisk(workspace: string) {
   if (!('__TAURI_INTERNALS__' in window)) return
@@ -49,6 +50,7 @@ export function VersionControlPanel(props: VersionControlPanelProps) {
 }
 
 function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: VersionControlPanelProps) {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<RepositoryStatus | null>(null)
   const [busy, setBusy] = useState(Boolean(workspace))
   const [error, setError] = useState('')
