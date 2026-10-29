@@ -7,6 +7,7 @@ export const PANEL_IDS = ['files', 'templates', 'snippets', 'git', 'properties',
 export type PanelId = (typeof PANEL_IDS)[number]
 export type PanelVisibility = Record<PanelId, boolean>
 export const DEFAULT_PANELS: PanelVisibility = { files: true, templates: true, snippets: true, git: true, properties: true, documentIndex: true }
+export type Language = 'en' | 'es'
 
 interface SettingsState {
   panels: PanelVisibility
@@ -34,6 +35,8 @@ interface SettingsState {
   setColumns: (columns: 1 | 2) => void
   setTheme: (theme: ThemeId) => void
   setViewMode: (viewMode: ViewMode) => void
+  language: Language
+  setLanguage: (language: Language) => void
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -69,4 +72,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setColumns: (columns) => set({ columns }),
   setTheme: (theme) => set({ theme }),
   setViewMode: (viewMode) => set({ viewMode }),
+  language: 'en',
+  setLanguage: (language) => { if (language === 'en' || language === 'es') set({ language }) },
 }))

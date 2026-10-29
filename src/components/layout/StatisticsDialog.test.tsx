@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import { StatisticsDialog } from './StatisticsDialog'
 import { useDocumentStore } from '../../stores/documentStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 it('shows statistics for open documents with Word Frequency collapsed by default', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
@@ -26,4 +27,30 @@ it('shows statistics for open documents with Word Frequency collapsed by default
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Close Statistics"]')!.click())
     expect(onClose).toHaveBeenCalledOnce()
   } finally { await act(async () => root.unmount()); useDocumentStore.getState().resetDocuments() }
+})
+
+it('translates statistics dialog to Spanish', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value: vi.fn() })
+  Object.defineProperty(HTMLDialogElement.prototype, 'close', { configurable: true, value: vi.fn() })
+  useSettingsStore.setState({ language: 'es' })
+  useDocumentStore.getState().resetDocuments()
+  useDocumentStore.getState().setBody('asd asd asd asd sda sda')
+  const onClose = vi.fn()
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<StatisticsDialog onClose={onClose} />))
+    const text = container.textContent!
+    expect(text).toContain('Palabras:6')
+    expect(text).toContain('Documentos:1')
+    expect(text).toContain('Tiempo de lectura:00:00:02')
+    expect(container.querySelector('#statistics-title')?.textContent).toBe('Estadísticas')
+    expect(container.querySelector('details summary')?.textContent).toBe('Frecuencia de palabras')
+    expect(container.querySelector<HTMLButtonElement>('[aria-label="Cerrar estadísticas"]')).not.toBeNull()
+  } finally {
+    useSettingsStore.setState({ language: 'en' })
+    await act(async () => root.unmount())
+    useDocumentStore.getState().resetDocuments()
+  }
 })

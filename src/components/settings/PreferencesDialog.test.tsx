@@ -257,3 +257,16 @@ it('can open straight into Customize Theme', async () => {
   await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Back')!.click())
   expect(container.querySelector('#preferences-title')?.textContent).toBe('Preferences')
 })
+it('allows changing the application language under Appearance', async () => {
+  const langSelect = container.querySelector<HTMLSelectElement>('#preferences-language')!
+  expect(langSelect).not.toBeNull()
+  expect(Array.from(langSelect.options).map((opt) => opt.text)).toEqual(['English', 'Español'])
+  expect(useSettingsStore.getState().language).toBe('en')
+
+  await act(async () => {
+    langSelect.value = 'es'
+    langSelect.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  expect(useSettingsStore.getState().language).toBe('es')
+  useSettingsStore.getState().setLanguage('en')
+})

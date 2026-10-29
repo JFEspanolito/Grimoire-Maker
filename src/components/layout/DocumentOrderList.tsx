@@ -1,4 +1,5 @@
 import { moveItem, type OrderItem } from '../../lib/documentOrder'
+import { useTranslation } from '../../lib/i18n'
 import styles from './DocumentOrderList.module.css'
 
 export const documentLabel = (path: string) => path.replace(/^Draft\//i, '').replace(/\.md$/i, '')
@@ -9,16 +10,17 @@ export function DocumentOrderList({ items, onChange, disabled = false }: {
   onChange: (items: OrderItem[]) => void
   disabled?: boolean
 }) {
-  return <ol className={styles.list} aria-label="Documents">
+  const { t } = useTranslation()
+  return <ol className={styles.list} aria-label={t('order.documentsAria')}>
     {items.map((item, index) => <li key={item.path}>
       <label>
-        <input type="checkbox" checked={item.included} disabled={disabled} aria-label={`Include ${documentLabel(item.path)}`}
+        <input type="checkbox" checked={item.included} disabled={disabled} aria-label={`${t('order.include')} ${documentLabel(item.path)}`}
           onChange={() => onChange(items.map((other, at) => at === index ? { ...other, included: !other.included } : other))} />
         <span title={item.path}>{documentLabel(item.path)}</span>
       </label>
-      <button type="button" aria-label={`Move ${documentLabel(item.path)} up`} disabled={disabled || index === 0}
+      <button type="button" aria-label={`${t('order.move')} ${documentLabel(item.path)} ${t('order.up')}`} disabled={disabled || index === 0}
         onClick={() => onChange(moveItem(items, index, -1))}>↑</button>
-      <button type="button" aria-label={`Move ${documentLabel(item.path)} down`} disabled={disabled || index === items.length - 1}
+      <button type="button" aria-label={`${t('order.move')} ${documentLabel(item.path)} ${t('order.down')}`} disabled={disabled || index === items.length - 1}
         onClick={() => onChange(moveItem(items, index, 1))}>↓</button>
     </li>)}
   </ol>

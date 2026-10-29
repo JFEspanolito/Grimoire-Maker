@@ -10,13 +10,13 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: vi.fn(), mkdir: vi.fn(), readTextFile: vi.fn(), writeTextFile: vi.fn(),
 }))
 let stop: (() => void) | undefined
-afterEach(() => { stop?.(); useSettingsStore.setState({ theme: 'parchment', rulerGuides: [], zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' }); vi.clearAllMocks() })
+afterEach(() => { stop?.(); useSettingsStore.setState({ theme: 'parchment', rulerGuides: [], zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically', language: 'en' }); vi.clearAllMocks() })
 
 it('saves appearance through the shared native settings writer, not workspace state', async () => {
   stop = watchSettings()
   useSettingsStore.getState().setTheme('sci-fi')
   await Promise.resolve()
-  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], panels: expect.objectContaining({ files: true, documentIndex: true }), zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically' })
+  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], panels: expect.objectContaining({ files: true, documentIndex: true }), zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically', language: 'en' })
   expect(writeTextFile).not.toHaveBeenCalled()
 })
 
@@ -72,4 +72,11 @@ it('saves which panels are shown whenever one is toggled', async () => {
   expect(saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ panels: expect.objectContaining({ snippets: false, files: true }) }))
   useSettingsStore.getState().togglePanel('snippets')
   unwatch()
+})
+it('persists language through setting.json when changed', async () => {
+  stop = watchSettings()
+  useSettingsStore.getState().setLanguage('es')
+  await Promise.resolve()
+  expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ language: 'es' }))
+  useSettingsStore.getState().setLanguage('en')
 })

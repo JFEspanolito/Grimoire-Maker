@@ -4,6 +4,7 @@ import { useFileSystem } from '../../hooks/useFileSystem'
 import { usePrint } from '../../hooks/usePrint'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore, type PanelId } from '../../stores/settingsStore'
+import { useTranslation } from '../../lib/i18n'
 import { useTabStore } from '../../stores/tabStore'
 import { PAGE_SIZES, type PageSizeId } from '../../types/document'
 import styles from './MenuBar.module.css'
@@ -36,6 +37,7 @@ interface Props {
 const MODAL_DIALOG = 'dialog[open]:not([data-find-panel])'
 
 export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) {
+  const { t } = useTranslation()
   const actions = useFileSystem()
   const print = usePrint()
   const workspace = useDocumentStore((s) => s.workspaceRoot)
@@ -119,95 +121,95 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       }
     }}>
     <details name="application-menu">
-      <summary>File</summary>
+      <summary>{t('menu.file')}</summary>
       <div className={styles.menu}>
-        <button onClick={() => void run(actions.createNewFile)}>New File…</button>
-        <button onClick={() => { closeMenus(); setNewProjectOpen(true) }}>New Project…</button>
-        <button onClick={() => void run(() => actions.openFile())}>Open File…</button>
-        <button onClick={() => void run(actions.openWorkspace)}>Open Folder…</button>
+        <button onClick={() => void run(actions.createNewFile)}>{t('menu.file.newFile')}</button>
+        <button onClick={() => { closeMenus(); setNewProjectOpen(true) }}>{t('menu.file.newProject')}</button>
+        <button onClick={() => void run(() => actions.openFile())}>{t('menu.file.openFile')}</button>
+        <button onClick={() => void run(actions.openWorkspace)}>{t('menu.file.openFolder')}</button>
         <details className={styles.recent}>
-          <summary>Recent Folders</summary>
+          <summary>{t('menu.file.recentFolders')}</summary>
           <div role="group" aria-label="Recent folders">
             {recent.length ? recent.map(path => <button key={path} title={path} className={styles.recentPath}
-              onClick={() => void run(() => actions.openRecent(path))}>{path}</button>) : <button disabled>No recent folders</button>}
+              onClick={() => void run(() => actions.openRecent(path))}>{path}</button>) : <button disabled>{t('menu.file.noRecentFolders')}</button>}
           </div>
         </details>
         <hr />
-        <button disabled={readOnly} onClick={() => void run(actions.saveFile)}>Save</button>
-        <button onClick={() => void run(actions.saveAll)}>Save All</button>
+        <button disabled={readOnly} onClick={() => void run(actions.saveFile)}>{t('menu.file.save')}</button>
+        <button onClick={() => void run(actions.saveAll)}>{t('menu.file.saveAll')}</button>
         <hr />
-        <button disabled={!workspace || !importSection} title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'} onClick={() => void run(() => actions.importInto())}>Import…</button>
+        <button disabled={!workspace || !importSection} title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'} onClick={() => void run(() => actions.importInto())}>{t('menu.file.import')}</button>
         <hr />
-        <button disabled={readOnly} onClick={() => { closeMenus(); setExportOpen(true) }}>Export PDF…</button>
         <details className={styles.recent}>
-          <summary>Export</summary>
+          <summary>{t('menu.file.export')}</summary>
           <div role="group" aria-label="Export">
+            <button disabled={readOnly} onClick={() => { closeMenus(); setExportOpen(true) }}>{t('menu.file.exportPdf')}</button>
             <button disabled={!workspace} title={workspace ? 'Export the open project as a template' : 'Open a project first'}
-              onClick={() => { closeMenus(); setTemplateExportOpen(true) }}>Export as Template</button>
+              onClick={() => { closeMenus(); setTemplateExportOpen(true) }}>{t('menu.file.exportAsTemplate')}</button>
           </div>
         </details>
         <hr />
       </div>
     </details>
     <details name="application-menu">
-      <summary>View</summary>
+      <summary>{t('menu.view')}</summary>
       <div className={styles.menu}>
         {(['files', 'templates', 'snippets', 'git', 'properties'] as const).map((panel) => <button key={panel}
           aria-label={`${visiblePanels[panel] ? 'Hide' : 'Show'} ${panel} panel`}
           aria-pressed={visiblePanels[panel]} onClick={() => onTogglePanel(panel)}>
-          <span className={styles.check} aria-hidden="true">{visiblePanels[panel] ? '✓' : ''}</span>{panel[0].toUpperCase() + panel.slice(1)}
+          <span className={styles.check} aria-hidden="true">{visiblePanels[panel] ? '✓' : ''}</span>{t(`menu.view.${panel}` as const)}
         </button>)}
         <hr />
         <button aria-label="Split View" aria-pressed={split} onClick={() => void run(() => useTabStore.getState().toggleSplit())}>
-          <span className={styles.check} aria-hidden="true">{split ? '✓' : ''}</span>Split View
+          <span className={styles.check} aria-hidden="true">{split ? '✓' : ''}</span>{t('menu.view.splitView')}
         </button>
         <button aria-label="Document Index" aria-pressed={showDocumentIndex} onClick={() => togglePanel('documentIndex')}>
-          <span className={styles.check} aria-hidden="true">{showDocumentIndex ? '✓' : ''}</span>Document Index
+          <span className={styles.check} aria-hidden="true">{showDocumentIndex ? '✓' : ''}</span>{t('menu.view.documentIndex')}
         </button>
       </div>
     </details>
     {!readOnly && <details name="application-menu">
-      <summary>Insert</summary>
+      <summary>{t('menu.insert')}</summary>
       <div className={styles.menu}>
-        <button disabled={!editor} onClick={() => void run(() => insertTable(editor!))}>Table</button>
-        <button disabled={!editor} onClick={() => void run(async () => { await insertImage(editor!); await actions.refreshTree() })}>Image…</button>
-        <button disabled={!editor} onClick={() => void run(() => insertDivider(editor!))}>Horizontal Rule</button>
-        <button disabled={!editor} onClick={() => void run(() => insertQuote(editor!))}>Quote</button>
-        <button disabled={!editor} onClick={() => void run(() => insertFloatingBox(editor!))}>Floating Box</button>
-        <button disabled={!editor} onClick={() => void run(() => insertFormula(editor!))}>Insert Formula</button>
-        <button disabled={!editor} onClick={() => void run(() => insertSectionBreak(editor!))}>Section Break</button>
+        <button disabled={!editor} onClick={() => void run(() => insertTable(editor!))}>{t('menu.insert.table')}</button>
+        <button disabled={!editor} onClick={() => void run(async () => { await insertImage(editor!); await actions.refreshTree() })}>{t('menu.insert.image')}</button>
+        <button disabled={!editor} onClick={() => void run(() => insertDivider(editor!))}>{t('menu.insert.horizontalRule')}</button>
+        <button disabled={!editor} onClick={() => void run(() => insertQuote(editor!))}>{t('menu.insert.quote')}</button>
+        <button disabled={!editor} onClick={() => void run(() => insertFloatingBox(editor!))}>{t('menu.insert.floatingBox')}</button>
+        <button disabled={!editor} onClick={() => void run(() => insertFormula(editor!))}>{t('menu.insert.formula')}</button>
+        <button disabled={!editor} onClick={() => void run(() => insertSectionBreak(editor!))}>{t('menu.insert.sectionBreak')}</button>
       </div>
     </details>}
     {!readOnly && <details name="application-menu">
-      <summary>Document</summary>
+      <summary>{t('menu.document')}</summary>
       <div className={styles.menu}>
-        <label className={styles.layout}>Page size
+        <label className={styles.layout}>{t('menu.document.pageSize')}
           <select aria-label="Page size" value={pageSize} onChange={(event) => setPageSize(event.target.value as PageSizeId)}>
             {Object.values(PAGE_SIZES).map((size) => <option key={size.id} value={size.id}>{size.label}</option>)}
           </select>
         </label>
-        <label className={styles.layout}>Columns
+        <label className={styles.layout}>{t('menu.document.columns')}
           <select aria-label="Columns" value={columns} onChange={(event) => setColumns(Number(event.target.value) as 1 | 2)}>
             <option value={1}>1</option>
             <option value={2}>2</option>
           </select>
         </label>
         <hr />
-        <button type="button" aria-keyshortcuts="Control+F" onClick={() => { closeMenus(); openFind() }}>Find and Replace…<kbd style={{ float: 'right', marginLeft: '1.5rem', opacity: 0.7, font: 'inherit' }}>Ctrl+F</kbd></button>
-        <button type="button" onClick={() => { closeMenus(); setPropertiesOpen(true) }}>Properties…</button>
-        <button type="button" disabled={!workspace} onClick={() => { closeMenus(); setOrderOpen(true) }}>Document Order…</button>
-        <button type="button" onClick={() => { closeMenus(); setStatisticsOpen(true) }}>Statistics…</button>
+        <button type="button" aria-keyshortcuts="Control+F" onClick={() => { closeMenus(); openFind() }}>{t('menu.document.findAndReplace')}<kbd style={{ float: 'right', marginLeft: '1.5rem', opacity: 0.7, font: 'inherit' }}>Ctrl+F</kbd></button>
+        <button type="button" onClick={() => { closeMenus(); setPropertiesOpen(true) }}>{t('menu.document.properties')}</button>
+        <button type="button" disabled={!workspace} onClick={() => { closeMenus(); setOrderOpen(true) }}>{t('menu.document.documentOrder')}</button>
+        <button type="button" onClick={() => { closeMenus(); setStatisticsOpen(true) }}>{t('menu.document.statistics')}</button>
         <hr />
-        <button type="button" onClick={() => { closeMenus(); setExportOpen(true) }}>Export PDF…</button>
+        <button type="button" onClick={() => { closeMenus(); setExportOpen(true) }}>{t('menu.document.exportPdf')}</button>
       </div>
     </details>}
     <details name="application-menu">
-      <summary ref={settingsSummary}>Settings</summary>
+      <summary ref={settingsSummary}>{t('menu.settings')}</summary>
       <div className={styles.menu}>
-        <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>Mod Manager</button>
-        <button type="button" onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}>Preferences…</button>
-        <button type="button" onClick={() => openInfo('about')}>About</button>
-        <button type="button" onClick={() => openInfo('tutorial')}>Tutorial</button>
+        <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>{t('menu.settings.modManager')}</button>
+        <button type="button" onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}>{t('menu.settings.preferences')}</button>
+        <button type="button" onClick={() => openInfo('about')}>{t('menu.settings.about')}</button>
+        <button type="button" onClick={() => openInfo('tutorial')}>{t('menu.settings.tutorial')}</button>
       </div>
     </details>
     {error && <span role="alert" className={styles.error}>{error}</span>}

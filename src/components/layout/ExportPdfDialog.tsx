@@ -8,6 +8,7 @@ import { EMPTY_ENTRY, useProjectStore } from '../../stores/projectStore'
 import { draftDocuments, includedDocuments, resolveDocumentOrder, toDocumentOrder, type OrderItem } from '../../lib/documentOrder'
 import { usePluginSurface } from '../../plugins/usePluginSurface'
 import { DocumentOrderList } from './DocumentOrderList'
+import { useTranslation } from '../../lib/i18n'
 import styles from './ExportPdfDialog.module.css'
 
 type Status =
@@ -21,6 +22,7 @@ const ZOOMS = [0.25, 0.35, 0.5, 0.75, 1]
 
 /** Shows the whole book as it will be printed before the PDF is written. */
 export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; onExport: (book?: Book) => void }) {
+  const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
   const display = useRef<HTMLDivElement>(null)
   const book = useRef<Book | undefined>(undefined)
@@ -85,32 +87,32 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="export-pdf-title"
     onCancel={(event) => { event.preventDefault(); onClose() }}>
     <header className={styles.header}>
-      <h2 id="export-pdf-title">Export PDF</h2>
-      <label className={styles.zoom}>Zoom
-        <select aria-label="Preview zoom" value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
+      <h2 id="export-pdf-title">{t('exportPdf.title')}</h2>
+      <label className={styles.zoom}>{t('exportPdf.zoom')}
+        <select aria-label={t('exportPdf.previewZoom')} value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
           {zoomOptions.map((value) => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}
         </select>
       </label>
-      <button type="button" className={styles.dismiss} aria-label="Close Export PDF" onClick={onClose}>×</button>
+      <button type="button" className={styles.dismiss} aria-label={t('exportPdf.close')} onClick={onClose}>×</button>
     </header>
     <div className={styles.body}>
       {items.length > 0 && <details className={styles.order} open>
-        <summary>Document Order</summary>
-        <p className={styles.hint}>Checked documents are printed, top to bottom.</p>
+        <summary>{t('order.title')}</summary>
+        <p className={styles.hint}>{t('exportPdf.hint')}</p>
         <DocumentOrderList items={items} onChange={reorder} disabled={entry.busy} />
         {entry.error && <p role="alert">{entry.error}</p>}
       </details>}
     <div ref={previewRef} className={styles.preview} data-theme={theme}>
-      {status.kind === 'loading' && <p role="status">Preparing preview…</p>}
-      {status.kind === 'empty' && <p role="status">No documents are selected. Check some in Document Order.</p>}
-      {status.kind === 'error' && <p role="alert">Preview failed: {status.message}</p>}
+      {status.kind === 'loading' && <p role="status">{t('exportPdf.preparing')}</p>}
+      {status.kind === 'empty' && <p role="status">{t('exportPdf.empty')}</p>}
+      {status.kind === 'error' && <p role="alert">{t('exportPdf.failed')}{status.message}</p>}
       <div ref={display} className={styles.sheets} style={{ zoom }} hidden={status.kind !== 'ready'} />
     </div>
     </div>
     <footer className={styles.footer}>
-      <span role="status">{status.kind === 'ready' ? `${status.sheets} page${status.sheets === 1 ? '' : 's'}` : ''}</span>
-      <button type="button" onClick={onClose}>Cancel</button>
-      <button type="button" className={styles.primary} disabled={status.kind !== 'ready'} onClick={() => onExport(book.current)}>Export PDF…</button>
+      <span role="status">{status.kind === 'ready' ? `${status.sheets} ${status.sheets === 1 ? t('exportPdf.page') : t('exportPdf.pages')}` : ''}</span>
+      <button type="button" onClick={onClose}>{t('common.cancel')}</button>
+      <button type="button" className={styles.primary} disabled={status.kind !== 'ready'} onClick={() => onExport(book.current)}>{t('menu.file.exportPdf')}</button>
     </footer>
   </dialog>
 }

@@ -89,6 +89,8 @@ pub struct UserSettings {
     auto_commit_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     panels: Option<Panels>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 }
 
 /// Which side panels and overlays are shown; a missing entry keeps the app default.
@@ -146,6 +148,9 @@ impl UserSettings {
         }
         if self.columns.is_some_and(|value| value != 1 && value != 2) {
             return Err("Columns must be 1 or 2".into());
+        }
+        if self.language.as_ref().is_some_and(|l| l != "en" && l != "es") {
+            return Err("Language must be 'en' or 'es'".into());
         }
         let mut ids = std::collections::HashSet::new();
         for guide in self.ruler_guides.iter().flatten() {
@@ -488,6 +493,9 @@ fn save_settings_in(config: &Path, mut settings: UserSettings) -> Result<(), Str
     }
     if settings.auto_commit_message.is_none() {
         settings.auto_commit_message = preferences.settings.auto_commit_message.clone();
+    }
+    if settings.language.is_none() {
+        settings.language = preferences.settings.language.clone();
     }
     preferences.settings = settings;
     publish_preferences(config, &preferences)
