@@ -3,10 +3,12 @@ import { exportProjectAsTemplate } from '../../lib/modExport'
 import { bookName } from '../../lib/themeHeaderFooter'
 import { useDocumentStore } from '../../stores/documentStore'
 import { savedMessage, useAction } from './createModShared'
+import { useTranslation } from '../../lib/i18n'
 import styles from './CreateMod.module.css'
 
 /** Templates tab: turns the open project into a shareable template package. */
 export function CreateModTemplates() {
+  const { t } = useTranslation()
   const workspace = useDocumentStore((state) => state.workspaceRoot)
   const project = workspace ? bookName(workspace) : ''
   const [name, setName] = useState('')
@@ -36,33 +38,33 @@ export function CreateModTemplates() {
   return (
     <div className={styles.stack}>
       {workspace
-        ? <p className={styles.workspace}>Grimorio activo: {project}</p>
-        : <p className={styles.hint}>Open a project folder to export it as a template.</p>}
+        ? <p className={styles.workspace}>{t('createMod.activeProject')}{project}</p>
+        : <p className={styles.hint}>{t('createMod.openProjectHint')}</p>}
       <label className={styles.field}>
-        <span>Template Name</span>
+        <span>{t('createMod.templateName')}</span>
         <input value={name} maxLength={80} required disabled={locked} onChange={(event) => setName(event.target.value)} />
       </label>
       <label className={styles.field}>
-        <span>Description</span>
+        <span>{t('createMod.description')}</span>
         <textarea rows={3} value={description} maxLength={500} disabled={locked} onChange={(event) => setDescription(event.target.value)} />
       </label>
       <label className={styles.field}>
-        <span>Author</span>
+        <span>{t('createMod.author')}</span>
         <input value={author} maxLength={80} disabled={locked} onChange={(event) => setAuthor(event.target.value)} />
       </label>
       <fieldset className={styles.choices} disabled={locked}>
-        <legend>What to include</legend>
-        <label><input type="radio" name="template-contents" checked={includeContent} onChange={() => setIncludeContent(true)} /> Incluir contenido de los archivos</label>
-        <label><input type="radio" name="template-contents" checked={!includeContent} onChange={() => setIncludeContent(false)} /> Solo estructura de carpetas y archivos en blanco</label>
+        <legend>{t('createMod.whatToInclude')}</legend>
+        <label><input type="radio" name="template-contents" checked={includeContent} onChange={() => setIncludeContent(true)} /> {t('createMod.includeContent')}</label>
+        <label><input type="radio" name="template-contents" checked={!includeContent} onChange={() => setIncludeContent(false)} /> {t('createMod.onlyStructure')}</label>
       </fieldset>
       <div className={styles.row}>
-        <button type="button" className={styles.primary} disabled={locked} onClick={exportTemplate}>Export Current Project as Template</button>
+        <button type="button" className={styles.primary} disabled={locked} onClick={exportTemplate}>{t('createMod.exportTemplate')}</button>
       </div>
-      {busy && <p role="status">Exporting…</p>}
+      {busy && <p role="status">{t('createMod.exporting')}</p>}
       {status && <p role="status" className={styles.success}>{status}</p>}
       {warnings.length > 0 && (
         <details className={styles.warnings}>
-          <summary>Details ({warnings.length} {warnings.length === 1 ? 'note' : 'notes'})</summary>
+          <summary>{t('createMod.details')} ({warnings.length} {warnings.length === 1 ? t('createMod.note') : t('createMod.notes')})</summary>
           <ul>{warnings.map((warning, index) => <li key={`${index}:${warning}`}>{warning}</li>)}</ul>
         </details>
       )}

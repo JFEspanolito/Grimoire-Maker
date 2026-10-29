@@ -8,6 +8,7 @@ import { OFFICIAL_PLUGINS } from '../../lib/modLibrary'
 import { DeleteModButton } from './DeleteModButton'
 import { DetailLine, PluginCard } from './PluginCard'
 import { CreateModDialog, CREATE_MOD_TABS, type CreateModTab } from './CreateModDialog'
+import { useTranslation, type TranslationKey } from '../../lib/i18n'
 import styles from './ModManager.module.css'
 
 export interface ModManagerProps {
@@ -26,7 +27,15 @@ const CATEGORIES: ModKind[] = [
 
 const IMPORT_CATEGORIES = CATEGORIES.filter((kind) => kind !== MOD_KIND.PLUGINS)
 
+const KIND_LABELS: Record<ModKind, TranslationKey> = {
+  [MOD_KIND.SNIPPETS]: 'mod.snippets',
+  [MOD_KIND.TEMPLATES]: 'mod.templates',
+  [MOD_KIND.THEMES]: 'mod.themes',
+  [MOD_KIND.PLUGINS]: 'mod.plugins',
+}
+
 export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModManagerProps) {
+  const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
   const { mods, missingOfficial, busy, errors, reload, setEnabled, installOfficial, deleteMod } = useModStore()
   const [activeKind, setActiveKind] = useState<ModKind>(MOD_KIND.SNIPPETS)
@@ -109,19 +118,19 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
   return (
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="mod-manager-title" onCancel={onClose}>
       <header className={styles.header}>
-        <h2 id="mod-manager-title">Mod Manager</h2>
-        <button type="button" onClick={onClose} aria-label="Close Mod Manager">×</button>
+        <h2 id="mod-manager-title">{t('mods.title')}</h2>
+        <button type="button" onClick={onClose} aria-label={t('mods.close')}>×</button>
       </header>
 
       <div className={styles.actions}>
-        <button type="button" onClick={() => onEditPaths?.()}>Edit Mods Path</button>
-        <button type="button" disabled={busy || !isTauri()} onClick={() => void run(reload)}>Refresh</button>
-        {activeKind !== MOD_KIND.PLUGINS && <button type="button" disabled={busy || !isTauri()} onClick={openImportModal}>Import Mod</button>}
-        {activeKind !== MOD_KIND.PLUGINS && <button type="button" onClick={() => setCreateOpen(true)}>Create Mod</button>}
-        {busy && <span role="status">Loading mods…</span>}
+        <button type="button" onClick={() => onEditPaths?.()}>{t('mods.editPaths')}</button>
+        <button type="button" disabled={busy || !isTauri()} onClick={() => void run(reload)}>{t('mods.refresh')}</button>
+        {activeKind !== MOD_KIND.PLUGINS && <button type="button" disabled={busy || !isTauri()} onClick={openImportModal}>{t('mods.importMod')}</button>}
+        {activeKind !== MOD_KIND.PLUGINS && <button type="button" onClick={() => setCreateOpen(true)}>{t('mods.createMod')}</button>}
+        {busy && <span role="status">{t('mods.loading')}</span>}
       </div>
 
-      {!isTauri() && <p className={styles.notice}>Folder mods are available in the desktop application.</p>}
+      {!isTauri() && <p className={styles.notice}>{t('mods.desktopOnly')}</p>}
 
       {(actionError || errors.length > 0) && (
         <div role="alert" className={styles.errors}>
@@ -131,7 +140,7 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
       )}
 
       <div className={styles.layout}>
-        <nav className={styles.nav} role="tablist" aria-label="Mod categories">
+        <nav className={styles.nav} role="tablist" aria-label={t('mods.categories')}>
           {CATEGORIES.map((kind) => (
             <button
               key={kind}
@@ -140,53 +149,53 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
               aria-selected={activeKind === kind}
               onClick={() => setActiveKind(kind)}
             >
-              <span>{kind}</span>
+              <span>{t(KIND_LABELS[kind])}</span>
               <span className={styles.badge}>{listed.filter((mod) => mod.kind === kind).length}</span>
             </button>
           ))}
         </nav>
 
         <section className={styles.viewer} role="tabpanel" aria-label={`${activeKind} mods`}>
-          <h3 className={styles.viewerTitle}>{activeKind}</h3>
+          <h3 className={styles.viewerTitle}>{t(KIND_LABELS[activeKind])}</h3>
           {activeKind === MOD_KIND.PLUGINS && (
             <div className={styles.intro}>
-              <p className={styles.description}>Only shipped official plugins are supported.</p>
+              <p className={styles.description}>{t('mods.pluginsOfficialOnly')}</p>
             </div>
           )}
-          {activeKind === MOD_KIND.PLUGINS && missingOfficial.length > 0 && <div className={styles.list} aria-label="Official plugins not installed">
+          {activeKind === MOD_KIND.PLUGINS && missingOfficial.length > 0 && <div className={styles.list} aria-label={t('mods.notInstalledAria')}>
             {missingOfficial.map((plugin) => (
-              <PluginCard key={plugin.folder} name={plugin.label} origin="Built in" status="Not installed"
-                description={plugin.description ?? 'Plugin that comes with the app.'}
+              <PluginCard key={plugin.folder} name={plugin.label} origin={t('mods.originBuiltIn')} status={t('mods.statusNotInstalled')}
+                description={plugin.description ?? t('mods.pluginDefaultDesc')}
                 actions={(
-                  <button type="button" className={styles.install} disabled={busy} aria-label={`Install official plugin ${plugin.label}`}
-                    onClick={() => void run(() => installOfficial(plugin.folder))}>Install</button>
+                  <button type="button" className={styles.install} disabled={busy} aria-label={`${t('mods.installOfficial')} ${plugin.label}`}
+                    onClick={() => void run(() => installOfficial(plugin.folder))}>{t('mods.install')}</button>
                 )}
-                details={<p>It is not in your Plugins folder. Install it to put a fresh copy there.</p>} />
+                details={<p>{t('mods.notInFolder')}</p>} />
             ))}
           </div>}
           {visibleMods.length === 0 ? (
             activeKind === MOD_KIND.PLUGINS && missingOfficial.length > 0 ? null : (
               <p className={styles.description}>
                 {activeKind === MOD_KIND.PLUGINS
-                  ? 'No official plugins are installed.'
-                  : `No ${activeKind.toLowerCase()} mods found.`}
+                  ? t('mods.noPluginsInstalled')
+                  : `No ${t(KIND_LABELS[activeKind]).toLowerCase()} ${t('mods.noModsFound')}`}
               </p>
             )
           ) : activeKind === MOD_KIND.PLUGINS ? (
             <div className={styles.list} aria-label="Official plugins">
               {visibleMods.map((mod) => {
                 const official = OFFICIAL_PLUGINS.find((plugin) => modKey(MOD_KIND.PLUGINS, plugin.folder) === mod.id)!
-                return <PluginCard key={mod.id} name={official.label} origin="Built in"
-                  status={mod.errors.length ? 'Error' : mod.enabled ? 'On' : 'Off'}
-                  description={official.description ?? 'Plugin that comes with the app.'}
-                  actions={<button type="button" disabled={busy || mod.errors.length > 0} aria-label={`Enable ${mod.label}`}
+                return <PluginCard key={mod.id} name={official.label} origin={t('mods.originBuiltIn')}
+                  status={mod.errors.length ? t('common.error') : mod.enabled ? t('mods.statusOn') : t('mods.statusOff')}
+                  description={official.description ?? t('mods.pluginDefaultDesc')}
+                  actions={<button type="button" disabled={busy || mod.errors.length > 0} aria-label={`${t('mods.enable')} ${mod.label}`}
                     aria-pressed={mod.enabled} onClick={() => void run(() => setEnabled(mod.id, !mod.enabled))}>
-                    {mod.enabled ? 'Turn off' : 'Turn on'}
+                    {mod.enabled ? t('mods.turnOff') : t('mods.turnOn')}
                   </button>}
                   details={<>
-                    <DetailLine label="Folder">{mod.folder}</DetailLine>
-                    <p>Runs the official implementation bundled with the app. Editing this folder does not change the running plugin.</p>
-                    {mod.errors.length > 0 && <ul aria-label="Plugin problems">{mod.errors.map((error, index) => <li key={index}>{error}</li>)}</ul>}
+                    <DetailLine label={t('mods.folder')}>{mod.folder}</DetailLine>
+                    <p>{t('mods.runsOfficial')}</p>
+                    {mod.errors.length > 0 && <ul aria-label={t('mods.pluginProblems')}>{mod.errors.map((error, index) => <li key={index}>{error}</li>)}</ul>}
                     <DeleteModButton name={official.label} disabled={busy} onConfirm={() => run(() => deleteMod(mod.id))} />
                   </>} />
               })}
@@ -200,14 +209,14 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
                       type="checkbox"
                       checked={mod.enabled}
                       disabled={busy}
-                      aria-label={`Enable ${mod.label}`}
+                      aria-label={`${t('mods.enable')} ${mod.label}`}
                       onChange={(event) => void run(() => setEnabled(mod.id, event.target.checked))}
                     />
                     <span>
                       <strong>{mod.label}</strong>
                       <small>{mod.folder}</small>
                       {mod.errors.length > 0 && (
-                        <small className={styles.notice}>Contains invalid files; see errors above.</small>
+                        <small className={styles.notice}>{t('mods.invalidFilesNotice')}</small>
                       )}
                     </span>
                   </label>
@@ -230,14 +239,14 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
         <div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby="import-mod-title">
           <div className={styles.modalCard}>
             <header className={styles.modalHeader}>
-              <h3 id="import-mod-title">Import Mod</h3>
-              <button type="button" onClick={() => setImportOpen(false)} aria-label="Close Import Mod">×</button>
+              <h3 id="import-mod-title">{t('mods.importMod')}</h3>
+              <button type="button" onClick={() => setImportOpen(false)} aria-label={t('mods.closeImport')}>×</button>
             </header>
 
             <label className={styles.field}>
-              <span>Mod Type</span>
+              <span>{t('mods.modType')}</span>
               <select
-                aria-label="Mod type"
+                aria-label={t('mods.modType')}
                 value={importKind}
                 onChange={(event) => {
                   setImportKind(event.target.value as ModKind)
@@ -246,15 +255,15 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
                 }}
               >
                 {IMPORT_CATEGORIES.map((kind) => (
-                  <option key={kind} value={kind}>{kind}</option>
+                  <option key={kind} value={kind}>{t(KIND_LABELS[kind])}</option>
                 ))}
               </select>
             </label>
 
             <label className={styles.field}>
-              <span>Source Format</span>
+              <span>{t('mods.sourceFormat')}</span>
               <select
-                aria-label="Source format"
+                aria-label={t('mods.sourceFormat')}
                 value={importSource}
                 onChange={(event) => {
                   setImportSource(event.target.value as ModImportSource)
@@ -263,24 +272,24 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
                 }}
               >
                 <option value="zip">
-                  {importKind === MOD_KIND.THEMES ? 'ZIP / CSS File' : 'ZIP Archive'}
+                  {importKind === MOD_KIND.THEMES ? t('mods.formatZipCss') : t('mods.formatZipArchive')}
                 </option>
-                <option value="folder">Folder</option>
+                <option value="folder">{t('mods.formatFolder')}</option>
               </select>
             </label>
 
             <div className={styles.field}>
-              <span>Source Location</span>
+              <span>{t('mods.sourceLocation')}</span>
               <div className={styles.sourceRow}>
                 <input
                   type="text"
                   readOnly
-                  aria-label="Selected mod source"
-                  placeholder={importSource === 'folder' ? 'Select a mod folder…' : 'Select a mod archive…'}
+                  aria-label={t('mods.selectedModSource')}
+                  placeholder={importSource === 'folder' ? t('mods.selectModFolder') : t('mods.selectModArchive')}
                   value={importSourcePath}
                 />
                 <button type="button" disabled={importing} onClick={() => void handleBrowseImportSource()}>
-                  Browse…
+                  {t('mods.browse')}
                 </button>
               </div>
             </div>
@@ -288,9 +297,9 @@ export function ModManager({ onClose, onEditPaths, onOpenThemeCustomizer }: ModM
             {importError && <p role="alert" className={styles.errors}>{importError}</p>}
 
             <footer className={styles.modalActions}>
-              <button type="button" disabled={importing} onClick={() => setImportOpen(false)}>Cancel</button>
+              <button type="button" disabled={importing} onClick={() => setImportOpen(false)}>{t('common.cancel')}</button>
               <button type="button" disabled={importing} onClick={() => void handleConfirmImport()}>
-                {importing ? 'Importing…' : 'Import'}
+                {importing ? t('mods.importing') : t('mods.importAction')}
               </button>
             </footer>
           </div>

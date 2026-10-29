@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from 'react'
+import { useTranslation } from '../../lib/i18n'
 import styles from './PluginCard.module.css'
 
 export type PluginOrigin = 'Built in' | 'Imported' | 'Local' | 'Local package'
@@ -6,7 +7,7 @@ export type PluginOrigin = 'Built in' | 'Imported' | 'Local' | 'Local package'
 interface Props {
   name: string
   version?: string
-  origin: PluginOrigin
+  origin: PluginOrigin | string
   /** One short plain word or phrase: On, Off, Needs approval, Stopped, Changed. */
   status: string
   /** One plain line. */
@@ -21,6 +22,7 @@ interface Props {
 
 /** One plugin as two rows: name and status, then a one-line description. Actions and a Details link sit in a right column. */
 export function PluginCard({ name, version, origin, status, description, actions, details, children }: Props) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const panelId = useId()
   return (
@@ -33,10 +35,10 @@ export function PluginCard({ name, version, origin, status, description, actions
       <p className={styles.description} data-row="2">{description}</p>
       {actions && <span className={styles.actions}>{actions}</span>}
       <button type="button" className={styles.link} aria-expanded={open} aria-controls={panelId}
-        aria-label={`Details of ${name}`} onClick={() => setOpen((value) => !value)}>Details</button>
+        aria-label={`${t('mods.detailsOf')} ${name}`} onClick={() => setOpen((value) => !value)}>{t('mods.details')}</button>
       {open && (
-        <div id={panelId} className={styles.panel} role="group" aria-label={`${name} details`}>
-          <DetailLine label="Source">{origin}</DetailLine>
+        <div id={panelId} className={styles.panel} role="group" aria-label={`${name} ${t('mods.details').toLowerCase()}`}>
+          <DetailLine label={t('mods.source')}>{origin}</DetailLine>
           {details}
         </div>
       )}

@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useTranslation } from '../../lib/i18n'
 import styles from './PreferencesDialog.module.css'
 
 export function AutoSaveSettings() {
+  const { t } = useTranslation()
   const interval = useSettingsStore(state => state.autoSaveSeconds)
   const [minutes, setMinutes] = useState(String(Math.floor(interval / 60)))
   const [seconds, setSeconds] = useState(String(interval % 60))
@@ -19,20 +21,21 @@ export function AutoSaveSettings() {
     useSettingsStore.getState().setAutoSaveSeconds(total)
     setError(''); setSaved(true)
   }}>
-    <h3>Auto save</h3>
-    <p className={styles.description}>Save modified pages automatically. New pages without a file path need to be saved once manually. Auto save does not create Git commits.</p>
+    <h3>{t('preferences.section.autosave')}</h3>
+    <p className={styles.description}>{t('pref.autosave.description')}</p>
     <div className={styles.autoSave}>
-      <label>Minutes<input aria-label="Auto save minutes" type="number" min="0" max="1440" step="1" required value={minutes} onChange={event => { setMinutes(event.target.value); setSaved(false) }} /></label>
-      <label>Seconds<input aria-label="Auto save seconds" type="number" min="0" max="59" step="1" required value={seconds} onChange={event => { setSeconds(event.target.value); setSaved(false) }} /></label>
-      <button type="submit">Apply interval</button>
+      <label>{t('pref.autosave.minutes')}<input aria-label="Auto save minutes" type="number" min="0" max="1440" step="1" required value={minutes} onChange={event => { setMinutes(event.target.value); setSaved(false) }} /></label>
+      <label>{t('pref.autosave.seconds')}<input aria-label="Auto save seconds" type="number" min="0" max="59" step="1" required value={seconds} onChange={event => { setSeconds(event.target.value); setSaved(false) }} /></label>
+      <button type="submit">{t('pref.autosave.apply')}</button>
     </div>
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    {saved && <p role="status" className={styles.notice}>Interval applied.</p>}
+    {saved && <p role="status" className={styles.notice}>{t('pref.autosave.applied')}</p>}
   </form><AutoCommitSettings /></>
 }
 
 
 function AutoCommitSettings() {
+  const { t } = useTranslation()
   const settings = useSettingsStore.getState()
   const [enabled, setEnabled] = useState(settings.autoCommitEnabled)
   const [minutes, setMinutes] = useState(String(settings.autoCommitMinutes))
@@ -50,15 +53,15 @@ function AutoCommitSettings() {
     useSettingsStore.getState().setAutoCommitSettings(enabled, Number(minutes), message)
     setError(''); setSaved(true)
   }}>
-    <h3>Auto commits</h3>
-    <p className={styles.description}>Automatically stage and commit all non-ignored changes saved on disk in this project. Requires Git and an existing repository. Does not push or create repositories. Runs independently of Auto save.</p>
-    <label className={styles.autoCommitToggle}><input aria-label="Enable auto commits" type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setSaved(false) }} />Enable auto commits</label>
+    <h3>{t('pref.autocommit.title')}</h3>
+    <p className={styles.description}>{t('pref.autocommit.description')}</p>
+    <label className={styles.autoCommitToggle}><input aria-label="Enable auto commits" type="checkbox" checked={enabled} onChange={event => { setEnabled(event.target.checked); setSaved(false) }} />{t('pref.autocommit.enable')}</label>
     <div className={styles.autoSave}>
-      <label>Minutes<input aria-label="Auto commit minutes" type="number" min="1" max="1440" step="1" required value={minutes} onChange={event => { setMinutes(event.target.value); setSaved(false) }} /></label>
+      <label>{t('pref.autosave.minutes')}<input aria-label="Auto commit minutes" type="number" min="1" max="1440" step="1" required value={minutes} onChange={event => { setMinutes(event.target.value); setSaved(false) }} /></label>
     </div>
-    <label className={styles.autoCommitMessage}>Commit message<input aria-label="Auto commit message" required value={message} onChange={event => { setMessage(event.target.value); setSaved(false) }} /></label>
-    <button type="submit">Save</button>
+    <label className={styles.autoCommitMessage}>{t('pref.autocommit.message')}<input aria-label="Auto commit message" required value={message} onChange={event => { setMessage(event.target.value); setSaved(false) }} /></label>
+    <button type="submit">{t('common.save')}</button>
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    {saved && <p role="status" className={styles.notice}>Auto commit settings applied.</p>}
+    {saved && <p role="status" className={styles.notice}>{t('pref.autocommit.applied')}</p>}
   </form>
 }

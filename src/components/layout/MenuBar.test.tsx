@@ -427,3 +427,28 @@ it('opens the one Find panel from the Document menu, Ctrl+F and Ctrl+H, and step
     expect(closed.defaultPrevented).toBe(false)
   } finally { modal.remove(); container.remove(); await act(async () => root.unmount()) }
 })
+it('translates menu summaries dynamically when language is changed', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  try {
+    useSettingsStore.setState({ language: 'en' })
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
+    const summariesEn = Array.from(container.querySelectorAll('details[name="application-menu"] > summary')).map((s) => s.textContent)
+    expect(summariesEn).toEqual(['File', 'View', 'Insert', 'Document', 'Settings'])
+
+    await act(async () => useSettingsStore.getState().setLanguage('es'))
+    const summariesEs = Array.from(container.querySelectorAll('details[name="application-menu"] > summary')).map((s) => s.textContent)
+    expect(summariesEs).toEqual(['Archivo', 'Ver', 'Insertar', 'Documento', 'Configuración'])
+
+    const fileButtonsEs = Array.from(container.querySelectorAll('details[name="application-menu"]:first-of-type button')).slice(0, 4).map((b) => b.textContent)
+    expect(fileButtonsEs).toEqual(['Nuevo archivo…', 'Nuevo proyecto…', 'Abrir archivo…', 'Abrir carpeta…'])
+
+    const settingsButtonsEs = Array.from(container.querySelectorAll('details[name="application-menu"]:last-of-type button')).map((b) => b.textContent)
+    expect(settingsButtonsEs).toEqual(['Administrador de mods', 'Preferencias…', 'Acerca de', 'Tutorial'])
+  } finally {
+    useSettingsStore.setState({ language: 'en' })
+    container.remove()
+    await act(async () => root.unmount())
+  }
+})

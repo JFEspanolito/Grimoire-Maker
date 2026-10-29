@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { changeLibraryPath, loadLibraryPaths, type LibraryKind, type LibraryPaths } from '../../lib/preferences'
 import { isTauri } from '../../hooks/useFileSystem'
+import { SUPPORTED_LANGUAGES, type Language, useTranslation, type TranslationKey } from '../../lib/i18n'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { useTemplateStore } from '../../stores/templateStore'
@@ -14,19 +15,20 @@ import { ProjectSettings } from './ProjectSettings'
 import { AutoSaveSettings } from './AutoSaveSettings'
 import { ConfirmDialog } from '../layout/ConfirmDialog'
 
-const PATH_FIELDS: { kind: LibraryKind; label: string }[] = [
-  { kind: 'plugins', label: 'Plugin Path' },
-  { kind: 'snippets', label: 'Snippet Path' },
-  { kind: 'templates', label: 'Template Path' },
-  { kind: 'themes', label: 'Theme Path' },
-  { kind: 'logs', label: 'Logs Path' },
+const PATH_FIELDS: { kind: LibraryKind; labelKey: TranslationKey }[] = [
+  { kind: 'plugins', labelKey: 'pref.path.plugins' },
+  { kind: 'snippets', labelKey: 'pref.path.snippets' },
+  { kind: 'templates', labelKey: 'pref.path.templates' },
+  { kind: 'themes', labelKey: 'pref.path.themes' },
+  { kind: 'logs', labelKey: 'pref.path.logs' },
 ]
 
-const SECTIONS = { appearance: 'Appearance', folders: 'Content folders', shortcuts: 'Shortcuts', autosave: 'Auto save', project: 'Project' } as const
+const SECTIONS: Record<string, TranslationKey> = { appearance: 'preferences.section.appearance', folders: 'preferences.section.folders', shortcuts: 'preferences.section.shortcuts', autosave: 'preferences.section.autosave', project: 'preferences.section.project' } as const
 type Section = keyof typeof SECTIONS
 const SECTION_IDS = Object.keys(SECTIONS) as Section[]
 
 export function PreferencesDialog({ onClose, initialSection = 'appearance', initialCustomizing = false }: { onClose: () => void; initialSection?: Section; initialCustomizing?: boolean }) {
+  const { t } = useTranslation()
   const desktop = isTauri()
   const dialog = useRef<HTMLDialogElement>(null)
   const locked = useRef(false)
@@ -39,7 +41,7 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
   const [customizing, setCustomizing] = useState(initialCustomizing)
   const [pendingDeleteTheme, setPendingDeleteTheme] = useState<ThemeInfo | null>(null)
   const [section, setSection] = useState<Section>(initialSection)
-  const { theme, setTheme } = useSettingsStore()
+  const { theme, setTheme, language, setLanguage } = useSettingsStore()
   const { themes, userThemes = [], errors: themeErrors } = useThemeStore()
   const activeThemeId = resolveTheme(theme, themes)
   const activeCustomTheme = userThemes.find((item) => item.id === activeThemeId) ?? null
@@ -134,8 +136,8 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
   return <dialog ref={dialog} className={`${styles.dialog} ${customizing ? styles.customizingDialog : ''}`} aria-labelledby={customizing ? 'customize-theme-title' : 'preferences-title'} aria-busy={busy}
     onCancel={(event) => { event.preventDefault(); if (!locked.current) { if (customizing) setCustomizing(false); else onClose() } }}>
     <header className={styles.header}>
-      {!customizing && <h2 id="preferences-title">Preferences</h2>}
-      {!customizing && <button type="button" aria-label="Close preferences" disabled={busy} onClick={onClose}>×</button>}
+      {!customizing && <h2 id="preferences-title">{t('preferences.title')}</h2>}
+      {!customizing && <button type="button" aria-label={t('preferences.close')} disabled={busy} onClick={onClose}>×</button>}
     </header>
     <div className={customizing ? styles.customizingLayout : styles.layout}>
       {!customizing && <nav className={styles.sections} role="tablist" aria-label="Preferences sections" aria-orientation="vertical">
@@ -150,50 +152,59 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
             event.preventDefault()
             setSection(SECTION_IDS[next])
             dialog.current?.querySelector<HTMLButtonElement>(`#preferences-tab-${SECTION_IDS[next]}`)?.focus()
-          }}>{SECTIONS[id]}</button>)}
+          }}>{t(SECTIONS[id])}</button>)}
       </nav>}
       <div className={styles.content}>
     <section className={styles.section} role="tabpanel" id="preferences-appearance" aria-labelledby="preferences-tab-appearance" hidden={section !== 'appearance'}>
       {customizing ? <ThemeCustomizer onClose={() => setCustomizing(false)} onBusyChange={(value) => { locked.current = value; setBusy(value) }} /> : <>
 
-      <h3 id="appearance-title">Appearance</h3>
+      <h3 id="appearance-title">{t('preferences.appearance.title')}</h3>
       <div className={styles.theme}>
-        <label htmlFor="preferences-theme">Select Theme</label>
+        <label htmlFor="preferences-theme">{t('preferences.appearance.theme')}</label>
         <div className={styles.themeControls}>
-        <select id="preferences-theme" aria-label="Select Theme" value={activeThemeId} disabled={busy}
+        <select id="preferences-theme" aria-label={t('preferences.appearance.theme')} value={activeThemeId} disabled={busy}
           onChange={(event) => setTheme(event.target.value)}>
           {themes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        <button type="button" disabled={busy} onClick={() => setCustomizing(true)}>Customize Theme</button>
+        <button type="button" disabled={busy} onClick={() => setCustomizing(true)}>{t('preferences.appearance.customizeTheme')}</button>
         {activeCustomTheme && <>
-          <button type="button" disabled={busy || !desktop} onClick={() => void handleExportTheme()}>Export Theme</button>
-          <button type="button" className={styles.dangerButton} disabled={busy || !desktop} onClick={() => setPendingDeleteTheme(activeCustomTheme)}>Delete Theme</button>
+          <button type="button" disabled={busy || !desktop} onClick={() => void handleExportTheme()}>{t('preferences.exportTheme')}</button>
+          <button type="button" className={styles.dangerButton} disabled={busy || !desktop} onClick={() => setPendingDeleteTheme(activeCustomTheme)}>{t('preferences.deleteTheme')}</button>
         </>}
+        </div>
+      </div>
+      <div className={styles.theme} style={{ marginTop: '1rem' }}>
+        <label htmlFor="preferences-language">{t('preferences.appearance.language')}</label>
+        <div className={styles.themeControls}>
+          <select id="preferences-language" aria-label={t('preferences.appearance.language')} value={language} disabled={busy}
+            onChange={(event) => setLanguage(event.target.value as Language)}>
+            {SUPPORTED_LANGUAGES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
         </div>
       </div>
       {themeErrors.length > 0 && <p className={styles.error} role="alert">{themeErrors.join('\n')}</p>}
       </>}
     </section>
     <section className={styles.section} role="tabpanel" id="preferences-folders" aria-labelledby="preferences-tab-folders" hidden={section !== 'folders'}>
-      <h3 id="libraries-title">Content folders</h3>
-      <p className={styles.description}>Choose a folder to copy the existing content there and use that location from now on. Originals are kept; existing destination files are never overwritten.</p>
-      {!desktop && <p className={styles.description}>Folder preferences are available in the desktop app.</p>}
-      {loading && <p role="status">Loading folders…</p>}
-      {PATH_FIELDS.map(({ kind, label }) => <label key={kind} className={styles.path}>
-        <span>{label}</span>
+      <h3 id="libraries-title">{t('preferences.section.folders')}</h3>
+      <p className={styles.description}>{t('pref.folders.description')}</p>
+      {!desktop && <p className={styles.description}>{t('pref.folders.desktopOnly')}</p>}
+      {loading && <p role="status">{t('pref.folders.loading')}</p>}
+      {PATH_FIELDS.map(({ kind, labelKey }) => <label key={kind} className={styles.path}>
+        <span>{t(labelKey)}</span>
         <span className={styles.pathControls}>
-          <input aria-label={label} value={paths?.[kind] ?? ''} readOnly title={paths?.[kind]} onFocus={(event) => event.target.select()} />
-          <button type="button" aria-label={`Edit ${label}`} disabled={!desktop || loading || busy || !paths} onClick={() => void changePath(kind)}>Change…</button>
+          <input aria-label={t(labelKey)} value={paths?.[kind] ?? ''} readOnly title={paths?.[kind]} onFocus={(event) => event.target.select()} />
+          <button type="button" aria-label={`${t('common.edit')} ${t(labelKey)}`} disabled={!desktop || loading || busy || !paths} onClick={() => void changePath(kind)}>{t('common.change')}</button>
         </span>
       </label>)}
-      <p className={styles.description}>External executable plugins are reserved for stage 2. Changing Plugin Path does not enable them.</p>
-      <p className={styles.description}>Errors are recorded as .txt files in Logs Path. Check logs for private information before sharing them.</p>
+      <p className={styles.description}>{t('pref.folders.pluginsNotice')}</p>
+      <p className={styles.description}>{t('pref.folders.logsNotice')}</p>
     </section>
     <section className={styles.section} role="tabpanel" id="preferences-shortcuts" aria-labelledby="preferences-tab-shortcuts" hidden={section !== 'shortcuts'}>
-      <h3>Shortcuts</h3>
-      <p className={styles.description}>Use Cmd instead of Ctrl for keyboard shortcuts on macOS. Editing shortcuts apply while writing in the document. Hold Ctrl and scroll over a page to zoom in editing or page view. File and zoom shortcuts are paused while a dialog is open.</p>
+      <h3>{t('preferences.section.shortcuts')}</h3>
+      <p className={styles.description}>{t('pref.shortcuts.description')}</p>
       <table className={styles.shortcuts}>
-        <thead><tr><th scope="col">Action</th><th scope="col">Shortcut</th></tr></thead>
+        <thead><tr><th scope="col">{t('pref.shortcuts.action')}</th><th scope="col">{t('pref.shortcuts.shortcut')}</th></tr></thead>
         <tbody>{[
           ...Object.values(FILE_SHORTCUTS).map(({ label, key }) => ({ label, keys: ['Ctrl', key.toUpperCase()] })),
           ...FIND_SHORTCUTS,
@@ -203,26 +214,26 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
         ].map(({ label, keys }) => <tr key={label}><td>{label}</td><td>{keys.map((key, index) => <span key={key}>{index > 0 && <span aria-hidden="true"> + </span>}<kbd>{key}</kbd></span>)}</td></tr>)}</tbody>
       </table>
     </section>
-    {busy && !customizing && <p role="status">Selecting a folder or copying content…</p>}
+    {busy && !customizing && <p role="status">{t('pref.folders.busy')}</p>}
     <section className={styles.section} role="tabpanel" id="preferences-autosave" aria-labelledby="preferences-tab-autosave" hidden={section !== 'autosave'}>
       <AutoSaveSettings />
     </section>
     <section className={styles.section} role="tabpanel" id="preferences-project" aria-labelledby="preferences-tab-project" hidden={section !== 'project'}>
-      <h3>Project properties</h3>
+      <h3>{t('properties.projectProperties')}</h3>
       {section === 'project' && <ProjectSettings />}
     </section>
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
-    {!paths && desktop && !loading && <button type="button" onClick={() => { setLoading(true); setError(''); setAttempt((value) => value + 1) }}>Retry loading folders</button>}
+    {!paths && desktop && !loading && <button type="button" onClick={() => { setLoading(true); setError(''); setAttempt((value) => value + 1) }}>{t('pref.folders.retry')}</button>}
       </div>
     </div>
     {!customizing && <footer className={styles.footer}>
-      <span>Preferences are saved in setting.json. No restart needed.</span>
-      <button type="button" disabled={busy} onClick={onClose}>Done</button>
+      <span>{t('preferences.footerNotice')}</span>
+      <button type="button" disabled={busy} onClick={onClose}>{t('preferences.done')}</button>
     </footer>}
-    {pendingDeleteTheme && <ConfirmDialog title="Delete custom theme"
-      message={`Delete custom theme "${pendingDeleteTheme.name}"? This cannot be undone.`}
-      confirmLabel="Delete" danger onCancel={() => setPendingDeleteTheme(null)}
+    {pendingDeleteTheme && <ConfirmDialog title={t('preferences.deleteThemeTitle')}
+      message={`${t('preferences.deleteThemeTitle')} "${pendingDeleteTheme.name}"? ${t('preferences.deleteThemeWarning')}`}
+      confirmLabel={t('common.delete')} danger onCancel={() => setPendingDeleteTheme(null)}
       onConfirm={() => { const target = pendingDeleteTheme; setPendingDeleteTheme(null); void handleDeleteTheme(target) }} />}
   </dialog>
 }

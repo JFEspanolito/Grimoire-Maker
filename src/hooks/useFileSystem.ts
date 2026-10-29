@@ -328,11 +328,12 @@ export function useFileSystem() {
       const state = await loadAppState()
       useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
 
-      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage, panels } = await loadSettings()
+      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage, panels, language } = await loadSettings()
       const settings = useSettingsStore.getState()
       if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
       if (columns === 1 || columns === 2) settings.setColumns(columns)
       if (typeof theme === 'string') settings.setTheme(theme)
+      if (language === 'en' || language === 'es') settings.setLanguage(language)
       settings.setRulerGuides(rulerGuides ?? [])
       settings.restorePanels(panels)
       settings.setZoom(typeof zoom === 'number' ? zoom : 1)

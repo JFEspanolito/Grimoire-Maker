@@ -2,6 +2,7 @@ import { reportError } from "../../lib/errorLogging";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ConfirmDialog } from "../layout/ConfirmDialog";
+import { useTranslation, type TranslationKey } from "../../lib/i18n";
 import {
   DndContext,
   DragOverlay,
@@ -27,11 +28,11 @@ import { newImageAttrs } from "../../lib/insertActions";
 const fileLabel = (name: string, isDirectory = false): string =>
   isDirectory ? name : name.replace(/(?<=.)\.[^.]+$/, "");
 
-const defaultFolderDescriptions: Record<string, string> = {
-  draft: "Files and folders for your project.",
-  research: "Inspiration and reference sources.",
-  trash: "Deleted files.",
-  assets: "Images and other resources used in your project.",
+const defaultFolderDescriptions: Record<string, TranslationKey> = {
+  draft: "files.desc.draft",
+  research: "files.desc.research",
+  trash: "files.desc.trash",
+  assets: "files.desc.assets",
 };
 
 type Editing =
@@ -103,11 +104,14 @@ function InlineInput({
 }
 
 function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
+  const { t } = useTranslation();
   const label = fileLabel(node.name, node.isDirectory);
+  const folderKey = node.name.toLowerCase();
   const defaultFolderTooltip =
     node.isDirectory &&
-    node.path.toLowerCase() === `${ctx.root}/${node.name}`.toLowerCase()
-      ? defaultFolderDescriptions[node.name.toLowerCase()]
+    node.path.toLowerCase() === `${ctx.root}/${node.name}`.toLowerCase() &&
+    folderKey in defaultFolderDescriptions
+      ? t(defaultFolderDescriptions[folderKey])
       : undefined;
   const sectionRoot = ["Draft", "Research", "Trash"].some(
     (section) =>
@@ -170,7 +174,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
       {node.isDirectory && (
         <button
           type="button"
-          aria-label={`${expanded ? "Collapse" : "Expand"} ${node.name}`}
+          aria-label={`${expanded ? t("files.collapse") : t("files.expand")} ${node.name}`}
           aria-expanded={expanded}
           className="mr-1 text-white/60"
           onPointerDown={(e) => e.stopPropagation()}
@@ -189,7 +193,7 @@ function Node({ node, ctx }: { node: FileNode; ctx: TreeContext }) {
       <span className={node.isDirectory ? "text-white/60" : ""}>{label}</span>
       <button
         className="invisible ml-auto text-xs text-white/50 hover:text-white group-hover:visible"
-        title="Rename"
+        title={t("files.rename")}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
@@ -251,6 +255,7 @@ function RootDrop({
 }
 
 export function FileTree() {
+  const { t } = useTranslation();
   const tree = useDocumentStore((s) => s.tree);
   const root = useDocumentStore((s) => s.workspaceRoot);
   const workspaceError = useSessionStore((s) => s.workspaceError);
@@ -493,31 +498,31 @@ export function FileTree() {
 
   return (
     <div className="p-3 text-sm">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-col gap-1.5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">
-          Files
+          {t("files.title")}
         </h2>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-1.5 text-xs">
           <button
             className={actionButton}
-            title="New file"
+            title={t("files.newFileTitle")}
             disabled={!root}
             onClick={() => startCreate("new-file")}
           >
-            + File
+            {t("files.newFile")}
           </button>
           <button
             className={actionButton}
-            title="New folder"
+            title={t("files.newFolderTitle")}
             disabled={!root}
             onClick={() => startCreate("new-folder")}
           >
-            + Folder
+            {t("files.newFolder")}
           </button>
           <button
-            className={`${actionButton} ml-1 px-1`}
-            title="Refresh file list"
-            aria-label="Refresh file list"
+            className={`${actionButton} ml-auto px-1.5`}
+            title={t("files.refresh")}
+            aria-label={t("files.refresh")}
             disabled={!root}
             onClick={() => void run(refreshTree)}
           >
@@ -618,7 +623,7 @@ export function FileTree() {
                 void run(() => openFolder(path));
               }}
             >
-              Open Folder
+              {t("files.openFolder")}
             </button>
           ) : (
             <button
@@ -631,7 +636,7 @@ export function FileTree() {
                 void run(() => openFile(path));
               }}
             >
-              Open File
+              {t("files.openFile")}
             </button>
           )}
           {!menu.node.isDirectory && (
@@ -645,7 +650,7 @@ export function FileTree() {
                 void run(() => openFile(path, true));
               }}
             >
-              Open in new Tab
+              {t("files.openInNewTab")}
             </button>
           )}
           {!menu.node.isDirectory && (
@@ -659,7 +664,7 @@ export function FileTree() {
                 void run(() => openFolder(path));
               }}
             >
-              Open Folder
+              {t("files.openFolder")}
             </button>
           )}
           {!menu.node.isDirectory && (
@@ -676,7 +681,7 @@ export function FileTree() {
                 });
               }}
             >
-              Copy file path
+              {t("files.copyPath")}
             </button>
           )}
           {inTrash && !isBinderRoot && (
@@ -689,7 +694,7 @@ export function FileTree() {
                 setMenu(null);
               }}
             >
-              Delete…
+              {t("files.deletePrompt")}
             </button>
           )}
           {!inTrash && !isBinderRoot && (
@@ -699,16 +704,16 @@ export function FileTree() {
               className="block w-full rounded px-2 py-1 text-left hover:bg-white/10"
               onClick={() => void run(() => deleteEntry(menu.node))}
             >
-              Move to Trash
+              {t("files.moveToTrash")}
             </button>
           )}
         </div>
       )}
       {pendingDelete && (
         <ConfirmDialog
-          title="Delete permanently"
+          title={t("files.deletePermanently")}
           message={`Delete "${fileLabel(pendingDelete.name, pendingDelete.isDirectory)}"? It will be sent to the system recycle bin and removed from the project.`}
-          confirmLabel="Delete"
+          confirmLabel={t("common.delete")}
           danger
           onCancel={() => setPendingDelete(null)}
           onConfirm={() => {
@@ -719,7 +724,7 @@ export function FileTree() {
         />
       )}
       {!root && (
-        <p className="text-xs text-white/40">Open a folder to manage files.</p>
+        <p className="text-xs text-white/40">{t("files.openFolderNotice")}</p>
       )}
     </div>
   );

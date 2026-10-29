@@ -604,9 +604,9 @@ describe('applying templates', () => {
 it('restores appearance from setting.json rather than stale session settings', async () => {
   state.settings = { theme: 'parchment', columns: 2, pageSize: 'a4' }
   const rulerGuides = [{ id: 'guide-1', axis: 'column' as const, positionMm: 72 }]
-  vi.mocked(loadSettings).mockResolvedValue({ theme: 'sci-fi', columns: 1, pageSize: 'letter', rulerGuides, zoom: 1.5 })
+  vi.mocked(loadSettings).mockResolvedValue({ theme: 'sci-fi', columns: 1, pageSize: 'letter', rulerGuides, zoom: 1.5, language: 'es' })
   await act(async () => actions.restoreSession())
-  expect(useSettingsStore.getState()).toMatchObject({ theme: 'sci-fi', columns: 1, pageSize: 'letter', rulerGuides, zoom: 1.5 })
+  expect(useSettingsStore.getState()).toMatchObject({ theme: 'sci-fi', columns: 1, pageSize: 'letter', rulerGuides, zoom: 1.5, language: 'es' })
   expect(state.settings.theme).toBe('parchment')
 })
 

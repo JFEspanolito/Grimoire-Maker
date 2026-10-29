@@ -12,10 +12,10 @@ import { autoCommitChanges } from '../../lib/versionControl'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useFindStore } from '../../stores/findStore'
 import { useTabStore } from '../../stores/tabStore'
+import { useTranslation } from '../../lib/i18n'
 import styles from './FindReplaceDialog.module.css'
 
-const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 'es'}`
-const files = (count: number) => `${count} file${count === 1 ? '' : 's'}`
+// plural handled inside component via t()
 const sameMatches = (a: SearchMatch[], b: SearchMatch[]) => a === b || (a.length === b.length && a.every((match, index) => match.from === b[index].from && match.to === b[index].to))
 
 /**
@@ -28,6 +28,7 @@ export function FindReplaceDialog({ editor }: { editor: Editor | null }) {
 }
 
 function FindPanel({ editor }: { editor: Editor | null }) {
+  const { t } = useTranslation()
   const find = useFindStore()
   const { term, replacement, caseSensitive, wholeWord, regex, scope, replaceOpen } = find
   const query = useMemo<SearchOptions>(() => ({ term, caseSensitive, wholeWord, regex }), [term, caseSensitive, wholeWord, regex])
@@ -157,7 +158,7 @@ function FindPanel({ editor }: { editor: Editor | null }) {
     if (!search || !root) return null
     try {
       const { changes, matches } = await applyProjectReplace(root, search, query, replacement, ids)
-      setMessage(matches ? `Replaced ${plural(matches, 'match')} in ${files(changes.length)}.` : 'Nothing to replace.')
+      setMessage(matches ? `${t('find.replaced')} ${plural(matches)} ${t('find.in')} ${files(changes.length)}.` : t('find.nothingToReplace'))
       return changes
     } catch (error) {
       setMessage(error instanceof ProjectChangedError ? error.message : friendlyErrorMessage(error))
@@ -195,7 +196,7 @@ function FindPanel({ editor }: { editor: Editor | null }) {
     if (!root || !lastReplace) return
     try {
       const { restored, skipped } = await undoProjectReplace(root, lastReplace)
-      setMessage(`Restored ${files(restored)}.${skipped.length ? ` Skipped because they changed since: ${skipped.map(relative).join(', ')}.` : ''}`)
+      setMessage(`${t('find.restored')} ${files(restored)}.${skipped.length ? ` ${t('find.skippedSince')} ${skipped.map(relative).join(', ')}.` : ''}`)
       find.setLastReplace(null)
     } catch (error) {
       setMessage(friendlyErrorMessage(error))
@@ -229,74 +230,76 @@ function FindPanel({ editor }: { editor: Editor | null }) {
   const noEditor = !projectScope && !editor
   const canReplaceAll = count > 0 && !truncated && (!projectScope || selectedIds.size > 0)
   const position = fileMatches.findIndex((match) => `${match.from}:${match.to}` === selection)
+  const plural = (c: number) => `${c} ${c === 1 ? t('find.match') : t('find.matches')}`
+  const files = (c: number) => `${c} ${c === 1 ? t('find.file') : t('find.files')}`
   const status = !term
-    ? (projectScope ? 'Type to search the project' : 'Type to search this page')
-    : noEditor ? 'Open a Markdown page to search it'
+    ? (projectScope ? t('find.typeToSearchProject') : t('find.typeToSearchPage'))
+    : noEditor ? t('find.openMarkdownToSearch')
       : matcherError ? ''
         : projectScope
-          ? busy && !search ? 'Searching…'
-            : `${truncated ? `${MAX_MATCHES}+ matches` : plural(flat.length, 'match')}${flat.length ? ` in ${files(search?.files.length ?? 0)}` : ''}`
-          : truncated ? `${MAX_MATCHES}+ matches`
-            : position >= 0 ? `${position + 1} of ${fileMatches.length}` : plural(fileMatches.length, 'match')
+          ? busy && !search ? t('find.searching')
+            : `${truncated ? `${MAX_MATCHES}+ ${t('find.matches')}` : plural(flat.length)}${flat.length ? ` ${t('find.in')} ${files(search?.files.length ?? 0)}` : ''}`
+          : truncated ? `${MAX_MATCHES}+ ${t('find.matches')}`
+            : position >= 0 ? `${position + 1} ${t('common.of')} ${fileMatches.length}` : plural(fileMatches.length)
 
-  return <dialog open data-find-panel="" className={styles.dialog} aria-label="Find and replace"
+  return <dialog open data-find-panel="" className={styles.dialog} aria-label={t('find.title')}
     onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() } }}>
     <header>
-      <h2>Find and Replace</h2>
-      <button type="button" aria-label="Close Find and Replace" onClick={close}>×</button>
+      <h2>{t('find.title')}</h2>
+      <button type="button" aria-label={t('find.close')} onClick={close}>×</button>
     </header>
-    <div className={styles.scope} role="group" aria-label="Search in">
+    <div className={styles.scope} role="group" aria-label={t('find.searchIn')}>
       {(['file', 'project'] as const).map((value) => <button key={value} type="button" aria-pressed={scope === value}
-        onClick={() => find.set({ scope: value })}>{value === 'file' ? 'This file' : 'Project'}</button>)}
+        onClick={() => find.set({ scope: value })}>{value === 'file' ? t('find.thisFile') : t('find.project')}</button>)}
     </div>
     <div className={styles.fields}>
-      <button type="button" className={styles.toggle} aria-expanded={replaceOpen} aria-label={replaceOpen ? 'Hide replace field' : 'Show replace field'}
+      <button type="button" className={styles.toggle} aria-expanded={replaceOpen} aria-label={replaceOpen ? t('find.hideReplace') : t('find.showReplace')}
         onClick={() => find.set({ replaceOpen: !replaceOpen })}>{replaceOpen ? '▾' : '▸'}</button>
-      <label>Find
+      <label>{t('find.findLabel')}
         <input ref={findInput} value={term} onChange={(event) => find.set({ term: event.target.value })}
           onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); step(event.shiftKey ? -1 : 1) } }} />
       </label>
-      {replaceOpen && <label>Replace with
+      {replaceOpen && <label>{t('find.replaceWithLabel')}
         <input ref={replaceInput} value={replacement} onChange={(event) => find.set({ replacement: event.target.value })} />
       </label>}
     </div>
     <div className={styles.options}>
-      <label className={styles.check}><input type="checkbox" checked={caseSensitive} onChange={(event) => find.set({ caseSensitive: event.target.checked })} />Match case</label>
-      <label className={styles.check}><input type="checkbox" checked={wholeWord} onChange={(event) => find.set({ wholeWord: event.target.checked })} />Whole word</label>
-      <label className={styles.check}><input type="checkbox" checked={regex} onChange={(event) => find.set({ regex: event.target.checked })} />Regex</label>
+      <label className={styles.check}><input type="checkbox" checked={caseSensitive} onChange={(event) => find.set({ caseSensitive: event.target.checked })} />{t('find.matchCase')}</label>
+      <label className={styles.check}><input type="checkbox" checked={wholeWord} onChange={(event) => find.set({ wholeWord: event.target.checked })} />{t('find.wholeWord')}</label>
+      <label className={styles.check}><input type="checkbox" checked={regex} onChange={(event) => find.set({ regex: event.target.checked })} />{t('find.regex')}</label>
     </div>
     <p role="status">{status}</p>
     {matcherError && term && <p role="alert" className={styles.error}>{matcherError}</p>}
-    {truncated && <p className={styles.note}>Too many matches. Narrow the search to replace them all.</p>}
-    {projectScope && <p className={styles.note}>Links, image paths, HTML tags, web addresses and the front matter are not searched.</p>}
+    {truncated && <p className={styles.note}>{t('find.tooManyMatches')}</p>}
+    {projectScope && <p className={styles.note}>{t('find.projectScopeNote')}</p>}
     <div className={styles.actions}>
-      <button type="button" disabled={!count} onClick={() => step(-1)}>Previous</button>
-      <button type="button" disabled={!count} onClick={() => step(1)}>Next</button>
-      <button type="button" disabled={!count} onClick={projectScope ? replaceCurrentInProject : replaceCurrentInFile}>Replace</button>
+      <button type="button" disabled={!count} onClick={() => step(-1)}>{t('find.previous')}</button>
+      <button type="button" disabled={!count} onClick={() => step(1)}>{t('find.next')}</button>
+      <button type="button" disabled={!count} onClick={projectScope ? replaceCurrentInProject : replaceCurrentInFile}>{t('find.replace')}</button>
       <button type="button" disabled={!canReplaceAll} onClick={projectScope ? () => void askReplaceAll() : replaceAllInFile}>
-        {projectScope ? `Replace All (${plural(selectedIds.size, 'match')} in ${files(selectedFiles)})` : 'Replace All'}
+        {projectScope ? `${t('find.replaceAll')} (${plural(selectedIds.size)} ${t('find.in')} ${files(selectedFiles)})` : t('find.replaceAll')}
       </button>
     </div>
-    {confirm && <div className={styles.confirm} role="group" aria-label="Confirm replace all">
-      <p>Replace {plural(selectedIds.size, 'match')} in {files(selectedFiles)}? {confirm.versioned
-        ? 'A "Before replace all" commit was saved first.'
-        : 'This replace cannot be recovered with version control.'}</p>
-      <button type="button" onClick={() => void replaceAllInProject()}>Yes, replace all</button>
-      <button type="button" onClick={() => setConfirm(null)}>Cancel</button>
+    {confirm && <div className={styles.confirm} role="group" aria-label={t('find.confirmReplaceAll')}>
+      <p>{t('find.replace')} {plural(selectedIds.size)} {t('find.in')} {files(selectedFiles)}? {confirm.versioned
+        ? t('find.versionedNotice')
+        : t('find.unversionedNotice')}</p>
+      <button type="button" onClick={() => void replaceAllInProject()}>{t('find.yesReplaceAll')}</button>
+      <button type="button" onClick={() => setConfirm(null)}>{t('common.cancel')}</button>
     </div>}
-    {projectScope && lastReplace && <button type="button" onClick={() => void undoReplace()}>Undo last replace</button>}
+    {projectScope && lastReplace && <button type="button" onClick={() => void undoReplace()}>{t('find.undoLastReplace')}</button>}
     {projectScope && message && <p role="status" className={styles.note}>{message}</p>}
-    {projectScope && search && <div className={styles.results} aria-label="Project results">
+    {projectScope && search && <div className={styles.results} aria-label={t('find.projectResults')}>
       {search.files.map((file) => <section key={file.path}>
         <h3><span title={file.path}>{relative(file.path)}</span> <small>{file.matches.length}</small>
-          <button type="button" onClick={() => replaceFile(file)}>Replace in file</button></h3>
+          <button type="button" onClick={() => replaceFile(file)}>{t('find.replaceInFile')}</button></h3>
         <ul>{file.matches.map((match) => <li key={match.id} data-current={flat[current] === match}>
-          <input type="checkbox" aria-label={`Include match on line ${match.line} of ${relative(file.path)}`} checked={!unchecked.has(match.id)}
+          <input type="checkbox" aria-label={`${t('find.includeMatch')} ${match.line} ${t('common.of')} ${relative(file.path)}`} checked={!unchecked.has(match.id)}
             onChange={(event) => setUnchecked((previous) => { const next = new Set(previous); if (event.target.checked) next.delete(match.id); else next.add(match.id); return next })} />
           <button type="button" className={styles.hit} onClick={() => void jump(match)}>
             <span>{match.line}</span>{match.context.slice(0, match.contextStart)}<mark>{match.context.slice(match.contextStart, match.contextEnd)}</mark>{match.context.slice(match.contextEnd)}
           </button>
-          <button type="button" onClick={() => void runReplace(new Set([match.id]))}>Replace here</button>
+          <button type="button" onClick={() => void runReplace(new Set([match.id]))}>{t('find.replaceHere')}</button>
         </li>)}</ul>
       </section>)}
     </div>}

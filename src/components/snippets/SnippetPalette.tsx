@@ -8,6 +8,7 @@ import type { TemplateSnippet } from '../../lib/templateSnippets'
 import { SNIPPETS, type Snippet } from './snippets'
 import { findSnippetDropTarget } from '../../lib/snippetDrop'
 import { insertContentBox } from '../../lib/contentBoxes'
+import { useTranslation } from '../../lib/i18n'
 
 type PaletteSnippet = Snippet | TemplateSnippet
 
@@ -35,6 +36,7 @@ function buildFolderTree(items: PaletteSnippet[]): SnippetFolderNode {
 }
 
 function DraggableSnippet({ snippet, onInsert }: { snippet: PaletteSnippet; onInsert: () => void }) {
+  const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: snippet.id })
   return (
     <button
@@ -42,7 +44,7 @@ function DraggableSnippet({ snippet, onInsert }: { snippet: PaletteSnippet; onIn
       {...listeners}
       {...attributes}
       type="button"
-      title="Drag onto the page to choose a position, or double-click to insert at the cursor"
+      title={t('snippets.dragTooltip')}
       onDoubleClick={onInsert}
       onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); onInsert() } }}
       style={{ opacity: isDragging ? 0.4 : 1, touchAction: 'none' }}
@@ -58,6 +60,7 @@ function DraggableSnippet({ snippet, onInsert }: { snippet: PaletteSnippet; onIn
  * Drop coordinates select both the document pane and the insertion position.
  */
 export function SnippetPalette({ editor }: { editor: Editor | null }) {
+  const { t } = useTranslation()
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [caret, setCaret] = useState<{ left: number; top: number; height: number } | null>(null)
@@ -114,7 +117,7 @@ export function SnippetPalette({ editor }: { editor: Editor | null }) {
         setCaret({ left: point.left, top: point.top, height: Math.max(18, point.bottom - point.top) })
       }}>
       <div className="flex flex-col gap-2 p-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">Snippets</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">{t('snippets.title')}</h2>
         {groups.map((group) => {
           const tree = buildFolderTree(snippets.filter((s) => s.group === group))
           return (

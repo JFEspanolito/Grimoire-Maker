@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react'
 import type { Editor } from '@tiptap/react'
 import { PropertiesPanel } from './PropertiesPanel'
+import { useTranslation } from '../../lib/i18n'
 import styles from './DocumentOrderDialog.module.css'
 
 /** Every project and page property in one place, opened from the Document menu. */
 export function PropertiesDialog({ onClose, editor = null }: { onClose: () => void; editor?: Editor | null }) {
+  const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const element = dialog.current
@@ -18,10 +20,10 @@ export function PropertiesDialog({ onClose, editor = null }: { onClose: () => vo
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="properties-dialog-title"
     onCancel={(event) => { event.preventDefault(); onClose() }}>
     <header className={styles.header}>
-      <h2 id="properties-dialog-title">Properties</h2>
-      <button type="button" className={styles.dismiss} aria-label="Close Properties" onClick={onClose}>×</button>
+      <h2 id="properties-dialog-title">{t('properties.title')}</h2>
+      <button type="button" className={styles.dismiss} aria-label={t('properties.close')} onClick={onClose}>×</button>
     </header>
     <PropertiesPanel expanded editor={editor} />
-    <footer className={styles.footer}><button type="button" onClick={onClose}>Close</button></footer>
+    <footer className={styles.footer}><button type="button" onClick={onClose}>{t('common.close')}</button></footer>
   </dialog>
 }

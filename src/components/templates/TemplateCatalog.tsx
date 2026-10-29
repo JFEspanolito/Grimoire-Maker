@@ -6,6 +6,7 @@ import type { Template } from '../../lib/templates'
 import { isTauri, useFileSystem } from '../../hooks/useFileSystem'
 import { useDocumentStore } from '../../stores/documentStore'
 import { ConfirmDialog } from '../layout/ConfirmDialog'
+import { useTranslation } from '../../lib/i18n'
 
 function TemplateList({
   items,
@@ -16,19 +17,20 @@ function TemplateList({
   onApply: (t: Template) => void
   onExport?: (t: Template) => void
 }) {
+  const { t } = useTranslation()
   return (
     <ul className="flex flex-col gap-1">
-      {items.map((t) => (
-        <li key={t.id} className="flex items-center justify-between gap-2">
-          <button className="text-left text-sm hover:underline" onClick={() => onApply(t)}>
-            {t.label}
+      {items.map((template) => (
+        <li key={template.id} className="flex items-center justify-between gap-2">
+          <button className="text-left text-sm hover:underline" onClick={() => onApply(template)}>
+            {template.label}
           </button>
           {onExport && (
             <button
               className="shrink-0 text-xs text-white/50 hover:text-white"
-              title="Export template"
-              aria-label={`Export ${t.label}`}
-              onClick={() => onExport(t)}
+              title={t('templates.export')}
+              aria-label={`Export ${template.label}`}
+              onClick={() => onExport(template)}
             >
               ⤓
             </button>
@@ -43,6 +45,7 @@ type Notice = { kind: 'ok' | 'error'; text: string }
 
 /** Browser presets plus enabled folder templates, including compatible legacy packages. */
 export function TemplateCatalog() {
+  const { t } = useTranslation()
   const { applyTemplate, createProject } = useFileSystem()
   const hasProject = useDocumentStore((state) => state.workspaceRoot !== null)
   const { templates, dir, errors, reload } = useTemplateStore()
@@ -97,7 +100,7 @@ export function TemplateCatalog() {
       <button
         className="flex w-full items-center gap-1 text-xs font-semibold uppercase tracking-wide text-white/50 hover:text-white/80"
         aria-expanded={open}
-        title={dir ? 'Empty project structures created by the community.' : undefined}
+        title={dir ? t('templates.hint') : undefined}
         onClick={() => setManualOpen({ hasProject, open: !open })}
       >
         <span aria-hidden>{open ? '▾' : '▸'}</span>
@@ -108,7 +111,7 @@ export function TemplateCatalog() {
           <TemplateList items={official} onApply={setPendingTemplate} onExport={(t) => void exportZip(t)} />
           {community.length > 0 && (
             <>
-              <h3 className="text-xs uppercase tracking-wide text-white/40">Installed</h3>
+              <h3 className="text-xs uppercase tracking-wide text-white/40">{t('templates.installed')}</h3>
               <TemplateList items={community} onApply={setPendingTemplate} onExport={(t) => void exportZip(t)} />
             </>
           )}
