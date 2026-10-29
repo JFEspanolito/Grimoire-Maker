@@ -4,6 +4,7 @@ import type { ImageAlign, ImageAnchor, ImageFrame } from './extensions/image'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { PAGE_SIZES } from '../../types/document'
 import { positionImageOnPage } from '../../lib/imagePlacement'
+import { useTranslation, type TranslationKey } from '../../lib/i18n'
 
 export interface ImageAttrs {
   alt: string | null
@@ -16,26 +17,26 @@ export interface ImageAttrs {
   yMm: number | null
 }
 
-const ALIGNS: [ImageAlign, string][] = [
-  ['none', 'In line'],
-  ['left', 'Wrap · left'],
-  ['center', 'Centered'],
-  ['right', 'Wrap · right'],
+const ALIGN_KEYS: [ImageAlign, TranslationKey][] = [
+  ['none', 'image.wrapInline'],
+  ['left', 'image.wrapLeft'],
+  ['center', 'image.wrapCenter'],
+  ['right', 'image.wrapRight'],
 ]
 
-const FRAMES: [ImageFrame, string][] = [
-  ['none', 'No frame'],
-  ['simple', 'Simple'],
-  ['double', 'Double'],
-  ['shadow', 'Shadow'],
+const FRAME_KEYS: [ImageFrame, TranslationKey][] = [
+  ['none', 'image.frameNone'],
+  ['simple', 'image.frameSimple'],
+  ['double', 'image.frameDouble'],
+  ['shadow', 'image.frameShadow'],
 ]
 
-const ANCHORS: [ImageAnchor, string][] = [
-  ['flow', 'Push text'],
-  ['free', 'Over text'],
-  ['header', 'Page header'],
-  ['footer', 'Page footer'],
-  ['background', 'Page background'],
+const ANCHOR_KEYS: [ImageAnchor, TranslationKey][] = [
+  ['flow', 'image.placementFlow'],
+  ['free', 'image.placementFree'],
+  ['header', 'image.placementHeader'],
+  ['footer', 'image.placementFooter'],
+  ['background', 'image.placementBackground'],
 ]
 
 const field = 'flex items-center gap-1 text-xs text-white/60'
@@ -47,6 +48,7 @@ const EMPTY_IMAGE: ImageAttrs = {
 
 /** Layout controls for the selected image: wrap, size, frame, opacity and page anchor. */
 export function ImageControls({ editor, attrs: selection }: { editor: Editor | null; attrs: ImageAttrs | null }) {
+  const { t } = useTranslation()
   const active = !!editor && !!selection
   const attrs = selection ?? EMPTY_IMAGE
   // No `focus()`: moving focus into the editor would interrupt typing in these inputs.
@@ -94,29 +96,29 @@ export function ImageControls({ editor, attrs: selection }: { editor: Editor | n
   return (
     <div
       role="group"
-      aria-label="Image layout"
+      aria-label={t('image.layout')}
       aria-hidden={!active}
       inert={!active}
       className={`flex min-h-9 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-white/10 bg-neutral-900 px-3 py-1 ${active ? '' : '[&>label]:invisible'}`}
     >
       <label className={field}>
-        Wrap
+        {t('image.wrap')}
         <select
-          aria-label="Text wrapping"
-          title="Wrap right places the image to the right of its paragraph, with text on the left. Wrap left does the opposite."
+          aria-label={t('image.textWrapping')}
+          title={t('image.wrapTooltip')}
           className={control}
           value={attrs.align}
           onChange={(e) => setWrapping(e.target.value as ImageAlign)}
         >
-          {ALIGNS.map(([value, label]) => (
+          {ALIGN_KEYS.map(([value, labelKey]) => (
             <option key={value} value={value} className="text-black">
-              {label}
+              {t(labelKey)}
             </option>
           ))}
         </select>
       </label>
       <label className={field}>
-        Width
+        {t('image.width')}
         <input
           type="number"
           min={5}
@@ -132,21 +134,21 @@ export function ImageControls({ editor, attrs: selection }: { editor: Editor | n
         />
       </label>
       <label className={field}>
-        Frame
+        {t('image.frame')}
         <select
           className={control}
           value={attrs.frame}
           onChange={(e) => update({ frame: e.target.value as ImageFrame })}
         >
-          {FRAMES.map(([value, label]) => (
+          {FRAME_KEYS.map(([value, labelKey]) => (
             <option key={value} value={value} className="text-black">
-              {label}
+              {t(labelKey)}
             </option>
           ))}
         </select>
       </label>
       <label className={field}>
-        Opacity
+        {t('image.opacity')}
         <input
           type="range"
           min={0.1}
@@ -158,23 +160,23 @@ export function ImageControls({ editor, attrs: selection }: { editor: Editor | n
         <span className="w-8 tabular-nums">{Math.round(attrs.opacity * 100)}%</span>
       </label>
       <label className={field}>
-        Text placement
+        {t('image.placement')}
         <select
-          aria-label="Text placement"
-          title="Over text allows free positioning. In Push text, drop beside a paragraph to wrap on its left or right without covering the text."
+          aria-label={t('image.placement')}
+          title={t('image.placementTooltip')}
           className={control}
           value={attrs.anchor}
           onChange={(e) => setPlacement(e.target.value as ImageAnchor)}
         >
-          {ANCHORS.map(([value, label]) => (
+          {ANCHOR_KEYS.map(([value, labelKey]) => (
             <option key={value} value={value} className="text-black">
-              {label}
+              {t(labelKey)}
             </option>
           ))}
         </select>
       </label>
       <label className={field}>
-        Alt text
+        {t('image.altText')}
         <input
           type="text"
           className={`${control} w-40`}
