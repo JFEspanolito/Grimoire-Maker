@@ -2,7 +2,7 @@
 ; bundle.windows.nsis.installerHooks).
 ;
 ; Interactive installs, including reinstalls, ask for one content root.
-; Creates Mods/Plugins, Mods/Snippets, Mods/Templates, themes and logs without moving old files.
+; Creates Mods/Plugins, Mods/Snippets, Mods/Templates, Mods/Themes and logs without moving old files.
 ; An explicit v2 request updates only paths on next startup; legacy hints remain first-run only.
 ; Silent/passive upgrades preserve paths unless /CONTENTDIR is explicitly provided.
 ;
@@ -34,8 +34,8 @@ LangString GmPageTitle 1033 "Content folders"
 LangString GmPageTitle 1034 "Carpetas de contenido"
 LangString GmPageSubtitle 1033 "Choose where Grimoire Maker keeps your content."
 LangString GmPageSubtitle 1034 "Elija dónde guarda Grimoire Maker su contenido."
-LangString GmPageText 1033 "Creates Mods/Plugins, Mods/Snippets, Mods/Templates, themes and logs inside this folder. Existing files are not moved or deleted. Selecting a folder updates the five paths on next launch."
-LangString GmPageText 1034 "Crea Mods/Plugins, Mods/Snippets, Mods/Templates, themes y logs dentro de esta carpeta. No mueve ni elimina archivos existentes. La selección actualiza las cinco rutas al iniciar la aplicación."
+LangString GmPageText 1033 "Creates Mods/Plugins, Mods/Snippets, Mods/Templates, Mods/Themes and logs inside this folder. Existing files are not moved or deleted. Selecting a folder updates the five paths on next launch."
+LangString GmPageText 1034 "Crea Mods/Plugins, Mods/Snippets, Mods/Templates, Mods/Themes y logs dentro de esta carpeta. No mueve ni elimina archivos existentes. La selección actualiza las cinco rutas al iniciar la aplicación."
 LangString GmBrowse 1033 "Browse..."
 LangString GmBrowse 1034 "Examinar..."
 LangString GmBrowsePrompt 1033 "Select the folder for your content"
@@ -400,7 +400,7 @@ Function GmApplyContentDir
   CreateDirectory "$GmContentDir\Mods\Plugins"
   CreateDirectory "$GmContentDir\Mods\Snippets"
   CreateDirectory "$GmContentDir\Mods\Templates"
-  CreateDirectory "$GmContentDir\themes"
+  CreateDirectory "$GmContentDir\Mods\Themes"
   CreateDirectory "$GmContentDir\logs"
   ${If} ${Errors}
     DetailPrint "Could not create the content folders in $GmContentDir"

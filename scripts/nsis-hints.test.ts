@@ -136,7 +136,7 @@ describe('hooks.nsh structure', () => {
 
   it('accepts the configuration root and creates the requested layout', () => {
     expect(functionBody('GmNormalizeContentDir')).not.toContain('$APPDATA\\GriomoireMaker')
-    for (const name of ['Mods\\Plugins', 'Mods\\Snippets', 'Mods\\Templates', 'themes', 'logs']) {
+    for (const name of ['Mods\\Plugins', 'Mods\\Snippets', 'Mods\\Templates', 'Mods\\Themes', 'logs']) {
       expect(functionBody('GmApplyContentDir')).toContain(`CreateDirectory "$GmContentDir\\${name}"`)
     }
     expect(functionBody('GmPrefillContentDir')).toContain('$APPDATA\\GriomoireMaker')

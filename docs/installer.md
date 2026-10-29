@@ -17,7 +17,7 @@ Both scripts run `tauri build`, which builds the frontend first (`pnpm build`, i
   install folder, Start Menu folder, installing, finish.
   The page comes first because the Tauri hooks file is included before the template's own pages.
 * **Content folders** is shown on interactive first installs and reinstalls. Choose one root;
-  the installer derives `Mods/Plugins`, `Mods/Snippets`, `Mods/Templates`, `themes`, and `logs` beneath it.
+  the installer derives `Mods/Plugins`, `Mods/Snippets`, `Mods/Templates`, `Mods/Themes`, and `logs` beneath it.
   The default is `%APPDATA%\GriomoireMaker`; a previous installer selection is pre-filled when available.
   This is separate from the executable installation directory.
 * Absolute drive and ordinary network-share paths are accepted, including the configuration root itself.
@@ -83,7 +83,7 @@ Run these checks on a spare Windows user or VM. Never delete the real user's con
 Automated tests and a successful build do not prove the installed wizard behavior.
 
 1. **Fresh interactive install:** expect Content folders, default `%APPDATA%\GriomoireMaker`. Select that root.
-   Verify `Mods/Plugins`, `Mods/Snippets`, `Mods/Templates`, `themes`, `logs` and the corresponding Preferences paths.
+   Verify `Mods/Plugins`, `Mods/Snippets`, `Mods/Templates`, `Mods/Themes`, `logs` and the corresponding Preferences paths.
 2. **Custom path:** choose a folder with spaces and accents. Verify all five paths and example seeding on launch.
 3. **Reinstall:** expect Content folders even when settings already exist, pre-filled with the previous selection.
    Choose another root; verify other settings and old content remain unchanged while the five paths update.

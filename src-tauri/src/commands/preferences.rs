@@ -198,11 +198,11 @@ fn read_json(path: &Path) -> Result<Option<serde_json::Value>, String> {
 
 /// Where the first-run library folders go.
 enum Defaults {
-    /// Today's layout: `<config>/Mods/{Plugins,Snippets,Templates}`, `<config>/themes`, `<config>/logs`.
+    /// Installed layout: `<root>/Mods/{Plugins,Snippets,Templates,Themes}`, `<root>/logs`.
     Standard,
     /// Portable layout: `<config>/{Plugins,Snippets,Templates,Themes,Logs}`.
     Portable,
-    /// Installer layout: `<content root>/{Plugins,Snippets,Templates,Themes,Logs}`.
+    /// Legacy installer hint layout: `<content root>/{Plugins,Snippets,Templates,Themes,Logs}`.
     ContentRoot(String),
 }
 
@@ -244,7 +244,7 @@ fn default_paths_for(config: &Path, defaults: &Defaults) -> Result<LibraryPaths,
                 "Mods/Plugins",
                 "Mods/Snippets",
                 "Mods/Templates",
-                "themes",
+                "Mods/Themes",
                 "logs",
             ] {
                 create_checked(&config.join(relative), &mut locks)?;
@@ -253,7 +253,7 @@ fn default_paths_for(config: &Path, defaults: &Defaults) -> Result<LibraryPaths,
                 plugins: text(&config.join("Mods/Plugins"))?,
                 snippets: text(&config.join("Mods/Snippets"))?,
                 templates: text(&config.join("Mods/Templates"))?,
-                themes: text(&config.join("themes"))?,
+                themes: text(&config.join("Mods/Themes"))?,
                 logs: text(&config.join("logs"))?,
             })
         }
@@ -1536,7 +1536,7 @@ mod preferences_tests {
         let saved = read_preferences_as(&config, Mode::Normal).unwrap();
         for (actual, relative) in [
             (&saved.paths.plugins, "Mods/Plugins"), (&saved.paths.snippets, "Mods/Snippets"),
-            (&saved.paths.templates, "Mods/Templates"), (&saved.paths.themes, "themes"), (&saved.paths.logs, "logs"),
+            (&saved.paths.templates, "Mods/Templates"), (&saved.paths.themes, "Mods/Themes"), (&saved.paths.logs, "logs"),
         ] {
             assert_eq!(*actual, text(&content.join(relative)).unwrap());
             assert!(content.join(relative).is_dir());
@@ -1573,7 +1573,7 @@ mod preferences_tests {
             (&saved.plugins, "Mods/Plugins"),
             (&saved.snippets, "Mods/Snippets"),
             (&saved.templates, "Mods/Templates"),
-            (&saved.themes, "themes"),
+            (&saved.themes, "Mods/Themes"),
             (&saved.logs, "logs"),
         ] {
             assert_eq!(*actual, text(&config.join(relative)).unwrap());
