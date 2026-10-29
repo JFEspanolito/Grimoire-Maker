@@ -1,16 +1,10 @@
 ﻿; Grimoire Maker NSIS installer hooks (included by the Tauri NSIS template, see tauri.conf.json
 ; bundle.windows.nsis.installerHooks).
 ;
-; What this file adds:
-;   * A "Content folders" wizard page (path field + Browse button, default "$DOCUMENTS\Grimoire Maker").
-;     This file is included near the top of the generated script, so the page is declared before the
-;     template's own pages and appears FIRST in the wizard. It is skipped on upgrades/reinstalls (when
-;     "setting.json" or the legacy "library-paths.json" already exists in "%APPDATA%\GriomoireMaker" or in
-;     the pre-rename "%APPDATA%\app.grimoiremaker.desktop") and in passive/update mode.
-;   * After the files are copied (NSIS_HOOK_POSTINSTALL): creates <path>\Plugins, Snippets, Templates,
-;     Themes and Logs, and writes the hint file "%APPDATA%\GriomoireMaker\install-content-root.txt"
-;     (UTF-16LE with a BOM, one line, the path) that the app reads on its first run.
-;   * Silent installs (/S) read "/CONTENTDIR=<path>" and otherwise use "$DOCUMENTS\Grimoire Maker".
+; Interactive installs, including reinstalls, ask for one content root.
+; Creates Mods/Plugins, Mods/Snippets, Mods/Templates, themes and logs without moving old files.
+; An explicit v2 request updates only paths on next startup; legacy hints remain first-run only.
+; Silent/passive upgrades preserve paths unless /CONTENTDIR is explicitly provided.
 ;
 ; Path rules (GmNormalizeContentDir). They MUST stay identical to the hint validator in
 ; src-tauri/src/portable.rs (parse_hint), otherwise the app silently ignores the folder the user chose.
@@ -26,7 +20,6 @@
 ;       first dot, trailing spaces removed) must not be a Windows device name (list below).
 ;   R6  A network path needs host and share; a share ending in "$" (administrative share) is rejected.
 ;       "\\?\" and "\\.\" fail through R2 and R5.
-;   R7  A path equal to or inside "%APPDATA%\GriomoireMaker" is rejected (the app configuration folder).
 ; Comparisons use NSIS "==", which is case-insensitive, like the Rust check on Windows.
 ;
 ; The uninstaller is not customised: the content folders, setting.json and the hint files are never
@@ -41,14 +34,14 @@ LangString GmPageTitle 1033 "Content folders"
 LangString GmPageTitle 1034 "Carpetas de contenido"
 LangString GmPageSubtitle 1033 "Choose where Grimoire Maker keeps your content."
 LangString GmPageSubtitle 1034 "Elija dónde guarda Grimoire Maker su contenido."
-LangString GmPageText 1033 "Grimoire Maker will create the Plugins, Snippets, Templates, Themes and Logs folders inside this folder. They stay where they are if you uninstall the app."
-LangString GmPageText 1034 "Grimoire Maker creará las carpetas Plugins, Snippets, Templates, Themes y Logs dentro de esta carpeta. Se conservan si desinstala la aplicación."
+LangString GmPageText 1033 "Creates Mods/Plugins, Mods/Snippets, Mods/Templates, themes and logs inside this folder. Existing files are not moved or deleted. Selecting a folder updates the five paths on next launch."
+LangString GmPageText 1034 "Crea Mods/Plugins, Mods/Snippets, Mods/Templates, themes y logs dentro de esta carpeta. No mueve ni elimina archivos existentes. La selección actualiza las cinco rutas al iniciar la aplicación."
 LangString GmBrowse 1033 "Browse..."
 LangString GmBrowse 1034 "Examinar..."
 LangString GmBrowsePrompt 1033 "Select the folder for your content"
 LangString GmBrowsePrompt 1034 "Seleccione la carpeta para su contenido"
-LangString GmBadPath 1033 "Enter a full folder path such as C:\Users\you\Documents\Grimoire Maker (or a network path like \\server\share\folder), at most 240 characters.$\r$\n$\r$\nIt cannot contain the characters < > : $\" | ? * (a colon is only allowed after the drive letter), empty parts such as \\ inside the path, parts named . or .., names ending in a dot or a space, Windows device names (CON, NUL, COM1, LPT1...), administrative shares such as \\server\C$$, or the Grimoire Maker settings folder in %APPDATA%."
-LangString GmBadPath 1034 "Escriba una ruta completa de carpeta, por ejemplo C:\Users\usted\Documents\Grimoire Maker (o una ruta de red como \\servidor\recurso\carpeta), de 240 caracteres como máximo.$\r$\n$\r$\nNo puede contener los caracteres < > : $\" | ? * (los dos puntos solo se permiten tras la letra de la unidad), partes vacías como \\ dentro de la ruta, partes llamadas . o .., nombres que terminen en punto o espacio, nombres de dispositivo de Windows (CON, NUL, COM1, LPT1...), recursos administrativos como \\servidor\C$$, ni la carpeta de configuración de Grimoire Maker en %APPDATA%."
+LangString GmBadPath 1033 "Enter a full folder path such as C:\Users\you\Documents\Grimoire Maker (or a network path like \\server\share\folder), at most 240 characters.$\r$\n$\r$\nIt cannot contain the characters < > : $\" | ? * (a colon is only allowed after the drive letter), empty parts such as \\ inside the path, parts named . or .., names ending in a dot or a space, Windows device names (CON, NUL, COM1, LPT1...), administrative shares such as \\server\C$$, or invalid Windows paths."
+LangString GmBadPath 1034 "Escriba una ruta completa de carpeta, por ejemplo C:\Users\usted\Documents\Grimoire Maker (o una ruta de red como \\servidor\recurso\carpeta), de 240 caracteres como máximo.$\r$\n$\r$\nNo puede contener los caracteres < > : $\" | ? * (los dos puntos solo se permiten tras la letra de la unidad), partes vacías como \\ dentro de la ruta, partes llamadas . o .., nombres que terminen en punto o espacio, nombres de dispositivo de Windows (CON, NUL, COM1, LPT1...), recursos administrativos como \\servidor\C$$."
 
 Var GmContentDir
 Var GmContentEdit
@@ -58,7 +51,7 @@ Var GmExisting
 Page custom GmContentPageCreate GmContentPageLeave
 
 ; Sets $GmExisting to 1 when settings of an earlier installation exist (current or legacy file, current or
-; pre-rename folder). Such an installation keeps its settings: no page, no folders, no hint.
+; pre-rename folder). Unattended upgrades keep these settings unless explicitly overridden.
 ; The identifier is literal because the template defines BUNDLEID after this file is included.
 Function GmDetectExisting
   StrCpy $GmExisting 0
@@ -70,7 +63,7 @@ Function GmDetectExisting
   ${EndIf}
 FunctionEnd
 
-; Normalizes and validates $GmContentDir in place (rules R1-R7 above). Sets $GmDirOk to 1 when the result
+; Normalizes and validates $GmContentDir in place (rules R1-R6 above). Sets $GmDirOk to 1 when the result
 ; is accepted, 0 otherwise. Registers $R0-$R9 are saved and restored.
 Function GmNormalizeContentDir
   Push $R0
@@ -150,17 +143,6 @@ Function GmNormalizeContentDir
     StrCpy $R2 $R2 -1
     Goto gm_strip
   gm_stripped:
-
-  ; R7: not the application configuration folder or anything inside it.
-  StrLen $R6 "$APPDATA\GriomoireMaker"
-  StrCpy $R5 $R2 $R6
-  ${If} $R5 == "$APPDATA\GriomoireMaker"
-    StrCpy $R5 $R2 1 $R6
-    ${If} $R5 == ""
-    ${OrIf} $R5 == "\"
-      Goto gm_done
-    ${EndIf}
-  ${EndIf}
 
   ; R4: pick the prefix; $R1 = 1 for a network path, $R8 = the segments after the prefix.
   StrCpy $R5 $R2 2
@@ -305,6 +287,28 @@ Function GmContentBrowse
   ${EndIf}
 FunctionEnd
 
+Function GmPrefillContentDir
+  Push $0
+  StrCpy $GmContentDir "$APPDATA\GriomoireMaker"
+  ClearErrors
+  FileOpen $0 "$APPDATA\GriomoireMaker\install-content-root-v2.txt" r
+  ${If} ${Errors}
+    ClearErrors
+    FileOpen $0 "$APPDATA\GriomoireMaker\install-content-root.txt.applied" r
+  ${EndIf}
+  ${IfNot} ${Errors}
+    ; Both records were written by NSIS as UTF-16LE with a BOM.
+    FileSeek $0 2 SET
+    FileReadUTF16LE $0 $GmContentDir
+    FileClose $0
+    Call GmNormalizeContentDir
+    ${If} $GmDirOk <> 1
+      StrCpy $GmContentDir "$APPDATA\GriomoireMaker"
+    ${EndIf}
+  ${EndIf}
+  Pop $0
+FunctionEnd
+
 Function GmContentPageCreate
   ; Passive and update installs show no pages.
   ${GetOptions} $CMDLINE "/P" $0
@@ -313,11 +317,6 @@ Function GmContentPageCreate
   ${EndIf}
   ${GetOptions} $CMDLINE "/UPDATE" $0
   ${IfNot} ${Errors}
-    Abort
-  ${EndIf}
-  ; An existing installation keeps its settings: no page.
-  Call GmDetectExisting
-  ${If} $GmExisting = 1
     Abort
   ${EndIf}
 
@@ -343,7 +342,7 @@ Function GmContentPageCreate
   ${IfThen} $(^RTL) = 1 ${|} nsDialogs::SetRTL $(^RTL) ${|}
 
   ${If} $GmContentDir == ""
-    StrCpy $GmContentDir "$DOCUMENTS\Grimoire Maker"
+    Call GmPrefillContentDir
   ${EndIf}
 
   ${NSD_CreateLabel} 0 0 100% 36u "$(GmPageText)"
@@ -372,21 +371,17 @@ FunctionEnd
 Function GmApplyContentDir
   Push $0
 
-  ; An earlier installation (settings.json, or only the legacy library-paths.json) keeps its settings.
-  Call GmDetectExisting
-  ${If} $GmExisting = 1
-    DetailPrint "Existing settings found: content folders unchanged."
-    Goto gm_apply_end
-  ${EndIf}
-
-  ; No page was shown (silent or passive install): /CONTENTDIR=<path> or the default.
+  ; Only an explicit unattended override may change an existing installation.
   ${If} $GmContentDir == ""
+    ClearErrors
     ${GetOptions} $CMDLINE "/CONTENTDIR=" $GmContentDir
     ${If} ${Errors}
-      StrCpy $GmContentDir ""
-    ${EndIf}
-    ${If} $GmContentDir == ""
-      StrCpy $GmContentDir "$DOCUMENTS\Grimoire Maker"
+      Call GmDetectExisting
+      ${If} $GmExisting = 1
+        DetailPrint "Existing settings found: content folders unchanged."
+        Goto gm_apply_end
+      ${EndIf}
+      Call GmPrefillContentDir
     ${EndIf}
   ${EndIf}
 
@@ -400,13 +395,14 @@ Function GmApplyContentDir
     Goto gm_apply_end
   ${EndIf}
 
+  ClearErrors
   CreateDirectory "$GmContentDir"
-  CreateDirectory "$GmContentDir\Plugins"
-  CreateDirectory "$GmContentDir\Snippets"
-  CreateDirectory "$GmContentDir\Templates"
-  CreateDirectory "$GmContentDir\Themes"
-  CreateDirectory "$GmContentDir\Logs"
-  ${IfNot} ${FileExists} "$GmContentDir\Logs\*.*"
+  CreateDirectory "$GmContentDir\Mods\Plugins"
+  CreateDirectory "$GmContentDir\Mods\Snippets"
+  CreateDirectory "$GmContentDir\Mods\Templates"
+  CreateDirectory "$GmContentDir\themes"
+  CreateDirectory "$GmContentDir\logs"
+  ${If} ${Errors}
     DetailPrint "Could not create the content folders in $GmContentDir"
     SetErrorLevel 2
     ${IfNot} ${Silent}
@@ -417,14 +413,14 @@ Function GmApplyContentDir
 
   CreateDirectory "$APPDATA\GriomoireMaker"
   ClearErrors
-  FileOpen $0 "$APPDATA\GriomoireMaker\install-content-root.txt" w
+  FileOpen $0 "$APPDATA\GriomoireMaker\install-content-root-v2.txt" w
   ${IfNot} ${Errors}
     ; UTF-16LE with a byte order mark: correct for accents, enye and Cyrillic user folder names.
     FileWriteUTF16LE /BOM $0 "$GmContentDir"
     FileClose $0
     DetailPrint "Content folders created in $GmContentDir"
   ${Else}
-    DetailPrint "Could not write the install-content-root.txt hint."
+    DetailPrint "Could not write the install-content-root-v2.txt hint."
     SetErrorLevel 2
   ${EndIf}
 

@@ -21,6 +21,7 @@ pub const DATA_DIRECTORY: &str = "Data";
 pub const WEBVIEW_DIRECTORY: &str = "WebView2";
 pub const HINT_FILE: &str = "install-content-root.txt";
 pub const HINT_APPLIED_FILE: &str = "install-content-root.txt.applied";
+pub const REQUEST_FILE: &str = "install-content-root-v2.txt";
 /// The five content folders of the portable and installer layouts, in the app's existing naming.
 pub const LIBRARY_FOLDERS: [&str; 5] = ["Plugins", "Snippets", "Templates", "Themes", "Logs"];
 const MAX_HINT_BYTES: u64 = 1024;
@@ -117,7 +118,15 @@ pub enum Hint {
 }
 
 pub fn read_hint(config: &Path) -> Hint {
-    let path = config.join(HINT_FILE);
+    match read_hint_file(config, HINT_FILE) {
+        Hint::Valid(root) if crate::config_root::is_inside(&root, config) =>
+            Hint::Invalid("the legacy hint points inside the application configuration folder".into()),
+        hint => hint,
+    }
+}
+
+fn read_hint_file(config: &Path, name: &str) -> Hint {
+    let path = config.join(name);
     let meta = match fs::symlink_metadata(&path) {
         Ok(meta) => meta,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Hint::Absent,
@@ -140,6 +149,22 @@ pub fn read_hint(config: &Path) -> Hint {
     match read().and_then(|bytes| parse_hint(&bytes, config)) {
         Ok(root) => Hint::Valid(root),
         Err(reason) => Hint::Invalid(reason),
+    }
+}
+
+/// Explicit reinstall selection, separate from legacy first-run hints. The file is retained
+/// for installer prefill; its write timestamp identifies a new selection of the same root.
+pub fn read_install_request(config: &Path) -> Result<Option<(String, String)>, String> {
+    match read_hint_file(config, REQUEST_FILE) {
+        Hint::Absent => Ok(None),
+        Hint::Invalid(reason) => Err(format!("Invalid installer content selection: {reason}")),
+        Hint::Valid(root) => {
+            let modified = fs::metadata(config.join(REQUEST_FILE))
+                .and_then(|meta| meta.modified()).map_err(|e| e.to_string())?
+                .duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_nanos();
+            let identity = format!("{modified}:{root}");
+            Ok(Some((root, identity)))
+        }
     }
 }
 
@@ -187,7 +212,7 @@ fn decode_hint_text(bytes: &[u8]) -> Result<String, String> {
 }
 
 /// Validates the hint text and returns the normalized root. Only the first line may carry a path.
-pub fn parse_hint(bytes: &[u8], config: &Path) -> Result<String, String> {
+pub fn parse_hint(bytes: &[u8], _config: &Path) -> Result<String, String> {
     let decoded = decode_hint_text(bytes)?;
     let text = decoded.strip_prefix('\u{feff}').unwrap_or(&decoded);
     let mut lines = text.split('\n').map(|line| line.strip_suffix('\r').unwrap_or(line));
@@ -233,10 +258,6 @@ pub fn parse_hint(bytes: &[u8], config: &Path) -> Result<String, String> {
     }
     let root = normalized.trim_end_matches('/').to_string();
     let root = if root.ends_with(':') { format!("{root}/") } else { root };
-    // The library folders must not live inside the configuration root they would be mixed with.
-    if crate::config_root::is_inside(&root, config) {
-        return Err("the hint points inside the application configuration folder".into());
-    }
     Ok(root.trim_end_matches('/').to_string())
 }
 
@@ -423,13 +444,13 @@ mod tests {
     }
 
     #[test]
-    fn hint_inside_the_config_root_is_rejected() {
+    fn installer_root_inside_the_config_root_is_accepted() {
         let config = Path::new("C:/Users/test/AppData/Roaming/GriomoireMaker");
         for inside in [
             "C:\\Users\\test\\AppData\\Roaming\\GriomoireMaker",
             "c:/users/test/appdata/roaming/griomoiremaker/Content",
         ] {
-            assert!(parse_hint(inside.as_bytes(), config).is_err(), "{inside}");
+            assert!(parse_hint(inside.as_bytes(), config).is_ok(), "{inside}");
         }
         assert!(parse_hint(b"C:\\Users\\test\\AppData\\Roaming\\GriomoireMaker2", config).is_ok());
         assert!(parse_hint(b"C:\\Users\\test\\Documents", config).is_ok());

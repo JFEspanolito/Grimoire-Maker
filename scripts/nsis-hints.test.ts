@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Keeps the installer's content-folder path rules (src-tauri/nsis/hooks.nsh, GmNormalizeContentDir) in line
 // with the Rust hint validator (src-tauri/src/portable.rs, parse_hint). NSIS code cannot run in a unit test,
-// so this file holds a step-by-step JavaScript port of the rules R1-R7 documented at the top of hooks.nsh,
+// so this file holds a step-by-step JavaScript port of the rules R1-R6 documented at the top of hooks.nsh,
 // checks it against the shared cases in src-tauri/nsis/hint-path-cases.json (the Rust test reads the same
 // file), and statically asserts the structure of hooks.nsh that the port depends on.
 // Manual checklist for the real installer: see docs/installer.md ("Manual test checklist").
@@ -28,7 +28,6 @@ function rustDeviceNames(): string[] {
   return [...block.matchAll(/"([A-Z0-9$]+)"/g)].map((m) => m[1])
 }
 
-const APPDATA = 'C:\\Users\\test\\AppData\\Roaming' // stands for $APPDATA in the NSIS rules
 const DEVICES = nsisDeviceNames()
 const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase() // NSIS "==" is case-insensitive
 
@@ -47,11 +46,6 @@ function normalize(input: string): string | null {
     r2 += c
   }
   while (r2.length > 3 && r2.endsWith('\\')) r2 = r2.slice(0, -1) // R3
-  const config = `${APPDATA}\\GriomoireMaker` // R7
-  if (eq(r2.slice(0, config.length), config)) {
-    const next = r2.slice(config.length, config.length + 1)
-    if (next === '' || next === '\\') return null
-  }
   let unc = false // R4
   let rest: string
   if (r2.slice(0, 2) === '\\\\') {
@@ -122,11 +116,11 @@ describe('hooks.nsh structure', () => {
     expect(apply).not.toMatch(/^\s*Return\s*$/m)
   })
 
-  it('treats a legacy library-paths.json like an upgrade, in the page and in the post-install step', () => {
+  it('shows the interactive page on upgrades but preserves unattended upgrade paths', () => {
     const detect = functionBody('GmDetectExisting')
     expect(detect).toContain('GriomoireMaker\\setting.json')
     expect(detect).toContain('GriomoireMaker\\library-paths.json')
-    expect(functionBody('GmContentPageCreate')).toContain('Call GmDetectExisting')
+    expect(functionBody('GmContentPageCreate')).not.toContain('Call GmDetectExisting')
     expect(functionBody('GmApplyContentDir')).toContain('Call GmDetectExisting')
   })
 
@@ -140,7 +134,12 @@ describe('hooks.nsh structure', () => {
     }
   })
 
-  it('rejects paths inside the application configuration folder', () => {
-    expect(functionBody('GmNormalizeContentDir')).toContain('$APPDATA\\GriomoireMaker')
+  it('accepts the configuration root and creates the requested layout', () => {
+    expect(functionBody('GmNormalizeContentDir')).not.toContain('$APPDATA\\GriomoireMaker')
+    for (const name of ['Mods\\Plugins', 'Mods\\Snippets', 'Mods\\Templates', 'themes', 'logs']) {
+      expect(functionBody('GmApplyContentDir')).toContain(`CreateDirectory "$GmContentDir\\${name}"`)
+    }
+    expect(functionBody('GmPrefillContentDir')).toContain('$APPDATA\\GriomoireMaker')
+    expect(functionBody('GmApplyContentDir')).toContain('install-content-root-v2.txt')
   })
 })
