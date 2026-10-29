@@ -1,3 +1,6 @@
+packages:
+  - '.'
+
 minimumReleaseAgeExclude:
   - '@tiptap/core@3.32.1'
   - '@tiptap/extension-blockquote@3.32.1'
