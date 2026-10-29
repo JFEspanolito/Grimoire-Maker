@@ -1,4 +1,5 @@
 import { exists, readTextFile, writeTextFile, rename } from '@tauri-apps/plugin-fs'
+import { invoke } from '@tauri-apps/api/core'
 import { validateContributors, type Contributor } from './projectContributors'
 import type { DocumentOrder } from './documentOrder'
 
@@ -16,6 +17,7 @@ export const EMPTY_PROJECT: ProjectSettings = { name: '', author: '', coAuthor: 
 const filePath = (root: string) => `${root.replace(/[\\/]$/, '')}/.grimoire-project.json`
 
 async function readMetadata(root: string): Promise<Record<string, unknown>> {
+  await invoke('prepare_project_metadata', { root, token: null })
   const path = filePath(root)
   if (!(await exists(path))) return {}
   const value: unknown = JSON.parse(await readTextFile(path))
@@ -61,7 +63,9 @@ export async function saveProjectSettings(root: string, settings: ProjectSetting
   const previous = await readMetadata(root)
   validate(previous)
   const next = { ...previous, ...validate({ ...settings }) }
-  const temporary = `${filePath(root)}.${crypto.randomUUID()}.tmp`
+  const token = crypto.randomUUID()
+  await invoke('prepare_project_metadata', { root, token })
+  const temporary = `${filePath(root)}.${token}.tmp`
   await writeTextFile(temporary, JSON.stringify(next, null, 2), { createNew: true })
   await rename(temporary, filePath(root))
 }

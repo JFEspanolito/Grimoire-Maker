@@ -1,6 +1,7 @@
 mod commands;
 mod config;
 mod config_root;
+mod fs_scope;
 mod plugin_install;
 mod plugin_local;
 mod plugin_package;
@@ -57,6 +58,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            fs_scope::prepare_project_metadata,
             config_root::config_root,
             commands::files::list_markdown_files,
             commands::export::export_pdf,

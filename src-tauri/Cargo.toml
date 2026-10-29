@@ -21,6 +21,9 @@ zip = { version = "8.6", default-features = false, features = ["deflate"] }
 trash = "5"
 sha2 = "0.10"
 
+[dev-dependencies]
+tauri = { version = "2", features = ["test"] }
+
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"
 windows-core = "0.62"

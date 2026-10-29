@@ -585,7 +585,40 @@ pub(super) fn restore_scopes_locked(app: &AppHandle) -> Result<LibraryPaths, Str
             .allow_directory(path, true)
             .map_err(|e| e.to_string())?;
     }
+    grant_seed_markers(&app.fs_scope(), &config, &read_preferences(&config)?, crate::config_root::mode(app))?;
     Ok(paths)
+}
+
+fn grant_seed_markers(
+    scope: &tauri::scope::fs::Scope,
+    config: &Path,
+    preferences: &Preferences,
+    mode: Mode,
+) -> Result<(), String> {
+    use crate::fs_scope::allow_owned_file;
+    let paths = &preferences.paths;
+    let managed = managed_in(config, preferences, mode);
+    let mods = config.join("Mods");
+    // The frontend checks the shared marker even when all libraries are custom.
+    allow_owned_file(scope, &mods, ".examples-seeded")?;
+    for (path, folder, managed, marker) in [
+        (&paths.plugins, "Plugins", managed.plugins, ".executable-plugins-v1-seeded"),
+        (&paths.snippets, "Snippets", managed.snippets, ".rol-adventures-snippets-v2-seeded"),
+        (&paths.templates, "Templates", managed.templates, ".editorial-templates-v2-seeded"),
+    ] {
+        let library = Path::new(path);
+        let original = same_path(path, &text(&mods.join(folder))?);
+        if original || (managed && library.file_name().is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case(folder))) {
+            allow_owned_file(scope, library, marker)?;
+            if let Some(base) = library.parent() {
+                allow_owned_file(scope, base, ".examples-seeded")?;
+            }
+        }
+    }
+    for marker in [".grimoire-theme-examples-v1", ".grimoire-theme-examples-v2"] {
+        allow_owned_file(scope, Path::new(&paths.themes), marker)?;
+    }
+    Ok(())
 }
 
 /// Portable mode: when the folder was moved, saved paths that lived under the old `Data` root follow it.
@@ -733,8 +766,8 @@ pub async fn change_library_path(
             app.fs_scope()
                 .allow_directory(path, true)
                 .map_err(|e| e.to_string())
-        })
-        .map(Some)
+        })?;
+        restore_scopes_locked(&app).map(Some)
     })
     .await
     .map_err(|e| e.to_string())?

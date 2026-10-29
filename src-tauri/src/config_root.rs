@@ -43,6 +43,7 @@ pub fn initialize(app: &AppHandle) -> Result<(), String> {
     app.fs_scope()
         .allow_directory(&root, true)
         .map_err(|error| error.to_string())?;
+    crate::fs_scope::allow_owned_file(&app.fs_scope(), &root.join("Mods"), ".examples-seeded")?;
     if !app.manage(PreparedRoot {
         path: root,
         mode,
