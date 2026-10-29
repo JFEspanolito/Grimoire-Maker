@@ -20,17 +20,17 @@ function TemplateList({
   const { t } = useTranslation()
   return (
     <ul className="flex flex-col gap-1">
-      {items.map((t) => (
-        <li key={t.id} className="flex items-center justify-between gap-2">
-          <button className="text-left text-sm hover:underline" onClick={() => onApply(t)}>
-            {t.label}
+      {items.map((template) => (
+        <li key={template.id} className="flex items-center justify-between gap-2">
+          <button className="text-left text-sm hover:underline" onClick={() => onApply(template)}>
+            {template.label}
           </button>
           {onExport && (
             <button
               className="shrink-0 text-xs text-white/50 hover:text-white"
               title={t('templates.export')}
-              aria-label={`Export ${t.label}`}
-              onClick={() => onExport(t)}
+              aria-label={`Export ${template.label}`}
+              onClick={() => onExport(template)}
             >
               ⤓
             </button>
