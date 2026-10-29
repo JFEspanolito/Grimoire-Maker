@@ -498,11 +498,11 @@ export function FileTree() {
 
   return (
     <div className="p-3 text-sm">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex flex-col gap-1.5">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-white/50">
           {t("files.title")}
         </h2>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-1.5 text-xs">
           <button
             className={actionButton}
             title={t("files.newFileTitle")}
@@ -520,7 +520,7 @@ export function FileTree() {
             {t("files.newFolder")}
           </button>
           <button
-            className={`${actionButton} ml-1 px-1`}
+            className={`${actionButton} ml-auto px-1.5`}
             title={t("files.refresh")}
             aria-label={t("files.refresh")}
             disabled={!root}
