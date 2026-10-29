@@ -1,8 +1,25 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { loadProjectSettings, saveProjectSettings } from './projectSettings'
 const fs = vi.hoisted(() => ({ exists: vi.fn(), readTextFile: vi.fn(), writeTextFile: vi.fn(), rename: vi.fn() }))
+const invoke = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+vi.mock('@tauri-apps/api/core', () => ({ invoke }))
 vi.mock('@tauri-apps/plugin-fs', () => fs)
 beforeEach(() => { vi.clearAllMocks(); fs.exists.mockResolvedValue(false); fs.writeTextFile.mockResolvedValue(undefined); fs.rename.mockResolvedValue(undefined) })
+it('prepares only project metadata and its exact temporary file before filesystem access', async () => {
+  await loadProjectSettings('/book')
+  expect(invoke).toHaveBeenCalledWith('prepare_project_metadata', { root: '/book', token: null })
+  expect(invoke.mock.invocationCallOrder[0]).toBeLessThan(fs.exists.mock.invocationCallOrder[0])
+  await saveProjectSettings('/book', { name: '', author: '', coAuthor: '' })
+  const token = invoke.mock.calls.at(-1)![1].token
+  expect(token).toMatch(/^[0-9a-f-]{36}$/)
+  expect(fs.writeTextFile.mock.calls[0][0]).toBe(`/book/.grimoire-project.json.${token}.tmp`)
+  expect(invoke.mock.invocationCallOrder.at(-1)!).toBeLessThan(fs.writeTextFile.mock.invocationCallOrder[0])
+})
+it('does not access files when native metadata permission is refused', async () => {
+  invoke.mockRejectedValueOnce(new Error('Forbidden project directory'))
+  await expect(loadProjectSettings('/book')).rejects.toThrow('Forbidden project directory')
+  expect(fs.exists).not.toHaveBeenCalled()
+})
 it('loads defaults only for a missing project file', async () => {
   expect(await loadProjectSettings('/book')).toEqual({ name: '', author: '', coAuthor: '' })
   fs.exists.mockResolvedValue(true); fs.readTextFile.mockResolvedValue('{broken')
