@@ -16,7 +16,7 @@
     - [1. Creating Templates](#1-creating-templates)
     - [2. Creating Snippets](#2-creating-snippets)
     - [3. Creating Themes](#3-creating-themes)
-    - [4. Creating Local Plugins](#4-creating-local-plugins)
+    - [4. Official Plugins](#4-official-plugins)
   - [How to Contribute (Pull Request from a Fork)](#how-to-contribute-pull-request-from-a-fork)
 
 ---
@@ -232,45 +232,17 @@ Write standard Markdown (tables, blockquotes, headings, task lists) inside each 
 
 ---
 
-### 4. Creating Local Plugins *(In Development)*
+### 4. Official Plugins
 
-> **Status — Under Active Development:** The plugin runtime and SDK are currently in active development. APIs, capability permissions, and lifecycle hooks may evolve in upcoming releases.
+This release supports only the **Bookmarks**, **Zoom**, and **Pixel Ruler** plugins shipped with Grimoire Maker.
 
-Grimoire Maker runs external plugins inside a **multi-layer isolated sandbox (`src/plugins/isolated/`)**:
-- **Sandboxed Iframe + Blob Worker Frontier:** Each plugin executes inside a dedicated `iframe[sandbox="allow-scripts"]` (opaque origin, no `allow-same-origin`, no navigation, no forms/popups) with a strict Content Security Policy (`default-src 'none'`, `connect-src 'none'`). The iframe spawns an isolated blob `Worker` where plugin code actually runs—with **zero direct DOM or `window` access**.
-- **Private `MessageChannel` & Capability Permissions:** Communication between the Worker and the host happens exclusively over a private `MessageChannel` (`bridge.ts`), gated by explicit capability permissions (`permissions.ts`) and audited by a heartbeat watchdog (`runtime.ts`) that terminates unresponsive or faulting plugins automatically.
-- **Package & Module Guards:** Package scanning (`readPluginPackage`) enforces strict size and depth limits (`4 MiB` per package, `512 KiB` per file, max `8` folder levels, no symlinks, and relative-path confinement), plus automatic CSS module selector scoping (`plugin_<hash>_`).
+- Enable, disable, remove, or restore official plugins in the Plugins tab.
+- Implementations are compiled with the application. Bookmarks uses bundled TSX; Zoom and Pixel Ruler use bundled declarations rendered by the host.
+- Source copies in the Plugins folder are kept for reference. Editing those copies does not change the running plugin, and existing edits are not overwritten.
+- Creating, importing, approving, or activating third-party plugins is unavailable. Previously imported plugins are not started.
+- Snippet, template, and theme creation/import remain available.
 
-```tsx
-import type { GrimoirePlugin } from '@grimoire/plugin-api'
-
-const wordCounterPlugin: GrimoirePlugin = {
-  id: 'custom-word-counter',
-  name: 'Custom Word Counter',
-  version: '1.0.0',
-  activate(api) {
-    api.registerCommand({
-      id: 'custom-word-counter.insert-stamp',
-      label: 'Insert Timestamp',
-      run: () => {
-        api.insertContent(`\n> _Updated: ${new Date().toISOString()}_\n`)
-      },
-    })
-  },
-}
-
-export default wordCounterPlugin
-```
-
-**Available `PluginApi` Registration Hooks:**
-- `api.registerCommand({ id, label, run })`
-- `api.registerToolbar({ id, title, component })`
-- `api.registerPanel({ id, title, component })`
-- `api.registerOverlay({ id, title, component })`
-- `api.registerEditorTool({ id, title, component })`
-- `api.registerPreviewToolbar({ id, title, component })`
-- `api.registerPageBehavior({ id, mount })`
-- `api.registerContextAction({ id, label, when, run })`
+TypeScript 7 checks the app during the build. The running app does not depend on the removed TypeScript JavaScript compiler API to execute plugins.
 
 ---
 

@@ -2,7 +2,6 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readFile, stat, writeFile } from '@tauri-apps/plugin-fs'
 import { Unzip, UnzipInflate, UnzipPassThrough, strFromU8, strToU8 } from 'fflate'
 import { ThemeAssetError, findRemoteCssReference, inlinePackAssets } from './cssGuard'
-import { installExternalPlugin } from './externalPlugins'
 import { MOD_KIND, type ModKind } from './modCatalog'
 import { parseDocument } from './frontmatter'
 import { prepareModLibrary } from './modLibrary'
@@ -293,17 +292,16 @@ async function importSingleSnippet(fs: PackageFs, snippetsDir: string, path: str
 
 /** Opens the native file or folder picker for the given import source and mod category. */
 export async function pickModSource(source: ModImportSource, kind: ModKind): Promise<string | null> {
+  if (kind === MOD_KIND.PLUGINS) throw new PackageError('Only shipped official plugins are supported. Plugin imports are unavailable.')
   if (source === 'folder') {
     const picked = await open({ directory: true, multiple: false })
     return typeof picked === 'string' ? picked.replaceAll('\\', '/') : null
   }
   const extensions = kind === MOD_KIND.THEMES ? ['zip', 'css']
-    : kind === MOD_KIND.PLUGINS ? ['zip', 'gmp']
-      : kind === MOD_KIND.SNIPPETS ? ['zip', 'md']
+    : kind === MOD_KIND.SNIPPETS ? ['zip', 'md']
         : kind === MOD_KIND.TEMPLATES ? ['zip', 'gmtemplate'] : ['zip']
   const name = kind === MOD_KIND.THEMES ? 'Theme archive or CSS'
-    : kind === MOD_KIND.PLUGINS ? 'Plugin package (.zip, .gmp)'
-      : kind === MOD_KIND.SNIPPETS ? 'Snippet (.md) or snippet pack (.zip)'
+    : kind === MOD_KIND.SNIPPETS ? 'Snippet (.md) or snippet pack (.zip)'
         : kind === MOD_KIND.TEMPLATES ? 'Template package (.zip, .gmtemplate)' : 'Mod archive (.zip)'
   const picked = await open({ multiple: false, filters: [{ name, extensions }] })
   return typeof picked === 'string' ? picked.replaceAll('\\', '/') : null
@@ -316,11 +314,9 @@ export async function importModFromPath(
   kind: ModKind,
   fs: PackageFs = tauriPackageFs,
 ): Promise<string> {
+  if (kind === MOD_KIND.PLUGINS) throw new PackageError('Only shipped official plugins are supported. Plugin imports are unavailable.')
   const normalized = sourcePath.replaceAll('\\', '/').replace(/\/$/, '')
   const baseName = normalized.slice(normalized.lastIndexOf('/') + 1)
-  // A downloaded plugin package never reaches the trusted loader: native validation and managed
-  // storage install it disabled and unverified. Folders stay a deliberate local-trust action.
-  if (kind === MOD_KIND.PLUGINS && source === 'zip') return (await installExternalPlugin(normalized)).id
   const paths = await prepareModLibrary()
 
   if (kind === MOD_KIND.TEMPLATES) {
@@ -403,16 +399,5 @@ export async function importModFromPath(
     return lastId
   }
 
-  // MOD_KIND.PLUGINS
-  const taken = await existingNames(fs, paths.plugins)
-  const pluginFiles =
-    source === 'zip'
-      ? unpackZipEntries(await fs.readFile(normalized))
-      : await collectDirectoryFiles(fs, normalized)
-  if (Object.keys(pluginFiles).length === 0) {
-    throw new PackageError('No files were found in the selected plugin source')
-  }
-  const id = packageIdFromFileName(baseName, taken)
-  await writeFileMap(fs, `${paths.plugins}/${id}`, pluginFiles)
-  return id
+  throw new PackageError('Unsupported mod type')
 }

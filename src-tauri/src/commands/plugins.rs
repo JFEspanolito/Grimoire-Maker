@@ -3,6 +3,11 @@ use std::{path::PathBuf, time::Duration};
 use tauri::AppHandle;
 use tauri_plugin_fs::FsExt;
 
+/// External code is unavailable while only bundled official plugins are supported.
+fn external_operation<T>(_operation: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    Err("Only shipped official plugins are supported. External plugins are unavailable.".into())
+}
+
 /// External packages live apart from the trusted local Mods/Plugins folder.
 fn managed_root(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(crate::config_root::path(app)?.join("ManagedPlugins"))
@@ -18,15 +23,14 @@ async fn blocking<T: Send + 'static>(work: impl FnOnce() -> Result<T, String> + 
 /// destination is fixed and the package is fully validated; the renderer chooses nothing else.
 #[tauri::command]
 pub async fn install_plugin_package(app: AppHandle, zip_path: String) -> Result<InstallResult, String> {
-    let source = PathBuf::from(&zip_path);
-    if !source.is_absolute() || !app.fs_scope().is_allowed(&source) {
-        return Err("The plugin package must be selected with the file dialog".into());
-    }
-    let root = managed_root(&app)?;
-    blocking(move || {
+    external_operation(move || {
+        let source = PathBuf::from(&zip_path);
+        if !source.is_absolute() || !app.fs_scope().is_allowed(&source) {
+            return Err("The plugin package must be selected with the file dialog".into());
+        }
+        let root = managed_root(&app)?;
         plugin_registry::install(&root, &source, Duration::from_secs(crate::plugin_package::MAX_EXTRACT_SECONDS))
     })
-    .await
 }
 
 #[tauri::command]
@@ -50,8 +54,10 @@ pub async fn grant_plugin_consent(
     granted: Vec<String>,
     sdk_version: u32,
 ) -> Result<(), String> {
-    let root = managed_root(&app)?;
-    blocking(move || plugin_registry::grant_consent(&root, &id, &version, &fingerprint, &granted, sdk_version)).await
+    external_operation(move || {
+        let root = managed_root(&app)?;
+        plugin_registry::grant_consent(&root, &id, &version, &fingerprint, &granted, sdk_version)
+    })
 }
 
 #[tauri::command]
@@ -62,6 +68,9 @@ pub async fn revoke_plugin_consent(app: AppHandle, id: String) -> Result<(), Str
 
 #[tauri::command]
 pub async fn set_external_plugin_active(app: AppHandle, id: String, active: bool) -> Result<(), String> {
+    if active {
+        return external_operation(|| Ok(()));
+    }
     let root = managed_root(&app)?;
     blocking(move || plugin_registry::set_active(&root, &id, active)).await
 }
@@ -75,6 +84,9 @@ pub async fn stop_external_plugin(app: AppHandle, id: String, reason: String) ->
 
 #[tauri::command]
 pub async fn set_external_plugins_disabled(app: AppHandle, disabled: bool) -> Result<(), String> {
+    if !disabled {
+        return external_operation(|| Ok(()));
+    }
     let root = managed_root(&app)?;
     blocking(move || plugin_registry::set_disabled_all(&root, disabled)).await
 }
@@ -82,8 +94,10 @@ pub async fn set_external_plugins_disabled(app: AppHandle, disabled: bool) -> Re
 /// Integrity is verified again here, at every start, before any byte is handed to the runtime.
 #[tauri::command]
 pub async fn read_external_plugin_entry(app: AppHandle, id: String) -> Result<plugin_registry::EntryPayload, String> {
-    let root = managed_root(&app)?;
-    blocking(move || plugin_registry::read_entry(&root, &id)).await
+    external_operation(move || {
+        let root = managed_root(&app)?;
+        plugin_registry::read_entry(&root, &id)
+    })
 }
 
 #[tauri::command]
@@ -105,11 +119,29 @@ pub fn protect_managed_root(app: &AppHandle) -> Result<(), String> {
 /// validated like an import before it is published.
 #[tauri::command]
 pub async fn sync_local_plugin_packages(app: AppHandle, plugins_dir: String) -> Result<plugin_local::LocalSyncResult, String> {
-    let folder = PathBuf::from(&plugins_dir);
-    if !folder.is_absolute() || !app.fs_scope().is_allowed(&folder) {
-        return Err("The plugins folder must be inside the allowed folders".into());
+    external_operation(move || {
+        let folder = PathBuf::from(&plugins_dir);
+        if !folder.is_absolute() || !app.fs_scope().is_allowed(&folder) {
+            return Err("The plugins folder must be inside the allowed folders".into());
+        }
+        let root = managed_root(&app)?;
+        plugin_local::ensure_outside_managed(&root, &folder)?;
+        plugin_local::sync(&root, &folder)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_operations_are_rejected_before_their_io_or_mutation() {
+        let mut touched = false;
+        let result = external_operation(|| {
+            touched = true;
+            Ok(())
+        });
+        assert_eq!(result, Err("Only shipped official plugins are supported. External plugins are unavailable.".into()));
+        assert!(!touched);
     }
-    let root = managed_root(&app)?;
-    plugin_local::ensure_outside_managed(&root, &folder)?;
-    blocking(move || plugin_local::sync(&root, &folder)).await
 }

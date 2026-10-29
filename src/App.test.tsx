@@ -3,13 +3,23 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import App from './App'
 import { useToastStore } from './stores/toastStore'
+import { useThemeStore } from './stores/themeStore'
+import { useTemplateStore } from './stores/templateStore'
+
+const runtime = vi.hoisted(() => ({ native: false, restore: vi.fn(async () => {}), startExternal: vi.fn(async () => {}) }))
+vi.mock('./plugins/isolated/externalHost', () => ({ startActiveExternalPlugins: runtime.startExternal }))
+vi.mock('./lib/appState', () => ({ watchSettings: () => () => {} }))
+vi.mock('./hooks/useAutoSave', () => ({ useAutoSave: () => {} }))
+vi.mock('./hooks/useAutoCommit', () => ({ useAutoCommit: () => {} }))
+vi.mock('./hooks/useUnsavedClose', () => ({ useUnsavedClose: () => {} }))
 
 vi.mock('./hooks/useRepositoryStatus', () => ({ useRepositoryStatus: () => ({ status: { isRepository: true, entries: [{}, {}] }, error: '' }) }))
 vi.mock('./hooks/useFileSystem', () => ({
-  isTauri: () => false,
-  useFileSystem: () => ({ restoreSession: vi.fn() }),
+  isTauri: () => runtime.native,
+  useFileSystem: () => ({ restoreSession: runtime.restore }),
 }))
 vi.mock('./components/layout/Toolbar', () => ({ Toolbar: () => null }))
+vi.mock('./components/project/NewProjectDialog', () => ({ NewProjectDialog: () => null }))
 vi.mock('./components/sidebar/FileTree', () => ({ FileTree: () => <div>Files panel</div> }))
 vi.mock('./components/templates/TemplateCatalog', () => ({ TemplateCatalog: () => <div>Templates panel</div> }))
 vi.mock('./components/snippets/SnippetPalette', () => ({ SnippetPalette: () => <div>Snippets panel</div> }))
@@ -23,6 +33,26 @@ vi.mock('./plugins/PluginContext', () => ({ PluginProvider: ({ children }: { chi
 let root: Root | null = null
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
 afterEach(async () => { if (root) await act(async () => root?.unmount()); root = null })
+
+it('does not activate previously imported plugins at desktop startup', async () => {
+  runtime.native = true
+  const themes = useThemeStore.getState().reload
+  const templates = useTemplateStore.getState().reload
+  useThemeStore.setState({ reload: vi.fn(async () => {}) })
+  useTemplateStore.setState({ reload: vi.fn(async () => {}) })
+  try {
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<App />))
+    expect(runtime.restore).toHaveBeenCalled()
+    expect(runtime.startExternal).not.toHaveBeenCalled()
+  } finally {
+    await act(async () => root?.unmount())
+    root = null
+    runtime.native = false
+    useThemeStore.setState({ reload: themes })
+    useTemplateStore.setState({ reload: templates })
+  }
+})
 
 it.each([
   ['project-sidebar', 'Resize Files panel', 224, 1],

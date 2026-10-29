@@ -1,23 +1,19 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it } from 'vitest'
-import { LEGACY_PLUGINS, MOD_EXAMPLES } from '../lib/modLibrary'
 import type { ModEntry, ModFs } from '../lib/modCatalog'
 import { reconcilePlugins } from './plugin-loader'
 import { usePluginRegistry } from './plugin-manager'
 import { PluginSlot } from './PluginSlot'
 import { PageView } from '../components/editor/PageView'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useTabStore } from '../stores/tabStore'
 
-// The old trusted Zoom and Pixel Ruler sources are kept as the legacy baseline; this test still loads them as trusted plugins.
-const legacy = LEGACY_PLUGINS.flatMap((plugin) => Object.entries(plugin.files).map(([file, text]) => [`/Mods/Plugins/${plugin.folder}/${file}`, text] as const))
-const shipped = Object.entries(MOD_EXAMPLES).filter(([path]) => !/^Plugins\/(zoom|pixel-ruler)\/(manifest\.json|dist\/|index\.md)/.test(path))
-const files = { ...Object.fromEntries(shipped.map(([path, text]) => [`/Mods/${path}`, text])), ...Object.fromEntries(legacy) }
+// The registry must use bundled code, even if installed copies cannot be read.
 const io: ModFs = {
-  exists: async path => path in files, mkdir: async () => {}, writeTextFile: async () => {},
-  readTextFile: async path => files[path], stat: async path => ({ size: files[path].length }),
-  readDir: async path => Object.keys(files).filter(file => file.startsWith(`${path}/`))
-    .map(file => ({ name: file.slice(path.length + 1), isDirectory: false })),
+  exists: async () => true, mkdir: async () => {}, writeTextFile: async () => {},
+  readTextFile: async () => { throw new Error('Local plugin code is not executable') },
+  stat: async () => ({ size: 0 }), readDir: async () => [],
 }
 const mods: ModEntry[] = ['zoom', 'pixel-ruler', 'bookmarks'].map(name => ({ id: `Plugins/${name}`, folder: `/Mods/Plugins/${name}`,
   kind: 'Plugins', label: name, enabled: true, errors: [] }))
@@ -26,8 +22,9 @@ afterEach(async () => {
   useSettingsStore.setState({ zoom: 1, rulerGuides: [] })
 })
 
-it('executes the shipped folders through the loader and unloads generic slots and wheel handlers', async () => {
+it('runs compiled official plugins and unloads their visible controls and wheel handlers', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  useTabStore.getState().reset('/book/page.md')
   expect(await reconcilePlugins(io, mods)).toEqual([])
   expect(usePluginRegistry.getState().plugins).toHaveLength(3)
   const host = document.createElement('div')
