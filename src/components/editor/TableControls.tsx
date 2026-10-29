@@ -1,12 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { useTranslation, type TranslationKey } from '../../lib/i18n'
 
-interface Action {
-  label: string
-  title: string
-  run: (editor: Editor) => boolean
-}
-
 interface ActionDef {
   label: string
   titleKey: TranslationKey

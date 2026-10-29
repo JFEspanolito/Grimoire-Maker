@@ -121,24 +121,24 @@ export function ContentBoxView({ node, editor, getPos, selected }: NodeViewProps
         left: placement === 'free' ? `${boxNumber(xMm) ?? 0}mm` : undefined,
         top: placement === 'free' ? `${boxNumber(yMm) ?? 0}mm` : undefined }}>
       <div className="grimoire-box-controls" data-editor-only="true" contentEditable={false}>
-        <button type="button" aria-label={t('box.move')} title={t('box.moveTitle')}
+        <button type="button" aria-label={t('box.ariaMove')} title={t('box.moveTitle')}
           onPointerDown={startDrag} onClick={() => { const position = getPos(); if (typeof position === 'number') editor.commands.setNodeSelection(position) }}>{t('box.move')}</button>
-        <label>{t('box.placement')} <select aria-label={t('box.placement')} value={placement} onChange={(event) => setPlacement(event.target.value)}>
+        <label>{t('box.placement')} <select aria-label={t('box.ariaPlacement')} value={placement} onChange={(event) => setPlacement(event.target.value)}>
           <option value="flow">{t('box.flow')}</option><option value="free">{t('box.free')}</option>
         </select></label>
-        <label>{t('box.width')} <input aria-label={t('box.width')} title={t('box.widthTitle')} type="number" min="5" max="500" placeholder="Auto"
+        <label>{t('box.width')} <input aria-label={t('box.ariaWidth')} title={t('box.widthTitle')} type="number" min="5" max="500" placeholder="Auto"
           value={widthMm ?? ''} onChange={(event) => change({ widthMm: boxNumber(event.target.value, 5) })} /></label>
-        <label>{t('box.height')} <input aria-label={t('box.height')} title={t('box.heightTitle')} type="number" min="5" max="500" placeholder="Auto"
+        <label>{t('box.height')} <input aria-label={t('box.ariaHeight')} title={t('box.heightTitle')} type="number" min="5" max="500" placeholder="Auto"
           value={heightMm ?? ''} onChange={(event) => change({ heightMm: boxNumber(event.target.value, 5) })} /></label>
-        <label>{t('box.border')} <input aria-label={t('box.border')} title={t('box.borderTitle')} type="number" min="0" max={BOX_BORDER_MAX_PX}
+        <label>{t('box.border')} <input aria-label={t('box.ariaBorder')} title={t('box.borderTitle')} type="number" min="0" max={BOX_BORDER_MAX_PX}
           value={borderWidth ?? 0} onChange={(event) => change({ borderWidth: boxBorderWidth(event.target.value) })} /></label>
-        <input aria-label={t('box.borderColor')} title={t('box.borderColor')} type="color" value={borderColor}
+        <input aria-label={t('box.ariaBorderColor')} title={t('box.borderColor')} type="color" value={borderColor}
           onChange={(event) => change({ borderColor: boxBorderColor(event.target.value) })} />
-        <label>{t('box.fill')} <input aria-label={t('box.fillColor')} title={t('box.fillColor')} type="color" value={boxBackgroundInputValue(backgroundColor)}
+        <label>{t('box.fill')} <input aria-label={t('box.ariaFillColor')} title={t('box.fillColor')} type="color" value={boxBackgroundInputValue(backgroundColor)}
           onChange={(event) => change({ backgroundColor: boxBackgroundColor(event.target.value) })} /></label>
-        <button type="button" aria-label={t('box.noFill')} title={t('box.noFillTitle')} disabled={backgroundColor === null}
+        <button type="button" aria-label={t('box.ariaClearFill')} title={t('box.noFillTitle')} disabled={backgroundColor === null}
           onClick={() => change({ backgroundColor: null })}>{t('box.noFill')}</button>
-        <button type="button" aria-label={t('box.delete')} title={t('box.deleteTitle')} onClick={() => {
+        <button type="button" aria-label={t('box.ariaDelete')} title={t('box.deleteTitle')} onClick={() => {
           const position = getPos()
           if (typeof position !== 'number') return
           const current = editor.state.doc.nodeAt(position)

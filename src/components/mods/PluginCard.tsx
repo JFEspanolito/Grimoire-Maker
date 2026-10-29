@@ -7,7 +7,7 @@ export type PluginOrigin = 'Built in' | 'Imported' | 'Local' | 'Local package'
 interface Props {
   name: string
   version?: string
-  origin: PluginOrigin
+  origin: PluginOrigin | string
   /** One short plain word or phrase: On, Off, Needs approval, Stopped, Changed. */
   status: string
   /** One plain line. */

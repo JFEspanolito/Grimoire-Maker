@@ -140,7 +140,7 @@ export function AppInfoDialog({ kind, onClose }: Props) {
   const [contributors, setContributors] = useState<typeof localContributors>([])
   const [creditsLoading, setCreditsLoading] = useState(true)
   const [localCredits, setLocalCredits] = useState(false)
-  const title = isTutorial ? 'Interactive Tutorial' : 'About'
+  const title = isTutorial ? 'Tutorial' : 'About'
   const currentStep = TUTORIAL_STEPS[stepIndex] ?? TUTORIAL_STEPS[0]
 
   useEffect(() => {

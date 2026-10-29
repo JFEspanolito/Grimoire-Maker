@@ -46,7 +46,7 @@ export function ContributorsDialog({ title, group, initial, busy, error, onSave,
               required={key === 'name'} maxLength={500} disabled={busy} placeholder={['Midrava', '@midrava', 'Instagram'][column]}
               onChange={event => { setValidation(''); setRows(current => current.map(item => item.id === row.id ? { ...item, value: { ...item.value, [key]: event.target.value } } : item)) }} />
           </td>)}
-          <td><button type="button" aria-label={`${t('contributors.remove')} ${index + 1}`} disabled={busy}
+          <td><button type="button" aria-label={`${t('contributors.removeContributor')} ${index + 1}`} disabled={busy}
             onClick={() => setRows(current => current.filter(item => item.id !== row.id))}>{t('contributors.remove')}</button></td>
         </tr>)}</tbody>
       </table></div>
