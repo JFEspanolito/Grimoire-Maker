@@ -25,7 +25,7 @@ export function GitDiffDialog({ path, staged, diff, loading, error, onClose }: P
     <p className={styles.legend}><span className={styles.removed}>{t('git.diff.removed')}</span><span className={styles.added}>{t('git.diff.added')}</span></p>
     {loading && <p role="status">{t('git.diff.loading')}</p>}
     {error && <p role="alert">{error}</p>}
-    {diff?.binary ? <p>{t('git.diff.binary')}</p> : <div className={styles.scroll} tabIndex={0} aria-label={t('git.diff.sideBySide')}>}
+    {diff?.binary ? <p>{t('git.diff.binary')}</p> : <div className={styles.scroll} tabIndex={0} aria-label={t('git.diff.sideBySide')}>
       <table className={styles.table}>
         <thead><tr><th scope="col">{t('git.diff.original')}</th><th scope="col">{t('git.diff.incoming')}</th></tr></thead>
         <tbody>{rows.map((row, index) => <tr key={index}>
