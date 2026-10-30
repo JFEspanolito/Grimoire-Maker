@@ -4,7 +4,6 @@ import { useDocumentStore } from '../../stores/documentStore'
 import { documentLabel } from '../../lib/documentLabel'
 import { useTranslation } from '../../lib/i18n'
 import { useAppUpdateStore } from '../../stores/appUpdateStore'
-import { openExternalUrl } from '../../lib/openUrl'
 
 interface DocumentTabsProps {
   markdownViews: Record<string, boolean>
@@ -50,10 +49,6 @@ export function DocumentTabs({ markdownViews, onChangeView }: DocumentTabsProps)
           href="https://github.com/JFEspanolito/Grimoire-Maker/releases/latest"
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(event) => {
-            event.preventDefault()
-            void openExternalUrl('https://github.com/JFEspanolito/Grimoire-Maker/releases/latest')
-          }}
           className="ml-auto mr-3 flex shrink-0 items-center gap-1.5 px-2 py-1 text-xs text-red-400/80 transition-colors hover:text-red-300 hover:underline"
           title={`${t('about.newVersionAvailable')}${updateInfo.latestVersion}`}
         >

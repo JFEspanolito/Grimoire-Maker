@@ -104,6 +104,7 @@ export default function App() {
   useEffect(() => {
     if (!isTauri()) return
     const onGlobalClick = (event: MouseEvent) => {
+      if (event.defaultPrevented) return
       const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]')
       if (!anchor) return
       const href = anchor.href
