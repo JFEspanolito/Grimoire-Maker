@@ -8,8 +8,11 @@
   position: fixed;
   inset: 0;
   margin: auto;
-  width: min(48rem, calc(100vw - 3rem));
-  max-height: min(40rem, calc(100vh - 4rem));
+  width: min(67.2rem, calc(100vw - 3rem));
+  max-width: 96vw;
+  height: 70vh;
+  max-height: 70vh;
+  min-height: 28rem;
   padding: 1.25rem;
   border: 1px solid #4a4539;
   border-radius: 0.6rem;
@@ -29,9 +32,46 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.85rem;
-  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+}
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   border-bottom: 1px solid #36332b;
+  margin-bottom: 0.85rem;
+}
+
+.tabButton {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #a8a296;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tabButton:hover {
+  color: #f0eee9;
+}
+.tabButtonActive {
+  color: #f0eee9;
+  border-bottom-color: #cfb37c;
+  font-weight: 600;
+}
+
+.placeholderView {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: #a8a296;
+  text-align: center;
 }
 .header h2 {
   margin: 0;
@@ -58,7 +98,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: min(30rem, 65vh);
+  flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 0.25rem 0.25rem 0.25rem 0;
   overflow-y: auto;

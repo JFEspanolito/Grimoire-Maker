@@ -174,6 +174,17 @@ it('renders QuotesButton and opens quotes modal with new quote button and dropdo
 
   const textareas = document.querySelectorAll<HTMLTextAreaElement>('textarea')
   expect(textareas.length).toBeGreaterThanOrEqual(1)
+
+  const tabs = document.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+  expect(tabs).toHaveLength(2)
+  expect(tabs[0].textContent).toContain('Quotes')
+  expect(tabs[1].textContent).toContain('References')
+
+  await act(async () => tabs[1].click())
+  expect(document.querySelector('dialog')?.textContent).toContain('References view (coming soon)')
+
+  await act(async () => tabs[0].click())
+  expect(document.querySelector('dialog')?.textContent).toContain('Simple quote')
 })
 
 it('finds and appends references to nested References.md in template subfolders', async () => {

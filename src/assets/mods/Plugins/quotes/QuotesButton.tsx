@@ -176,6 +176,7 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const root = useWorkspaceRoot()
   const { items, error, add, update, remove } = useQuotes()
+  const [activeTab, setActiveTab] = useState<'quotes' | 'references'>('quotes')
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
@@ -241,39 +242,70 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
       <header className={styles.header}>
         <div className={styles.headerTitleRow}>
           <h2 id="quotes-title">Quotes & Citations</h2>
-          <button
-            type="button"
-            className={styles.newQuoteBtn}
-            title="Create a new quote manually"
-            onClick={handleCreateQuote}
-          >
-            + New quote
-          </button>
+          {activeTab === 'quotes' && (
+            <button
+              type="button"
+              className={styles.newQuoteBtn}
+              title="Create a new quote manually"
+              onClick={handleCreateQuote}
+            >
+              + New quote
+            </button>
+          )}
         </div>
         <button type="button" className={styles.close} aria-label="Close Quotes" onClick={onClose}>
           ×
         </button>
       </header>
 
+      <div className={styles.tabBar} role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'quotes'}
+          className={`${styles.tabButton} ${activeTab === 'quotes' ? styles.tabButtonActive : ''}`}
+          onClick={() => setActiveTab('quotes')}
+        >
+          Quotes ({items.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'references'}
+          className={`${styles.tabButton} ${activeTab === 'references' ? styles.tabButtonActive : ''}`}
+          onClick={() => setActiveTab('references')}
+        >
+          References
+        </button>
+      </div>
+
       {error && <p role="alert" className={styles.error}>{error}</p>}
       {notice && <p role="status" className={styles.notice}>{notice}</p>}
 
-      {items.length === 0 ? (
-        <p className={styles.empty}>
-          No quotes collected yet. Select text in any Draft or Research document, right-click, and choose "Add to quote", or click "+ New quote" above.
-        </p>
+      {activeTab === 'quotes' ? (
+        items.length === 0 ? (
+          <p className={styles.empty}>
+            No quotes collected yet. Select text in any Draft or Research document, right-click, and choose "Add to quote", or click "+ New quote" above.
+          </p>
+        ) : (
+          <ul className={styles.list}>
+            {items.map((quote) => (
+              <QuoteCard
+                key={quote.id}
+                quote={quote}
+                onUpdate={(updates) => update(quote.id, updates)}
+                onRemove={() => remove(quote.id)}
+                onInsert={() => void handleInsertAtCursor(quote)}
+              />
+            ))}
+          </ul>
+        )
       ) : (
-        <ul className={styles.list}>
-          {items.map((quote) => (
-            <QuoteCard
-              key={quote.id}
-              quote={quote}
-              onUpdate={(updates) => update(quote.id, updates)}
-              onRemove={() => remove(quote.id)}
-              onInsert={() => void handleInsertAtCursor(quote)}
-            />
-          ))}
-        </ul>
+        <div className={styles.placeholderView}>
+          <p className={styles.empty}>
+            References view (coming soon).
+          </p>
+        </div>
       )}
     </dialog>
   )
