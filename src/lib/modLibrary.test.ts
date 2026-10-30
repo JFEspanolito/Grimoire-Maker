@@ -27,7 +27,7 @@ it('ships declarative content plus complete executable Zoom and Ruler packages',
     expect(JSON.parse(MOD_EXAMPLES[`Plugins/${folder}/manifest.json`]).id).toBe(`builtin.${folder}`)
     expect(MOD_EXAMPLES[`Plugins/${folder}/index.md`]).toContain('pnpm pack:plugin')
   }
-  expect(OFFICIAL_PLUGINS.map(plugin => plugin.folder)).toEqual(['bookmarks', 'pixel-ruler', 'zoom'])
+  expect(OFFICIAL_PLUGINS.map(plugin => plugin.folder)).toEqual(['bookmarks', 'pixel-ruler', 'quotes', 'zoom'])
   expect(OFFICIAL_PLUGINS.find(plugin => plugin.folder === 'zoom')).toMatchObject({ label: 'Zoom' })
 })
 it('keeps the old trusted sources apart as the legacy baseline, never as seedable examples', () => {

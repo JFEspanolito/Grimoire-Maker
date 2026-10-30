@@ -36,7 +36,7 @@ export function prepareModLibrary(): Promise<ModLibraryPaths> {
 /** Libraries that ship examples: the folder name inside a library root and the matching key of the configured paths. */
 const SEEDED = [['Snippets', 'snippets'], ['Plugins', 'plugins'], ['Templates', 'templates']] as const
 /** Per-library markers that let an upgrade add newer examples without replacing edited ones. */
-const UPGRADE_MARKERS = [['Templates', 'templates', '.editorial-templates-v3-seeded'], ['Plugins', 'plugins', '.executable-plugins-v1-seeded'], ['Snippets', 'snippets', '.rol-adventures-snippets-v2-seeded']] as const
+const UPGRADE_MARKERS = [['Templates', 'templates', '.editorial-templates-v3-seeded'], ['Plugins', 'plugins', '.executable-plugins-v2-seeded'], ['Snippets', 'snippets', '.rol-adventures-snippets-v2-seeded']] as const
 const RETIRED_FOLDERS: Partial<Record<(typeof SEEDED)[number][1], readonly string[]>> = {
   snippets: ['Dungeons and Dragons', 'Rol', 'Rol Adventures'],
   templates: ['classic-fantasy', 'quick-one-shot', 'a5-zine'],

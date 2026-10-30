@@ -113,7 +113,7 @@ it('seeds the shipped examples into native-managed folders (portable Data or ins
   for (const relative of exampleKeys('Templates')) expect(await present(`${managedPaths.templates}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Snippets')) expect(await present(`${managedPaths.snippets}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Plugins')) expect(await present(`${managedPaths.plugins}/${relative}`)).toBe(true)
-  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.editorial-templates-v3-seeded`, `${managedPaths.plugins}/.executable-plugins-v1-seeded`, `${managedPaths.snippets}/.rol-adventures-snippets-v2-seeded`]) expect(await present(marker)).toBe(true)
+  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.editorial-templates-v3-seeded`, `${managedPaths.plugins}/.executable-plugins-v2-seeded`, `${managedPaths.snippets}/.rol-adventures-snippets-v2-seeded`]) expect(await present(marker)).toBe(true)
   expect(await present(`${managedPaths.themes}/.examples-seeded`)).toBe(false)
   // A removed or edited example is never restored or replaced on the next start.
   const removed = exampleKeys('Templates')[0]
@@ -143,19 +143,19 @@ it('without a managed flag the original Mods library keeps seeding exactly as be
   for (const relative of exampleKeys('Plugins')) expect(await present(`${scope.root}/Mods/Plugins/${relative}`)).toBe(true)
   expect(await present(`${scope.root}/Mods/.examples-seeded`)).toBe(true)
   expect(await present(`${scope.root}/Mods/Templates/.editorial-templates-v3-seeded`)).toBe(true)
-  expect(await present(`${scope.root}/Mods/Plugins/.executable-plugins-v1-seeded`)).toBe(true)
+  expect(await present(`${scope.root}/Mods/Plugins/.executable-plugins-v2-seeded`)).toBe(true)
 })
 
 it('upgrades old descriptor installations without overwriting edited executable files', async () => {
   const plugins = `${scope.root}/Mods/Plugins`
-  await fs.unlink(`${plugins}/.executable-plugins-v1-seeded`)
+  await fs.unlink(`${plugins}/.executable-plugins-v2-seeded`)
   await fs.writeFile(`${plugins}/.plugins-seeded`, '1\n')
   await fs.writeFile(`${plugins}/bookmarks/bookmarks.tsx`, '// author edit')
   await fs.unlink(`${plugins}/bookmarks/anchors.ts`)
   await prepareModLibrary()
   expect(await fs.readFile(`${plugins}/bookmarks/bookmarks.tsx`, 'utf8')).toBe('// author edit')
   expect(await fs.readFile(`${plugins}/bookmarks/anchors.ts`, 'utf8')).toBe(MOD_EXAMPLES['Plugins/bookmarks/anchors.ts'])
-  expect(await fs.readFile(`${plugins}/.executable-plugins-v1-seeded`, 'utf8')).toBe('1\n')
+  expect(await fs.readFile(`${plugins}/.executable-plugins-v2-seeded`, 'utf8')).toBe('1\n')
 })
 it('toggle serializes with refresh and survives a module-level app restart without builtins fallback', async () => {
  await Promise.all([useModStore.getState().setEnabled('Snippets/community', false), useModStore.getState().reload(), useModStore.getState().setEnabled('Snippets/community', true)])
