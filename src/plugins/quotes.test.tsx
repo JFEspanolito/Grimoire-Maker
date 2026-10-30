@@ -22,9 +22,26 @@ vi.mock('@tauri-apps/plugin-fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tauri-apps/plugin-fs')>()
   return {
     ...actual,
-    exists: vi.fn(async (p: string) => fsMock.files.has(p)),
-    readTextFile: vi.fn(async (p: string) => fsMock.files.get(p) ?? ''),
-    writeTextFile: vi.fn(async (p: string, content: string) => { fsMock.files.set(p, content) }),
+    exists: vi.fn(async (p: string) => fsMock.files.has(p.replaceAll('\\', '/'))),
+    readTextFile: vi.fn(async (p: string) => fsMock.files.get(p.replaceAll('\\', '/')) ?? ''),
+    writeTextFile: vi.fn(async (p: string, content: string) => { fsMock.files.set(p.replaceAll('\\', '/'), content) }),
+    readDir: vi.fn(async (dir: string) => {
+      const normalizedDir = dir.replaceAll('\\', '/').replace(/\/+$/, '')
+      const entries = new Map<string, { name: string; isDirectory: boolean }>()
+      for (const p of fsMock.files.keys()) {
+        const norm = p.replaceAll('\\', '/').replace(/\/+$/, '')
+        if (norm.startsWith(`${normalizedDir}/`)) {
+          const rest = norm.slice(normalizedDir.length + 1)
+          const parts = rest.split('/')
+          const name = parts[0]
+          const isDirectory = parts.length > 1
+          if (!entries.has(name) || isDirectory) {
+            entries.set(name, { name, isDirectory })
+          }
+        }
+      }
+      return Array.from(entries.values())
+    }),
   }
 })
 
@@ -169,4 +186,25 @@ it('formats quotes and references according to selected Quote Type', async () =>
   const updated = useQuotes.getState().items.find(i => i.id === quote.id)!
   const mlaResult = await ensureReferenceForQuote('/book', updated)
   expect(mlaResult.quoteMarkdown).toContain('(Sullivan, L. 403)')
+})
+
+it('finds and appends references to nested References.md in template subfolders', async () => {
+  const nestedRefPath = '/book/Draft/thesis-example/chapters/Appendices/References.md'
+  fsMock.files.set(nestedRefPath, '# References\n\n')
+
+  const quote = useQuotes.getState().add({
+    text: 'A profound thesis statement.',
+    sourcePath: 'Draft/thesis-example/chapters/00 - Front Matter/Abstract and Keywords.md',
+    author: 'Espanolito, J.',
+    year: '2026',
+    title: 'Grimoire Architecture',
+    page: '12',
+  })!
+
+  const result = await ensureReferenceForQuote('/book', quote)
+  expect(result.referenceNumber).toBe(1)
+  expect(fsMock.files.has(nestedRefPath)).toBe(true)
+  expect(fsMock.files.get(nestedRefPath)).toContain('1. Espanolito, J. (2026). *Grimoire Architecture*, p. 12.')
+  // Should NOT create or touch root Draft/References.md
+  expect(fsMock.files.has('/book/Draft/References.md')).toBe(false)
 })

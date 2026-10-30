@@ -1,5 +1,7 @@
-import { exists, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
+import { exists, readDir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { serializeDocument, parseDocument } from '../../../../lib/frontmatter'
+import { useDocumentStore } from '../../../../stores/documentStore'
+import type { FileNode } from '../../../../types/document'
 import type { Quote } from './quotesStore'
 import { useQuotes } from './quotesStore'
 
@@ -90,12 +92,137 @@ export function formatQuoteMarkdown(quote: Quote, referenceNumber: number): stri
   }
 }
 
+function toNormalizedRelative(root: string, path: string): string {
+  const normRoot = root.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+  const normPath = path.replaceAll('\\', '/').toLowerCase()
+  if (normPath.startsWith(`${normRoot}/`)) {
+    return normPath.slice(normRoot.length + 1)
+  }
+  return normPath
+}
+
+function commonPrefixSegments(p1: string, p2: string): number {
+  const s1 = p1.replaceAll('\\', '/').toLowerCase().split('/').filter(Boolean)
+  const s2 = p2.replaceAll('\\', '/').toLowerCase().split('/').filter(Boolean)
+  let count = 0
+  for (let i = 0; i < Math.min(s1.length, s2.length); i++) {
+    if (s1[i] === s2[i]) count++
+    else break
+  }
+  return count
+}
+
+function searchTreeForReferences(nodes: FileNode[]): string[] {
+  const matches: string[] = []
+  for (const node of nodes) {
+    if (node.isDirectory && node.children) {
+      matches.push(...searchTreeForReferences(node.children))
+    } else if (node.name.toLowerCase() === 'references.md') {
+      matches.push(node.path.replaceAll('\\', '/'))
+    }
+  }
+  return matches
+}
+
+async function scanDirectoryForReferences(dir: string, depth = 0): Promise<string[]> {
+  if (depth > 6) return []
+  try {
+    const entries = await readDir(dir)
+    const matches: string[] = []
+    const subdirs: string[] = []
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      const full = `${dir}/${entry.name}`.replaceAll('\\', '/')
+      if (entry.isDirectory) {
+        subdirs.push(full)
+      } else if (entry.name.toLowerCase() === 'references.md') {
+        matches.push(full)
+      }
+    }
+    for (const sub of subdirs) {
+      const nested = await scanDirectoryForReferences(sub, depth + 1)
+      matches.push(...nested)
+    }
+    return matches
+  } catch {
+    return []
+  }
+}
+
 /**
- * Ensures that Draft/References.md exists in the project and contains a numbered reference entry
- * for this quote. Returns the reference number and the formatted quote Markdown ready to insert.
+ * Searches the workspace for an existing References.md file (e.g. inside subfolders or template chapters).
+ * If multiple exist, chooses the one with the strongest path proximity to the quote source.
+ */
+export async function findReferencesFile(root: string, contextPath?: string): Promise<string> {
+  const normRoot = root.replaceAll('\\', '/').replace(/\/+$/, '')
+  const candidates: string[] = []
+
+  // 1. Check in-memory document tree
+  try {
+    const tree = useDocumentStore.getState().tree
+    if (Array.isArray(tree) && tree.length > 0) {
+      candidates.push(...searchTreeForReferences(tree))
+    }
+  } catch {
+    // ignore
+  }
+
+  // 2. Scan Draft directory on disk
+  const draftDir = `${normRoot}/Draft`
+  try {
+    const diskMatches = await scanDirectoryForReferences(draftDir)
+    candidates.push(...diskMatches)
+  } catch {
+    // ignore
+  }
+
+  const uniqueCandidates = Array.from(new Set(candidates.map((p) => p.replaceAll('\\', '/'))))
+
+  if (uniqueCandidates.length === 1) {
+    return uniqueCandidates[0]
+  }
+
+  if (uniqueCandidates.length > 1) {
+    const targetContext = contextPath ? toNormalizedRelative(normRoot, contextPath) : ''
+    let bestCandidate = uniqueCandidates[0]
+    let bestScore = -1
+
+    for (const cand of uniqueCandidates) {
+      const relCand = toNormalizedRelative(normRoot, cand)
+      const score = commonPrefixSegments(targetContext, relCand)
+      if (score > bestScore) {
+        bestScore = score
+        bestCandidate = cand
+      }
+    }
+    return bestCandidate
+  }
+
+  // Fallback: If no candidate exists, determine where to create one.
+  if (contextPath) {
+    const rel = toNormalizedRelative(normRoot, contextPath)
+    const parts = rel.split('/')
+    if (parts.length > 2 && parts[0] === 'draft') {
+      const subprojectDir = `${normRoot}/Draft/${parts[1]}`
+      try {
+        if (await exists(subprojectDir)) {
+          return `${subprojectDir}/References.md`
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return `${normRoot}/Draft/References.md`
+}
+
+/**
+ * Ensures that the relevant References.md exists in the project and contains an up-to-date
+ * reference entry for this quote. Returns the reference number and the formatted quote Markdown.
  */
 export async function ensureReferenceForQuote(root: string, quote: Quote): Promise<ReferenceResult> {
-  const targetPath = `${root.replaceAll('\\', '/').replace(/\/+$/, '')}/Draft/References.md`
+  const targetPath = await findReferencesFile(root, quote.sourcePath)
   let referenceNumber = quote.referenceNumber ?? 0
   let currentBody = ''
   let currentFrontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
@@ -108,35 +235,60 @@ export async function ensureReferenceForQuote(root: string, quote: Quote): Promi
       currentBody = parsed.body
       currentFrontmatter = { ...currentFrontmatter, ...parsed.frontmatter }
 
-      // Check if reference already exists matching author and title
       const lines = currentBody.split('\n')
       let maxNum = 0
+      let existingLineIndex = -1
 
-      for (const line of lines) {
-        const match = /^(\d+)\.\s*(.+)$/.exec(line.trim())
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim()
+        const match = /^(\d+)\.\s*(.+)$/.exec(line)
         if (match) {
           const num = parseInt(match[1], 10)
           if (num > maxNum) maxNum = num
           const rest = match[2].toLowerCase()
-          const keyAuthor = (quote.author || quote.title || '').toLowerCase()
+          const keyAuthor = (quote.author || quote.title || '').trim().toLowerCase()
           if (keyAuthor && rest.includes(keyAuthor)) {
-            // Already present, reuse number
             referenceNumber = num
+            existingLineIndex = i
+          } else if (referenceNumber && num === referenceNumber) {
+            existingLineIndex = i
           }
         }
       }
 
-      if (!referenceNumber) {
+      if (existingLineIndex !== -1 && referenceNumber > 0) {
+        // Update existing entry with latest metadata/style
+        lines[existingLineIndex] = formatReferenceEntry(referenceNumber, quote)
+        const updatedBody = lines.join('\n')
+        const serialized = serializeDocument(currentFrontmatter, updatedBody)
+        await writeTextFile(targetPath, serialized)
+        try {
+          useDocumentStore.getState().setRawForPath(targetPath, serialized)
+        } catch {
+          // ignore
+        }
+      } else {
         referenceNumber = maxNum + 1
         const newEntry = formatReferenceEntry(referenceNumber, quote)
-        const updatedBody = currentBody.trimEnd() + `\n${newEntry}\n`
-        await writeTextFile(targetPath, serializeDocument(currentFrontmatter, updatedBody))
+        const updatedBody = currentBody.trimEnd() ? `${currentBody.trimEnd()}\n\n${newEntry}\n` : `${newEntry}\n`
+        const serialized = serializeDocument(currentFrontmatter, updatedBody)
+        await writeTextFile(targetPath, serialized)
+        try {
+          useDocumentStore.getState().setRawForPath(targetPath, serialized)
+        } catch {
+          // ignore
+        }
       }
     } else {
       referenceNumber = 1
       const newEntry = formatReferenceEntry(referenceNumber, quote)
       const initialContent = serializeDocument(currentFrontmatter, `# References\n\n${newEntry}\n`)
       await writeTextFile(targetPath, initialContent)
+      try {
+        useDocumentStore.getState().setRawForPath(targetPath, initialContent)
+      } catch {
+        // ignore
+      }
     }
 
     useQuotes.getState().update(quote.id, { referenceNumber })

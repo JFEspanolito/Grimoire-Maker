@@ -1,5 +1,6 @@
-import type { GrimoirePlugin, PluginContextActionContext } from '@grimoire/plugin-api'
+import { getWorkspaceRoot, type GrimoirePlugin, type PluginContextActionContext } from '@grimoire/plugin-api'
 import { useQuotes } from './quotesStore'
+import { ensureReferenceForQuote } from './referencesManager'
 import { QuotesButton } from './QuotesButton'
 
 export const addToQuote = {
@@ -8,10 +9,16 @@ export const addToQuote = {
   when: ({ selectionText }: PluginContextActionContext) => selectionText.trim().length > 0,
   run({ selectionText, path }: PluginContextActionContext) {
     if (selectionText.trim().length > 0) {
-      useQuotes.getState().add({
+      const quote = useQuotes.getState().add({
         text: selectionText.trim(),
         sourcePath: path ?? '',
       })
+      if (quote) {
+        const root = useQuotes.getState().root ?? getWorkspaceRoot()
+        if (root) {
+          void ensureReferenceForQuote(root, quote)
+        }
+      }
     }
   },
 }

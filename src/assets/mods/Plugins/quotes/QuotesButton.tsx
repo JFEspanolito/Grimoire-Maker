@@ -19,6 +19,14 @@ function QuoteCard({
 }) {
   const root = useWorkspaceRoot()
 
+  const handleUpdate = (updates: Partial<Quote>) => {
+    onUpdate(updates)
+    if (root) {
+      const updated = { ...quote, ...updates }
+      void ensureReferenceForQuote(root, updated)
+    }
+  }
+
   const handleDragStart = (e: React.DragEvent) => {
     const textRef = formatQuoteMarkdown(quote, quote.referenceNumber ?? 1)
     e.dataTransfer.setData('text/plain', textRef)
@@ -51,7 +59,7 @@ function QuoteCard({
             className={styles.input}
             value={quote.author}
             placeholder="e.g. Smith, J."
-            onChange={(e) => onUpdate({ author: e.target.value })}
+            onChange={(e) => handleUpdate({ author: e.target.value })}
           />
         </label>
         <label className={styles.field}>
@@ -60,7 +68,7 @@ function QuoteCard({
             className={styles.input}
             value={quote.year}
             placeholder="e.g. 2024"
-            onChange={(e) => onUpdate({ year: e.target.value })}
+            onChange={(e) => handleUpdate({ year: e.target.value })}
           />
         </label>
         <label className={styles.field}>
@@ -69,7 +77,7 @@ function QuoteCard({
             className={styles.input}
             value={quote.page}
             placeholder="e.g. 42"
-            onChange={(e) => onUpdate({ page: e.target.value })}
+            onChange={(e) => handleUpdate({ page: e.target.value })}
           />
         </label>
         <label className={styles.field}>
@@ -78,7 +86,7 @@ function QuoteCard({
             className={styles.input}
             value={quote.title}
             placeholder="e.g. Journal of AI"
-            onChange={(e) => onUpdate({ title: e.target.value })}
+            onChange={(e) => handleUpdate({ title: e.target.value })}
           />
         </label>
       </div>
@@ -99,7 +107,7 @@ function QuoteCard({
             <select
               className={styles.styleSelect}
               value={quote.quoteType ?? 'APA'}
-              onChange={(e) => onUpdate({ quoteType: e.target.value as QuoteType })}
+              onChange={(e) => handleUpdate({ quoteType: e.target.value as QuoteType })}
             >
               <option value="APA">APA</option>
               <option value="Chicago">Chicago</option>
@@ -132,6 +140,15 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
     el?.showModal()
     return () => el?.close()
   }, [])
+
+  useEffect(() => {
+    if (!root) return
+    for (const item of items) {
+      if (!item.referenceNumber) {
+        void ensureReferenceForQuote(root, item)
+      }
+    }
+  }, [root, items])
 
   const handleInsertAtCursor = async (quote: Quote) => {
     if (!root) return
