@@ -82,6 +82,7 @@ pub fn run() {
             commands::replace_text::snapshot_project_texts,
             commands::replace_text::commit_project_replace,
             commands::workspace::open_folder,
+            commands::workspace::open_url,
             commands::workspace::delete_from_trash,
             commands::mods::open_mods_folder,
             commands::mods::delete_mod,
