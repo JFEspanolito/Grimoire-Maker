@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWorkspaceRoot } from '@grimoire/plugin-api'
-import { useQuotes, type Quote, type QuoteType } from './quotesStore'
-import { ensureReferenceForQuote, formatQuoteMarkdown } from './referencesManager'
+import { useQuotes, type Quote } from './quotesStore'
+import type { CitationStyle } from './citationFormatter'
+import { syncReferences, insertQuote, ensureReferenceForQuote } from './referencesManager'
 import { findSnippetDropTarget, getActiveSnippetDropTarget } from '../../../../lib/snippetDrop'
 import { insertContentBox } from '../../../../lib/contentBoxes'
 import styles from './Quotes.module.css'
@@ -23,12 +24,12 @@ function QuoteCard({
     onUpdate(updates)
     if (root) {
       const updated = { ...quote, ...updates }
-      void ensureReferenceForQuote(root, updated)
+      void syncReferences(root, updated)
     }
   }
 
   const handleDragStart = (e: React.DragEvent) => {
-    const textRef = formatQuoteMarkdown(quote, quote.referenceNumber ?? 1)
+    const textRef = insertQuote(quote, quote.quoteType)
     e.dataTransfer.setData('text/plain', textRef)
     e.dataTransfer.setData('application/x-grimoire-quote', quote.id)
     e.dataTransfer.effectAllowed = 'copy'
@@ -38,34 +39,50 @@ function QuoteCard({
     if (!root) return
     const drop = findSnippetDropTarget(e.clientX, e.clientY)
     if (drop) {
-      const { referenceNumber, quoteMarkdown } = await ensureReferenceForQuote(root, quote)
-      insertContentBox(drop.editor, quoteMarkdown, drop.position)
+      const { refIndex } = await syncReferences(root, quote)
+      const updated = { ...quote, refIndex }
+      const textRef = insertQuote(updated, quote.quoteType)
+      insertContentBox(drop.editor, textRef, drop.position)
     }
   }
+
+  const textValue = quote.quoteText || quote.text || ''
+  const isNumeric = quote.quoteType === 'IEEE' || quote.quoteType === 'Chicago'
 
   return (
     <li className={styles.card}>
       <div className={styles.quoteHeader}>
         <textarea
           className={styles.quoteInput}
-          value={quote.text}
+          value={textValue}
           placeholder="Quote text…"
-          rows={Math.max(2, Math.min(6, (quote.text.match(/\n/g) || []).length + 1))}
-          onChange={(e) => handleUpdate({ text: e.target.value })}
+          rows={Math.max(2, Math.min(6, (textValue.match(/\n/g) || []).length + 1))}
+          onChange={(e) => handleUpdate({ quoteText: e.target.value, text: e.target.value })}
         />
         <span className={styles.badge}>
-          {quote.referenceNumber ? `Ref [${quote.referenceNumber}]` : 'Unassigned'}
+          {isNumeric
+            ? (quote.refIndex ?? quote.referenceNumber ? `Ref [${quote.refIndex ?? quote.referenceNumber}]` : 'Unassigned')
+            : (quote.quoteType ?? 'APA')}
         </span>
       </div>
 
       <div className={styles.metaGrid}>
         <label className={styles.field}>
-          <span>Author</span>
+          <span>Author Last Name</span>
           <input
             className={styles.input}
-            value={quote.author}
-            placeholder="e.g. Smith, J."
-            onChange={(e) => handleUpdate({ author: e.target.value })}
+            value={quote.authorLastName}
+            placeholder="e.g. Smith"
+            onChange={(e) => handleUpdate({ authorLastName: e.target.value, author: e.target.value })}
+          />
+        </label>
+        <label className={styles.field}>
+          <span>Initial</span>
+          <input
+            className={styles.input}
+            value={quote.authorInitial ?? ''}
+            placeholder="e.g. J."
+            onChange={(e) => handleUpdate({ authorInitial: e.target.value })}
           />
         </label>
         <label className={styles.field}>
@@ -73,7 +90,7 @@ function QuoteCard({
           <input
             className={styles.input}
             value={quote.year}
-            placeholder="e.g. 2024"
+            placeholder="e.g. 2026"
             onChange={(e) => handleUpdate({ year: e.target.value })}
           />
         </label>
@@ -82,17 +99,38 @@ function QuoteCard({
           <input
             className={styles.input}
             value={quote.page}
-            placeholder="e.g. 42"
+            placeholder="e.g. 2 or 15-16"
             onChange={(e) => handleUpdate({ page: e.target.value })}
           />
         </label>
+      </div>
+
+      <div className={styles.metaGridSecond}>
         <label className={styles.field}>
-          <span>Source / Title</span>
+          <span>Title</span>
           <input
             className={styles.input}
             value={quote.title}
-            placeholder="e.g. Journal of AI"
+            placeholder="e.g. Data Management Guidelines"
             onChange={(e) => handleUpdate({ title: e.target.value })}
+          />
+        </label>
+        <label className={styles.field}>
+          <span>Source / Publisher</span>
+          <input
+            className={styles.input}
+            value={quote.sourceContainer ?? ''}
+            placeholder="e.g. Tech Press / Journal"
+            onChange={(e) => handleUpdate({ sourceContainer: e.target.value })}
+          />
+        </label>
+        <label className={styles.field}>
+          <span>DOI / URL</span>
+          <input
+            className={styles.input}
+            value={quote.doiOrUrl ?? ''}
+            placeholder="e.g. https://doi.org/10..."
+            onChange={(e) => handleUpdate({ doiOrUrl: e.target.value })}
           />
         </label>
       </div>
@@ -113,14 +151,13 @@ function QuoteCard({
             <select
               className={styles.styleSelect}
               value={quote.quoteType ?? 'APA'}
-              onChange={(e) => handleUpdate({ quoteType: e.target.value as QuoteType })}
+              onChange={(e) => handleUpdate({ quoteType: e.target.value as CitationStyle })}
             >
-              <option value="APA">APA</option>
-              <option value="Chicago">Chicago</option>
-              <option value="MLA">MLA</option>
+              <option value="APA">APA (7th)</option>
+              <option value="IEEE">IEEE (Numeric)</option>
+              <option value="MLA">MLA (9th)</option>
+              <option value="Chicago">Chicago (Notes)</option>
               <option value="Harvard">Harvard</option>
-              <option value="IEEE">IEEE</option>
-              <option value="ASC">ASC</option>
             </select>
           </label>
           <button type="button" className={styles.insertBtn} title="Insert at cursor" onClick={onInsert}>
@@ -139,20 +176,6 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const root = useWorkspaceRoot()
   const { items, error, add, update, remove } = useQuotes()
-
-  const handleCreateQuote = () => {
-    const newQuote = add({
-      text: '',
-      author: '',
-      year: new Date().getFullYear().toString(),
-      page: '',
-      title: '',
-      quoteType: 'APA',
-    })
-    if (newQuote && root) {
-      void ensureReferenceForQuote(root, newQuote)
-    }
-  }
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
@@ -164,11 +187,29 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!root) return
     for (const item of items) {
-      if (!item.referenceNumber) {
-        void ensureReferenceForQuote(root, item)
+      const isNumeric = item.quoteType === 'IEEE' || item.quoteType === 'Chicago'
+      if (isNumeric && !item.refIndex && !item.referenceNumber) {
+        void syncReferences(root, item)
       }
     }
   }, [root, items])
+
+  const handleCreateQuote = () => {
+    const newQuote = add({
+      quoteText: '',
+      authorLastName: '',
+      authorInitial: '',
+      year: new Date().getFullYear().toString(),
+      page: '',
+      title: '',
+      sourceContainer: '',
+      doiOrUrl: '',
+      quoteType: 'APA',
+    })
+    if (newQuote && root) {
+      void syncReferences(root, newQuote)
+    }
+  }
 
   const handleInsertAtCursor = async (quote: Quote) => {
     if (!root) return
@@ -177,9 +218,13 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
       setNotice('Open a Draft document to insert the quote.')
       return
     }
-    const { referenceNumber, quoteMarkdown } = await ensureReferenceForQuote(root, quote)
+    const { refIndex } = await syncReferences(root, quote)
+    const updated = { ...quote, refIndex }
+    const quoteMarkdown = insertQuote(updated, quote.quoteType)
     insertContentBox(active.editor, quoteMarkdown)
-    setNotice(`Inserted quote with reference [${referenceNumber}] into ${active.documentPath ?? 'document'}`)
+    const isNumeric = quote.quoteType === 'IEEE' || quote.quoteType === 'Chicago'
+    const refNotice = isNumeric ? ` with reference [${refIndex}]` : ` (${quote.quoteType ?? 'APA'})`
+    setNotice(`Inserted quote${refNotice} into ${active.documentPath ?? 'document'}`)
     setTimeout(() => setNotice(null), 3000)
   }
 
@@ -215,7 +260,7 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
 
       {items.length === 0 ? (
         <p className={styles.empty}>
-          No quotes collected yet. Select text in any Draft or Research document, right-click, and choose "Add to quote".
+          No quotes collected yet. Select text in any Draft or Research document, right-click, and choose "Add to quote", or click "+ New quote" above.
         </p>
       ) : (
         <ul className={styles.list}>

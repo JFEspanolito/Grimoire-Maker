@@ -4,92 +4,11 @@ import { useDocumentStore } from '../../../../stores/documentStore'
 import type { FileNode } from '../../../../types/document'
 import type { Quote } from './quotesStore'
 import { useQuotes } from './quotesStore'
+import { CitationFormatter, type CitationStyle } from './citationFormatter'
 
 export interface ReferenceResult {
   referenceNumber: number
   quoteMarkdown: string
-}
-
-const DEFAULT_REFERENCES_HEADER = `---
-title: References
-pageSize: a4
-columns: 1
-theme: modern
----
-# References
-
-`
-
-/** Formats a single bibliographic reference entry according to academic conventions. */
-export function formatReferenceEntry(number: number, quote: Quote): string {
-  const author = quote.author?.trim() || quote.title?.trim() || 'Anonymous'
-  const year = quote.year?.trim() || 'n.d.'
-  const title = quote.title?.trim() || 'Untitled'
-  const page = quote.page?.trim()
-  const type = quote.quoteType || 'APA'
-
-  switch (type) {
-    case 'MLA': {
-      const pagePart = page ? `, p. ${page}` : ''
-      return `${number}. ${author}. *${title}*. ${year}${pagePart}.`
-    }
-    case 'Chicago': {
-      const pagePart = page ? `, ${page}` : ''
-      return `${number}. ${author}. ${year}. *${title}*${pagePart}.`
-    }
-    case 'Harvard': {
-      const pagePart = page ? `, p. ${page}` : ''
-      return `${number}. ${author}, ${year}. *${title}*${pagePart}.`
-    }
-    case 'IEEE': {
-      const pagePart = page ? `, p. ${page}` : ''
-      return `${number}. ${author}, "${title}", ${year}${pagePart}.`
-    }
-    case 'ASC': {
-      const pagePart = page ? `, p ${page}` : ''
-      return `${number}. ${author}. *${title}*; ${year}${pagePart}.`
-    }
-    case 'APA':
-    default: {
-      const pagePart = page ? `, p. ${page}` : ''
-      return `${number}. ${author} (${year}). *${title}*${pagePart}.`
-    }
-  }
-}
-
-/** Formats the blockquote to be inserted into the manuscript. */
-export function formatQuoteMarkdown(quote: Quote, referenceNumber: number): string {
-  const author = quote.author?.trim() || quote.title?.trim() || 'Anonymous'
-  const year = quote.year?.trim()
-  const page = quote.page?.trim()
-  const type = quote.quoteType || 'APA'
-
-  switch (type) {
-    case 'MLA': {
-      const cite = page ? `(${author} ${page})` : `(${author})`
-      return `> "${quote.text}"\n> — ${cite} [${referenceNumber}]\n`
-    }
-    case 'Chicago': {
-      const pagePart = page ? `, ${page}` : ''
-      const yearPart = year ? ` ${year}` : ''
-      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [${referenceNumber}]\n`
-    }
-    case 'Harvard': {
-      const yearPart = year ? `, ${year}` : ''
-      const pagePart = page ? `: ${page}` : ''
-      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [${referenceNumber}]\n`
-    }
-    case 'IEEE':
-    case 'ASC': {
-      return `> "${quote.text}" [${referenceNumber}]\n`
-    }
-    case 'APA':
-    default: {
-      const yearPart = year ? `, ${year}` : ''
-      const pagePart = page ? `, p. ${page}` : ''
-      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [${referenceNumber}]\n`
-    }
-  }
 }
 
 function toNormalizedRelative(root: string, path: string): string {
@@ -218,12 +137,35 @@ export async function findReferencesFile(root: string, contextPath?: string): Pr
 }
 
 /**
- * Ensures that the relevant References.md exists in the project and contains an up-to-date
- * reference entry for this quote. Returns the reference number and the formatted quote Markdown.
+ * Generates the in-text citation string to insert into the Draft editor.
+ * Pure function: decoupled from bibliography file generation.
  */
-export async function ensureReferenceForQuote(root: string, quote: Quote): Promise<ReferenceResult> {
+export function insertQuote(quote: Quote, style?: CitationStyle): string {
+  return CitationFormatter.formatInline(quote, style ?? quote.quoteType ?? 'APA')
+}
+
+/** Legacy alias for backwards compatibility */
+export function formatQuoteMarkdown(quote: Quote, referenceNumber?: number): string {
+  const copy = { ...quote, refIndex: referenceNumber ?? quote.refIndex ?? 1 }
+  return insertQuote(copy)
+}
+
+/** Legacy alias for backwards compatibility */
+export function formatReferenceEntry(number: number, quote: Quote): string {
+  const copy = { ...quote, refIndex: number }
+  return CitationFormatter.formatBibliography(copy, quote.quoteType ?? 'APA')
+}
+
+/**
+ * Synchronizes the bibliography file (Draft/References.md) for the project.
+ * Handles both sequential numbered styles (IEEE, Chicago) and alphabetical styles (APA, MLA, Harvard).
+ */
+export async function syncReferences(root: string, quote: Quote): Promise<{ targetPath: string; refIndex: number }> {
   const targetPath = await findReferencesFile(root, quote.sourcePath)
-  let referenceNumber = quote.referenceNumber ?? 0
+  const style = quote.quoteType ?? 'APA'
+  const isNumeric = style === 'IEEE' || style === 'Chicago'
+
+  let refIndex = quote.refIndex ?? quote.referenceNumber ?? 0
   let currentBody = ''
   let currentFrontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
 
@@ -239,26 +181,41 @@ export async function ensureReferenceForQuote(root: string, quote: Quote): Promi
       let maxNum = 0
       let existingLineIndex = -1
 
+      const authorKey = (quote.authorLastName || quote.title || '').trim().toLowerCase()
+
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim()
-        const match = /^(\d+)\.\s*(.+)$/.exec(line)
-        if (match) {
-          const num = parseInt(match[1], 10)
-          if (num > maxNum) maxNum = num
-          const rest = match[2].toLowerCase()
-          const keyAuthor = (quote.author || quote.title || '').trim().toLowerCase()
-          if (keyAuthor && rest.includes(keyAuthor)) {
-            referenceNumber = num
-            existingLineIndex = i
-          } else if (referenceNumber && num === referenceNumber) {
+        if (isNumeric) {
+          const matchNum = /^\[?(\d+)\]?[\.\s]+(.+)$/.exec(line)
+          if (matchNum) {
+            const num = parseInt(matchNum[1], 10)
+            if (num > maxNum) maxNum = num
+            const rest = matchNum[2].toLowerCase()
+            if (authorKey && rest.includes(authorKey)) {
+              refIndex = num
+              existingLineIndex = i
+            } else if (refIndex && num === refIndex) {
+              existingLineIndex = i
+            }
+          }
+        } else {
+          // Author-Date or Author-Page (APA, MLA, Harvard): match by author name or title
+          if (authorKey && line.toLowerCase().includes(authorKey)) {
             existingLineIndex = i
           }
         }
       }
 
-      if (existingLineIndex !== -1 && referenceNumber > 0) {
-        // Update existing entry with latest metadata/style
-        lines[existingLineIndex] = formatReferenceEntry(referenceNumber, quote)
+      if (isNumeric && !refIndex) {
+        refIndex = maxNum + 1
+      }
+      if (!refIndex) refIndex = 1
+
+      const updatedQuote = { ...quote, refIndex, referenceNumber: refIndex }
+      const newEntry = CitationFormatter.formatBibliography(updatedQuote, style)
+
+      if (existingLineIndex !== -1) {
+        lines[existingLineIndex] = newEntry
         const updatedBody = lines.join('\n')
         const serialized = serializeDocument(currentFrontmatter, updatedBody)
         await writeTextFile(targetPath, serialized)
@@ -268,8 +225,6 @@ export async function ensureReferenceForQuote(root: string, quote: Quote): Promi
           // ignore
         }
       } else {
-        referenceNumber = maxNum + 1
-        const newEntry = formatReferenceEntry(referenceNumber, quote)
         const updatedBody = currentBody.trimEnd() ? `${currentBody.trimEnd()}\n\n${newEntry}\n` : `${newEntry}\n`
         const serialized = serializeDocument(currentFrontmatter, updatedBody)
         await writeTextFile(targetPath, serialized)
@@ -280,8 +235,9 @@ export async function ensureReferenceForQuote(root: string, quote: Quote): Promi
         }
       }
     } else {
-      referenceNumber = 1
-      const newEntry = formatReferenceEntry(referenceNumber, quote)
+      if (!refIndex) refIndex = 1
+      const updatedQuote = { ...quote, refIndex, referenceNumber: refIndex }
+      const newEntry = CitationFormatter.formatBibliography(updatedQuote, style)
       const initialContent = serializeDocument(currentFrontmatter, `# References\n\n${newEntry}\n`)
       await writeTextFile(targetPath, initialContent)
       try {
@@ -291,14 +247,24 @@ export async function ensureReferenceForQuote(root: string, quote: Quote): Promi
       }
     }
 
-    useQuotes.getState().update(quote.id, { referenceNumber })
+    useQuotes.getState().update(quote.id, { refIndex, referenceNumber: refIndex })
   } catch (err) {
     console.warn('Could not update References.md:', err)
-    if (!referenceNumber) referenceNumber = 1
+    if (!refIndex) refIndex = 1
   }
 
+  return { targetPath, refIndex }
+}
+
+/**
+ * Ensures that the relevant References.md exists in the project and contains an up-to-date
+ * reference entry for this quote. Returns the reference number and the formatted quote Markdown.
+ */
+export async function ensureReferenceForQuote(root: string, quote: Quote): Promise<ReferenceResult> {
+  const { refIndex } = await syncReferences(root, quote)
+  const resolved = { ...quote, refIndex, referenceNumber: refIndex }
   return {
-    referenceNumber,
-    quoteMarkdown: formatQuoteMarkdown(quote, referenceNumber),
+    referenceNumber: refIndex,
+    quoteMarkdown: insertQuote(resolved),
   }
 }

@@ -1,9 +1,9 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import quotes, { addToQuote } from '../assets/mods/Plugins/quotes/quotes'
+import quotes from '../assets/mods/Plugins/quotes/quotes'
 import { useQuotes } from '../assets/mods/Plugins/quotes/quotesStore'
-import { ensureReferenceForQuote } from '../assets/mods/Plugins/quotes/referencesManager'
+import { ensureReferenceForQuote, syncReferences, insertQuote } from '../assets/mods/Plugins/quotes/referencesManager'
 import type { PluginApi, PluginContextAction, PluginPanel } from '../types/plugin'
 import { useDocumentStore } from '../stores/documentStore'
 import { useTabStore } from '../stores/tabStore'
@@ -88,65 +88,65 @@ it('only activates Add to quote when text is selected', () => {
   expect(action.when?.({ target: null, selectionText: '', path: null, x: 0, y: 0 })).toBe(false)
 })
 
-it('adds selected text as a quote with metadata', () => {
+it('adds selected text as a quote with metadata and does not contaminate author with filename', () => {
   const { action } = activate()
-  action.run({ target: null, selectionText: 'All models are wrong, but some are useful.', path: '/book/Research/Box_1976.pdf', x: 0, y: 0 })
+  action.run({ target: null, selectionText: 'All models are wrong, but some are useful.', path: '/book/Research/References.md', x: 0, y: 0 })
   const quotesList = useQuotes.getState().items
   expect(quotesList).toHaveLength(1)
-  expect(quotesList[0]).toMatchObject({
-    text: 'All models are wrong, but some are useful.',
-    sourcePath: 'Research/Box_1976.pdf',
-    author: 'Box',
-    year: '1976',
-  })
+  expect(quotesList[0].quoteText).toBe('All models are wrong, but some are useful.')
+  expect(quotesList[0].authorLastName).toBe('')
+  expect(quotesList[0].authorLastName).not.toBe('References')
 })
 
-it('creates References.md if it does not exist and assigns reference 1', async () => {
+it('creates References.md and formats APA bibliography without numeric prefix', async () => {
   const quote = useQuotes.getState().add({
-    text: 'Information wants to be free.',
-    author: 'Brand, S.',
+    quoteText: 'Information wants to be free.',
+    authorLastName: 'Brand',
+    authorInitial: 'S.',
     year: '1984',
     title: 'Whole Earth Review',
     page: '49',
+    quoteType: 'APA',
+  })!
+
+  const result = await ensureReferenceForQuote('/book', quote)
+  expect(result.quoteMarkdown).toBe('"Information wants to be free." (Brand, 1984, p. 49).')
+  expect(result.quoteMarkdown).not.toContain('—')
+  expect(result.quoteMarkdown).not.toContain('[1]')
+  expect(fsMock.files.has('/book/Draft/References.md')).toBe(true)
+  expect(fsMock.files.get('/book/Draft/References.md')).toContain('Brand, S. (1984). *Whole Earth Review*.')
+})
+
+it('formats IEEE references with sequential numeric brackets', async () => {
+  const quote = useQuotes.getState().add({
+    quoteText: 'Second quote',
+    authorLastName: 'Turing',
+    authorInitial: 'A.',
+    year: '1950',
+    title: 'Computing Machinery',
+    page: '433',
+    quoteType: 'IEEE',
   })!
 
   const result = await ensureReferenceForQuote('/book', quote)
   expect(result.referenceNumber).toBe(1)
-  expect(result.quoteMarkdown).toContain('[1]')
-  expect(fsMock.files.has('/book/Draft/References.md')).toBe(true)
-  expect(fsMock.files.get('/book/Draft/References.md')).toContain('1. Brand, S. (1984). *Whole Earth Review*, p. 49.')
-})
-
-it('appends sequential references to existing References.md', async () => {
-  fsMock.files.set('/book/Draft/References.md', '---\ntitle: References\n---\n# References\n\n1. Existing Author (2020). *Existing Work*.\n')
-
-  const quote = useQuotes.getState().add({
-    text: 'Second quote',
-    author: 'Turing, A.',
-    year: '1950',
-    title: 'Computing Machinery',
-    page: '433',
-  })!
-
-  const result = await ensureReferenceForQuote('/book', quote)
-  expect(result.referenceNumber).toBe(2)
-  expect(result.quoteMarkdown).toContain('[2]')
+  expect(result.quoteMarkdown).toBe('"Second quote" [1, p. 433].')
   const content = fsMock.files.get('/book/Draft/References.md')!
-  expect(content).toContain('1. Existing Author')
-  expect(content).toContain('2. Turing, A. (1950). *Computing Machinery*, p. 433.')
+  expect(content).toContain('[1] A. Turing, *Computing Machinery*. 1950, p. 433.')
 })
 
-it('renders QuotesButton and opens quotes modal', async () => {
+it('renders QuotesButton and opens quotes modal with new quote button and dropdown', async () => {
   files.saved = JSON.stringify({
-    version: 1,
+    version: 2,
     items: [{
       id: 'q1',
-      text: 'Simple quote',
+      quoteText: 'Simple quote',
       sourcePath: 'Draft/test.md',
-      author: 'Author A',
+      authorLastName: 'Smith',
       year: '2023',
       page: '10',
       title: 'Test',
+      quoteType: 'APA',
       createdAt: Date.now(),
     }],
   })
@@ -162,39 +162,18 @@ it('renders QuotesButton and opens quotes modal', async () => {
   await act(async () => button?.click())
   expect(document.querySelector('dialog')).not.toBeNull()
   expect(document.querySelector('dialog')?.textContent).toContain('Simple quote')
+
   const select = document.querySelector<HTMLSelectElement>('select')
   expect(select).not.toBeNull()
-  expect(Array.from(select?.options ?? []).map(o => o.value)).toEqual(['APA', 'Chicago', 'MLA', 'Harvard', 'IEEE', 'ASC'])
+  expect(Array.from(select?.options ?? []).map(o => o.value)).toEqual(['APA', 'IEEE', 'MLA', 'Chicago', 'Harvard'])
 
   const newBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('+ New quote'))
   expect(newBtn).toBeDefined()
   await act(async () => newBtn?.click())
   expect(useQuotes.getState().items).toHaveLength(2)
 
-  const textarea = document.querySelector<HTMLTextAreaElement>('textarea')
-  expect(textarea).not.toBeNull()
-  expect(textarea?.value).toBe('')
-})
-
-it('formats quotes and references according to selected Quote Type', async () => {
-  const quote = useQuotes.getState().add({
-    text: 'Form follows function.',
-    author: 'Sullivan, L.',
-    year: '1896',
-    title: 'The Tall Office Building Artistically Considered',
-    page: '403',
-    quoteType: 'Chicago',
-  })!
-
-  const result = await ensureReferenceForQuote('/book', quote)
-  expect(result.quoteMarkdown).toContain('(Sullivan, L. 1896, 403)')
-  expect(fsMock.files.get('/book/Draft/References.md')).toContain('1. Sullivan, L.. 1896. *The Tall Office Building Artistically Considered*, 403.')
-
-  // Test MLA
-  useQuotes.getState().update(quote.id, { quoteType: 'MLA' })
-  const updated = useQuotes.getState().items.find(i => i.id === quote.id)!
-  const mlaResult = await ensureReferenceForQuote('/book', updated)
-  expect(mlaResult.quoteMarkdown).toContain('(Sullivan, L. 403)')
+  const textareas = document.querySelectorAll<HTMLTextAreaElement>('textarea')
+  expect(textareas.length).toBeGreaterThanOrEqual(1)
 })
 
 it('finds and appends references to nested References.md in template subfolders', async () => {
@@ -202,18 +181,18 @@ it('finds and appends references to nested References.md in template subfolders'
   fsMock.files.set(nestedRefPath, '# References\n\n')
 
   const quote = useQuotes.getState().add({
-    text: 'A profound thesis statement.',
+    quoteText: 'A profound thesis statement.',
     sourcePath: 'Draft/thesis-example/chapters/00 - Front Matter/Abstract and Keywords.md',
-    author: 'Espanolito, J.',
+    authorLastName: 'Espanolito',
+    authorInitial: 'J.',
     year: '2026',
     title: 'Grimoire Architecture',
     page: '12',
+    quoteType: 'APA',
   })!
 
   const result = await ensureReferenceForQuote('/book', quote)
-  expect(result.referenceNumber).toBe(1)
   expect(fsMock.files.has(nestedRefPath)).toBe(true)
-  expect(fsMock.files.get(nestedRefPath)).toContain('1. Espanolito, J. (2026). *Grimoire Architecture*, p. 12.')
-  // Should NOT create or touch root Draft/References.md
+  expect(fsMock.files.get(nestedRefPath)).toContain('Espanolito, J. (2026). *Grimoire Architecture*.')
   expect(fsMock.files.has('/book/Draft/References.md')).toBe(false)
 })

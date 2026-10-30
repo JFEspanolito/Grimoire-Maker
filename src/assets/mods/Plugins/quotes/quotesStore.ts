@@ -1,22 +1,19 @@
 import { create } from 'zustand'
 import { getWorkspaceRoot, readProjectData, writeProjectData } from '@grimoire/plugin-api'
+import type { CitationMetadata, CitationStyle } from './citationFormatter'
 
 export const PLUGIN_ID = 'builtin.quotes'
 const MAX_QUOTES = 1000
 
-export type QuoteType = 'APA' | 'Chicago' | 'MLA' | 'Harvard' | 'IEEE' | 'ASC'
+export type QuoteType = CitationStyle
 
-export interface Quote {
-  id: string
-  text: string
-  sourcePath: string
-  author: string
-  year: string
-  page: string
-  title: string
-  quoteType?: QuoteType
+export interface Quote extends CitationMetadata {
+  /** Backwards compatibility alias for quoteText */
+  text?: string
+  /** Backwards compatibility alias for authorLastName */
+  author?: string
+  /** Backwards compatibility alias for refIndex */
   referenceNumber?: number
-  createdAt: number
 }
 
 interface QuoteState {
@@ -24,8 +21,8 @@ interface QuoteState {
   items: Quote[]
   error: string
   load(root: string): Promise<void>
-  add(data: { text: string; sourcePath?: string; author?: string; year?: string; page?: string; title?: string; quoteType?: QuoteType }): Quote | null
-  update(id: string, updates: Partial<Pick<Quote, 'text' | 'author' | 'year' | 'page' | 'title' | 'quoteType' | 'referenceNumber'>>): void
+  add(data: Partial<Quote> & { text?: string; quoteText?: string }): Quote | null
+  update(id: string, updates: Partial<Quote>): void
   remove(id: string): void
 }
 
@@ -35,16 +32,59 @@ function parse(text: string): Quote[] {
   try {
     const value: unknown = JSON.parse(text)
     const list = value && typeof value === 'object' && 'items' in value && Array.isArray(value.items) ? value.items : []
-    return list.filter((item): item is Quote => !!item && typeof item === 'object'
-      && typeof item.id === 'string' && typeof item.text === 'string').slice(0, MAX_QUOTES)
+    return list
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && typeof item.id === 'string')
+      .map((item): Quote => {
+        const quoteText = String(item.quoteText ?? item.text ?? '').trim()
+        const rawAuthor = String(item.authorLastName ?? item.author ?? '').trim()
+        let authorLastName = rawAuthor
+        let authorInitial = String(item.authorInitial ?? '').trim()
+
+        if (!authorInitial && rawAuthor.includes(',')) {
+          const parts = rawAuthor.split(',').map(s => s.trim())
+          authorLastName = parts[0]
+          authorInitial = parts[1] || ''
+        }
+
+        const validStyles: CitationStyle[] = ['APA', 'IEEE', 'MLA', 'Chicago', 'Harvard']
+        const quoteType = (validStyles.includes(item.quoteType as CitationStyle)
+          ? item.quoteType
+          : 'APA') as CitationStyle
+
+        const refIndex = typeof item.refIndex === 'number'
+          ? item.refIndex
+          : typeof item.referenceNumber === 'number'
+            ? item.referenceNumber
+            : undefined
+
+        const quote: Quote = {
+          id: String(item.id),
+          quoteText,
+          text: quoteText,
+          sourcePath: String(item.sourcePath ?? ''),
+          authorLastName,
+          author: authorLastName,
+          authorInitial,
+          year: String(item.year ?? ''),
+          page: String(item.page ?? ''),
+          title: String(item.title ?? ''),
+          sourceContainer: String(item.sourceContainer ?? ''),
+          doiOrUrl: String(item.doiOrUrl ?? ''),
+          quoteType,
+          refIndex,
+          referenceNumber: refIndex,
+          createdAt: typeof item.createdAt === 'number' ? item.createdAt : Date.now(),
+        }
+        return quote
+      })
+      .slice(0, MAX_QUOTES)
   } catch {
     return []
   }
 }
 
-function parseSourceMetadata(path: string): { author: string; year: string; title: string } {
+function parseSourceMetadata(path: string): { year: string; title: string } {
   const fileName = path.replaceAll('\\', '/').split('/').pop()?.replace(/\.[^.]+$/, '') ?? ''
-  let author = ''
   let year = ''
   const title = fileName.replace(/[-_]+/g, ' ')
 
@@ -53,12 +93,8 @@ function parseSourceMetadata(path: string): { author: string; year: string; titl
     year = yearMatch[1]
   }
 
-  const authorMatch = /^([A-Z][a-zA-Z]+)(?:[-_\s]+(\d{4}|et[-_\s]al))?/.exec(fileName)
-  if (authorMatch && authorMatch[1]) {
-    author = authorMatch[1]
-  }
-
-  return { author, year, title }
+  // Never extract author from filename to avoid contaminating metadata with filenames like References or PaseQA.
+  return { year, title }
 }
 
 let saving: Promise<unknown> = Promise.resolve()
@@ -67,7 +103,7 @@ export const useQuotes = create<QuoteState>((set, get) => {
   const persist = () => {
     const { root, items } = get()
     if (!root) return
-    saving = saving.then(() => writeProjectData(root, PLUGIN_ID, JSON.stringify({ version: 1, items }, null, 2)))
+    saving = saving.then(() => writeProjectData(root, PLUGIN_ID, JSON.stringify({ version: 2, items }, null, 2)))
       .then(() => { if (get().error) set({ error: '' }) })
       .catch((error: unknown) => set({ error: `Could not save quotes: ${error instanceof Error ? error.message : String(error)}` }))
   }
@@ -85,23 +121,32 @@ export const useQuotes = create<QuoteState>((set, get) => {
         if (get().root === root) set({ error: `Could not read quotes: ${error instanceof Error ? error.message : String(error)}` })
       }
     },
-    add: ({ text, sourcePath = '', author, year, page = '', title, quoteType = 'APA' }) => {
+    add: (data) => {
       const root = get().root ?? getWorkspaceRoot()
       if (!root || get().items.length >= MAX_QUOTES) return null
       if (!get().root) set({ root })
 
-      const relative = sourcePath ? toRelative(root, sourcePath) : ''
+      const relative = data.sourcePath ? toRelative(root, data.sourcePath) : ''
       const inferred = parseSourceMetadata(relative)
+      const qText = (data.quoteText ?? data.text ?? '').trim()
+      const aLastName = (data.authorLastName ?? data.author ?? '').trim()
 
       const quote: Quote = {
         id: crypto.randomUUID(),
-        text: text.trim(),
+        quoteText: qText,
+        text: qText,
         sourcePath: relative,
-        author: author ?? inferred.author,
-        year: year ?? inferred.year,
-        page,
-        title: title ?? inferred.title,
-        quoteType,
+        authorLastName: aLastName,
+        author: aLastName,
+        authorInitial: (data.authorInitial ?? '').trim(),
+        year: data.year ? String(data.year).trim() : inferred.year,
+        page: data.page ? String(data.page).trim() : '',
+        title: (data.title ?? inferred.title).trim(),
+        sourceContainer: (data.sourceContainer ?? '').trim(),
+        doiOrUrl: (data.doiOrUrl ?? '').trim(),
+        quoteType: data.quoteType ?? 'APA',
+        refIndex: data.refIndex ?? data.referenceNumber,
+        referenceNumber: data.refIndex ?? data.referenceNumber,
         createdAt: Date.now(),
       }
 
@@ -111,7 +156,22 @@ export const useQuotes = create<QuoteState>((set, get) => {
     },
     update: (id, updates) => {
       set(state => ({
-        items: state.items.map(item => item.id === id ? { ...item, ...updates } : item),
+        items: state.items.map(item => {
+          if (item.id !== id) return item
+          const quoteText = updates.quoteText ?? updates.text ?? item.quoteText
+          const authorLastName = updates.authorLastName ?? updates.author ?? item.authorLastName
+          const refIndex = updates.refIndex ?? updates.referenceNumber ?? item.refIndex
+          return {
+            ...item,
+            ...updates,
+            quoteText,
+            text: quoteText,
+            authorLastName,
+            author: authorLastName,
+            refIndex,
+            referenceNumber: refIndex,
+          }
+        }),
       }))
       persist()
     },

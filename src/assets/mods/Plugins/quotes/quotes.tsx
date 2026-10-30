@@ -1,6 +1,6 @@
 import { getWorkspaceRoot, type GrimoirePlugin, type PluginContextActionContext } from '@grimoire/plugin-api'
 import { useQuotes } from './quotesStore'
-import { ensureReferenceForQuote } from './referencesManager'
+import { syncReferences } from './referencesManager'
 import { QuotesButton } from './QuotesButton'
 
 export const addToQuote = {
@@ -10,13 +10,14 @@ export const addToQuote = {
   run({ selectionText, path }: PluginContextActionContext) {
     if (selectionText.trim().length > 0) {
       const quote = useQuotes.getState().add({
+        quoteText: selectionText.trim(),
         text: selectionText.trim(),
         sourcePath: path ?? '',
       })
       if (quote) {
         const root = useQuotes.getState().root ?? getWorkspaceRoot()
         if (root) {
-          void ensureReferenceForQuote(root, quote)
+          void syncReferences(root, quote)
         }
       }
     }
@@ -26,7 +27,7 @@ export const addToQuote = {
 const quotes: GrimoirePlugin = {
   id: 'builtin.quotes',
   name: 'Quotes',
-  version: '1.0.0',
+  version: '2.0.0',
   activate(api) {
     api.registerToolbar({ id: 'quotes.control', title: 'Quotes', component: QuotesButton })
     api.registerContextAction(addToQuote)
