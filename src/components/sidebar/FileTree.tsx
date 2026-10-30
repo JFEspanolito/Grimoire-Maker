@@ -259,6 +259,7 @@ export function FileTree() {
   const tree = useDocumentStore((s) => s.tree);
   const root = useDocumentStore((s) => s.workspaceRoot);
   const workspaceError = useSessionStore((s) => s.workspaceError);
+  const setWorkspaceError = useSessionStore((s) => s.setWorkspaceError);
   const {
     openFile,
     openFolder,
@@ -275,6 +276,22 @@ export function FileTree() {
   );
   const [editing, setEditing] = useState<Editing | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!workspaceError) return;
+    const timer = setTimeout(() => {
+      setWorkspaceError(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [workspaceError, setWorkspaceError]);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => {
+      setError(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [error]);
   const [menu, setMenu] = useState<{
     node: FileNode;
     x: number;
@@ -543,11 +560,39 @@ export function FileTree() {
           </button>
         </div>
       </div>
-      {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
+      {error && (
+        <div
+          className="mb-2 flex items-start justify-between gap-1.5 rounded bg-red-950/40 p-1.5 text-xs text-red-400 border border-red-800/40"
+          role="alert"
+        >
+          <p className="flex-1 break-words">{error}</p>
+          <button
+            type="button"
+            className="text-red-400/70 hover:text-red-300 text-sm leading-none px-1 py-0.5 rounded transition-colors"
+            aria-label="Dismiss error"
+            title="Dismiss error"
+            onClick={() => setError(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
       {workspaceError && (
-        <p className="mb-2 text-xs text-amber-400" role="alert">
-          {workspaceError}
-        </p>
+        <div
+          className="mb-2 flex items-start justify-between gap-1.5 rounded bg-amber-950/40 p-1.5 text-xs text-amber-400 border border-amber-800/40"
+          role="alert"
+        >
+          <p className="flex-1 break-words">{workspaceError}</p>
+          <button
+            type="button"
+            className="text-amber-400/70 hover:text-amber-300 text-sm leading-none px-1 py-0.5 rounded transition-colors"
+            aria-label="Dismiss error"
+            title="Dismiss error"
+            onClick={() => setWorkspaceError(null)}
+          >
+            ×
+          </button>
+        </div>
       )}
       <DndContext
         sensors={sensors}
