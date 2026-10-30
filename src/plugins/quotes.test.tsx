@@ -112,7 +112,7 @@ it('creates References.md if it does not exist and assigns reference 1', async (
 
   const result = await ensureReferenceForQuote('/book', quote)
   expect(result.referenceNumber).toBe(1)
-  expect(result.quoteMarkdown).toContain('[[1]]')
+  expect(result.quoteMarkdown).toContain('[1]')
   expect(fsMock.files.has('/book/Draft/References.md')).toBe(true)
   expect(fsMock.files.get('/book/Draft/References.md')).toContain('1. Brand, S. (1984). *Whole Earth Review*, p. 49.')
 })
@@ -130,7 +130,7 @@ it('appends sequential references to existing References.md', async () => {
 
   const result = await ensureReferenceForQuote('/book', quote)
   expect(result.referenceNumber).toBe(2)
-  expect(result.quoteMarkdown).toContain('[[2]]')
+  expect(result.quoteMarkdown).toContain('[2]')
   const content = fsMock.files.get('/book/Draft/References.md')!
   expect(content).toContain('1. Existing Author')
   expect(content).toContain('2. Turing, A. (1950). *Computing Machinery*, p. 433.')

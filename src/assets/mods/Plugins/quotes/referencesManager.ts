@@ -67,17 +67,17 @@ export function formatQuoteMarkdown(quote: Quote, referenceNumber: number): stri
   switch (type) {
     case 'MLA': {
       const cite = page ? `(${author} ${page})` : `(${author})`
-      return `> "${quote.text}"\n> — ${cite} [[${referenceNumber}]]\n`
+      return `> "${quote.text}"\n> — ${cite} [${referenceNumber}]\n`
     }
     case 'Chicago': {
       const pagePart = page ? `, ${page}` : ''
       const yearPart = year ? ` ${year}` : ''
-      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [[${referenceNumber}]]\n`
+      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [${referenceNumber}]\n`
     }
     case 'Harvard': {
       const yearPart = year ? `, ${year}` : ''
       const pagePart = page ? `: ${page}` : ''
-      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [[${referenceNumber}]]\n`
+      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [${referenceNumber}]\n`
     }
     case 'IEEE':
     case 'ASC': {
@@ -87,7 +87,7 @@ export function formatQuoteMarkdown(quote: Quote, referenceNumber: number): stri
     default: {
       const yearPart = year ? `, ${year}` : ''
       const pagePart = page ? `, p. ${page}` : ''
-      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [[${referenceNumber}]]\n`
+      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [${referenceNumber}]\n`
     }
   }
 }
