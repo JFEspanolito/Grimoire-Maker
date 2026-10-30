@@ -108,6 +108,7 @@ mod tests {
             ".examples-seeded",
             ".executable-plugins-v1-seeded",
             ".editorial-templates-v2-seeded",
+            ".editorial-templates-v3-seeded",
             ".rol-adventures-snippets-v2-seeded",
             ".grimoire-theme-examples-v1",
             ".grimoire-theme-examples-v2",

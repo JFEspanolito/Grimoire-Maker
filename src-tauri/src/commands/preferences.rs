@@ -613,6 +613,7 @@ fn grant_seed_markers(
         (&paths.plugins, "Plugins", managed.plugins, ".executable-plugins-v1-seeded"),
         (&paths.snippets, "Snippets", managed.snippets, ".rol-adventures-snippets-v2-seeded"),
         (&paths.templates, "Templates", managed.templates, ".editorial-templates-v2-seeded"),
+        (&paths.templates, "Templates", managed.templates, ".editorial-templates-v3-seeded"),
     ] {
         let library = Path::new(path);
         let original = same_path(path, &text(&mods.join(folder))?);
