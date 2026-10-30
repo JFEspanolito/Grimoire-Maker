@@ -178,12 +178,46 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
   const { items, error, add, update, remove } = useQuotes()
   const [activeTab, setActiveTab] = useState<'quotes' | 'references'>('quotes')
   const [notice, setNotice] = useState<string | null>(null)
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
+  const isDraggingHeader = useRef(false)
+  const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 })
 
   useEffect(() => {
     const el = dialog.current
-    el?.showModal()
+    if (el && !el.open) {
+      if (typeof el.show === 'function') el.show()
+      else el.showModal()
+    }
     return () => el?.close()
   }, [])
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button, input, select, textarea, [role="tab"]')) return
+    isDraggingHeader.current = true
+    const rect = dialog.current?.getBoundingClientRect()
+    const currentX = rect?.left ?? Math.max(20, window.innerWidth - 1100)
+    const currentY = rect?.top ?? 70
+    dragStart.current = { x: e.clientX, y: e.clientY, posX: currentX, posY: currentY }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDraggingHeader.current) return
+    const dx = e.clientX - dragStart.current.x
+    const dy = e.clientY - dragStart.current.y
+    const newX = Math.max(10, Math.min(window.innerWidth - 300, dragStart.current.posX + dx))
+    const newY = Math.max(10, Math.min(window.innerHeight - 150, dragStart.current.posY + dy))
+    setPosition({ x: newX, y: newY })
+  }
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    isDraggingHeader.current = false
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    } catch {
+      // ignore
+    }
+  }
 
   useEffect(() => {
     if (!root) return
@@ -234,12 +268,18 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
       ref={dialog}
       className={styles.dialog}
       aria-labelledby="quotes-title"
+      style={position ? { left: `${position.x}px`, top: `${position.y}px`, right: 'auto', bottom: 'auto', margin: 0 } : undefined}
       onCancel={(e) => {
         e.preventDefault()
         onClose()
       }}
     >
-      <header className={styles.header}>
+      <header
+        className={styles.header}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+      >
         <div className={styles.headerTitleRow}>
           <h2 id="quotes-title">Quotes & Citations</h2>
           {activeTab === 'quotes' && (
@@ -328,7 +368,7 @@ export function QuotesButton() {
         className={styles.button}
         disabled={!root}
         title="Quotes and citations of this project"
-        onClick={() => setShown(true)}
+        onClick={() => setShown((prev) => !prev)}
       >
         Quotes <span className={styles.count}>{count}</span>
       </button>
