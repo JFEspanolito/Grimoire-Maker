@@ -46,7 +46,13 @@ function QuoteCard({
   return (
     <li className={styles.card}>
       <div className={styles.quoteHeader}>
-        <blockquote className={styles.quoteText}>"{quote.text}"</blockquote>
+        <textarea
+          className={styles.quoteInput}
+          value={quote.text}
+          placeholder="Quote text…"
+          rows={Math.max(2, Math.min(6, (quote.text.match(/\n/g) || []).length + 1))}
+          onChange={(e) => handleUpdate({ text: e.target.value })}
+        />
         <span className={styles.badge}>
           {quote.referenceNumber ? `Ref [${quote.referenceNumber}]` : 'Unassigned'}
         </span>
@@ -132,7 +138,21 @@ function QuoteCard({
 function QuotesDialog({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const root = useWorkspaceRoot()
-  const { items, error, update, remove } = useQuotes()
+  const { items, error, add, update, remove } = useQuotes()
+
+  const handleCreateQuote = () => {
+    const newQuote = add({
+      text: '',
+      author: '',
+      year: new Date().getFullYear().toString(),
+      page: '',
+      title: '',
+      quoteType: 'APA',
+    })
+    if (newQuote && root) {
+      void ensureReferenceForQuote(root, newQuote)
+    }
+  }
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
@@ -174,7 +194,17 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
       }}
     >
       <header className={styles.header}>
-        <h2 id="quotes-title">Quotes & Citations</h2>
+        <div className={styles.headerTitleRow}>
+          <h2 id="quotes-title">Quotes & Citations</h2>
+          <button
+            type="button"
+            className={styles.newQuoteBtn}
+            title="Create a new quote manually"
+            onClick={handleCreateQuote}
+          >
+            + New quote
+          </button>
+        </div>
         <button type="button" className={styles.close} aria-label="Close Quotes" onClick={onClose}>
           ×
         </button>

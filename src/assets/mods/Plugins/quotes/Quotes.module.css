@@ -97,6 +97,56 @@
   word-break: break-word;
 }
 
+.quoteInput {
+  flex: 1;
+  margin: 0;
+  font-size: 0.95rem;
+  font-style: italic;
+  font-family: inherit;
+  color: #f3efe6;
+  line-height: 1.45;
+  border-left: 3px solid #cfb37c;
+  border-top: none;
+  border-right: none;
+  border-bottom: 1px dashed #444037;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.2rem 0.4rem 0.2rem 0.65rem;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.quoteInput:focus {
+  border-bottom-color: #cfb37c;
+  background: #ffffff08;
+}
+
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.newQuoteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.3rem;
+  background: #38342c;
+  border: 1px solid #554f42;
+  color: #f3efe6;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.newQuoteBtn:hover {
+  background: #474238;
+  border-color: #cfb37c;
+  color: #ffffff;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

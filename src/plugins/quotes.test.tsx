@@ -165,6 +165,15 @@ it('renders QuotesButton and opens quotes modal', async () => {
   const select = document.querySelector<HTMLSelectElement>('select')
   expect(select).not.toBeNull()
   expect(Array.from(select?.options ?? []).map(o => o.value)).toEqual(['APA', 'Chicago', 'MLA', 'Harvard', 'IEEE', 'ASC'])
+
+  const newBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('+ New quote'))
+  expect(newBtn).toBeDefined()
+  await act(async () => newBtn?.click())
+  expect(useQuotes.getState().items).toHaveLength(2)
+
+  const textarea = document.querySelector<HTMLTextAreaElement>('textarea')
+  expect(textarea).not.toBeNull()
+  expect(textarea?.value).toBe('')
 })
 
 it('formats quotes and references according to selected Quote Type', async () => {
