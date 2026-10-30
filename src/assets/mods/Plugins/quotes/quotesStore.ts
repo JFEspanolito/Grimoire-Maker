@@ -4,6 +4,8 @@ import { getWorkspaceRoot, readProjectData, writeProjectData } from '@grimoire/p
 export const PLUGIN_ID = 'builtin.quotes'
 const MAX_QUOTES = 1000
 
+export type QuoteType = 'APA' | 'Chicago' | 'MLA' | 'Harvard' | 'IEEE' | 'ASC'
+
 export interface Quote {
   id: string
   text: string
@@ -12,6 +14,7 @@ export interface Quote {
   year: string
   page: string
   title: string
+  quoteType?: QuoteType
   referenceNumber?: number
   createdAt: number
 }
@@ -21,8 +24,8 @@ interface QuoteState {
   items: Quote[]
   error: string
   load(root: string): Promise<void>
-  add(data: { text: string; sourcePath?: string; author?: string; year?: string; page?: string; title?: string }): Quote | null
-  update(id: string, updates: Partial<Pick<Quote, 'text' | 'author' | 'year' | 'page' | 'title' | 'referenceNumber'>>): void
+  add(data: { text: string; sourcePath?: string; author?: string; year?: string; page?: string; title?: string; quoteType?: QuoteType }): Quote | null
+  update(id: string, updates: Partial<Pick<Quote, 'text' | 'author' | 'year' | 'page' | 'title' | 'quoteType' | 'referenceNumber'>>): void
   remove(id: string): void
 }
 
@@ -82,7 +85,7 @@ export const useQuotes = create<QuoteState>((set, get) => {
         if (get().root === root) set({ error: `Could not read quotes: ${error instanceof Error ? error.message : String(error)}` })
       }
     },
-    add: ({ text, sourcePath = '', author, year, page = '', title }) => {
+    add: ({ text, sourcePath = '', author, year, page = '', title, quoteType = 'APA' }) => {
       const root = get().root ?? getWorkspaceRoot()
       if (!root || get().items.length >= MAX_QUOTES) return null
       if (!get().root) set({ root })
@@ -98,6 +101,7 @@ export const useQuotes = create<QuoteState>((set, get) => {
         year: year ?? inferred.year,
         page,
         title: title ?? inferred.title,
+        quoteType,
         createdAt: Date.now(),
       }
 

@@ -21,18 +21,73 @@ theme: modern
 /** Formats a single bibliographic reference entry according to academic conventions. */
 export function formatReferenceEntry(number: number, quote: Quote): string {
   const author = quote.author?.trim() || quote.title?.trim() || 'Anonymous'
-  const year = quote.year?.trim() ? ` (${quote.year.trim()})` : ''
-  const title = quote.title?.trim() ? ` *${quote.title.trim()}*` : ''
-  const page = quote.page?.trim() ? `, p. ${quote.page.trim()}` : ''
-  return `${number}. ${author}${year}.${title}${page}.`
+  const year = quote.year?.trim() || 'n.d.'
+  const title = quote.title?.trim() || 'Untitled'
+  const page = quote.page?.trim()
+  const type = quote.quoteType || 'APA'
+
+  switch (type) {
+    case 'MLA': {
+      const pagePart = page ? `, p. ${page}` : ''
+      return `${number}. ${author}. *${title}*. ${year}${pagePart}.`
+    }
+    case 'Chicago': {
+      const pagePart = page ? `, ${page}` : ''
+      return `${number}. ${author}. ${year}. *${title}*${pagePart}.`
+    }
+    case 'Harvard': {
+      const pagePart = page ? `, p. ${page}` : ''
+      return `${number}. ${author}, ${year}. *${title}*${pagePart}.`
+    }
+    case 'IEEE': {
+      const pagePart = page ? `, p. ${page}` : ''
+      return `${number}. ${author}, "${title}", ${year}${pagePart}.`
+    }
+    case 'ASC': {
+      const pagePart = page ? `, p ${page}` : ''
+      return `${number}. ${author}. *${title}*; ${year}${pagePart}.`
+    }
+    case 'APA':
+    default: {
+      const pagePart = page ? `, p. ${page}` : ''
+      return `${number}. ${author} (${year}). *${title}*${pagePart}.`
+    }
+  }
 }
 
 /** Formats the blockquote to be inserted into the manuscript. */
 export function formatQuoteMarkdown(quote: Quote, referenceNumber: number): string {
-  const attribution = quote.author?.trim() || quote.title?.trim() || 'Source'
-  const yearPart = quote.year?.trim() ? ` (${quote.year.trim()})` : ''
-  const pagePart = quote.page?.trim() ? `, p. ${quote.page.trim()}` : ''
-  return `> "${quote.text}"\n> — ${attribution}${yearPart}${pagePart} [[${referenceNumber}]]\n`
+  const author = quote.author?.trim() || quote.title?.trim() || 'Anonymous'
+  const year = quote.year?.trim()
+  const page = quote.page?.trim()
+  const type = quote.quoteType || 'APA'
+
+  switch (type) {
+    case 'MLA': {
+      const cite = page ? `(${author} ${page})` : `(${author})`
+      return `> "${quote.text}"\n> — ${cite} [[${referenceNumber}]]\n`
+    }
+    case 'Chicago': {
+      const pagePart = page ? `, ${page}` : ''
+      const yearPart = year ? ` ${year}` : ''
+      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [[${referenceNumber}]]\n`
+    }
+    case 'Harvard': {
+      const yearPart = year ? `, ${year}` : ''
+      const pagePart = page ? `: ${page}` : ''
+      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [[${referenceNumber}]]\n`
+    }
+    case 'IEEE':
+    case 'ASC': {
+      return `> "${quote.text}" [${referenceNumber}]\n`
+    }
+    case 'APA':
+    default: {
+      const yearPart = year ? `, ${year}` : ''
+      const pagePart = page ? `, p. ${page}` : ''
+      return `> "${quote.text}"\n> — (${author}${yearPart}${pagePart}) [[${referenceNumber}]]\n`
+    }
+  }
 }
 
 /**

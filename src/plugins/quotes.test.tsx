@@ -145,4 +145,28 @@ it('renders QuotesButton and opens quotes modal', async () => {
   await act(async () => button?.click())
   expect(document.querySelector('dialog')).not.toBeNull()
   expect(document.querySelector('dialog')?.textContent).toContain('Simple quote')
+  const select = document.querySelector<HTMLSelectElement>('select')
+  expect(select).not.toBeNull()
+  expect(Array.from(select?.options ?? []).map(o => o.value)).toEqual(['APA', 'Chicago', 'MLA', 'Harvard', 'IEEE', 'ASC'])
+})
+
+it('formats quotes and references according to selected Quote Type', async () => {
+  const quote = useQuotes.getState().add({
+    text: 'Form follows function.',
+    author: 'Sullivan, L.',
+    year: '1896',
+    title: 'The Tall Office Building Artistically Considered',
+    page: '403',
+    quoteType: 'Chicago',
+  })!
+
+  const result = await ensureReferenceForQuote('/book', quote)
+  expect(result.quoteMarkdown).toContain('(Sullivan, L. 1896, 403)')
+  expect(fsMock.files.get('/book/Draft/References.md')).toContain('1. Sullivan, L.. 1896. *The Tall Office Building Artistically Considered*, 403.')
+
+  // Test MLA
+  useQuotes.getState().update(quote.id, { quoteType: 'MLA' })
+  const updated = useQuotes.getState().items.find(i => i.id === quote.id)!
+  const mlaResult = await ensureReferenceForQuote('/book', updated)
+  expect(mlaResult.quoteMarkdown).toContain('(Sullivan, L. 403)')
 })

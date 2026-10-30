@@ -184,6 +184,34 @@
   gap: 0.4rem;
 }
 
+.stylePicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: #a8a296;
+}
+
+.styleLabel {
+  font-weight: 500;
+  color: #c9c3b6;
+}
+
+.styleSelect {
+  background: #201e19;
+  border: 1px solid #444037;
+  border-radius: 0.25rem;
+  color: #f0eee9;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.styleSelect:focus {
+  border-color: #cfb37c;
+}
+
 .insertBtn {
   padding: 0.25rem 0.55rem;
   border-radius: 0.25rem;

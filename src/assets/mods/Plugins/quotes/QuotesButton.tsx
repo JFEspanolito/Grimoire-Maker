@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useWorkspaceRoot } from '@grimoire/plugin-api'
-import { useQuotes, type Quote } from './quotesStore'
+import { useQuotes, type Quote, type QuoteType } from './quotesStore'
 import { ensureReferenceForQuote, formatQuoteMarkdown } from './referencesManager'
 import { findSnippetDropTarget, getActiveSnippetDropTarget } from '../../../../lib/snippetDrop'
 import { insertContentBox } from '../../../../lib/contentBoxes'
@@ -94,6 +94,21 @@ function QuoteCard({
           ⋮⋮ Drag to insert
         </div>
         <div className={styles.actions}>
+          <label className={styles.stylePicker} title="Citation Style">
+            <span className={styles.styleLabel}>Quote Type</span>
+            <select
+              className={styles.styleSelect}
+              value={quote.quoteType ?? 'APA'}
+              onChange={(e) => onUpdate({ quoteType: e.target.value as QuoteType })}
+            >
+              <option value="APA">APA</option>
+              <option value="Chicago">Chicago</option>
+              <option value="MLA">MLA</option>
+              <option value="Harvard">Harvard</option>
+              <option value="IEEE">IEEE</option>
+              <option value="ASC">ASC</option>
+            </select>
+          </label>
           <button type="button" className={styles.insertBtn} title="Insert at cursor" onClick={onInsert}>
             Insert at cursor
           </button>
