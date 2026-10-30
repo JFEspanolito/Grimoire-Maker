@@ -33,6 +33,7 @@ import { PanelResizeHandle } from './components/layout/PanelResizeHandle'
 import { ConfirmDialog } from './components/layout/ConfirmDialog'
 import { useTranslation } from './lib/i18n'
 import { useAppUpdateStore } from './stores/appUpdateStore'
+import { openExternalUrl } from './lib/openUrl'
 
 export default function App() {
   const { t } = useTranslation()
@@ -98,6 +99,22 @@ export default function App() {
 
   useEffect(() => {
     void useAppUpdateStore.getState().checkUpdates()
+  }, [])
+
+  useEffect(() => {
+    if (!isTauri()) return
+    const onGlobalClick = (event: MouseEvent) => {
+      if (event.defaultPrevented) return
+      const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>('a[href]')
+      if (!anchor) return
+      const href = anchor.href
+      if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:')) {
+        event.preventDefault()
+        void openExternalUrl(href)
+      }
+    }
+    document.addEventListener('click', onGlobalClick)
+    return () => document.removeEventListener('click', onGlobalClick)
   }, [])
 
   // Reopen last session first, then start saving page-setup changes: subscribing

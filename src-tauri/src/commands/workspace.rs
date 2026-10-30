@@ -188,6 +188,38 @@ fn open_folder_in(
     launch(&launch_path)
 }
 
+/// Opens an external HTTP, HTTPS or mailto URL in the default application.
+#[tauri::command]
+pub fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") && !url.starts_with("mailto:") {
+        return Err("Only http, https, and mailto URLs are allowed".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", &url])
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// Opens an active-project directory in the operating system's file explorer.
 #[tauri::command]
 pub fn open_folder(app: AppHandle, path: String) -> Result<(), String> {
