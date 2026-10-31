@@ -435,3 +435,22 @@
   color: #f0eee9;
   border-color: #cfb37c;
 }
+
+.resizeHandle {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  cursor: nwse-resize;
+  user-select: none;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+  padding: 2px;
+}
+.resizeHandle:hover {
+  opacity: 1;
+}

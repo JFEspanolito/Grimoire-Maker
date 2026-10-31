@@ -114,6 +114,18 @@ function parse(text: string): { items: Quote[]; references: ReferenceItem[] } {
   }
 }
 
+function getNextSequentialIndex(items: Quote[], references: ReferenceItem[]): number {
+  let max = 0
+  for (const q of items) {
+    const idx = q.refIndex ?? q.referenceNumber ?? 0
+    if (idx > max) max = idx
+  }
+  for (const r of references) {
+    if (r.refIndex > max) max = r.refIndex
+  }
+  return max + 1
+}
+
 function parseSourceMetadata(path: string): { year: string; title: string } {
   const fileName = path.replaceAll('\\', '/').split('/').pop()?.replace(/\.[^.]+$/, '') ?? ''
   let year = ''
@@ -165,6 +177,8 @@ export const useQuotes = create<QuoteState>((set, get) => {
       const qText = (data.quoteText ?? data.text ?? '').trim()
       const aLastName = (data.authorLastName ?? data.author ?? '').trim()
 
+      const allocatedIndex = data.refIndex ?? data.referenceNumber ?? getNextSequentialIndex(get().items, get().references)
+
       const quote: Quote = {
         id: crypto.randomUUID(),
         quoteText: qText,
@@ -179,8 +193,8 @@ export const useQuotes = create<QuoteState>((set, get) => {
         sourceContainer: (data.sourceContainer ?? '').trim(),
         doiOrUrl: (data.doiOrUrl ?? '').trim(),
         quoteType: data.quoteType ?? 'APA',
-        refIndex: data.refIndex ?? data.referenceNumber,
-        referenceNumber: data.refIndex ?? data.referenceNumber,
+        refIndex: allocatedIndex,
+        referenceNumber: allocatedIndex,
         createdAt: Date.now(),
       }
 
@@ -218,19 +232,11 @@ export const useQuotes = create<QuoteState>((set, get) => {
       if (!root || get().references.length >= MAX_ITEMS) return null
       if (!get().root) set({ root })
 
-      // Calculate next sequential refIndex
-      let maxIndex = 0
-      for (const r of get().references) {
-        if (r.refIndex > maxIndex) maxIndex = r.refIndex
-      }
-      for (const q of get().items) {
-        const idx = q.refIndex ?? q.referenceNumber ?? 0
-        if (idx > maxIndex) maxIndex = idx
-      }
+      const allocatedIndex = data.refIndex ?? getNextSequentialIndex(get().items, get().references)
 
       const refItem: ReferenceItem = {
         id: crypto.randomUUID(),
-        refIndex: data.refIndex ?? (maxIndex + 1),
+        refIndex: allocatedIndex,
         authors: (data.authors ?? '').trim(),
         year: (data.year ?? '').trim(),
         title: (data.title ?? '').trim(),

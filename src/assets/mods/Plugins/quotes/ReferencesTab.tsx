@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useWorkspaceRoot } from '@grimoire/plugin-api'
 import { useQuotes } from './quotesStore'
 import {
@@ -31,17 +31,54 @@ export function ReferenceCard({
   const [isEditing, setIsEditing] = useState(
     initiallyEditing || !reference.authors || !reference.title
   )
+  const debouncedSync = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (debouncedSync.current) clearTimeout(debouncedSync.current)
+    }
+  }, [])
 
   const handleFieldChange = (updates: Partial<ReferenceItem>) => {
     onUpdate(updates)
-    if (root) {
-      const updated = { ...reference, ...updates }
-      void syncReferenceItem(root, updated)
+    if (!root) return
+    const updated = { ...reference, ...updates }
+    if (debouncedSync.current) clearTimeout(debouncedSync.current)
+    if (updated.authors.trim() || updated.title.trim()) {
+      debouncedSync.current = setTimeout(() => {
+        void syncReferenceItem(root, updated)
+      }, 600)
     }
   }
 
+  const handleBlur = () => {
+    if (!root) return
+    if (debouncedSync.current) {
+      clearTimeout(debouncedSync.current)
+      debouncedSync.current = null
+    }
+    if (reference.authors.trim() || reference.title.trim()) {
+      void syncReferenceItem(root, reference)
+    }
+  }
+
+  const handleToggleEdit = () => {
+    if (isEditing && root && (reference.authors.trim() || reference.title.trim())) {
+      if (debouncedSync.current) {
+        clearTimeout(debouncedSync.current)
+        debouncedSync.current = null
+      }
+      void syncReferenceItem(root, reference)
+    }
+    setIsEditing((prev) => !prev)
+  }
+
   const handleInsert = async () => {
-    if (root) {
+    if (debouncedSync.current) {
+      clearTimeout(debouncedSync.current)
+      debouncedSync.current = null
+    }
+    if (root && (reference.authors.trim() || reference.title.trim())) {
       await syncReferenceItem(root, reference)
     }
     const result = handleInsertReferenceCitation(reference, reference.style ?? 'APA')
@@ -70,7 +107,7 @@ export function ReferenceCard({
           </div>
         </div>
         <span className={styles.badge}>
-          Ref [{reference.refIndex ?? 1}]
+          [{reference.refIndex ?? 1}]
         </span>
       </div>
 
@@ -84,6 +121,7 @@ export function ReferenceCard({
                 value={reference.authors}
                 placeholder="e.g. Fraústo da Silva, J. J. R. or Smith, J."
                 onChange={(e) => handleFieldChange({ authors: e.target.value })}
+                onBlur={handleBlur}
               />
             </label>
             <label className={styles.field}>
@@ -93,6 +131,7 @@ export function ReferenceCard({
                 value={reference.year}
                 placeholder="e.g. 1991"
                 onChange={(e) => handleFieldChange({ year: e.target.value })}
+                onBlur={handleBlur}
               />
             </label>
             <label className={styles.field}>
@@ -102,6 +141,7 @@ export function ReferenceCard({
                 value={reference.title}
                 placeholder="e.g. The biological chemistry of the elements"
                 onChange={(e) => handleFieldChange({ title: e.target.value })}
+                onBlur={handleBlur}
               />
             </label>
             <label className={styles.field}>
@@ -111,6 +151,7 @@ export function ReferenceCard({
                 value={reference.volumeIssuePages ?? ''}
                 placeholder="e.g. Vol. 4, No. 2, pp. 45-52"
                 onChange={(e) => handleFieldChange({ volumeIssuePages: e.target.value })}
+                onBlur={handleBlur}
               />
             </label>
           </div>
@@ -123,6 +164,7 @@ export function ReferenceCard({
                 value={reference.sourceContainer}
                 placeholder="e.g. Oxford University Press"
                 onChange={(e) => handleFieldChange({ sourceContainer: e.target.value })}
+                onBlur={handleBlur}
               />
             </label>
             <label className={styles.field}>
@@ -132,6 +174,7 @@ export function ReferenceCard({
                 value={reference.doiOrUrl ?? ''}
                 placeholder="e.g. https://doi.org/10.1000/182"
                 onChange={(e) => handleFieldChange({ doiOrUrl: e.target.value })}
+                onBlur={handleBlur}
               />
             </label>
           </div>
@@ -160,7 +203,7 @@ export function ReferenceCard({
           <button
             type="button"
             className={styles.editToggleBtn}
-            onClick={() => setIsEditing((prev) => !prev)}
+            onClick={handleToggleEdit}
             title={isEditing ? 'Collapse metadata editor' : 'Edit reference metadata'}
           >
             {isEditing ? 'Done editing' : 'Edit metadata'}

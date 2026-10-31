@@ -20,12 +20,40 @@ function QuoteCard({
   onInsert: () => void
 }) {
   const root = useWorkspaceRoot()
+  const debouncedSync = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (debouncedSync.current) clearTimeout(debouncedSync.current)
+    }
+  }, [])
 
   const handleUpdate = (updates: Partial<Quote>) => {
     onUpdate(updates)
-    if (root) {
-      const updated = { ...quote, ...updates }
-      void syncReferences(root, updated)
+    if (!root) return
+    const updated = { ...quote, ...updates }
+    const hasContent = (updated.authorLastName && updated.authorLastName.trim()) ||
+      (updated.title && updated.title.trim()) ||
+      (updated.quoteText && updated.quoteText.trim())
+    if (debouncedSync.current) clearTimeout(debouncedSync.current)
+    if (hasContent) {
+      debouncedSync.current = setTimeout(() => {
+        void syncReferences(root, updated)
+      }, 600)
+    }
+  }
+
+  const handleBlur = () => {
+    if (!root) return
+    if (debouncedSync.current) {
+      clearTimeout(debouncedSync.current)
+      debouncedSync.current = null
+    }
+    const hasContent = (quote.authorLastName && quote.authorLastName.trim()) ||
+      (quote.title && quote.title.trim()) ||
+      (quote.quoteText && quote.quoteText.trim())
+    if (hasContent) {
+      void syncReferences(root, quote)
     }
   }
 
@@ -48,7 +76,7 @@ function QuoteCard({
   }
 
   const textValue = quote.quoteText || quote.text || ''
-  const isNumeric = quote.quoteType === 'IEEE' || quote.quoteType === 'Chicago'
+  const assignedNum = quote.refIndex ?? quote.referenceNumber ?? 1
 
   return (
     <li className={styles.card}>
@@ -59,11 +87,10 @@ function QuoteCard({
           placeholder="Quote text…"
           rows={Math.max(2, Math.min(6, (textValue.match(/\n/g) || []).length + 1))}
           onChange={(e) => handleUpdate({ quoteText: e.target.value, text: e.target.value })}
+          onBlur={handleBlur}
         />
         <span className={styles.badge}>
-          {isNumeric
-            ? (quote.refIndex ?? quote.referenceNumber ? `Ref [${quote.refIndex ?? quote.referenceNumber}]` : 'Unassigned')
-            : (quote.quoteType ?? 'APA')}
+          [{assignedNum}]
         </span>
       </div>
 
@@ -75,6 +102,7 @@ function QuoteCard({
             value={quote.authorLastName}
             placeholder="e.g. Smith"
             onChange={(e) => handleUpdate({ authorLastName: e.target.value, author: e.target.value })}
+            onBlur={handleBlur}
           />
         </label>
         <label className={styles.field}>
@@ -84,6 +112,7 @@ function QuoteCard({
             value={quote.authorInitial ?? ''}
             placeholder="e.g. J."
             onChange={(e) => handleUpdate({ authorInitial: e.target.value })}
+            onBlur={handleBlur}
           />
         </label>
         <label className={styles.field}>
@@ -93,6 +122,7 @@ function QuoteCard({
             value={quote.year}
             placeholder="e.g. 2026"
             onChange={(e) => handleUpdate({ year: e.target.value })}
+            onBlur={handleBlur}
           />
         </label>
         <label className={styles.field}>
@@ -102,6 +132,7 @@ function QuoteCard({
             value={quote.page}
             placeholder="e.g. 2 or 15-16"
             onChange={(e) => handleUpdate({ page: e.target.value })}
+            onBlur={handleBlur}
           />
         </label>
       </div>
@@ -114,6 +145,7 @@ function QuoteCard({
             value={quote.title}
             placeholder="e.g. Data Management Guidelines"
             onChange={(e) => handleUpdate({ title: e.target.value })}
+            onBlur={handleBlur}
           />
         </label>
         <label className={styles.field}>
@@ -123,6 +155,7 @@ function QuoteCard({
             value={quote.sourceContainer ?? ''}
             placeholder="e.g. Tech Press / Journal"
             onChange={(e) => handleUpdate({ sourceContainer: e.target.value })}
+            onBlur={handleBlur}
           />
         </label>
         <label className={styles.field}>
@@ -132,6 +165,7 @@ function QuoteCard({
             value={quote.doiOrUrl ?? ''}
             placeholder="e.g. https://doi.org/10..."
             onChange={(e) => handleUpdate({ doiOrUrl: e.target.value })}
+            onBlur={handleBlur}
           />
         </label>
       </div>
@@ -180,8 +214,11 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<'quotes' | 'references'>('quotes')
   const [notice, setNotice] = useState<string | null>(null)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null)
   const isDraggingHeader = useRef(false)
   const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 })
+  const isResizing = useRef(false)
+  const resizeStart = useRef({ x: 0, y: 0, width: 0, height: 0 })
 
   useEffect(() => {
     const el = dialog.current
@@ -220,6 +257,35 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const handleResizePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    isResizing.current = true
+    const rect = dialog.current?.getBoundingClientRect()
+    const currentW = rect?.width ?? 900
+    const currentH = rect?.height ?? 600
+    resizeStart.current = { x: e.clientX, y: e.clientY, width: currentW, height: currentH }
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  const handleResizePointerMove = (e: React.PointerEvent) => {
+    if (!isResizing.current) return
+    const dx = e.clientX - resizeStart.current.x
+    const dy = e.clientY - resizeStart.current.y
+    const newW = Math.max(480, Math.min(window.innerWidth - 30, resizeStart.current.width + dx))
+    const newH = Math.max(300, Math.min(window.innerHeight - 30, resizeStart.current.height + dy))
+    setSize({ width: newW, height: newH })
+  }
+
+  const handleResizePointerUp = (e: React.PointerEvent) => {
+    isResizing.current = false
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    } catch {
+      // ignore
+    }
+  }
+
   useEffect(() => {
     if (!root) return
     for (const item of items) {
@@ -231,7 +297,7 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
   }, [root, items])
 
   const handleCreateQuote = () => {
-    const newQuote = add({
+    add({
       quoteText: '',
       authorLastName: '',
       authorInitial: '',
@@ -242,13 +308,10 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
       doiOrUrl: '',
       quoteType: 'APA',
     })
-    if (newQuote && root) {
-      void syncReferences(root, newQuote)
-    }
   }
 
   const handleCreateReference = () => {
-    const newRef = addReference({
+    addReference({
       authors: '',
       year: new Date().getFullYear().toString(),
       title: '',
@@ -257,9 +320,6 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
       doiOrUrl: '',
       style: 'APA',
     })
-    if (newRef && root) {
-      void syncReferenceItem(root, newRef)
-    }
   }
 
   const handleInsertAtCursor = async (quote: Quote) => {
@@ -284,7 +344,10 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
       ref={dialog}
       className={styles.dialog}
       aria-labelledby="quotes-title"
-      style={position ? { left: `${position.x}px`, top: `${position.y}px`, right: 'auto', bottom: 'auto', margin: 0 } : undefined}
+      style={{
+        ...(position ? { left: `${position.x}px`, top: `${position.y}px`, right: 'auto', bottom: 'auto', margin: 0 } : {}),
+        ...(size ? { width: `${size.width}px`, height: `${size.height}px`, maxWidth: '98vw', maxHeight: '98vh' } : {}),
+      }}
       onCancel={(e) => {
         e.preventDefault()
         onClose()
@@ -373,6 +436,18 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
           }}
         />
       )}
+
+      <div
+        className={styles.resizeHandle}
+        onPointerDown={handleResizePointerDown}
+        onPointerMove={handleResizePointerMove}
+        onPointerUp={handleResizePointerUp}
+        title="Drag to resize Quotes modal"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10 2L2 10M10 6L6 10M10 10L10 10.01" stroke="#a8a296" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </div>
     </dialog>
   )
 }

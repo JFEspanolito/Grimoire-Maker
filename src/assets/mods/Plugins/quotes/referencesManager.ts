@@ -157,15 +157,33 @@ export function formatReferenceEntry(number: number, quote: Quote): string {
   return CitationFormatter.formatBibliography(copy, quote.quoteType ?? 'APA')
 }
 
+let referencesWriteQueue: Promise<unknown> = Promise.resolve()
+
 /**
  * Synchronizes the bibliography file (Draft/References.md) for direct quotes.
+ * Serialized via referencesWriteQueue to prevent file race conditions.
  */
-export async function syncReferences(root: string, quote: Quote): Promise<{ targetPath: string; refIndex: number }> {
+export function syncReferences(root: string, quote: Quote): Promise<{ targetPath: string; refIndex: number }> {
+  const task = referencesWriteQueue.then(() => doSyncReferences(root, quote))
+  referencesWriteQueue = task.catch(() => {})
+  return task
+}
+
+async function doSyncReferences(root: string, quote: Quote): Promise<{ targetPath: string; refIndex: number }> {
   const targetPath = await findReferencesFile(root, quote.sourcePath)
   const style = quote.quoteType ?? 'APA'
   const isNumeric = style === 'IEEE' || style === 'Chicago'
 
   let refIndex = quote.refIndex ?? quote.referenceNumber ?? 0
+  const authorTrimmed = (quote.authorLastName || quote.author || '').trim()
+  const titleTrimmed = (quote.title || '').trim()
+  const textTrimmed = (quote.quoteText || quote.text || '').trim()
+
+  // Guard: If empty draft quote, don't pollute References.md
+  if (!authorTrimmed && !titleTrimmed && !textTrimmed) {
+    return { targetPath, refIndex: refIndex || 1 }
+  }
+
   let currentBody = ''
   let currentFrontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
 
@@ -177,14 +195,38 @@ export async function syncReferences(root: string, quote: Quote): Promise<{ targ
       currentBody = parsed.body
       currentFrontmatter = { ...currentFrontmatter, ...parsed.frontmatter }
 
-      const lines = currentBody.split('\n')
+      let lines = currentBody.split('\n')
+
+      // Clean up orphaned dummy lines from accidental keystroke writes
+      lines = lines.filter(l => {
+        const trimmed = l.trim()
+        if (/^\[?Autor Desconocido\]? \(\d{4}\)\. \*?Untitled\*?\.$/i.test(trimmed)) return false
+        if (/^[a-z]{1,4} \(\d{4}\)\. \*?Untitled\*?\.$/i.test(trimmed)) return false
+        return true
+      })
+
       let maxNum = 0
+      let tagLineIndex = -1
       let existingLineIndex = -1
 
-      const authorKey = (quote.authorLastName || quote.title || '').trim().toLowerCase()
+      const citeTag = `<!-- cite:${quote.id} -->`
+      const authorKey = authorTrimmed.toLowerCase()
+      const titleKey = titleTrimmed.toLowerCase()
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim()
+        const lower = line.toLowerCase()
+
+        if (line === citeTag || line.includes(`cite:${quote.id}`)) {
+          tagLineIndex = i
+          if (i + 1 < lines.length && lines[i + 1].trim()) {
+            existingLineIndex = i + 1
+          } else {
+            existingLineIndex = i
+          }
+          break
+        }
+
         if (isNumeric) {
           const matchNum = /^\[?(\d+)\]?[\.\s]+(.+)$/.exec(line)
           if (matchNum) {
@@ -199,7 +241,9 @@ export async function syncReferences(root: string, quote: Quote): Promise<{ targ
             }
           }
         } else {
-          if (authorKey && line.toLowerCase().includes(authorKey)) {
+          if (authorKey.length >= 3 && lower.includes(authorKey)) {
+            existingLineIndex = i
+          } else if (titleKey.length >= 3 && lower.includes(titleKey)) {
             existingLineIndex = i
           }
         }
@@ -213,31 +257,32 @@ export async function syncReferences(root: string, quote: Quote): Promise<{ targ
       const updatedQuote = { ...quote, refIndex, referenceNumber: refIndex }
       const newEntry = CitationFormatter.formatBibliography(updatedQuote, style)
 
-      if (existingLineIndex !== -1) {
-        lines[existingLineIndex] = newEntry
-        const updatedBody = lines.join('\n')
-        const serialized = serializeDocument(currentFrontmatter, updatedBody)
-        await writeTextFile(targetPath, serialized)
-        try {
-          useDocumentStore.getState().setRawForPath(targetPath, serialized)
-        } catch {
-          // ignore
+      if (tagLineIndex !== -1) {
+        if (tagLineIndex === existingLineIndex) {
+          lines[tagLineIndex] = `${citeTag}\n${newEntry}`
+        } else {
+          lines[existingLineIndex] = newEntry
         }
+      } else if (existingLineIndex !== -1) {
+        lines[existingLineIndex] = `${citeTag}\n${newEntry}`
       } else {
-        const updatedBody = currentBody.trimEnd() ? `${currentBody.trimEnd()}\n\n${newEntry}\n` : `${newEntry}\n`
-        const serialized = serializeDocument(currentFrontmatter, updatedBody)
-        await writeTextFile(targetPath, serialized)
-        try {
-          useDocumentStore.getState().setRawForPath(targetPath, serialized)
-        } catch {
-          // ignore
-        }
+        lines.push('', citeTag, newEntry)
+      }
+
+      const updatedBody = lines.join('\n')
+      const serialized = serializeDocument(currentFrontmatter, updatedBody)
+      await writeTextFile(targetPath, serialized)
+      try {
+        useDocumentStore.getState().setRawForPath(targetPath, serialized)
+      } catch {
+        // ignore
       }
     } else {
       if (!refIndex) refIndex = 1
       const updatedQuote = { ...quote, refIndex, referenceNumber: refIndex }
       const newEntry = CitationFormatter.formatBibliography(updatedQuote, style)
-      const initialContent = serializeDocument(currentFrontmatter, `# References\n\n${newEntry}\n`)
+      const citeTag = `<!-- cite:${quote.id} -->`
+      const initialContent = serializeDocument(currentFrontmatter, `# References\n\n${citeTag}\n${newEntry}\n`)
       await writeTextFile(targetPath, initialContent)
       try {
         useDocumentStore.getState().setRawForPath(targetPath, initialContent)
@@ -257,14 +302,29 @@ export async function syncReferences(root: string, quote: Quote): Promise<{ targ
 
 /**
  * Synchronizes an indirect reference item with Draft/References.md.
- * Checks for duplicates by DOI or Title+Year, assigns nextIndex if new, and writes formatted entry.
+ * Serialized via referencesWriteQueue to eliminate race conditions.
+ * Uses exact <!-- cite:id --> tracking to prevent duplicate lines.
  */
-export async function syncReferenceItem(root: string, refItem: ReferenceItem): Promise<{ targetPath: string; refIndex: number }> {
+export function syncReferenceItem(root: string, refItem: ReferenceItem): Promise<{ targetPath: string; refIndex: number }> {
+  const task = referencesWriteQueue.then(() => doSyncReferenceItem(root, refItem))
+  referencesWriteQueue = task.catch(() => {})
+  return task
+}
+
+async function doSyncReferenceItem(root: string, refItem: ReferenceItem): Promise<{ targetPath: string; refIndex: number }> {
   const targetPath = await findReferencesFile(root)
   const style = refItem.style ?? 'APA'
   const isNumeric = style === 'IEEE' || style === 'Chicago'
 
   let refIndex = refItem.refIndex ?? 0
+  const authorsTrimmed = (refItem.authors || '').trim()
+  const titleTrimmed = (refItem.title || '').trim()
+
+  // Guard: If both authors and title are empty, do not pollute References.md
+  if (!authorsTrimmed && !titleTrimmed) {
+    return { targetPath, refIndex: refIndex || 1 }
+  }
+
   let currentBody = ''
   let currentFrontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
 
@@ -276,24 +336,45 @@ export async function syncReferenceItem(root: string, refItem: ReferenceItem): P
       currentBody = parsed.body
       currentFrontmatter = { ...currentFrontmatter, ...parsed.frontmatter }
 
-      const lines = currentBody.split('\n')
+      let lines = currentBody.split('\n')
+
+      // Clean up orphaned dummy lines from accidental keystroke writes
+      lines = lines.filter(l => {
+        const trimmed = l.trim()
+        if (/^\[?Autor Desconocido\]? \(\d{4}\)\. \*?Untitled\*?\.$/i.test(trimmed)) return false
+        if (/^[a-z]{1,4} \(\d{4}\)\. \*?Untitled\*?\.$/i.test(trimmed)) return false
+        return true
+      })
+
       let maxNum = 0
+      let tagLineIndex = -1
       let existingLineIndex = -1
 
+      const citeTag = `<!-- cite:${refItem.id} -->`
       const doiKey = (refItem.doiOrUrl || '').trim().toLowerCase()
-      const titleYearKey = `${(refItem.title || '').trim()} ${(refItem.year || '').trim()}`.toLowerCase()
+      const titleKey = titleTrimmed.toLowerCase()
+      const authorKey = authorsTrimmed.toLowerCase()
 
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim()
         const lower = line.toLowerCase()
+
+        if (line === citeTag || line.includes(`cite:${refItem.id}`)) {
+          tagLineIndex = i
+          if (i + 1 < lines.length && lines[i + 1].trim()) {
+            existingLineIndex = i + 1
+          } else {
+            existingLineIndex = i
+          }
+          break
+        }
 
         if (isNumeric) {
           const matchNum = /^\[?(\d+)\]?[\.\s]+(.+)$/.exec(line)
           if (matchNum) {
             const num = parseInt(matchNum[1], 10)
             if (num > maxNum) maxNum = num
-            // Duplicate check by DOI or Title+Year
-            if ((doiKey && lower.includes(doiKey)) || (titleYearKey && lower.includes(titleYearKey))) {
+            if ((doiKey && lower.includes(doiKey)) || (titleKey.length >= 3 && lower.includes(titleKey))) {
               refIndex = num
               existingLineIndex = i
             } else if (refIndex && num === refIndex) {
@@ -301,12 +382,11 @@ export async function syncReferenceItem(root: string, refItem: ReferenceItem): P
             }
           }
         } else {
-          // Duplicate check by DOI or Title+Year or Author
           if (doiKey && lower.includes(doiKey)) {
             existingLineIndex = i
-          } else if (titleYearKey && lower.includes(titleYearKey)) {
+          } else if (titleKey.length >= 3 && lower.includes(titleKey)) {
             existingLineIndex = i
-          } else if (refItem.authors && lower.includes(refItem.authors.toLowerCase()) && refItem.year && lower.includes(refItem.year)) {
+          } else if (authorKey.length >= 3 && lower.includes(authorKey) && refItem.year && lower.includes(refItem.year)) {
             existingLineIndex = i
           }
         }
@@ -320,31 +400,32 @@ export async function syncReferenceItem(root: string, refItem: ReferenceItem): P
       const updatedRef = { ...refItem, refIndex }
       const newEntry = CitationFormatter.formatReferenceBibliography(updatedRef, style)
 
-      if (existingLineIndex !== -1) {
-        lines[existingLineIndex] = newEntry
-        const updatedBody = lines.join('\n')
-        const serialized = serializeDocument(currentFrontmatter, updatedBody)
-        await writeTextFile(targetPath, serialized)
-        try {
-          useDocumentStore.getState().setRawForPath(targetPath, serialized)
-        } catch {
-          // ignore
+      if (tagLineIndex !== -1) {
+        if (tagLineIndex === existingLineIndex) {
+          lines[tagLineIndex] = `${citeTag}\n${newEntry}`
+        } else {
+          lines[existingLineIndex] = newEntry
         }
+      } else if (existingLineIndex !== -1) {
+        lines[existingLineIndex] = `${citeTag}\n${newEntry}`
       } else {
-        const updatedBody = currentBody.trimEnd() ? `${currentBody.trimEnd()}\n\n${newEntry}\n` : `${newEntry}\n`
-        const serialized = serializeDocument(currentFrontmatter, updatedBody)
-        await writeTextFile(targetPath, serialized)
-        try {
-          useDocumentStore.getState().setRawForPath(targetPath, serialized)
-        } catch {
-          // ignore
-        }
+        lines.push('', citeTag, newEntry)
+      }
+
+      const updatedBody = lines.join('\n')
+      const serialized = serializeDocument(currentFrontmatter, updatedBody)
+      await writeTextFile(targetPath, serialized)
+      try {
+        useDocumentStore.getState().setRawForPath(targetPath, serialized)
+      } catch {
+        // ignore
       }
     } else {
       if (!refIndex) refIndex = 1
       const updatedRef = { ...refItem, refIndex }
       const newEntry = CitationFormatter.formatReferenceBibliography(updatedRef, style)
-      const initialContent = serializeDocument(currentFrontmatter, `# References\n\n${newEntry}\n`)
+      const citeTag = `<!-- cite:${refItem.id} -->`
+      const initialContent = serializeDocument(currentFrontmatter, `# References\n\n${citeTag}\n${newEntry}\n`)
       await writeTextFile(targetPath, initialContent)
       try {
         useDocumentStore.getState().setRawForPath(targetPath, initialContent)

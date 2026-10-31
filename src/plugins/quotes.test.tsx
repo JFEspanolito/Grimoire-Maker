@@ -189,7 +189,7 @@ it('renders QuotesButton and opens quotes modal with new quote button and dropdo
   expect(newRefBtn).toBeDefined()
   await act(async () => newRefBtn?.click())
   expect(useQuotes.getState().references).toHaveLength(1)
-  expect(document.querySelector('dialog')?.textContent).toContain('Ref [2]')
+  expect(document.querySelector('dialog')?.textContent).toContain('[2]')
 
   await act(async () => tabs[0].click())
   expect(document.querySelector('dialog')?.textContent).toContain('Simple quote')
@@ -259,4 +259,65 @@ it('correctly handles citation insertion when no draft editor is active', () => 
   const result = handleInsertReferenceCitation(ref, 'APA')
   expect(result.success).toBe(false)
   expect(result.message).toContain('Open a Draft document')
+})
+
+it('shares sequential numbering between Quotes and References', () => {
+  const quote1 = useQuotes.getState().add({
+    quoteText: 'First quote text',
+    authorLastName: 'AuthorOne',
+    year: '2020',
+    title: 'Paper 1',
+    quoteType: 'IEEE',
+  })!
+  expect(quote1.refIndex).toBe(1)
+
+  const ref2 = useQuotes.getState().addReference({
+    authors: 'AuthorTwo',
+    year: '2021',
+    title: 'Paper 2',
+    style: 'IEEE',
+  })!
+  expect(ref2.refIndex).toBe(2)
+
+  const quote3 = useQuotes.getState().add({
+    quoteText: 'Third quote text',
+    authorLastName: 'AuthorThree',
+    year: '2022',
+    title: 'Paper 3',
+    quoteType: 'IEEE',
+  })!
+  expect(quote3.refIndex).toBe(3)
+
+  const ref4 = useQuotes.getState().addReference({
+    authors: 'AuthorFour',
+    year: '2023',
+    title: 'Paper 4',
+    style: 'IEEE',
+  })!
+  expect(ref4.refIndex).toBe(4)
+})
+
+it('does not duplicate entries when updating a reference with syncReferenceItem', async () => {
+  const ref = useQuotes.getState().addReference({
+    authors: 'Smith, J.',
+    year: '2026',
+    title: 'Initial Title',
+    style: 'APA',
+  })!
+
+  await syncReferenceItem('/book', ref)
+  let content = fsMock.files.get('/book/Draft/References.md')!
+  expect(content).toContain('Smith, J. (2026). *Initial Title*.')
+
+  // Update title on the same reference
+  const updatedRef = { ...ref, title: 'Updated Title' }
+  useQuotes.getState().updateReference(ref.id, { title: 'Updated Title' })
+  await syncReferenceItem('/book', updatedRef)
+
+  content = fsMock.files.get('/book/Draft/References.md')!
+  expect(content).toContain('Smith, J. (2026). *Updated Title*.')
+  expect(content).not.toContain('Smith, J. (2026). *Initial Title*.')
+  // Ensure the entry appears exactly once
+  const matches = content.match(/Smith, J\. \(2026\)/g)
+  expect(matches).toHaveLength(1)
 })
