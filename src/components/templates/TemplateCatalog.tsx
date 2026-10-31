@@ -1,9 +1,9 @@
 import { reportError } from '../../lib/errorLogging'
 import { useState } from 'react'
 import { useTemplateStore } from '../../stores/templateStore'
-import { exportTemplateZip, importTemplateZip } from '../../lib/templateActions'
+import { exportTemplateZip } from '../../lib/templateActions'
 import type { Template } from '../../lib/templates'
-import { isTauri, useFileSystem } from '../../hooks/useFileSystem'
+import { useFileSystem } from '../../hooks/useFileSystem'
 import { useDocumentStore } from '../../stores/documentStore'
 import { ConfirmDialog } from '../layout/ConfirmDialog'
 import { useTranslation } from '../../lib/i18n'
@@ -19,10 +19,10 @@ function TemplateList({
 }) {
   const { t } = useTranslation()
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex flex-col gap-2">
       {items.map((template) => (
-        <li key={template.id} className="flex items-center justify-between gap-2">
-          <button className="text-left text-sm hover:underline" onClick={() => onApply(template)}>
+        <li key={template.id} className="flex items-center justify-between gap-2 rounded px-1.5 py-1 transition-colors hover:bg-white/5">
+          <button className="text-left text-sm leading-snug hover:underline" onClick={() => onApply(template)}>
             {template.label}
           </button>
           {onExport && (
@@ -48,14 +48,11 @@ export function TemplateCatalog() {
   const { t } = useTranslation()
   const { applyTemplate, createProject } = useFileSystem()
   const hasProject = useDocumentStore((state) => state.workspaceRoot !== null)
-  const { templates, dir, errors, reload } = useTemplateStore()
+  const { templates, dir, errors } = useTemplateStore()
   const [manualOpen, setManualOpen] = useState<{ hasProject: boolean; open: boolean } | null>(null)
   const open = manualOpen?.hasProject === hasProject ? manualOpen.open : !hasProject
   const [notice, setNotice] = useState<Notice | null>(null)
   const [pendingTemplate, setPendingTemplate] = useState<Template | null>(null)
-
-  const official = templates.filter((t) => t.builtin)
-  const community = templates.filter((t) => !t.builtin)
 
   /** Runs a file action; a returned string is shown as the result, null means it was cancelled. */
   const run = async (action: () => Promise<string | null>) => {
@@ -67,14 +64,6 @@ export function TemplateCatalog() {
       setNotice({ kind: 'error', text: e instanceof Error ? e.message : String(e) })
     }
   }
-
-  const importZip = () =>
-    run(async () => {
-      const id = await importTemplateZip()
-      if (!id) return null
-      await reload()
-      return `Imported "${id}"`
-    })
 
   const exportZip = (t: Template) =>
     run(async () => ((await exportTemplateZip(t)) ? `Exported "${t.label}"` : null))
@@ -108,18 +97,7 @@ export function TemplateCatalog() {
       </button>
       {open && (
         <div className="mt-2 flex flex-col gap-2">
-          <TemplateList items={official} onApply={setPendingTemplate} onExport={(t) => void exportZip(t)} />
-          {community.length > 0 && (
-            <>
-              <h3 className="text-xs uppercase tracking-wide text-white/40">{t('templates.installed')}</h3>
-              <TemplateList items={community} onApply={setPendingTemplate} onExport={(t) => void exportZip(t)} />
-            </>
-          )}
-          {isTauri() && (
-            <button className="self-start text-xs underline" onClick={() => void importZip()}>
-              Import…
-            </button>
-          )}
+          <TemplateList items={templates} onApply={setPendingTemplate} onExport={(t) => void exportZip(t)} />
           {notice && (
             <p className={`text-xs ${notice.kind === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
               {notice.text}

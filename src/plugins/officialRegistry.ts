@@ -1,3 +1,4 @@
+import quotes from '../assets/mods/Plugins/quotes/quotes'
 import bookmarks from '../assets/mods/Plugins/bookmarks/bookmarks'
 import zoomSource from '../assets/mods/Plugins/zoom/manifest.json?raw'
 import rulerSource from '../assets/mods/Plugins/pixel-ruler/manifest.json?raw'
@@ -33,7 +34,10 @@ function declarativePlugin(source: string): GrimoirePlugin {
 }
 
 const shipped = new Map<string, GrimoirePlugin>([
-  ['bookmarks', bookmarks], ['zoom', declarativePlugin(zoomSource)], ['pixel-ruler', declarativePlugin(rulerSource)],
+  ['quotes', quotes],
+  ['bookmarks', bookmarks],
+  ['zoom', declarativePlugin(zoomSource)],
+  ['pixel-ruler', declarativePlugin(rulerSource)],
 ])
 
 /** A folder controls presence only; its name never authorizes running its contents. */

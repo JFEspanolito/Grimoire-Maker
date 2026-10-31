@@ -11,7 +11,13 @@ let pending: Promise<unknown> = Promise.resolve()
 export function reconcilePlugins(_io: ModFs, mods: ModEntry[]): Promise<string[]> {
   const next = pending.then(() => {
     const errors: string[] = []
-    const enabled = mods.filter(mod => mod.kind === MOD_KIND.PLUGINS && mod.enabled && !mod.errors.length)
+    const enabled = mods
+      .filter(mod => mod.kind === MOD_KIND.PLUGINS && mod.enabled && !mod.errors.length)
+      .sort((a, b) => {
+        const orderA = a.id === 'Plugins/quotes' ? 1 : a.id === 'Plugins/bookmarks' ? 2 : 99
+        const orderB = b.id === 'Plugins/quotes' ? 1 : b.id === 'Plugins/bookmarks' ? 2 : 99
+        return orderA - orderB || a.id.localeCompare(b.id)
+      })
     const unload = (id: string) => {
       const current = loaded.get(id)
       if (!current) return

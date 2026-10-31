@@ -86,6 +86,13 @@ export const OFFICIAL_TEMPLATES: Template[] = [
     body: '# TTRPG Core Rulebook / Homebrew Manual\n\nBegin your rulebook here.\n',
     builtin: true,
   },
+  {
+    id: 'thesis-example',
+    label: 'Thesis Example',
+    frontmatter: { title: 'Untitled Thesis', pageSize: 'a4', columns: 1, theme: 'modern' },
+    body: '# Thesis Example\n\nBegin your thesis manuscript here.\n',
+    builtin: true,
+  },
 ]
 
 export interface UserTemplates {

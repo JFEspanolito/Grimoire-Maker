@@ -421,4 +421,23 @@ describe('explorer toolbar and Trash', () => {
     await click('Delete')
     expect(deleteFromTrashMock).toHaveBeenCalledWith('/book/Trash/Old.md')
   })
+
+  it('allows dismissing workspaceError with dismiss button', async () => {
+    useDocumentStore.getState().setWorkspace('/book', [])
+    useSessionStore.getState().setWorkspaceError('Could not open file: test error')
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<FileTree />))
+
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert).not.toBeNull()
+    expect(alert?.textContent).toContain('Could not open file: test error')
+
+    const dismissBtn = alert?.querySelector<HTMLButtonElement>('[aria-label="Dismiss error"]')
+    expect(dismissBtn).not.toBeNull()
+    await act(async () => dismissBtn?.click())
+
+    expect(useSessionStore.getState().workspaceError).toBeNull()
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+  })
 })

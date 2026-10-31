@@ -10,6 +10,7 @@ import { StatusBar } from './StatusBar'
 import styles from './DocumentWorkspace.module.css'
 import { useExplorerStore } from '../../stores/explorerStore'
 import { MarkdownSourceView } from '../editor/MarkdownSourceView'
+import { PluginContextMenu } from './PluginContextMenu'
 
 const FilePreview = lazy(() => import('../viewers/FilePreview').then((module) => ({ default: module.FilePreview })))
 
@@ -53,6 +54,7 @@ export function DocumentWorkspace({ editor, onReady }: { editor: Editor | null; 
           Select this view, then open a file or choose a tab.
         </button>)}
     </div>
+    <PluginContextMenu />
     {!previewingFile && !(activeTab && markdownViews[activeTab]) && <StatusBar />}
   </>
 }

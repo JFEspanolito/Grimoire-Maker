@@ -1,0 +1,463 @@
+.button { display: flex; align-items: center; gap: .35rem; padding: .25rem .5rem; border-radius: .25rem; color: #d1c5ad; font: 12px/1.4 system-ui, sans-serif; cursor: pointer; }
+.button:hover:not(:disabled) { background: #ffffff12; color: #f0eee9; }
+.button:disabled { opacity: .4; cursor: default; }
+.count { color: #f0eee9; font-variant-numeric: tabular-nums; }
+.button:focus-visible, .dialog :focus-visible { outline: 2px solid #cfb37c; outline-offset: 2px; }
+
+.dialog {
+  position: fixed;
+  top: 4.5rem;
+  right: 2rem;
+  margin: 0;
+  width: min(67.2rem, calc(100vw - 4rem));
+  max-width: 96vw;
+  height: 70vh;
+  max-height: 70vh;
+  min-height: 28rem;
+  padding: 1.25rem;
+  border: 1px solid #4a4539;
+  border-radius: 0.6rem;
+  background: #201f1c;
+  color: #f0eee9;
+  font: 13px/1.5 system-ui, sans-serif;
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  pointer-events: auto;
+}
+.dialog::backdrop {
+  display: none !important;
+  background: transparent !important;
+  backdrop-filter: none !important;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  user-select: none;
+  cursor: grab;
+}
+.header:active {
+  cursor: grabbing;
+}
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid #36332b;
+  margin-bottom: 0.85rem;
+}
+
+.tabButton {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #a8a296;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tabButton:hover {
+  color: #f0eee9;
+}
+.tabButtonActive {
+  color: #f0eee9;
+  border-bottom-color: #cfb37c;
+  font-weight: 600;
+}
+
+.placeholderView {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  color: #a8a296;
+  text-align: center;
+}
+.header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.close {
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.3rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #a8a296;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.close:hover {
+  background: #ffffff18;
+  color: #ffffff;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0.25rem 0.25rem 0.25rem 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: 0.45rem;
+  background: #282622;
+  border: 1px solid #38352d;
+  transition: border-color 0.15s ease;
+}
+.card:hover {
+  border-color: #554f42;
+}
+
+.quoteHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.quoteText {
+  margin: 0;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: #f3efe6;
+  line-height: 1.45;
+  border-left: 3px solid #cfb37c;
+  padding-left: 0.65rem;
+  word-break: break-word;
+}
+
+.quoteInput {
+  flex: 1;
+  margin: 0;
+  font-size: 0.95rem;
+  font-style: italic;
+  font-family: inherit;
+  color: #f3efe6;
+  line-height: 1.45;
+  border-left: 3px solid #cfb37c;
+  border-top: none;
+  border-right: none;
+  border-bottom: 1px dashed #444037;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.2rem 0.4rem 0.2rem 0.65rem;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.quoteInput:focus {
+  border-bottom-color: #cfb37c;
+  background: #ffffff08;
+}
+
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.newQuoteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.3rem;
+  background: #38342c;
+  border: 1px solid #554f42;
+  color: #f3efe6;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.newQuoteBtn:hover {
+  background: #474238;
+  border-color: #cfb37c;
+  color: #ffffff;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.25rem;
+  background: #3b362a;
+  color: #e5c386;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.metaGridSecond {
+  display: grid;
+  grid-template-columns: 2fr 2fr 2fr;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .metaGrid,
+  .metaGridSecond {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.field span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9c9689;
+}
+.input {
+  background: #1c1b18;
+  border: 1px solid #423e35;
+  border-radius: 0.25rem;
+  color: #f0eee9;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.8rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.input:focus {
+  border-color: #cfb37c;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #333029;
+}
+
+.dragHandle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.25rem;
+  background: #38342c;
+  color: #e5dfd3;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: grab;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+.dragHandle:hover {
+  background: #474238;
+}
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.stylePicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: #a8a296;
+}
+
+.styleLabel {
+  font-weight: 500;
+  color: #c9c3b6;
+}
+
+.styleSelect {
+  background: #201e19;
+  border: 1px solid #444037;
+  border-radius: 0.25rem;
+  color: #f0eee9;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.styleSelect:focus {
+  border-color: #cfb37c;
+}
+
+.insertBtn {
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.25rem;
+  background: #2a3a2e;
+  border: 1px solid #3d5643;
+  color: #86efac;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.insertBtn:hover:not(:disabled) {
+  background: #344a39;
+  color: #bbf7d0;
+}
+.insertBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #202621;
+  border-color: #2b382d;
+  color: #6b8f75;
+}
+
+.deleteBtn {
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #e8a49c;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.deleteBtn:hover {
+  background: #ffffff14;
+  color: #fca5a5;
+}
+
+.empty {
+  margin: 1rem 0;
+  color: #a8a296;
+  text-align: center;
+  font-style: italic;
+}
+.notice {
+  margin: 0.4rem 0;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.25rem;
+  background: #1c2e22;
+  border: 1px solid #285437;
+  color: #86efac;
+  font-size: 0.8rem;
+}
+
+.refInfoContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.refInlinePreview,
+.refBiblioPreview {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.refPreviewLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a8a296;
+  flex-shrink: 0;
+}
+
+.refInlineCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  background: #1e1d19;
+  border: 1px solid #3c382e;
+  color: #cfb37c;
+  word-break: break-all;
+}
+
+.refBiblioText {
+  color: #e5dfd3;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.refEditSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+  padding: 0.6rem;
+  border-radius: 0.35rem;
+  background: #23211d;
+  border: 1px solid #36322a;
+}
+
+.editToggleBtn {
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.25rem;
+  background: #333028;
+  border: 1px solid #484338;
+  color: #d1c5ad;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.editToggleBtn:hover {
+  background: #423d32;
+  color: #f0eee9;
+  border-color: #cfb37c;
+}
+
+.resizeHandle {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  cursor: nwse-resize;
+  user-select: none;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+  padding: 2px;
+}
+.resizeHandle:hover {
+  opacity: 1;
+}

@@ -115,11 +115,6 @@ it('shows template names and format-neutral controls without changing their acti
     expect(exportButton?.title).toBe('Export template')
     await act(async () => exportButton?.click())
     expect(mocks.export).toHaveBeenCalledWith(mocks.template)
-    const importButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Import…')
-    expect(importButton).toBeDefined()
-    await act(async () => importButton?.click())
-    expect(mocks.import).toHaveBeenCalledOnce()
-    expect(mocks.reload).toHaveBeenCalledOnce()
   } finally {
     await act(async () => root.unmount())
     if (showModal) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModal)

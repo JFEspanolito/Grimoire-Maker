@@ -106,8 +106,9 @@ mod tests {
         let root = std::env::temp_dir().join("grimoire-custom-library");
         for name in [
             ".examples-seeded",
-            ".executable-plugins-v1-seeded",
+            ".executable-plugins-v2-seeded",
             ".editorial-templates-v2-seeded",
+            ".editorial-templates-v3-seeded",
             ".rol-adventures-snippets-v2-seeded",
             ".grimoire-theme-examples-v1",
             ".grimoire-theme-examples-v2",

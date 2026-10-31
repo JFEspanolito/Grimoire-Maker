@@ -610,9 +610,10 @@ fn grant_seed_markers(
     // The frontend checks the shared marker even when all libraries are custom.
     allow_owned_file(scope, &mods, ".examples-seeded")?;
     for (path, folder, managed, marker) in [
-        (&paths.plugins, "Plugins", managed.plugins, ".executable-plugins-v1-seeded"),
+        (&paths.plugins, "Plugins", managed.plugins, ".executable-plugins-v2-seeded"),
         (&paths.snippets, "Snippets", managed.snippets, ".rol-adventures-snippets-v2-seeded"),
         (&paths.templates, "Templates", managed.templates, ".editorial-templates-v2-seeded"),
+        (&paths.templates, "Templates", managed.templates, ".editorial-templates-v3-seeded"),
     ] {
         let library = Path::new(path);
         let original = same_path(path, &text(&mods.join(folder))?);

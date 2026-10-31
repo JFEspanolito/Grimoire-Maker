@@ -15,9 +15,18 @@ class PluginBoundary extends Component<{ children: ReactNode; identity: unknown;
 }
 
 /** A contribution is isolated so a rendering error does not remove the editor. */
+const TOOLBAR_ORDER: Record<string, number> = {
+  'quotes.control': 10,
+  'bookmarks.control': 20,
+}
+
+/** A contribution is isolated so a rendering error does not remove the editor. */
 export function PluginSlot({ slot }: { slot: 'toolbar' | 'editorTools' | 'overlays' | 'panels' }) {
   const panels = usePluginRegistry(state => state[slot])
-  return panels.map(({ id, title, component: Widget }) =>
+  const sorted = slot === 'toolbar'
+    ? [...panels].sort((a, b) => (TOOLBAR_ORDER[a.id] ?? 999) - (TOOLBAR_ORDER[b.id] ?? 999))
+    : panels
+  return sorted.map(({ id, title, component: Widget }) =>
     <PluginBoundary key={id} identity={Widget} title={title}><Widget /></PluginBoundary>)
 }
 

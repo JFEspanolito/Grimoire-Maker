@@ -25,3 +25,12 @@ export function findSnippetDropTarget(x: number, y: number): { editor: Editor; p
   })
   return hit ? { editor, position: hit.pos, documentPath: paths.get(element) ?? null } : null
 }
+
+/** Finds the currently active or focused editor target for direct insertion. */
+export function getActiveSnippetDropTarget(): { editor: Editor; documentPath: string | null } | null {
+  const element = document.querySelector<HTMLElement>('[data-active-editor="true"] .ProseMirror')
+    ?? document.querySelector<HTMLElement>('.ProseMirror')
+  const editor = element && targets.get(element)
+  if (!element || !editor || editor.isDestroyed || !editor.isEditable) return null
+  return { editor, documentPath: paths.get(element) ?? null }
+}
