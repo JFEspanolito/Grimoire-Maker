@@ -356,8 +356,8 @@ it('appends at the bottom with sequential dot numbering when document uses numbe
 
   // Must not replace the guideline
   expect(content).toContain('- **Guideline**: Mentions Elena and 2026 in description.')
-  // Must append at the bottom with number 3
-  expect(content).toContain('3. Elena (2026). *Acerca de ser Puntual*. puntualidad.org.')
+  // Must append at the bottom with bracket number [3]
+  expect(content).toContain('[3] Elena (2026). *Acerca de ser Puntual*. puntualidad.org.')
   // Guideline line must come before the new entry
-  expect(content.indexOf('- **Guideline**')).toBeLessThan(content.indexOf('3. Elena'))
+  expect(content.indexOf('- **Guideline**')).toBeLessThan(content.indexOf('[3] Elena'))
 })

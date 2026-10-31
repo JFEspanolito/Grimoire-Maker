@@ -275,10 +275,12 @@ async function doSyncReferences(root: string, quote: Quote): Promise<{ targetPat
       const updatedQuote = { ...quote, refIndex, referenceNumber: refIndex }
       let newEntry = CitationFormatter.formatBibliography(updatedQuote, style)
 
-      if (hasDotNumbering && !/^\d+\.[\s]+/.test(newEntry) && !/^\[\d+\]/.test(newEntry)) {
-        newEntry = `${refIndex}. ${newEntry}`
-      } else if (hasBracketNumbering && !/^\[\d+\]/.test(newEntry)) {
-        newEntry = `[${refIndex}] ${newEntry}`
+      if ((hasDotNumbering || hasBracketNumbering || isNumeric) && !/^\[\d+\]/.test(newEntry)) {
+        if (/^\d+\.[\s]+/.test(newEntry)) {
+          newEntry = newEntry.replace(/^\d+\.[\s]+/, `[${refIndex}] `)
+        } else {
+          newEntry = `[${refIndex}] ${newEntry}`
+        }
       }
 
       if (tagLineIndex !== -1) {
@@ -445,10 +447,12 @@ async function doSyncReferenceItem(root: string, refItem: ReferenceItem): Promis
       const updatedRef = { ...refItem, refIndex }
       let newEntry = CitationFormatter.formatReferenceBibliography(updatedRef, style)
 
-      if (hasDotNumbering && !/^\d+\.[\s]+/.test(newEntry) && !/^\[\d+\]/.test(newEntry)) {
-        newEntry = `${refIndex}. ${newEntry}`
-      } else if (hasBracketNumbering && !/^\[\d+\]/.test(newEntry)) {
-        newEntry = `[${refIndex}] ${newEntry}`
+      if ((hasDotNumbering || hasBracketNumbering || isNumeric) && !/^\[\d+\]/.test(newEntry)) {
+        if (/^\d+\.[\s]+/.test(newEntry)) {
+          newEntry = newEntry.replace(/^\d+\.[\s]+/, `[${refIndex}] `)
+        } else {
+          newEntry = `[${refIndex}] ${newEntry}`
+        }
       }
 
       if (tagLineIndex !== -1) {

@@ -76,9 +76,9 @@ describe('CitationFormatter', () => {
       expect(inline).toBe('"Persistent Digital Identifiers: Include active DOIs for all datasets."^[2]')
     })
 
-    it('formats bibliography / note entry with index dot and parenthesized publication', () => {
+    it('formats bibliography / note entry with index bracket and parenthesized publication', () => {
       const bib = CitationFormatter.formatBibliography({ ...sampleMeta, doiOrUrl: '' }, 'Chicago')
-      expect(bib).toBe('2. J. Smith, *Data Management Guidelines* (Tech Press, 2026), 2.')
+      expect(bib).toBe('[2] J. Smith, *Data Management Guidelines* (Tech Press, 2026), 2.')
     })
   })
 

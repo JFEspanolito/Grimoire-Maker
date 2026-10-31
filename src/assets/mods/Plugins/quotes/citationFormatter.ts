@@ -161,13 +161,13 @@ export class CitationFormatter {
       }
 
       case 'Chicago': {
-        // [refIndex]. [authorInitial] [authorLastName], *[title]* ([sourceContainer], [year]), [page]. [doiOrUrl]
+        // [[refIndex]] [authorInitial] [authorLastName], *[title]* ([sourceContainer], [year]), [page]. [doiOrUrl]
         const authorPart = initial ? `${initial} ${author}` : author
         const innerPub = [container, year !== 'n.d.' ? year : ''].filter(Boolean).join(', ')
         const pubPart = innerPub ? ` (${innerPub})` : ''
         const pagePart = page ? `, ${page}` : ''
         const doiPart = doi ? ` ${doi}` : ''
-        return `${refIndex}. ${authorPart}, *${title}*${pubPart}${pagePart}.${doiPart}`
+        return `[${refIndex}] ${authorPart}, *${title}*${pubPart}${pagePart}.${doiPart}`
       }
 
       case 'Harvard': {
@@ -249,7 +249,7 @@ export class CitationFormatter {
         const pubPart = innerPub ? ` (${innerPub})` : ''
         const vipPart = vip ? `, ${vip}` : ''
         const doiPart = doi ? ` ${doi}` : ''
-        return `${refIndex}. ${authors}, *${title}*${pubPart}${vipPart}.${doiPart}`
+        return `[${refIndex}] ${authors}, *${title}*${pubPart}${vipPart}.${doiPart}`
       }
 
       case 'Harvard': {
