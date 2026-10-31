@@ -2,7 +2,7 @@ import { exists, readDir, readTextFile, writeTextFile } from '@tauri-apps/plugin
 import { serializeDocument, parseDocument } from '../../../../lib/frontmatter'
 import { useDocumentStore } from '../../../../stores/documentStore'
 import { getActiveSnippetDropTarget } from '../../../../lib/snippetDrop'
-import type { FileNode } from '../../../../types/document'
+import type { FileNode, Frontmatter } from '../../../../types/document'
 import type { Quote } from './quotesStore'
 import { useQuotes } from './quotesStore'
 import { CitationFormatter, type CitationStyle, type ReferenceItem } from './citationFormatter'
@@ -185,7 +185,7 @@ async function doSyncReferences(root: string, quote: Quote): Promise<{ targetPat
   }
 
   let currentBody = ''
-  let currentFrontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
+  let currentFrontmatter: Frontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
 
   try {
     const fileExists = await exists(targetPath).catch(() => false)
@@ -355,7 +355,7 @@ async function doSyncReferenceItem(root: string, refItem: ReferenceItem): Promis
   }
 
   let currentBody = ''
-  let currentFrontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
+  let currentFrontmatter: Frontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
 
   try {
     const fileExists = await exists(targetPath).catch(() => false)

@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import quotes from '../assets/mods/Plugins/quotes/quotes'
 import { useQuotes } from '../assets/mods/Plugins/quotes/quotesStore'
-import { ensureReferenceForQuote, syncReferences, insertQuote, syncReferenceItem, handleInsertReferenceCitation } from '../assets/mods/Plugins/quotes/referencesManager'
+import { ensureReferenceForQuote, syncReferenceItem, handleInsertReferenceCitation } from '../assets/mods/Plugins/quotes/referencesManager'
 import type { PluginApi, PluginContextAction, PluginPanel } from '../types/plugin'
 import { useDocumentStore } from '../stores/documentStore'
 import { useTabStore } from '../stores/tabStore'
@@ -227,7 +227,7 @@ it('finds and appends references to nested References.md in template subfolders'
     quoteType: 'APA',
   })!
 
-  const result = await ensureReferenceForQuote('/book', quote)
+  await ensureReferenceForQuote('/book', quote)
   expect(fsMock.files.has(nestedRefPath)).toBe(true)
   expect(fsMock.files.get(nestedRefPath)).toContain('Espanolito, J. (2026). *Grimoire Architecture*.')
   expect(fsMock.files.has('/book/Draft/References.md')).toBe(false)
