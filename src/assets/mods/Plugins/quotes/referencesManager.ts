@@ -208,6 +208,8 @@ async function doSyncReferences(root: string, quote: Quote): Promise<{ targetPat
       let maxNum = 0
       let tagLineIndex = -1
       let existingLineIndex = -1
+      let hasDotNumbering = false
+      let hasBracketNumbering = false
 
       const citeTag = `<!-- cite:${quote.id} -->`
       const authorKey = authorTrimmed.toLowerCase()
@@ -227,12 +229,28 @@ async function doSyncReferences(root: string, quote: Quote): Promise<{ targetPat
           break
         }
 
+        // Detect document numbering style
+        const matchBracket = /^\[(\d+)\][\.\s]+(.+)$/.exec(line)
+        const matchDot = /^(\d+)\.[\s]+(.+)$/.exec(line)
+        if (matchBracket) {
+          hasBracketNumbering = true
+          const num = parseInt(matchBracket[1], 10)
+          if (num > maxNum) maxNum = num
+        } else if (matchDot) {
+          hasDotNumbering = true
+          const num = parseInt(matchDot[1], 10)
+          if (num > maxNum) maxNum = num
+        }
+
+        // Never match markdown structural elements (headings, list items, blockquotes, code blocks)
+        if (/^[-*+]\s|^#+|^>|^---|^\s*```/.test(line)) {
+          continue
+        }
+
         if (isNumeric) {
-          const matchNum = /^\[?(\d+)\]?[\.\s]+(.+)$/.exec(line)
-          if (matchNum) {
-            const num = parseInt(matchNum[1], 10)
-            if (num > maxNum) maxNum = num
-            const rest = matchNum[2].toLowerCase()
+          if (matchBracket || matchDot) {
+            const num = parseInt((matchBracket || matchDot)![1], 10)
+            const rest = (matchBracket || matchDot)![2].toLowerCase()
             if (authorKey && rest.includes(authorKey)) {
               refIndex = num
               existingLineIndex = i
@@ -249,13 +267,19 @@ async function doSyncReferences(root: string, quote: Quote): Promise<{ targetPat
         }
       }
 
-      if (isNumeric && !refIndex) {
-        refIndex = maxNum + 1
+      if (!refIndex || (existingLineIndex === -1 && tagLineIndex === -1 && refIndex <= maxNum)) {
+        refIndex = Math.max(refIndex || 0, maxNum + 1)
       }
       if (!refIndex) refIndex = 1
 
       const updatedQuote = { ...quote, refIndex, referenceNumber: refIndex }
-      const newEntry = CitationFormatter.formatBibliography(updatedQuote, style)
+      let newEntry = CitationFormatter.formatBibliography(updatedQuote, style)
+
+      if (hasDotNumbering && !/^\d+\.[\s]+/.test(newEntry) && !/^\[\d+\]/.test(newEntry)) {
+        newEntry = `${refIndex}. ${newEntry}`
+      } else if (hasBracketNumbering && !/^\[\d+\]/.test(newEntry)) {
+        newEntry = `[${refIndex}] ${newEntry}`
+      }
 
       if (tagLineIndex !== -1) {
         if (tagLineIndex === existingLineIndex) {
@@ -266,6 +290,9 @@ async function doSyncReferences(root: string, quote: Quote): Promise<{ targetPat
       } else if (existingLineIndex !== -1) {
         lines[existingLineIndex] = `${citeTag}\n${newEntry}`
       } else {
+        while (lines.length > 0 && !lines[lines.length - 1].trim()) {
+          lines.pop()
+        }
         lines.push('', citeTag, newEntry)
       }
 
@@ -349,6 +376,8 @@ async function doSyncReferenceItem(root: string, refItem: ReferenceItem): Promis
       let maxNum = 0
       let tagLineIndex = -1
       let existingLineIndex = -1
+      let hasDotNumbering = false
+      let hasBracketNumbering = false
 
       const citeTag = `<!-- cite:${refItem.id} -->`
       const doiKey = (refItem.doiOrUrl || '').trim().toLowerCase()
@@ -369,11 +398,27 @@ async function doSyncReferenceItem(root: string, refItem: ReferenceItem): Promis
           break
         }
 
+        // Detect document numbering style
+        const matchBracket = /^\[(\d+)\][\.\s]+(.+)$/.exec(line)
+        const matchDot = /^(\d+)\.[\s]+(.+)$/.exec(line)
+        if (matchBracket) {
+          hasBracketNumbering = true
+          const num = parseInt(matchBracket[1], 10)
+          if (num > maxNum) maxNum = num
+        } else if (matchDot) {
+          hasDotNumbering = true
+          const num = parseInt(matchDot[1], 10)
+          if (num > maxNum) maxNum = num
+        }
+
+        // Never match markdown structural elements (headings, list items, blockquotes, code blocks)
+        if (/^[-*+]\s|^#+|^>|^---|^\s*```/.test(line)) {
+          continue
+        }
+
         if (isNumeric) {
-          const matchNum = /^\[?(\d+)\]?[\.\s]+(.+)$/.exec(line)
-          if (matchNum) {
-            const num = parseInt(matchNum[1], 10)
-            if (num > maxNum) maxNum = num
+          if (matchBracket || matchDot) {
+            const num = parseInt((matchBracket || matchDot)![1], 10)
             if ((doiKey && lower.includes(doiKey)) || (titleKey.length >= 3 && lower.includes(titleKey))) {
               refIndex = num
               existingLineIndex = i
@@ -392,13 +437,19 @@ async function doSyncReferenceItem(root: string, refItem: ReferenceItem): Promis
         }
       }
 
-      if (isNumeric && !refIndex) {
-        refIndex = maxNum + 1
+      if (!refIndex || (existingLineIndex === -1 && tagLineIndex === -1 && refIndex <= maxNum)) {
+        refIndex = Math.max(refIndex || 0, maxNum + 1)
       }
       if (!refIndex) refIndex = 1
 
       const updatedRef = { ...refItem, refIndex }
-      const newEntry = CitationFormatter.formatReferenceBibliography(updatedRef, style)
+      let newEntry = CitationFormatter.formatReferenceBibliography(updatedRef, style)
+
+      if (hasDotNumbering && !/^\d+\.[\s]+/.test(newEntry) && !/^\[\d+\]/.test(newEntry)) {
+        newEntry = `${refIndex}. ${newEntry}`
+      } else if (hasBracketNumbering && !/^\[\d+\]/.test(newEntry)) {
+        newEntry = `[${refIndex}] ${newEntry}`
+      }
 
       if (tagLineIndex !== -1) {
         if (tagLineIndex === existingLineIndex) {
@@ -409,6 +460,9 @@ async function doSyncReferenceItem(root: string, refItem: ReferenceItem): Promis
       } else if (existingLineIndex !== -1) {
         lines[existingLineIndex] = `${citeTag}\n${newEntry}`
       } else {
+        while (lines.length > 0 && !lines[lines.length - 1].trim()) {
+          lines.pop()
+        }
         lines.push('', citeTag, newEntry)
       }
 

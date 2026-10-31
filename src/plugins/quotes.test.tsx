@@ -338,3 +338,26 @@ it('does not duplicate entries when updating a reference with syncReferenceItem'
   const matches = content.match(/Smith, J\. \(2026\)/g)
   expect(matches).toHaveLength(1)
 })
+
+it('appends at the bottom with sequential dot numbering when document uses numbered references', async () => {
+  const initialContent = '# References\n\n- **Guideline**: Mentions Elena and 2026 in description.\n\n---\n\n1. First (2024). *One*.\n\n2. Second (2025). *Two*.\n'
+  fsMock.files.set('/book/Draft/References.md', initialContent)
+
+  const ref = useQuotes.getState().addReference({
+    authors: 'Elena',
+    year: '2026',
+    title: 'Acerca de ser Puntual',
+    sourceContainer: 'puntualidad.org',
+    style: 'APA',
+  })!
+
+  await syncReferenceItem('/book', ref)
+  const content = fsMock.files.get('/book/Draft/References.md')!
+
+  // Must not replace the guideline
+  expect(content).toContain('- **Guideline**: Mentions Elena and 2026 in description.')
+  // Must append at the bottom with number 3
+  expect(content).toContain('3. Elena (2026). *Acerca de ser Puntual*. puntualidad.org.')
+  // Guideline line must come before the new entry
+  expect(content.indexOf('- **Guideline**')).toBeLessThan(content.indexOf('3. Elena'))
+})
