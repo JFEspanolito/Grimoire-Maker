@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import quotes from '../assets/mods/Plugins/quotes/quotes'
 import { useQuotes } from '../assets/mods/Plugins/quotes/quotesStore'
-import { ensureReferenceForQuote, syncReferences, insertQuote } from '../assets/mods/Plugins/quotes/referencesManager'
+import { ensureReferenceForQuote, syncReferences, insertQuote, syncReferenceItem, handleInsertReferenceCitation } from '../assets/mods/Plugins/quotes/referencesManager'
 import type { PluginApi, PluginContextAction, PluginPanel } from '../types/plugin'
 import { useDocumentStore } from '../stores/documentStore'
 import { useTabStore } from '../stores/tabStore'
@@ -67,7 +67,7 @@ beforeEach(() => {
   fsMock.files.clear()
   useDocumentStore.setState({ workspaceRoot: '/book' })
   useTabStore.getState().reset('/book/Draft/Chapter 1.md')
-  useQuotes.setState({ root: null, items: [], error: '' })
+  useQuotes.setState({ root: null, items: [], references: [], error: '' })
 })
 
 afterEach(async () => {
@@ -182,7 +182,14 @@ it('renders QuotesButton and opens quotes modal with new quote button and dropdo
   expect(tabs[1].textContent).toContain('References')
 
   await act(async () => tabs[1].click())
-  expect(document.querySelector('dialog')?.textContent).toContain('References view (coming soon)')
+  expect(document.querySelector('dialog')?.textContent).toContain('No references added yet')
+  expect(document.querySelector('dialog')?.textContent).toContain('+ New reference')
+
+  const newRefBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('+ New reference'))
+  expect(newRefBtn).toBeDefined()
+  await act(async () => newRefBtn?.click())
+  expect(useQuotes.getState().references).toHaveLength(1)
+  expect(document.querySelector('dialog')?.textContent).toContain('Ref [2]')
 
   await act(async () => tabs[0].click())
   expect(document.querySelector('dialog')?.textContent).toContain('Simple quote')
@@ -207,4 +214,49 @@ it('finds and appends references to nested References.md in template subfolders'
   expect(fsMock.files.has(nestedRefPath)).toBe(true)
   expect(fsMock.files.get(nestedRefPath)).toContain('Espanolito, J. (2026). *Grimoire Architecture*.')
   expect(fsMock.files.has('/book/Draft/References.md')).toBe(false)
+})
+
+it('syncs indirect references to References.md for both IEEE and APA styles', async () => {
+  // Test APA indirect reference
+  const apaRef = useQuotes.getState().addReference({
+    authors: 'Fraústo da Silva, J. J. R.',
+    year: '1991',
+    title: 'The biological chemistry of the elements',
+    sourceContainer: 'Oxford University Press',
+    style: 'APA',
+  })!
+
+  const apaSync = await syncReferenceItem('/book', apaRef)
+  expect(apaSync.targetPath).toBe('/book/Draft/References.md')
+  const contentAfterApa = fsMock.files.get('/book/Draft/References.md')!
+  expect(contentAfterApa).toContain('Fraústo da Silva, J. J. R. (1991). *The biological chemistry of the elements*. Oxford University Press.')
+
+  // Test IEEE indirect reference
+  const ieeeRef = useQuotes.getState().addReference({
+    authors: 'Shannon, C. E.',
+    year: '1948',
+    title: 'A Mathematical Theory of Communication',
+    sourceContainer: 'Bell System Technical Journal',
+    volumeIssuePages: 'vol. 27, no. 3, pp. 379-423',
+    style: 'IEEE',
+  })!
+
+  const ieeeSync = await syncReferenceItem('/book', ieeeRef)
+  expect(ieeeSync.refIndex).toBe(2)
+  const contentAfterIeee = fsMock.files.get('/book/Draft/References.md')!
+  expect(contentAfterIeee).toContain('[2] Shannon, C. E., *A Mathematical Theory of Communication*, Bell System Technical Journal, vol. 27, no. 3, pp. 379-423, 1948.')
+})
+
+it('correctly handles citation insertion when no draft editor is active', () => {
+  const ref = useQuotes.getState().addReference({
+    authors: 'Fraústo da Silva, J. J. R.',
+    year: '1991',
+    title: 'The biological chemistry of the elements',
+    sourceContainer: 'Oxford University Press',
+    style: 'APA',
+  })!
+
+  const result = handleInsertReferenceCitation(ref, 'APA')
+  expect(result.success).toBe(false)
+  expect(result.message).toContain('Open a Draft document')
 })

@@ -16,6 +16,29 @@ export interface CitationMetadata {
   createdAt?: number
 }
 
+export interface ReferenceItem {
+  id: string
+  refIndex: number
+  authors: string
+  year: string
+  title: string
+  sourceContainer: string
+  volumeIssuePages?: string
+  doiOrUrl?: string
+  style?: CitationStyle
+  createdAt: number
+}
+
+export function extractPrimaryAuthor(authors?: string): string {
+  const trimmed = (authors ?? '').trim()
+  if (!trimmed) return '[Autor Desconocido]'
+  const firstAuthor = trimmed.split(/\s*(?:and|&|;)\s*/i)[0].trim()
+  if (firstAuthor.includes(',')) {
+    return firstAuthor.split(',')[0].trim()
+  }
+  return firstAuthor
+}
+
 function resolveAuthor(authorLastName?: string): string {
   const trimmed = (authorLastName ?? '').trim()
   return trimmed.length > 0 ? trimmed : '[Autor Desconocido]'
@@ -140,7 +163,7 @@ export class CitationFormatter {
       case 'Chicago': {
         // [refIndex]. [authorInitial] [authorLastName], *[title]* ([sourceContainer], [year]), [page]. [doiOrUrl]
         const authorPart = initial ? `${initial} ${author}` : author
-        const innerPub = [container, year].filter(Boolean).join(', ')
+        const innerPub = [container, year !== 'n.d.' ? year : ''].filter(Boolean).join(', ')
         const pubPart = innerPub ? ` (${innerPub})` : ''
         const pagePart = page ? `, ${page}` : ''
         const doiPart = doi ? ` ${doi}` : ''
@@ -157,6 +180,87 @@ export class CitationFormatter {
 
       default: {
         return `${author} (${year}). *${title}*.`
+      }
+    }
+  }
+
+  /**
+   * Formats an indirect citation for paraphrasing at the cursor in Draft.
+   * e.g. IEEE -> [1], APA -> (Fraústo da Silva, 1991), Harvard -> (Smith, 2026), MLA -> (Smith), Chicago -> ^[1].
+   */
+  static formatReferenceInline(ref: ReferenceItem, style: CitationStyle = ref.style ?? 'APA'): string {
+    const author = extractPrimaryAuthor(ref.authors)
+    const year = ref.year ? String(ref.year).trim() : 'n.d.'
+    const refIndex = ref.refIndex ?? 1
+
+    switch (style) {
+      case 'IEEE':
+        return `[${refIndex}]`
+      case 'APA':
+      case 'Harvard':
+        return `(${author}, ${year})`
+      case 'MLA':
+        return `(${author})`
+      case 'Chicago':
+        return `^[${refIndex}]`
+      default:
+        return `(${author}, ${year})`
+    }
+  }
+
+  /**
+   * Formats a complete bibliographic entry for References.md from an indirect reference item.
+   */
+  static formatReferenceBibliography(ref: ReferenceItem, style: CitationStyle = ref.style ?? 'APA'): string {
+    const authors = ref.authors.trim() || '[Autor Desconocido]'
+    const year = ref.year ? String(ref.year).trim() : 'n.d.'
+    const title = ref.title.trim() || 'Untitled'
+    const source = ref.sourceContainer?.trim()
+    const vip = ref.volumeIssuePages?.trim()
+    const doi = ref.doiOrUrl?.trim()
+    const refIndex = ref.refIndex ?? 1
+
+    switch (style) {
+      case 'APA': {
+        // ${authors} (${year}). *${title}*. ${source}.${volumeIssuePages ? ` ${volumeIssuePages}.` : ''}${doiOrUrl ? ` ${doiOrUrl}` : ''}
+        const sourcePart = source ? ` ${source}.` : ''
+        const vipPart = vip ? ` ${vip}.` : ''
+        const doiPart = doi ? ` ${doi}` : ''
+        return `${authors} (${year}). *${title}*.${sourcePart}${vipPart}${doiPart}`
+      }
+
+      case 'IEEE': {
+        // [${refIndex}] ${authors}, *${title}*, ${source}, ${year}.
+        const sourcePart = source ? `, ${source}` : ''
+        const vipPart = vip ? `, ${vip}` : ''
+        const doiPart = doi ? ` ${doi}` : ''
+        return `[${refIndex}] ${authors}, *${title}*${sourcePart}${vipPart}, ${year}.${doiPart}`
+      }
+
+      case 'MLA': {
+        const sourcePart = source ? ` ${source},` : ''
+        const vipPart = vip ? ` ${vip},` : ''
+        const doiPart = doi ? ` ${doi}` : ''
+        return `${authors}. *${title}*.${sourcePart}${vipPart} ${year}.${doiPart}`
+      }
+
+      case 'Chicago': {
+        const innerPub = [source, year !== 'n.d.' ? year : ''].filter(Boolean).join(', ')
+        const pubPart = innerPub ? ` (${innerPub})` : ''
+        const vipPart = vip ? `, ${vip}` : ''
+        const doiPart = doi ? ` ${doi}` : ''
+        return `${refIndex}. ${authors}, *${title}*${pubPart}${vipPart}.${doiPart}`
+      }
+
+      case 'Harvard': {
+        const sourcePart = source ? ` ${source}.` : ''
+        const vipPart = vip ? ` ${vip}.` : ''
+        const doiPart = doi ? ` ${doi}` : ''
+        return `${authors} (${year}) *${title}*.${sourcePart}${vipPart}${doiPart}`
+      }
+
+      default: {
+        return `${authors} (${year}). *${title}*.`
       }
     }
   }

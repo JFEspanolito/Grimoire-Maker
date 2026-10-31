@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 import { getWorkspaceRoot, readProjectData, writeProjectData } from '@grimoire/plugin-api'
-import type { CitationMetadata, CitationStyle } from './citationFormatter'
+import type { CitationMetadata, CitationStyle, ReferenceItem } from './citationFormatter'
 
 export const PLUGIN_ID = 'builtin.quotes'
-const MAX_QUOTES = 1000
+const MAX_ITEMS = 1000
 
 export type QuoteType = CitationStyle
 
@@ -19,20 +19,28 @@ export interface Quote extends CitationMetadata {
 interface QuoteState {
   root: string | null
   items: Quote[]
+  references: ReferenceItem[]
   error: string
   load(root: string): Promise<void>
   add(data: Partial<Quote> & { text?: string; quoteText?: string }): Quote | null
   update(id: string, updates: Partial<Quote>): void
   remove(id: string): void
+  addReference(data: Partial<ReferenceItem>): ReferenceItem | null
+  updateReference(id: string, updates: Partial<ReferenceItem>): void
+  removeReference(id: string): void
 }
 
 export const toRelative = (root: string, path: string) => path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path
 
-function parse(text: string): Quote[] {
+function parse(text: string): { items: Quote[]; references: ReferenceItem[] } {
   try {
     const value: unknown = JSON.parse(text)
-    const list = value && typeof value === 'object' && 'items' in value && Array.isArray(value.items) ? value.items : []
-    return list
+    const rawItems = value && typeof value === 'object' && 'items' in value && Array.isArray(value.items) ? value.items : []
+    const rawRefs = value && typeof value === 'object' && 'references' in value && Array.isArray(value.references) ? value.references : []
+
+    const validStyles: CitationStyle[] = ['APA', 'IEEE', 'MLA', 'Chicago', 'Harvard']
+
+    const items = rawItems
       .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && typeof item.id === 'string')
       .map((item): Quote => {
         const quoteText = String(item.quoteText ?? item.text ?? '').trim()
@@ -46,7 +54,6 @@ function parse(text: string): Quote[] {
           authorInitial = parts[1] || ''
         }
 
-        const validStyles: CitationStyle[] = ['APA', 'IEEE', 'MLA', 'Chicago', 'Harvard']
         const quoteType = (validStyles.includes(item.quoteType as CitationStyle)
           ? item.quoteType
           : 'APA') as CitationStyle
@@ -77,9 +84,33 @@ function parse(text: string): Quote[] {
         }
         return quote
       })
-      .slice(0, MAX_QUOTES)
+      .slice(0, MAX_ITEMS)
+
+    const references = rawRefs
+      .filter((ref): ref is Record<string, unknown> => !!ref && typeof ref === 'object' && typeof ref.id === 'string')
+      .map((ref, idx): ReferenceItem => {
+        const style = (validStyles.includes(ref.style as CitationStyle)
+          ? ref.style
+          : 'APA') as CitationStyle
+
+        return {
+          id: String(ref.id),
+          refIndex: typeof ref.refIndex === 'number' ? ref.refIndex : idx + 1,
+          authors: String(ref.authors ?? '').trim(),
+          year: String(ref.year ?? '').trim(),
+          title: String(ref.title ?? '').trim(),
+          sourceContainer: String(ref.sourceContainer ?? '').trim(),
+          volumeIssuePages: String(ref.volumeIssuePages ?? '').trim(),
+          doiOrUrl: String(ref.doiOrUrl ?? '').trim(),
+          style,
+          createdAt: typeof ref.createdAt === 'number' ? ref.createdAt : Date.now(),
+        }
+      })
+      .slice(0, MAX_ITEMS)
+
+    return { items, references }
   } catch {
-    return []
+    return { items: [], references: [] }
   }
 }
 
@@ -93,7 +124,6 @@ function parseSourceMetadata(path: string): { year: string; title: string } {
     year = yearMatch[1]
   }
 
-  // Never extract author from filename to avoid contaminating metadata with filenames like References or PaseQA.
   return { year, title }
 }
 
@@ -101,9 +131,9 @@ let saving: Promise<unknown> = Promise.resolve()
 
 export const useQuotes = create<QuoteState>((set, get) => {
   const persist = () => {
-    const { root, items } = get()
+    const { root, items, references } = get()
     if (!root) return
-    saving = saving.then(() => writeProjectData(root, PLUGIN_ID, JSON.stringify({ version: 2, items }, null, 2)))
+    saving = saving.then(() => writeProjectData(root, PLUGIN_ID, JSON.stringify({ version: 2, items, references }, null, 2)))
       .then(() => { if (get().error) set({ error: '' }) })
       .catch((error: unknown) => set({ error: `Could not save quotes: ${error instanceof Error ? error.message : String(error)}` }))
   }
@@ -111,19 +141,23 @@ export const useQuotes = create<QuoteState>((set, get) => {
   return {
     root: null,
     items: [],
+    references: [],
     error: '',
     load: async (root) => {
-      set({ root, items: [], error: '' })
+      set({ root, items: [], references: [], error: '' })
       try {
         const text = await readProjectData(root, PLUGIN_ID)
-        if (get().root === root) set({ items: text ? parse(text) : [] })
+        if (get().root === root) {
+          const parsed = text ? parse(text) : { items: [], references: [] }
+          set({ items: parsed.items, references: parsed.references })
+        }
       } catch (error) {
         if (get().root === root) set({ error: `Could not read quotes: ${error instanceof Error ? error.message : String(error)}` })
       }
     },
     add: (data) => {
       const root = get().root ?? getWorkspaceRoot()
-      if (!root || get().items.length >= MAX_QUOTES) return null
+      if (!root || get().items.length >= MAX_ITEMS) return null
       if (!get().root) set({ root })
 
       const relative = data.sourcePath ? toRelative(root, data.sourcePath) : ''
@@ -177,6 +211,48 @@ export const useQuotes = create<QuoteState>((set, get) => {
     },
     remove: (id) => {
       set(state => ({ items: state.items.filter(item => item.id !== id) }))
+      persist()
+    },
+    addReference: (data) => {
+      const root = get().root ?? getWorkspaceRoot()
+      if (!root || get().references.length >= MAX_ITEMS) return null
+      if (!get().root) set({ root })
+
+      // Calculate next sequential refIndex
+      let maxIndex = 0
+      for (const r of get().references) {
+        if (r.refIndex > maxIndex) maxIndex = r.refIndex
+      }
+      for (const q of get().items) {
+        const idx = q.refIndex ?? q.referenceNumber ?? 0
+        if (idx > maxIndex) maxIndex = idx
+      }
+
+      const refItem: ReferenceItem = {
+        id: crypto.randomUUID(),
+        refIndex: data.refIndex ?? (maxIndex + 1),
+        authors: (data.authors ?? '').trim(),
+        year: (data.year ?? '').trim(),
+        title: (data.title ?? '').trim(),
+        sourceContainer: (data.sourceContainer ?? '').trim(),
+        volumeIssuePages: (data.volumeIssuePages ?? '').trim(),
+        doiOrUrl: (data.doiOrUrl ?? '').trim(),
+        style: data.style ?? 'APA',
+        createdAt: Date.now(),
+      }
+
+      set(state => ({ references: [refItem, ...state.references] }))
+      persist()
+      return refItem
+    },
+    updateReference: (id, updates) => {
+      set(state => ({
+        references: state.references.map(r => r.id === id ? { ...r, ...updates } : r),
+      }))
+      persist()
+    },
+    removeReference: (id) => {
+      set(state => ({ references: state.references.filter(r => r.id !== id) }))
       persist()
     },
   }

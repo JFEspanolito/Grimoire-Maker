@@ -364,3 +364,74 @@
   color: #86efac;
   font-size: 0.8rem;
 }
+
+.refInfoContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.refInlinePreview,
+.refBiblioPreview {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.refPreviewLabel {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a8a296;
+  flex-shrink: 0;
+}
+
+.refInlineCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.25rem;
+  background: #1e1d19;
+  border: 1px solid #3c382e;
+  color: #cfb37c;
+  word-break: break-all;
+}
+
+.refBiblioText {
+  color: #e5dfd3;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.refEditSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+  padding: 0.6rem;
+  border-radius: 0.35rem;
+  background: #23211d;
+  border: 1px solid #36322a;
+}
+
+.editToggleBtn {
+  padding: 0.25rem 0.55rem;
+  border-radius: 0.25rem;
+  background: #333028;
+  border: 1px solid #484338;
+  color: #d1c5ad;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.editToggleBtn:hover {
+  background: #423d32;
+  color: #f0eee9;
+  border-color: #cfb37c;
+}

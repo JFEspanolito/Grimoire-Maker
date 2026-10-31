@@ -1,10 +1,11 @@
 import { exists, readDir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { serializeDocument, parseDocument } from '../../../../lib/frontmatter'
 import { useDocumentStore } from '../../../../stores/documentStore'
+import { getActiveSnippetDropTarget } from '../../../../lib/snippetDrop'
 import type { FileNode } from '../../../../types/document'
 import type { Quote } from './quotesStore'
 import { useQuotes } from './quotesStore'
-import { CitationFormatter, type CitationStyle } from './citationFormatter'
+import { CitationFormatter, type CitationStyle, type ReferenceItem } from './citationFormatter'
 
 export interface ReferenceResult {
   referenceNumber: number
@@ -157,8 +158,7 @@ export function formatReferenceEntry(number: number, quote: Quote): string {
 }
 
 /**
- * Synchronizes the bibliography file (Draft/References.md) for the project.
- * Handles both sequential numbered styles (IEEE, Chicago) and alphabetical styles (APA, MLA, Harvard).
+ * Synchronizes the bibliography file (Draft/References.md) for direct quotes.
  */
 export async function syncReferences(root: string, quote: Quote): Promise<{ targetPath: string; refIndex: number }> {
   const targetPath = await findReferencesFile(root, quote.sourcePath)
@@ -199,7 +199,6 @@ export async function syncReferences(root: string, quote: Quote): Promise<{ targ
             }
           }
         } else {
-          // Author-Date or Author-Page (APA, MLA, Harvard): match by author name or title
           if (authorKey && line.toLowerCase().includes(authorKey)) {
             existingLineIndex = i
           }
@@ -254,6 +253,137 @@ export async function syncReferences(root: string, quote: Quote): Promise<{ targ
   }
 
   return { targetPath, refIndex }
+}
+
+/**
+ * Synchronizes an indirect reference item with Draft/References.md.
+ * Checks for duplicates by DOI or Title+Year, assigns nextIndex if new, and writes formatted entry.
+ */
+export async function syncReferenceItem(root: string, refItem: ReferenceItem): Promise<{ targetPath: string; refIndex: number }> {
+  const targetPath = await findReferencesFile(root)
+  const style = refItem.style ?? 'APA'
+  const isNumeric = style === 'IEEE' || style === 'Chicago'
+
+  let refIndex = refItem.refIndex ?? 0
+  let currentBody = ''
+  let currentFrontmatter = { title: 'References', pageSize: 'a4', columns: 1, theme: 'modern' }
+
+  try {
+    const fileExists = await exists(targetPath).catch(() => false)
+    if (fileExists) {
+      const content = await readTextFile(targetPath)
+      const parsed = parseDocument(content)
+      currentBody = parsed.body
+      currentFrontmatter = { ...currentFrontmatter, ...parsed.frontmatter }
+
+      const lines = currentBody.split('\n')
+      let maxNum = 0
+      let existingLineIndex = -1
+
+      const doiKey = (refItem.doiOrUrl || '').trim().toLowerCase()
+      const titleYearKey = `${(refItem.title || '').trim()} ${(refItem.year || '').trim()}`.toLowerCase()
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim()
+        const lower = line.toLowerCase()
+
+        if (isNumeric) {
+          const matchNum = /^\[?(\d+)\]?[\.\s]+(.+)$/.exec(line)
+          if (matchNum) {
+            const num = parseInt(matchNum[1], 10)
+            if (num > maxNum) maxNum = num
+            // Duplicate check by DOI or Title+Year
+            if ((doiKey && lower.includes(doiKey)) || (titleYearKey && lower.includes(titleYearKey))) {
+              refIndex = num
+              existingLineIndex = i
+            } else if (refIndex && num === refIndex) {
+              existingLineIndex = i
+            }
+          }
+        } else {
+          // Duplicate check by DOI or Title+Year or Author
+          if (doiKey && lower.includes(doiKey)) {
+            existingLineIndex = i
+          } else if (titleYearKey && lower.includes(titleYearKey)) {
+            existingLineIndex = i
+          } else if (refItem.authors && lower.includes(refItem.authors.toLowerCase()) && refItem.year && lower.includes(refItem.year)) {
+            existingLineIndex = i
+          }
+        }
+      }
+
+      if (isNumeric && !refIndex) {
+        refIndex = maxNum + 1
+      }
+      if (!refIndex) refIndex = 1
+
+      const updatedRef = { ...refItem, refIndex }
+      const newEntry = CitationFormatter.formatReferenceBibliography(updatedRef, style)
+
+      if (existingLineIndex !== -1) {
+        lines[existingLineIndex] = newEntry
+        const updatedBody = lines.join('\n')
+        const serialized = serializeDocument(currentFrontmatter, updatedBody)
+        await writeTextFile(targetPath, serialized)
+        try {
+          useDocumentStore.getState().setRawForPath(targetPath, serialized)
+        } catch {
+          // ignore
+        }
+      } else {
+        const updatedBody = currentBody.trimEnd() ? `${currentBody.trimEnd()}\n\n${newEntry}\n` : `${newEntry}\n`
+        const serialized = serializeDocument(currentFrontmatter, updatedBody)
+        await writeTextFile(targetPath, serialized)
+        try {
+          useDocumentStore.getState().setRawForPath(targetPath, serialized)
+        } catch {
+          // ignore
+        }
+      }
+    } else {
+      if (!refIndex) refIndex = 1
+      const updatedRef = { ...refItem, refIndex }
+      const newEntry = CitationFormatter.formatReferenceBibliography(updatedRef, style)
+      const initialContent = serializeDocument(currentFrontmatter, `# References\n\n${newEntry}\n`)
+      await writeTextFile(targetPath, initialContent)
+      try {
+        useDocumentStore.getState().setRawForPath(targetPath, initialContent)
+      } catch {
+        // ignore
+      }
+    }
+
+    useQuotes.getState().updateReference(refItem.id, { refIndex })
+  } catch (err) {
+    console.warn('Could not sync reference in References.md:', err)
+    if (!refIndex) refIndex = 1
+  }
+
+  return { targetPath, refIndex }
+}
+
+/**
+ * Inserts an indirect citation at the active editor cursor position and refocuses the editor.
+ */
+export function handleInsertReferenceCitation(
+  refItem: ReferenceItem,
+  activeStyle: CitationStyle = refItem.style ?? 'APA'
+): { success: boolean; citationText?: string; message?: string } {
+  const active = getActiveSnippetDropTarget()
+  if (!active) {
+    return { success: false, message: 'Open a Draft document to insert the citation.' }
+  }
+
+  const citationText = CitationFormatter.formatReferenceInline(refItem, activeStyle)
+
+  if (active.editor && typeof active.editor.chain === 'function') {
+    active.editor.chain().focus().insertContent(citationText).run()
+  } else if (active.editor && typeof active.editor.commands?.insertContent === 'function') {
+    active.editor.commands.insertContent(citationText)
+    active.editor.commands.focus()
+  }
+
+  return { success: true, citationText, message: `Inserted citation ${citationText}` }
 }
 
 /**

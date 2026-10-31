@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useWorkspaceRoot } from '@grimoire/plugin-api'
 import { useQuotes, type Quote } from './quotesStore'
 import type { CitationStyle } from './citationFormatter'
-import { syncReferences, insertQuote, ensureReferenceForQuote } from './referencesManager'
+import { syncReferences, insertQuote, ensureReferenceForQuote, syncReferenceItem } from './referencesManager'
+import { ReferencesTab } from './ReferencesTab'
 import { findSnippetDropTarget, getActiveSnippetDropTarget } from '../../../../lib/snippetDrop'
 import { insertContentBox } from '../../../../lib/contentBoxes'
 import styles from './Quotes.module.css'
@@ -175,7 +176,7 @@ function QuoteCard({
 function QuotesDialog({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const root = useWorkspaceRoot()
-  const { items, error, add, update, remove } = useQuotes()
+  const { items, references, error, add, update, remove, addReference } = useQuotes()
   const [activeTab, setActiveTab] = useState<'quotes' | 'references'>('quotes')
   const [notice, setNotice] = useState<string | null>(null)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
@@ -246,6 +247,21 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const handleCreateReference = () => {
+    const newRef = addReference({
+      authors: '',
+      year: new Date().getFullYear().toString(),
+      title: '',
+      sourceContainer: '',
+      volumeIssuePages: '',
+      doiOrUrl: '',
+      style: 'APA',
+    })
+    if (newRef && root) {
+      void syncReferenceItem(root, newRef)
+    }
+  }
+
   const handleInsertAtCursor = async (quote: Quote) => {
     if (!root) return
     const active = getActiveSnippetDropTarget()
@@ -282,7 +298,7 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
       >
         <div className={styles.headerTitleRow}>
           <h2 id="quotes-title">Quotes & Citations</h2>
-          {activeTab === 'quotes' && (
+          {activeTab === 'quotes' ? (
             <button
               type="button"
               className={styles.newQuoteBtn}
@@ -290,6 +306,15 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
               onClick={handleCreateQuote}
             >
               + New quote
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.newQuoteBtn}
+              title="Add a new bibliographic reference"
+              onClick={handleCreateReference}
+            >
+              + New reference
             </button>
           )}
         </div>
@@ -315,7 +340,7 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
           className={`${styles.tabButton} ${activeTab === 'references' ? styles.tabButtonActive : ''}`}
           onClick={() => setActiveTab('references')}
         >
-          References
+          References ({references.length})
         </button>
       </div>
 
@@ -341,11 +366,12 @@ function QuotesDialog({ onClose }: { onClose: () => void }) {
           </ul>
         )
       ) : (
-        <div className={styles.placeholderView}>
-          <p className={styles.empty}>
-            References view (coming soon).
-          </p>
-        </div>
+        <ReferencesTab
+          onNotice={(msg) => {
+            setNotice(msg)
+            setTimeout(() => setNotice(null), 3000)
+          }}
+        />
       )}
     </dialog>
   )
