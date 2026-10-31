@@ -330,9 +330,16 @@
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.insertBtn:hover {
+.insertBtn:hover:not(:disabled) {
   background: #344a39;
   color: #bbf7d0;
+}
+.insertBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #202621;
+  border-color: #2b382d;
+  color: #6b8f75;
 }
 
 .deleteBtn {

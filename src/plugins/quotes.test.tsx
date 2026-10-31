@@ -191,6 +191,23 @@ it('renders QuotesButton and opens quotes modal with new quote button and dropdo
   expect(useQuotes.getState().references).toHaveLength(1)
   expect(document.querySelector('dialog')?.textContent).toContain('[2]')
 
+  // In edit mode, Insert citation button is disabled
+  const insertBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('Insert citation at cursor'))
+  expect(insertBtn).toBeDefined()
+  expect(insertBtn?.disabled).toBe(true)
+
+  // Toggle edit off after setting content
+  act(() => {
+    useQuotes.getState().updateReference(useQuotes.getState().references[0].id, {
+      authors: 'Smith, J.',
+      title: 'Valid Title',
+    })
+  })
+  const toggleBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(b => b.textContent?.includes('Done editing'))
+  expect(toggleBtn).toBeDefined()
+  await act(async () => toggleBtn?.click())
+  expect(insertBtn?.disabled).toBe(false)
+
   await act(async () => tabs[0].click())
   expect(document.querySelector('dialog')?.textContent).toContain('Simple quote')
 })

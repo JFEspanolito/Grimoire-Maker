@@ -457,7 +457,12 @@ export function handleInsertReferenceCitation(
 
   const citationText = CitationFormatter.formatReferenceInline(refItem, activeStyle)
 
-  if (active.editor && typeof active.editor.chain === 'function') {
+  if (active.editor?.view) {
+    const { state, view } = active.editor
+    const tr = state.tr.insertText(citationText)
+    view.dispatch(tr)
+    view.focus()
+  } else if (active.editor && typeof active.editor.chain === 'function') {
     active.editor.chain().focus().insertContent(citationText).run()
   } else if (active.editor && typeof active.editor.commands?.insertContent === 'function') {
     active.editor.commands.insertContent(citationText)

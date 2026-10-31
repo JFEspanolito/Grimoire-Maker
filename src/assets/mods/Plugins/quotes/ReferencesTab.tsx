@@ -74,6 +74,7 @@ export function ReferenceCard({
   }
 
   const handleInsert = async () => {
+    if (isEditing) return
     if (debouncedSync.current) {
       clearTimeout(debouncedSync.current)
       debouncedSync.current = null
@@ -92,6 +93,9 @@ export function ReferenceCard({
   const activeStyle = reference.style ?? 'APA'
   const inlinePreview = CitationFormatter.formatReferenceInline(reference, activeStyle)
   const biblioPreview = CitationFormatter.formatReferenceBibliography(reference, activeStyle)
+
+  const hasContent = Boolean(reference.authors.trim() || reference.title.trim())
+  const canInsert = !isEditing && hasContent
 
   return (
     <li className={styles.card}>
@@ -204,14 +208,19 @@ export function ReferenceCard({
             type="button"
             className={styles.editToggleBtn}
             onClick={handleToggleEdit}
-            title={isEditing ? 'Collapse metadata editor' : 'Edit reference metadata'}
+            title={isEditing ? 'Collapse metadata editor and save' : 'Edit reference metadata'}
           >
             {isEditing ? 'Done editing' : 'Edit metadata'}
           </button>
           <button
             type="button"
             className={styles.insertBtn}
-            title="Insert citation at cursor and refocus editor"
+            title={
+              isEditing
+                ? 'Finish editing ("Done editing") before inserting citation at cursor'
+                : (!hasContent ? 'Add author or title before inserting' : 'Insert citation at cursor and refocus editor')
+            }
+            disabled={!canInsert}
             onClick={handleInsert}
           >
             Insert citation at cursor
