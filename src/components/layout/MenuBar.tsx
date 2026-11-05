@@ -23,6 +23,8 @@ import { DocumentOrderDialog } from '../settings/DocumentOrderDialog'
 import { PropertiesDialog } from '../settings/PropertiesDialog'
 import type { Editor } from '@tiptap/react'
 import { insertDivider, insertFloatingBox, insertFormula, insertImage, insertQuote, insertSectionBreak, insertTable } from '../../lib/insertActions'
+import { urlGithubBugReport, urlGithubFeatureRequest } from '../../data/contributors'
+import { openExternalUrl } from '../../lib/openUrl'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
@@ -60,11 +62,12 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
   const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [infoDialog, setInfoDialog] = useState<InfoDialogKind | null>(null)
   const settingsSummary = useRef<HTMLElement>(null)
+  const helpSummary = useRef<HTMLElement>(null)
   const bar = useRef<HTMLElement>(null)
   const closeMenus = () => bar.current?.querySelectorAll('details[open]').forEach((menu) => menu.removeAttribute('open'))
   const openInfo = (kind: InfoDialogKind) => {
     closeMenus()
-    settingsSummary.current?.focus()
+    helpSummary.current?.focus()
     setInfoDialog(kind)
   }
   useEffect(() => {
@@ -208,8 +211,22 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <div className={styles.menu}>
         <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>{t('menu.settings.modManager')}</button>
         <button type="button" onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}>{t('menu.settings.preferences')}</button>
-        <button type="button" onClick={() => openInfo('about')}>{t('menu.settings.about')}</button>
-        <button type="button" onClick={() => openInfo('tutorial')}>{t('menu.settings.tutorial')}</button>
+
+      </div>
+    </details>
+    <details name="application-menu">
+      <summary ref={helpSummary}>{t('menu.help')}</summary>
+      <div className={styles.menu}>
+        <details className={styles.recent}>
+          <summary>{t('menu.help.reportIssue')}</summary>
+          <div role="group" aria-label={t('menu.help.reportIssue')}>
+            <button type="button" onClick={() => void run(() => openExternalUrl(urlGithubBugReport))}>{t('menu.help.reportBug')}</button>
+            <button type="button" onClick={() => void run(() => openExternalUrl(urlGithubFeatureRequest))}>{t('menu.help.requestFeature')}</button>
+          </div>
+        </details>
+        <hr />
+        <button type="button" onClick={() => openInfo('tutorial')}>{t('menu.help.tutorial')}</button>
+        <button type="button" onClick={() => openInfo('about')}>{t('menu.help.about')}</button>
       </div>
     </details>
     {error && <span role="alert" className={styles.error}>{error}</span>}
