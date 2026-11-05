@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import configSource from '../../../src-tauri/tauri.conf.json?raw'
 import packageSource from '../../../package.json?raw'
 import styles from './AppInfoDialog.module.css'
-import { localContributors, urlGithubRepo } from '../../data/contributors'
+import { localContributors, urlGithubBugReport, urlGithubFeatureRequest, urlGithubRepo } from '../../data/contributors'
 import { AboutUpdates } from './AboutUpdates'
 import { useTranslation } from '../../lib/i18n'
 
@@ -304,6 +304,11 @@ export function AppInfoDialog({ kind, onClose }: Props) {
           </svg>
           <span>{t('about.githubProject')}</span>
         </a>
+        <div className={styles.feedbackLinks}>
+          <a href={urlGithubBugReport} target="_blank" rel="noopener noreferrer">{t('about.reportBug')}</a>
+          <span aria-hidden="true" className={styles.bullet}>·</span>
+          <a href={urlGithubFeatureRequest} target="_blank" rel="noopener noreferrer">{t('about.requestFeature')}</a>
+        </div>
       </section>
       <section aria-labelledby="app-credits-title">
         <h3 id="app-credits-title">{t('about.credits')}</h3>

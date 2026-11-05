@@ -14,6 +14,8 @@
 .content a { color: #cfb37c; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: .2em; }
 .content a:hover { color: #f0eee9; }
 .github { display: inline-flex; align-items: center; gap: .5rem; margin-top: .35rem; }
+.feedbackLinks { display: inline-flex; align-items: center; gap: .5rem; margin-top: .15rem; font-size: .8rem; }
+.bullet { color: #bcb7ac; }
 .muted { color: #bcb7ac; font-size: .8rem; line-height: 1.6; }
 .tutorial { margin: .75rem 0 .5rem; line-height: 1.55; color: #e5e1d8; }
 .footer { display: flex; justify-content: flex-end; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid #ffffff20; }

@@ -26,6 +26,8 @@ const openFile = vi.hoisted(() => vi.fn())
 const createNewFile = vi.hoisted(() => vi.fn())
 const createProject = vi.hoisted(() => vi.fn())
 const refreshTree = vi.hoisted(() => vi.fn())
+const openExternalUrlMock = vi.hoisted(() => vi.fn())
+vi.mock('../../lib/openUrl', () => ({ openExternalUrl: openExternalUrlMock }))
 vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openWorkspace, openRecent, saveFile, saveAll, openFile, createNewFile, createProject, refreshTree }), isTauri: () => false }))
 vi.mock('../../lib/images', () => ({ importImage: vi.fn() }))
 vi.mock('../../hooks/usePrint', () => ({ usePrint: () => vi.fn() }))
@@ -42,7 +44,7 @@ it('groups application actions in keyboard-accessible menus', async () => {
   const root = createRoot(container)
   const toggle = vi.fn()
   await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={toggle} />))
-  expect(Array.from(container.querySelectorAll('nav > details > summary')).map((item) => item.textContent)).toEqual(['File', 'View', 'Insert', 'Document', 'Settings'])
+  expect(Array.from(container.querySelectorAll('nav > details > summary')).map((item) => item.textContent)).toEqual(['File', 'View', 'Insert', 'Document', 'Settings', 'Help'])
   await act(async () => Array.from(container.querySelectorAll('button')).find((item) => item.textContent === 'Open Folder…')?.click())
   expect(openWorkspace).toHaveBeenCalledOnce()
   expect(container.textContent).not.toContain('Pack ZIP')
@@ -233,7 +235,7 @@ it('keeps recent folders inside File and reopens the selected path', async () =>
   }
 })
 
-it('opens About and Tutorial from Settings, closes menus, and restores Settings focus', async () => {
+it('opens About and Tutorial from Help, closes menus, and restores Help focus', async () => {
   const originalShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal')
   const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close')
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', { configurable: true, value(this: HTMLDialogElement) { this.open = true } })
@@ -243,17 +245,17 @@ it('opens About and Tutorial from Settings, closes menus, and restores Settings 
   const root = createRoot(container)
   try {
     await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
-    const settings = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Settings')! as HTMLDetailsElement
+    const help = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Help')! as HTMLDetailsElement
     for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'Step 1 of 6']]) {
-      settings.open = true
-      const action = Array.from(settings.querySelectorAll('button')).find((button) => button.textContent === label)
+      help.open = true
+      const action = Array.from(help.querySelectorAll('button')).find((button) => button.textContent === label)
       expect(action).toBeDefined()
       await act(async () => action!.click())
-      expect(settings.open).toBe(false)
+      expect(help.open).toBe(false)
       expect(container.querySelector('dialog')?.textContent).toContain(content)
       await act(async () => container.querySelector<HTMLButtonElement>(`[aria-label="Close ${label}"]`)!.click())
       expect(container.querySelector('dialog')).toBeNull()
-      expect(document.activeElement).toBe(settings.querySelector('summary'))
+      expect(document.activeElement).toBe(help.querySelector('summary'))
     }
   } finally {
     await act(async () => root.unmount())
@@ -262,6 +264,28 @@ it('opens About and Tutorial from Settings, closes menus, and restores Settings 
     else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
     if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose)
     else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
+  }
+})
+
+it('opens bug report and feature request URLs from the Help menu', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
+    const help = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Help')! as HTMLDetailsElement
+    help.open = true
+
+    const bugButton = Array.from(help.querySelectorAll('button')).find((b) => b.textContent === 'Report Bug…')!
+    await act(async () => bugButton.click())
+    expect(openExternalUrlMock).toHaveBeenCalledWith('https://github.com/JFEspanolito/Grimoire-Maker/issues/new?template=bug_report.md')
+
+    const featureButton = Array.from(help.querySelectorAll('button')).find((b) => b.textContent === 'Request Feature…')!
+    await act(async () => featureButton.click())
+    expect(openExternalUrlMock).toHaveBeenCalledWith('https://github.com/JFEspanolito/Grimoire-Maker/issues/new?template=feature_request.md')
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
   }
 })
 
@@ -435,17 +459,21 @@ it('translates menu summaries dynamically when language is changed', async () =>
     useSettingsStore.setState({ language: 'en' })
     await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
     const summariesEn = Array.from(container.querySelectorAll('details[name="application-menu"] > summary')).map((s) => s.textContent)
-    expect(summariesEn).toEqual(['File', 'View', 'Insert', 'Document', 'Settings'])
+    expect(summariesEn).toEqual(['File', 'View', 'Insert', 'Document', 'Settings', 'Help'])
 
     await act(async () => useSettingsStore.getState().setLanguage('es'))
     const summariesEs = Array.from(container.querySelectorAll('details[name="application-menu"] > summary')).map((s) => s.textContent)
-    expect(summariesEs).toEqual(['Archivo', 'Ver', 'Insertar', 'Documento', 'Configuración'])
+    expect(summariesEs).toEqual(['Archivo', 'Ver', 'Insertar', 'Documento', 'Configuración', 'Ayuda'])
 
     const fileButtonsEs = Array.from(container.querySelectorAll('details[name="application-menu"]:first-of-type button')).slice(0, 4).map((b) => b.textContent)
     expect(fileButtonsEs).toEqual(['Nuevo archivo…', 'Nuevo proyecto…', 'Abrir archivo…', 'Abrir carpeta…'])
 
-    const settingsButtonsEs = Array.from(container.querySelectorAll('details[name="application-menu"]:last-of-type button')).map((b) => b.textContent)
-    expect(settingsButtonsEs).toEqual(['Administrador de mods', 'Preferencias…', 'Acerca de', 'Tutorial'])
+    const menusEs = Array.from(container.querySelectorAll('details[name="application-menu"]'))
+    const settingsButtonsEs = Array.from(menusEs[4].querySelectorAll('button')).map((b) => b.textContent)
+    expect(settingsButtonsEs).toEqual(['Administrador de mods', 'Preferencias…'])
+
+    const helpButtonsEs = Array.from(menusEs[5].querySelectorAll('button')).map((b) => b.textContent)
+    expect(helpButtonsEs).toEqual(['Reportar un error…', 'Sugerir una función…', 'Tutorial', 'Acerca de'])
   } finally {
     useSettingsStore.setState({ language: 'en' })
     container.remove()

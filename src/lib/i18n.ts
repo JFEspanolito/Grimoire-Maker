@@ -32,6 +32,7 @@ export const DICTIONARY = {
     'menu.insert': 'Insert',
     'menu.document': 'Document',
     'menu.settings': 'Settings',
+    'menu.help': 'Help',
 
     // Menu File
     'menu.file.newFile': 'New File…',
@@ -82,6 +83,13 @@ export const DICTIONARY = {
     'menu.settings.preferences': 'Preferences…',
     'menu.settings.about': 'About',
     'menu.settings.tutorial': 'Tutorial',
+
+    // Menu Help
+    'menu.help.reportIssue': 'Report an Issue',
+    'menu.help.reportBug': 'Report Bug…',
+    'menu.help.requestFeature': 'Request Feature…',
+    'menu.help.tutorial': 'Tutorial',
+    'menu.help.about': 'About',
 
     // Preferences / Appearance
     'preferences.title': 'Preferences',
@@ -261,6 +269,8 @@ export const DICTIONARY = {
     'about.version': 'Version',
     'about.contact': 'Contact',
     'about.githubProject': 'GitHub project',
+    'about.reportBug': 'Report Bug',
+    'about.requestFeature': 'Request Feature',
     'about.credits': 'Credits',
     'about.loadingContributors': 'Loading contributors from GitHub…',
     'about.fallbackContributors': 'GitHub is unavailable. Showing bundled credits.',
@@ -601,6 +611,7 @@ export const DICTIONARY = {
     'menu.insert': 'Insertar',
     'menu.document': 'Documento',
     'menu.settings': 'Configuración',
+    'menu.help': 'Ayuda',
 
     // Menu File
     'menu.file.newFile': 'Nuevo archivo…',
@@ -651,6 +662,13 @@ export const DICTIONARY = {
     'menu.settings.preferences': 'Preferencias…',
     'menu.settings.about': 'Acerca de',
     'menu.settings.tutorial': 'Tutorial',
+
+    // Menu Help
+    'menu.help.reportIssue': 'Reportar un problema',
+    'menu.help.reportBug': 'Reportar un error…',
+    'menu.help.requestFeature': 'Sugerir una función…',
+    'menu.help.tutorial': 'Tutorial',
+    'menu.help.about': 'Acerca de',
 
     // Preferences / Appearance
     'preferences.title': 'Preferencias',
@@ -830,6 +848,8 @@ export const DICTIONARY = {
     'about.version': 'Versión',
     'about.contact': 'Contacto',
     'about.githubProject': 'Proyecto en GitHub',
+    'about.reportBug': 'Reportar un error',
+    'about.requestFeature': 'Sugerir una función',
     'about.credits': 'Créditos',
     'about.loadingContributors': 'Cargando colaboradores desde GitHub…',
     'about.fallbackContributors': 'GitHub no está disponible. Mostrando créditos incluidos.',
