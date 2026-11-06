@@ -11,6 +11,7 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { useLayoutStore } from '../../stores/layoutStore'
 import { PAGE_GAP_MM, pageGeometry, sheetCountForHeight } from '../../lib/pageLayout'
 import { alignSections, isSectionContentMutation } from '../../lib/sectionLayout'
+import { loadExternalFont } from '../../lib/fonts'
 import { PluginSlot } from '../../plugins/PluginSlot'
 import { usePluginSurface } from '../../plugins/usePluginSurface'
 import styles from './PageView.module.css'
@@ -78,6 +79,12 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
   const layoutKey = (path === undefined ? current?.path : path) ?? '__untitled__'
   useEffect(() => { publishSheets(layoutKey, sheetsShown) }, [publishSheets, layoutKey, sheetsShown])
 
+  useEffect(() => {
+    if (frontmatter.fontFamily) {
+      loadExternalFont(frontmatter.fontFamily)
+    }
+  }, [frontmatter.fontFamily])
+
   const visibleSheets = paginated
     ? (spreads ? Math.max(2, sheetCount + (sheetCount % 2)) : sheetCount)
     : 1
@@ -86,6 +93,12 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
     width: `${size.widthMm}mm`,
     minHeight: `${visibleSheets * size.heightMm + (visibleSheets - 1) * PAGE_GAP_MM}mm`,
     padding: `${marginMm}mm`,
+    ...(frontmatter.fontFamily
+      ? {
+          fontFamily: frontmatter.fontFamily,
+          ['--page-font' as any]: frontmatter.fontFamily,
+        }
+      : {}),
   }
   const flowStyle = {
     '--page-columns': String(columns),

@@ -19,6 +19,7 @@ export interface PersistedSettings {
   autoSaveSeconds?: number
   panels?: Partial<Record<PanelId, boolean>>
   language?: 'en' | 'es'
+  customFonts?: string[]
 }
 
 /** What survives a restart. Stored as `state.json` in the app config folder. */
@@ -107,8 +108,8 @@ export const forgetWorkspace =
 /** Saves page setup whenever it changes; returns the unsubscribe function. */
 export function watchSettings(): () => void {
   return useSettingsStore.subscribe((s, prev) => {
-    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.panels === prev.panels && s.zoom === prev.zoom && s.autoSaveSeconds === prev.autoSaveSeconds && s.autoCommitEnabled === prev.autoCommitEnabled && s.autoCommitMinutes === prev.autoCommitMinutes && s.autoCommitMessage === prev.autoCommitMessage && s.language === prev.language) return
-    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, panels: s.panels, zoom: s.zoom, autoSaveSeconds: s.autoSaveSeconds, autoCommitEnabled: s.autoCommitEnabled, autoCommitMinutes: s.autoCommitMinutes, autoCommitMessage: s.autoCommitMessage, language: s.language }).catch((error: unknown) => {
+    if (s.pageSize === prev.pageSize && s.columns === prev.columns && s.theme === prev.theme && s.rulerGuides === prev.rulerGuides && s.panels === prev.panels && s.zoom === prev.zoom && s.autoSaveSeconds === prev.autoSaveSeconds && s.autoCommitEnabled === prev.autoCommitEnabled && s.autoCommitMinutes === prev.autoCommitMinutes && s.autoCommitMessage === prev.autoCommitMessage && s.language === prev.language && s.customFonts === prev.customFonts) return
+    void saveSettings({ pageSize: s.pageSize, columns: s.columns, theme: s.theme, rulerGuides: s.rulerGuides, panels: s.panels, zoom: s.zoom, autoSaveSeconds: s.autoSaveSeconds, autoCommitEnabled: s.autoCommitEnabled, autoCommitMinutes: s.autoCommitMinutes, autoCommitMessage: s.autoCommitMessage, language: s.language, customFonts: s.customFonts }).catch((error: unknown) => {
       useSessionStore.getState().setWorkspaceError(`Could not save preferences: ${error instanceof Error ? error.message : String(error)}`)
     })
   })

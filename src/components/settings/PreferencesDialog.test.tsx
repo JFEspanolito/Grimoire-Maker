@@ -172,7 +172,7 @@ it('organizes preferences with a section index and a basic shortcut reference', 
     await act(async () => tabs[2].click())
     const panel = container.querySelector<HTMLElement>('#preferences-shortcuts')!
     expect(panel.hidden).toBe(false)
-    const rename = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Rename selected file (Files)'))!
+    const rename = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Rename selected file or folder (Files)'))!
     expect(rename.querySelector('kbd')?.textContent).toBe('F2')
     expect(container.querySelector<HTMLElement>('#preferences-appearance')!.hidden).toBe(true)
     const save = Array.from(panel.querySelectorAll('tr')).find(row => row.textContent?.includes('Save All'))!
@@ -269,4 +269,46 @@ it('allows changing the application language under Appearance', async () => {
   })
   expect(useSettingsStore.getState().language).toBe('es')
   useSettingsStore.getState().setLanguage('en')
+})
+
+it('allows adding and removing custom fonts under Appearance', async () => {
+  useSettingsStore.setState({ customFonts: [] })
+  expect(container.textContent).toContain('No custom fonts added yet')
+  const fontInput = container.querySelector<HTMLInputElement>('input[aria-label="Custom fonts"]')!
+  const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Add font')!
+  expect(fontInput).not.toBeNull()
+  expect(addBtn.disabled).toBe(true)
+
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(fontInput, 'MedievalSharp')
+    fontInput.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(addBtn.disabled).toBe(false)
+
+  await act(async () => {
+    addBtn.click()
+  })
+  expect(useSettingsStore.getState().customFonts).toContain('MedievalSharp')
+  expect(fontInput.value).toBe('')
+
+  const removeBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Remove font MedievalSharp"]')!
+  expect(removeBtn).not.toBeNull()
+  await act(async () => {
+    removeBtn.click()
+  })
+  expect(useSettingsStore.getState().customFonts).not.toContain('MedievalSharp')
+})
+
+it('allows picking local font files via file input', async () => {
+  useSettingsStore.setState({ customFonts: [] })
+  const fileInput = container.querySelector<HTMLInputElement>('input[type="file"][accept*=".ttf"]')!
+  expect(fileInput).not.toBeNull()
+
+  const fakeFile = new File([new Uint8Array([1, 2, 3])], 'WizardRunes.ttf', { type: 'font/ttf' })
+  await act(async () => {
+    Object.defineProperty(fileInput, 'files', { value: [fakeFile], configurable: true })
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+
+  expect(useSettingsStore.getState().customFonts).toContain('WizardRunes')
 })

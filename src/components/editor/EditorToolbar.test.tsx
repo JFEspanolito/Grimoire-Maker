@@ -129,7 +129,7 @@ describe('toolbar layout and text controls', () => {
     const sequence = Array.from(bar.querySelectorAll('[role="separator"], button, select, input')).filter((item) => !item.closest('details')).map((item) =>
       item.getAttribute('role') === 'separator' ? '//' : item.getAttribute('aria-label') ?? item.textContent)
     expect(sequence).toEqual([
-      'Undo', 'Redo', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
+      'Undo', 'Redo', '//', 'Font family', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
       'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', '//',
       'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', 'Insert Formula', '//', 'Find and Replace (Ctrl+F)', 'Page view',
     ])
@@ -156,5 +156,31 @@ describe('toolbar layout and text controls', () => {
     expect(editor.getAttributes('textStyle')).toMatchObject({ fontSize: '20px', color: '#336699' })
     expect(editor.getAttributes('paragraph')).toMatchObject({ textAlign: 'justify', indent: 1 })
     expect(container.querySelector<HTMLSelectElement>('[aria-label="Text size"]')!.value).toBe('20')
+  })
+
+  it('applies and unsets font family on selected text', async () => {
+    editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: 'Hello world' })
+    editor.commands.selectAll()
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<EditorToolbar editor={editor} />))
+
+    const fontSelect = container.querySelector<HTMLSelectElement>('[aria-label="Font family"]')!
+    expect(fontSelect).not.toBeNull()
+    expect(fontSelect.value).toBe('')
+
+    await act(async () => {
+      fontSelect.value = 'Georgia, serif'
+      fontSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(editor.getAttributes('textStyle')).toMatchObject({ fontFamily: 'Georgia, serif' })
+
+    await act(async () => {
+      fontSelect.value = ''
+      fontSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(editor.getAttributes('textStyle').fontFamily).toBeUndefined()
   })
 })

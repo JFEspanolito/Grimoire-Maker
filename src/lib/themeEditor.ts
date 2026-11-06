@@ -42,7 +42,23 @@ function validateName(name: string): string {
   return clean
 }
 
-export function buildThemeCss(source: string, sourceId: string, id: string, name: string, colors: ThemeColors, decorations?: ThemeDecoration[], headerFooter?: ThemeHeaderFooter): string {
+export interface ThemeFonts {
+  pageFont?: string
+  headingFont?: string
+}
+
+export function themeFonts(css: string): ThemeFonts {
+  const value = (name: string, fallback: string) => {
+    const matches = [...css.matchAll(new RegExp(`--${name}\\s*:\\s*([^;}\\n]+)[;}]`, 'gi'))]
+    return matches.at(-1)?.[1]?.trim() ?? fallback
+  }
+  return {
+    pageFont: value('page-font', 'Georgia, serif'),
+    headingFont: value('heading-font', 'Palatino Linotype, Georgia, serif'),
+  }
+}
+
+export function buildThemeCss(source: string, sourceId: string, id: string, name: string, colors: ThemeColors, decorations?: ThemeDecoration[], headerFooter?: ThemeHeaderFooter, fonts?: ThemeFonts): string {
   if (!ID_PATTERN.test(id) || !ID_PATTERN.test(sourceId)) throw new Error('Invalid theme ID')
   const title = validateName(name)
   for (const key of Object.keys(COLOR_FIELDS) as (keyof ThemeColors)[]) {
@@ -61,6 +77,8 @@ ${selector} {
   --divider-color: ${colors.divider}; --accent: ${colors.accent};
   --statblock-bg: ${colors.statblock}; --readaloud-bg: ${colors.readaloud};
   --index-bg: ${colors.indexBackground}; --index-fg: ${colors.indexText};
+  ${fonts?.pageFont ? `--page-font: ${fonts.pageFont};` : ''}
+  ${fonts?.headingFont ? `--heading-font: ${fonts.headingFont};` : ''}
 }
 ${[1, 2, 3].map((level) => `${selector} .grimoire-content h${level} { color: ${colors[`h${level}` as keyof ThemeColors]}; }`).join('\n')}
 ${selector} .grimoire-content hr { border-color: ${colors.divider}; }
@@ -94,7 +112,7 @@ export async function loadThemeDraft(theme: ThemeInfo, userOwned: boolean): Prom
   return { theme, css, path, directory: paths.themes }
 }
 
-export async function saveThemeDraft(draft: ThemeDraft, name: string, colors: ThemeColors, copy: boolean, takenIds: string[], decorations?: ThemeDecoration[], headerFooter?: ThemeHeaderFooter): Promise<ThemeInfo> {
+export async function saveThemeDraft(draft: ThemeDraft, name: string, colors: ThemeColors, copy: boolean, takenIds: string[], decorations?: ThemeDecoration[], headerFooter?: ThemeHeaderFooter, fonts?: ThemeFonts): Promise<ThemeInfo> {
   const title = validateName(name)
   const directory = (await loadLibraryPaths()).themes
   if (directory !== draft.directory) throw new Error('Themes Path changed. Reopen Customize Theme before saving.')
@@ -107,7 +125,7 @@ export async function saveThemeDraft(draft: ThemeDraft, name: string, colors: Th
     id = base
     for (let suffix = 2; taken.has(id.toLowerCase()) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(id); suffix++) id = `${base}-${suffix}`
   }
-  const css = buildThemeCss(draft.css, draft.theme.id, id, title, colors, decorations, headerFooter)
+  const css = buildThemeCss(draft.css, draft.theme.id, id, title, colors, decorations, headerFooter, fonts)
   if (new TextEncoder().encode(css).length > MAX_BYTES) throw new Error('The saved theme would exceed 24 MB.')
   if (creating) {
     await writeTextFile(`${directory}/${id}.css`, css, { createNew: true })

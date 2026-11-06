@@ -46,9 +46,12 @@ import {
   loadThemeDraft,
   saveThemeDraft,
   themeColors,
+  themeFonts,
   type ThemeColors,
   type ThemeDraft,
+  type ThemeFonts,
 } from "../../lib/themeEditor";
+import { getAllFonts, loadExternalFont, findMatchingFontOption } from "../../lib/fonts";
 
 import styles from "./ThemeCustomizer.module.css";
 
@@ -57,13 +60,16 @@ interface ThemeCustomizerProps {
   onBusyChange?: (busy: boolean) => void;
 }
 
-function preview(draft: ThemeDraft, colors: ThemeColors): string {
+function preview(draft: ThemeDraft, colors: ThemeColors, fonts?: ThemeFonts): string {
   const css = buildThemeCss(
     draft.css,
     draft.theme.id,
     "sample",
     "Sample",
     colors,
+    undefined,
+    undefined,
+    fonts,
   ).replaceAll("<", "\\3c ");
 
   return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:"><style>
@@ -97,8 +103,16 @@ export function ThemeCustomizer({
 
   const [colors, setColors] = useState(() => themeColors(""));
 
+  const customFonts = useSettingsStore((state) => state.customFonts);
+  const availableFonts = getAllFonts(customFonts);
+  const [fonts, setFonts] = useState<ThemeFonts>(() => ({
+    pageFont: "Georgia, serif",
+    headingFont: "Palatino Linotype, Georgia, serif",
+  }));
+
   const sections = [
     "Theme name",
+    "Typography",
     "Colors",
     "Backgrounds",
     "Header and footer",
@@ -160,6 +174,8 @@ export function ThemeCustomizer({
 
         setColors(themeColors(value.css));
 
+        setFonts(themeFonts(value.css));
+
         setName(value.path ? selected.name : `${selected.name} Copy`);
       },
       (cause: unknown) => {
@@ -201,6 +217,7 @@ export function ThemeCustomizer({
         themes.map((theme) => theme.id),
         decorations,
         headerFooter,
+        fonts,
       );
 
       await useThemeStore.getState().reload();
@@ -393,6 +410,59 @@ export function ThemeCustomizer({
                 hidden={section !== 1}
               >
                 <div className={styles.workspace}>
+                  <div className={styles.typography}>
+                    <label>
+                      Document font
+                      <select
+                        aria-label="Theme document font"
+                        value={findMatchingFontOption(availableFonts, fonts.pageFont)?.family ?? ''}
+                        disabled={busy}
+                        onChange={(event) => {
+                          const val = event.target.value;
+                          if (val) loadExternalFont(val);
+                          setFonts((current) => ({ ...current, pageFont: val || undefined }));
+                        }}
+                      >
+                        {availableFonts.map((f) => (
+                          <option key={f.id} value={f.family}>{f.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Heading font
+                      <select
+                        aria-label="Theme heading font"
+                        value={findMatchingFontOption(availableFonts, fonts.headingFont)?.family ?? ''}
+                        disabled={busy}
+                        onChange={(event) => {
+                          const val = event.target.value;
+                          if (val) loadExternalFont(val);
+                          setFonts((current) => ({ ...current, headingFont: val || undefined }));
+                        }}
+                      >
+                        {availableFonts.map((f) => (
+                          <option key={f.id} value={f.family}>{f.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+
+                  <iframe
+                    title="Theme typography preview"
+                    sandbox=""
+                    className={styles.preview}
+                    srcDoc={preview(draft, colors, fonts)}
+                  />
+                </div>
+              </section>
+
+              <section
+                role="tabpanel"
+                id="theme-panel-2"
+                aria-labelledby="theme-tab-2"
+                hidden={section !== 2}
+              >
+                <div className={styles.workspace}>
                   <div className={styles.colors}>
                     {(
                       Object.entries(COLOR_FIELDS) as [
@@ -422,16 +492,16 @@ export function ThemeCustomizer({
                     title="Theme preview"
                     sandbox=""
                     className={styles.preview}
-                    srcDoc={preview(draft, colors)}
+                    srcDoc={preview(draft, colors, fonts)}
                   />
                 </div>
               </section>
 
               <section
                 role="tabpanel"
-                id="theme-panel-2"
-                aria-labelledby="theme-tab-2"
-                hidden={section !== 2}
+                id="theme-panel-3"
+                aria-labelledby="theme-tab-3"
+                hidden={section !== 3}
               >
                 <ThemeBackgroundEditor
                   images={decorations}
@@ -447,9 +517,9 @@ export function ThemeCustomizer({
 
               <section
                 role="tabpanel"
-                id="theme-panel-3"
-                aria-labelledby="theme-tab-3"
-                hidden={section !== 3}
+                id="theme-panel-4"
+                aria-labelledby="theme-tab-4"
+                hidden={section !== 4}
               >
                 <h3>Header and footer</h3>
 

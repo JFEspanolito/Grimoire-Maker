@@ -10,6 +10,7 @@ import { PluginSlot } from '../../plugins/PluginSlot'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useTranslation, type TranslationKey } from '../../lib/i18n'
+import { getAllFonts, loadExternalFont, findMatchingFontOption } from '../../lib/fonts'
 import toolbarStyles from '../layout/Toolbar.module.css'
 
 interface Action {
@@ -74,9 +75,9 @@ const ACTION_TITLE_KEYS: Record<string, TranslationKey> = {
   formula: 'toolbar.insertFormula',
 }
 
-type Group = string[] | 'format' | 'structure' | 'tools'
+type Group = string[] | 'font' | 'format' | 'structure' | 'tools'
 /** Groups in order; a thin divider separates them. Controls with their own widget sit in named groups. */
-const LAYOUT: Group[] = [['undo', 'redo'], ['bold', 'italic', 'underline', 'strike'], 'format', 'structure', ['outdent', 'indent', 'bullet', 'ordered', 'formula'], 'tools']
+const LAYOUT: Group[] = [['undo', 'redo'], 'font', ['bold', 'italic', 'underline', 'strike'], 'format', 'structure', ['outdent', 'indent', 'bullet', 'ordered', 'formula'], 'tools']
 
 const btn = 'min-w-8 rounded px-2 py-1 text-sm hover:bg-white/10 disabled:opacity-30'
 const control = 'rounded bg-white/10 px-1 py-0.5 text-sm text-white'
@@ -103,6 +104,8 @@ function computedStyleAtCaret(editor: Editor): CSSStyleDeclaration | null {
 export function EditorToolbar({ editor }: { editor: Editor | null }) {
   const { t } = useTranslation()
   const { viewMode, setViewMode } = useSettingsStore()
+  const customFonts = useSettingsStore((state) => state.customFonts)
+  const fonts = getAllFonts(customFonts)
   const active = useTabStore((state) => state.active)
   const documentTools = !active || /\.md$/i.test(active)
   // Re-evaluates the per-button state on every transaction, so active styling follows the caret.
@@ -110,7 +113,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
     editor,
     selector: ({ editor: e }) => {
       if (!e) return null
-      const textStyle = e.getAttributes('textStyle') as { color?: string; fontSize?: string }
+      const textStyle = e.getAttributes('textStyle') as { color?: string; fontSize?: string; fontFamily?: string }
       const computed = computedStyleAtCaret(e)
       const block = e.isActive('heading') ? 'heading' : 'paragraph'
       return {
@@ -119,6 +122,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         ),
         color: toHex(textStyle.color ?? computed?.color),
         size: Math.round(parseFloat(textStyle.fontSize ?? computed?.fontSize ?? '') || 0),
+        fontFamily: textStyle.fontFamily ?? '',
         align: String((e.getAttributes(block) as { textAlign?: string }).textAlign ?? 'left'),
         image: e.isActive('image') ? (e.getAttributes('image') as ImageAttrs) : null,
         inTable: e.isActive('table'),
@@ -156,6 +160,25 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
   const sizes = state?.size && !FONT_SIZES.includes(state.size) ? [...FONT_SIZES, state.size].sort((a, b) => a - b) : FONT_SIZES
 
   const sections = {
+    font: <div className="flex items-center gap-1">
+      <select aria-label={t('toolbar.fontFamily')} title={t('toolbar.fontFamily')} disabled={!editor} className={control}
+        value={findMatchingFontOption(fonts, state?.fontFamily)?.family ?? ''}
+        onChange={(event) => {
+          const val = event.target.value
+          if (!editor) return
+          if (val) {
+            loadExternalFont(val)
+            editor.chain().focus().setFontFamily(val).run()
+          } else {
+            editor.chain().focus().unsetFontFamily().run()
+          }
+        }}>
+        <option value="" className="text-black">{t('toolbar.fontDefault')}</option>
+        {fonts.map((f) => (
+          <option key={f.id} value={f.family} className="text-black">{f.label}</option>
+        ))}
+      </select>
+    </div>,
     format: <div className="flex items-center gap-1">
       <input type="color" aria-label={t('toolbar.textColor')} title={t('toolbar.textColor')} disabled={!editor} value={state?.color ?? '#000000'}
         className="h-6 w-7 cursor-pointer rounded bg-transparent p-0 disabled:opacity-30"

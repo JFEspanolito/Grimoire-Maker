@@ -14,6 +14,7 @@ import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import { ProjectSettings } from './ProjectSettings'
 import { AutoSaveSettings } from './AutoSaveSettings'
 import { ConfirmDialog } from '../layout/ConfirmDialog'
+import { loadExternalFont, extractFontName, registerFontFile, registerFontBytes } from '../../lib/fonts'
 
 const PATH_FIELDS: { kind: LibraryKind; labelKey: TranslationKey }[] = [
   { kind: 'plugins', labelKey: 'pref.path.plugins' },
@@ -41,7 +42,9 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
   const [customizing, setCustomizing] = useState(initialCustomizing)
   const [pendingDeleteTheme, setPendingDeleteTheme] = useState<ThemeInfo | null>(null)
   const [section, setSection] = useState<Section>(initialSection)
-  const { theme, setTheme, language, setLanguage } = useSettingsStore()
+  const [newFontName, setNewFontName] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+  const { theme, setTheme, language, setLanguage, customFonts = [], addCustomFont, removeCustomFont } = useSettingsStore()
   const { themes, userThemes = [], errors: themeErrors } = useThemeStore()
   const activeThemeId = resolveTheme(theme, themes)
   const activeCustomTheme = userThemes.find((item) => item.id === activeThemeId) ?? null
@@ -133,6 +136,52 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
     }
   }
 
+  const handlePickFontFile = async () => {
+    if (desktop) {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog')
+        const { readFile } = await import('@tauri-apps/plugin-fs')
+        const path = await open({
+          multiple: false,
+          filters: [{ name: 'Font files', extensions: ['ttf', 'otf', 'woff', 'woff2'] }],
+        })
+        if (!path || typeof path !== 'string') return
+        const bytes = await readFile(path)
+        const fontName = await registerFontBytes(path, bytes)
+        addCustomFont(fontName)
+        setNotice(`Font "${fontName}" loaded.`)
+        return
+      } catch (cause) {
+        reportError('preferences.font.import', cause)
+      }
+    }
+    fileInput.current?.click()
+  }
+
+  const handleFileInputChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const fontName = await registerFontFile(file)
+      addCustomFont(fontName)
+      setNotice(`Font "${fontName}" loaded.`)
+    } catch (cause) {
+      reportError('preferences.font.import', cause)
+      setError(friendlyErrorMessage(cause, 'Could not load font file.'))
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const handleAddCustomFont = () => {
+    const trimmed = newFontName.trim()
+    if (!trimmed) return
+    const fontName = extractFontName(trimmed)
+    addCustomFont(fontName)
+    loadExternalFont(trimmed)
+    setNewFontName('')
+  }
+
   return <dialog ref={dialog} className={`${styles.dialog} ${customizing ? styles.customizingDialog : ''}`} aria-labelledby={customizing ? 'customize-theme-title' : 'preferences-title'} aria-busy={busy}
     onCancel={(event) => { event.preventDefault(); if (!locked.current) { if (customizing) setCustomizing(false); else onClose() } }}>
     <header className={styles.header}>
@@ -181,6 +230,62 @@ export function PreferencesDialog({ onClose, initialSection = 'appearance', init
             {SUPPORTED_LANGUAGES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           </select>
         </div>
+      </div>
+      <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid #ffffff20' }}>
+        <h4 style={{ fontSize: '0.8rem', fontWeight: 600, color: '#cfb37c', marginBottom: '0.35rem' }}>{t('preferences.customFonts')}</h4>
+        <p className={styles.description}>{t('preferences.customFontsHint')}</p>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".ttf,.otf,.woff,.woff2"
+          style={{ display: 'none' }}
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={(e) => void handleFileInputChange(e)}
+        />
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+          <button type="button" disabled={busy} onClick={() => void handlePickFontFile()}>
+            {t('preferences.browseFontFile')}
+          </button>
+        </div>
+        <div className={styles.fontAddRow}>
+          <input
+            aria-label={t('preferences.customFonts')}
+            placeholder={t('preferences.fontPlaceholder')}
+            value={newFontName}
+            disabled={busy}
+            onChange={(e) => setNewFontName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                handleAddCustomFont()
+              }
+            }}
+          />
+          <button type="button" disabled={busy || !newFontName.trim()} onClick={handleAddCustomFont}>
+            {t('preferences.addFont')}
+          </button>
+        </div>
+        {customFonts.length === 0 ? (
+          <p className={styles.description} style={{ marginTop: '0.75rem' }}>{t('preferences.noCustomFonts')}</p>
+        ) : (
+          <div className={styles.fontList}>
+            {customFonts.map((font) => (
+              <div key={font} className={styles.fontItem}>
+                <span style={{ fontFamily: `"${font}", sans-serif` }}>{font}</span>
+                <button
+                  type="button"
+                  className={styles.dangerButton}
+                  aria-label={`${t('preferences.removeFont')} ${font}`}
+                  disabled={busy}
+                  onClick={() => removeCustomFont(font)}
+                >
+                  {t('preferences.removeFont')}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       {themeErrors.length > 0 && <p className={styles.error} role="alert">{themeErrors.join('\n')}</p>}
       </>}

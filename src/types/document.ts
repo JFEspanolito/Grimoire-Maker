@@ -28,6 +28,7 @@ export interface Frontmatter {
   pageSize?: PageSizeId
   columns?: 1 | 2 | 3
   theme?: ThemeId
+  fontFamily?: string
   [key: string]: unknown
 }
 

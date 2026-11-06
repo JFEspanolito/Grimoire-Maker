@@ -47,3 +47,8 @@
 .autoCommitMessage input { width: 100%; min-width: 0; padding: .4rem; background: #201f1d; border: 1px solid #ffffff20; border-radius: .25rem; color: #f0eee9; }
 .autoCommit input:hover { border-color: #cfb37c80; }
 .autoCommitToggle:hover { color: #e8cf9a; }
+
+.fontList { display: flex; flex-direction: column; gap: .5rem; margin-top: .75rem; }
+.fontItem { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .35rem .6rem; border: 1px solid #ffffff15; border-radius: .25rem; background: #201f1d; }
+.fontAddRow { display: flex; gap: .5rem; margin-top: .75rem; }
+.fontAddRow input { flex: 1; min-width: 0; padding: .4rem .5rem; border: 1px solid #ffffff20; border-radius: .25rem; background: #0002; color: #f0eee9; font-size: .8rem; }

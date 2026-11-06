@@ -161,3 +161,18 @@ it('switches page presentation without replacing editable content or zoom', asyn
     expect(host.querySelectorAll('[data-editor-sheet]')).toHaveLength(1)
   } finally { await act(async () => root.unmount()); useSettingsStore.setState({ viewMode: 'edit', zoom: 1 }) }
 })
+
+it('applies document frontmatter fontFamily to the page style', async () => {
+  Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
+  useDocumentStore.getState().loadFromRaw('/c.md', '---\nfontFamily: "Georgia, serif"\n---\nText')
+  const host = document.createElement('div')
+  const root = createRoot(host)
+  try {
+    await act(async () => root.render(<DocumentPathContext value="/c.md"><PageView><p>Text</p></PageView></DocumentPathContext>))
+    const page = host.querySelector<HTMLElement>('.grimoire-page')
+    expect(page?.style.fontFamily).toBe('Georgia, serif')
+  } finally {
+    await act(async () => root.unmount())
+    useDocumentStore.getState().resetDocuments()
+  }
+})

@@ -67,6 +67,27 @@ it('persists columns in the selected Markdown without changing its sibling or th
   expect(useDocumentStore.getState().buffers['/book/a.md'].frontmatter.columns).toBe(1)
   expect(useSettingsStore.getState().columns).toBe(2)
 })
+it('persists font family in the selected Markdown without changing its sibling', async () => {
+  const fontSelect = host.querySelector<HTMLSelectElement>('[aria-label="Document font family"]')!
+  expect(fontSelect).not.toBeNull()
+  expect(fontSelect.value).toBe('')
+
+  await act(async () => {
+    fontSelect.value = 'Georgia, serif'
+    fontSelect.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+
+  expect(useDocumentStore.getState().toRaw()).toContain('fontFamily: Georgia, serif')
+  expect(useDocumentStore.getState().document.dirty).toBe(true)
+
+  await act(async () => {
+    useDocumentStore.getState().loadFromRaw('/book/b.md', 'B')
+    useTabStore.getState().reset('/book/b.md')
+  })
+  expect(fontSelect.value).toBe('')
+  expect(useDocumentStore.getState().buffers['/book/a.md'].frontmatter.fontFamily).toBe('Georgia, serif')
+})
+
 it('does not offer page controls for binary files', async () => {
   await act(async () => useTabStore.getState().reset('/book/image.png'))
   expect(host.querySelector('[aria-label="Page columns"]')).toBeNull()
