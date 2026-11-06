@@ -14,7 +14,7 @@ export const EDITOR_SHORTCUTS = [
 ] as const
 
 export const EXPLORER_SHORTCUTS = [
-  { label: 'Rename selected file (Files)', keys: ['F2'] },
+  { label: 'Rename selected file or folder (Files)', keys: ['F2'] },
 ] as const
 
 export const ZOOM_SHORTCUTS = [

@@ -117,17 +117,33 @@ describe('project explorer', () => {
     })
     expect(renameEntryMock).toHaveBeenCalledExactlyOnceWith('/book/cover.jpg', 'saved.jpg')
   })
-  it('does not use F2 for a selected folder or a file no longer in the tree', async () => {
+  it('renames a selected folder with F2 and prevents renaming section roots or a file no longer in the tree', async () => {
+    renameEntryMock.mockClear()
     useDocumentStore.getState().setWorkspace('/book', [
+      { name: 'Draft', path: '/book/Draft', isDirectory: true, children: [] },
       { name: 'folder', path: '/book/folder', isDirectory: true, children: [] },
       { name: 'cover.jpg', path: '/book/cover.jpg', isDirectory: false },
     ])
     const container = document.createElement('div')
     root = createRoot(container)
     await act(async () => root?.render(<FileTree />))
-    await act(async () => container.querySelector<HTMLElement>('[data-tree-path="/book/folder"]')!.click())
+
+    // Section root 'Draft' cannot be renamed with F2
+    await act(async () => container.querySelector<HTMLElement>('[data-tree-path="/book/Draft"]')!.click())
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' })))
     expect(container.querySelector('input')).toBeNull()
+
+    // Normal folder can be renamed with F2
+    await act(async () => container.querySelector<HTMLElement>('[data-tree-path="/book/folder"]')!.click())
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' })))
+    const input = container.querySelector('input')!
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('folder')
+    input.value = 'renamed-folder'
+    await act(async () => input.dispatchEvent(new FocusEvent('focusout', { bubbles: true })))
+    expect(renameEntryMock).toHaveBeenCalledWith('/book/folder', 'renamed-folder')
+
+    // File no longer in tree cannot be renamed
     await act(async () => container.querySelector<HTMLElement>('[data-tree-path="/book/cover.jpg"]')!.click())
     await act(async () => useDocumentStore.getState().setWorkspace('/other', []))
     await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'F2' })))

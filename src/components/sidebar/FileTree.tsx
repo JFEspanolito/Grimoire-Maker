@@ -304,7 +304,7 @@ export function FileTree() {
   useEffect(() => {
     const onRenameKey = (event: KeyboardEvent) => {
       if (event.key !== EXPLORER_SHORTCUTS[0].keys[0] || event.defaultPrevented || event.isComposing
-        || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || editing || !selected || selected.isDirectory) return;
+        || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || editing || !selected) return;
       if (document.querySelector('[role="dialog"], dialog[open]')) return;
       const target = event.target;
       if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return;
@@ -316,14 +316,18 @@ export function FileTree() {
         }
       };
       const current = find(tree);
-      if (!current || current.isDirectory) return;
+      if (!current) return;
+      const sectionRoot = root && ["Draft", "Research", "Trash"].some(
+        (section) => current.path.toLowerCase() === `${root}/${section}`.toLowerCase(),
+      );
+      if (sectionRoot) return;
       event.preventDefault();
       setMenu(null);
       setEditing(renameState(current));
     };
     window.addEventListener('keydown', onRenameKey);
     return () => window.removeEventListener('keydown', onRenameKey);
-  }, [editing, selected, tree]);
+  }, [editing, root, selected, tree]);
 
   useEffect(() => {
     if (!menu) return;
@@ -447,11 +451,11 @@ export function FileTree() {
     const name = from.slice(from.lastIndexOf("/") + 1);
     void run(async () => {
       const to = `${dir}/${name}`;
-      await moveEntry(from, to);
+      const finalTo = (await moveEntry(from, to)) ?? to;
       setSelected((current) =>
-        current?.path === from ? { ...current, path: to } : current,
+        current?.path === from ? { ...current, path: finalTo } : current,
       );
-      useExplorerStore.getState().selectPath(to);
+      useExplorerStore.getState().selectPath(finalTo);
     });
   };
 
