@@ -4,7 +4,6 @@ import { PAGE_SIZES, type FileNode, type Frontmatter, type PageSizeId } from '..
 import { parseDocument } from '../../lib/frontmatter'
 import { renderDocumentHtml } from '../editor/renderDocumentContent'
 import { readDir, readTextFile } from '@tauri-apps/plugin-fs'
-import { useTranslation } from '../../lib/i18n'
 import styles from './TemplatePreviewModal.module.css'
 
 interface Props {
@@ -145,7 +144,6 @@ function TemplateTreeItem({
 }
 
 export function TemplatePreviewModal({ template, templates, hasProject, onClose, onApply }: Props) {
-  const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
   const [currentTemplate, setCurrentTemplate] = useState<Template>(template)
   const [tree, setTree] = useState<FileNode[]>([{ name: 'index.md', path: 'index.md', isDirectory: false }])

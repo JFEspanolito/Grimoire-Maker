@@ -95,7 +95,7 @@ export async function registerFontBytes(name: string, bytes: Uint8Array): Promis
   const fontName = extractFontName(name)
   if (typeof window !== 'undefined' && typeof FontFace !== 'undefined') {
     try {
-      const fontFace = new FontFace(fontName, bytes.buffer)
+      const fontFace = new FontFace(fontName, bytes.buffer as ArrayBuffer)
       await fontFace.load()
       document.fonts.add(fontFace)
     } catch {
