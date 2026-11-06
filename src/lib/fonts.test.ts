@@ -29,6 +29,11 @@ describe('fonts library', () => {
     expect(extractFontName('/usr/share/fonts/MagicBook.otf')).toBe('MagicBook')
   })
 
+  it('converts array buffer to base64 correctly', () => {
+    const bytes = new Uint8Array([72, 101, 108, 108, 111])
+    expect(arrayBufferToBase64(bytes)).toBe('SGVsbG8=')
+  })
+
   it('combines base fonts with custom fonts in getAllFonts', () => {
     const fonts = getAllFonts(['MedievalSharp', '  Roboto  ', 'https://fonts.googleapis.com/css2?family=Cinzel+Decorative&display=swap'])
     expect(fonts.length).toBe(BASE_FONTS.length + 3)
