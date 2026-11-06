@@ -5,12 +5,13 @@ import { TableControls } from './TableControls'
 import { selectedSearchText } from './extensions/searchHighlight'
 import { useFindStore } from '../../stores/findStore'
 import { insertFormula } from '../../lib/insertActions'
-import { canChangeIndent, changeIndent } from './extensions/blockFormat'
+import { canChangeIndent, changeIndent, setListStart, toggleOrderedListSmart } from './extensions/blockFormat'
 import { PluginSlot } from '../../plugins/PluginSlot'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useTranslation, type TranslationKey } from '../../lib/i18n'
 import { getAllFonts, loadExternalFont, findMatchingFontOption } from '../../lib/fonts'
+import { useFormatPainterStore } from '../../stores/formatPainterStore'
 import toolbarStyles from '../layout/Toolbar.module.css'
 
 interface Action {
@@ -44,7 +45,7 @@ const ACTION_LIST: Action[] = [
   { id: 'outdent', label: '⇤', title: 'Decrease indent', run: (e) => changeIndent(e, -1), canRun: (e) => canChangeIndent(e, -1) },
   { id: 'indent', label: '⇥', title: 'Increase indent', run: (e) => changeIndent(e, 1), canRun: (e) => canChangeIndent(e, 1) },
   { id: 'bullet', label: '• List', title: 'Bulleted list', run: (e) => e.chain().focus().toggleBulletList().run(), isActive: (e) => e.isActive('bulletList') },
-  { id: 'ordered', label: '1. List', title: 'Numbered list', run: (e) => e.chain().focus().toggleOrderedList().run(), isActive: (e) => e.isActive('orderedList') },
+  { id: 'ordered', label: '1. List', title: 'Numbered list', run: (e) => toggleOrderedListSmart(e), isActive: (e) => e.isActive('orderedList') },
   { id: 'formula', label: '∑ Formula', title: 'Insert Formula', run: (e) => insertFormula(e), isActive: (e) => e.isActive('mathFormula') },
 ]
 const ACTIONS: Record<string, Action> = Object.fromEntries(ACTION_LIST.map((action) => [action.id, action]))
@@ -108,6 +109,8 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
   const fonts = getAllFonts(customFonts)
   const active = useTabStore((state) => state.active)
   const documentTools = !active || /\.md$/i.test(active)
+  const isFormatPainterArmed = useFormatPainterStore((state) => state.armed)
+  const armFormatPainter = useFormatPainterStore((state) => state.arm)
   // Re-evaluates the per-button state on every transaction, so active styling follows the caret.
   const state = useEditorState({
     editor,
@@ -126,6 +129,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         align: String((e.getAttributes(block) as { textAlign?: string }).textAlign ?? 'left'),
         image: e.isActive('image') ? (e.getAttributes('image') as ImageAttrs) : null,
         inTable: e.isActive('table'),
+        orderedStart: e.isActive('orderedList') ? (Number(e.getAttributes('orderedList').start) || 1) : null,
       }
     },
   })
@@ -137,7 +141,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
     const label = a.id === 'bullet' ? `• ${t('toolbar.list')}`
       : a.id === 'ordered' ? `1. ${t('toolbar.list')}`
       : a.id === 'formula' ? `∑ ${t('toolbar.formula')}` : a.label
-    return (
+    const button = (
       <button
         key={a.id}
         type="button"
@@ -155,12 +159,58 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         {label}
       </button>
     )
+
+    if (a.id === 'ordered' && state && state.orderedStart != null) {
+      return (
+        <div key={a.id} className="flex items-center gap-0.5">
+          {button}
+          <label
+            className="flex items-center gap-0.5 rounded bg-white/10 px-1 py-0.5 text-xs text-white/80"
+            title={t('toolbar.listStartNumber')}
+          >
+            <span className="text-[10px] text-white/50">#</span>
+            <input
+              type="number"
+              min={1}
+              value={state.orderedStart}
+              aria-label={t('toolbar.listStartNumber')}
+              className="w-8 rounded bg-transparent px-0.5 text-center text-xs text-white focus:bg-white/20 focus:outline-none"
+              onMouseDown={(e) => e.stopPropagation()}
+              onChange={(event) => {
+                const val = parseInt(event.target.value, 10)
+                if (!isNaN(val) && val >= 1 && editor) {
+                  setListStart(editor, val)
+                }
+              }}
+            />
+          </label>
+        </div>
+      )
+    }
+
+    return button
   }
 
   const sizes = state?.size && !FONT_SIZES.includes(state.size) ? [...FONT_SIZES, state.size].sort((a, b) => a - b) : FONT_SIZES
 
   const sections = {
     font: <div className="flex items-center gap-1">
+      <button
+        type="button"
+        title={t('toolbar.copyFormat')}
+        aria-label={t('toolbar.copyFormat')}
+        aria-pressed={isFormatPainterArmed}
+        disabled={!editor}
+        className={`${btn} ${isFormatPainterArmed ? 'bg-white/20 text-yellow-300 ring-1 ring-yellow-400/50' : ''}`}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => editor && armFormatPainter(editor)}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="inline-block">
+          <path d="m18 11 3-3-4-4-3 3"/>
+          <path d="m14 8-10 10v4h4l10-10"/>
+          <path d="m14 18 4 4"/>
+        </svg>
+      </button>
       <select aria-label={t('toolbar.fontFamily')} title={t('toolbar.fontFamily')} disabled={!editor} className={control}
         value={findMatchingFontOption(fonts, state?.fontFamily)?.family ?? ''}
         onChange={(event) => {

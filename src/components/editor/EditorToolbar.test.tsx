@@ -7,6 +7,7 @@ import sheetStyles from '../../styles/index.css?raw'
 import preflight from 'tailwindcss/preflight.css?raw'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { useDocumentStore } from '../../stores/documentStore'
+import { useFormatPainterStore } from '../../stores/formatPainterStore'
 import { EditorToolbar } from './EditorToolbar'
 import { GrimoireImage } from './extensions/image'
 import { TableExtensions } from './extensions/tables'
@@ -129,7 +130,7 @@ describe('toolbar layout and text controls', () => {
     const sequence = Array.from(bar.querySelectorAll('[role="separator"], button, select, input')).filter((item) => !item.closest('details')).map((item) =>
       item.getAttribute('role') === 'separator' ? '//' : item.getAttribute('aria-label') ?? item.textContent)
     expect(sequence).toEqual([
-      'Undo', 'Redo', '//', 'Font family', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
+      'Undo', 'Redo', '//', 'Copy format', 'Font family', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
       'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', '//',
       'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', 'Insert Formula', '//', 'Find and Replace (Ctrl+F)', 'Page view',
     ])
@@ -182,5 +183,51 @@ describe('toolbar layout and text controls', () => {
     })
 
     expect(editor.getAttributes('textStyle').fontFamily).toBeUndefined()
+  })
+
+  it('renders start number input when ordered list is active and allows changing it', async () => {
+    editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: '<ol start="3"><li><p>Third item</p></li></ol>' })
+    editor.commands.setTextSelection(5)
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<EditorToolbar editor={editor} />))
+
+    const startInput = container.querySelector<HTMLInputElement>('[aria-label="List start number"]')
+    expect(startInput).not.toBeNull()
+    expect(startInput!.value).toBe('3')
+
+    await act(async () => {
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+      descriptor?.set?.call(startInput, '7')
+      startInput!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    expect(editor.getAttributes('orderedList').start).toBe(7)
+  })
+
+  it('toggles format painter when copy format button is clicked', async () => {
+    editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: '<p><strong>Sample</strong></p>' })
+    editor.commands.setTextSelection(3)
+    const container = document.createElement('div')
+    root = createRoot(container)
+    await act(async () => root?.render(<EditorToolbar editor={editor} />))
+
+    const copyFormatBtn = container.querySelector<HTMLButtonElement>('[aria-label="Copy format"]')!
+    expect(copyFormatBtn).not.toBeNull()
+    expect(copyFormatBtn.getAttribute('aria-pressed')).toBe('false')
+
+    await act(async () => {
+      copyFormatBtn.click()
+    })
+
+    expect(copyFormatBtn.getAttribute('aria-pressed')).toBe('true')
+    expect(useFormatPainterStore.getState().armed).toBe(true)
+
+    await act(async () => {
+      copyFormatBtn.click()
+    })
+
+    expect(copyFormatBtn.getAttribute('aria-pressed')).toBe('false')
+    expect(useFormatPainterStore.getState().armed).toBe(false)
   })
 })
