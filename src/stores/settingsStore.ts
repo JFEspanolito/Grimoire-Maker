@@ -15,7 +15,7 @@ interface SettingsState {
   /** Applies a saved layout; unknown or missing entries keep their current value. */
   restorePanels: (saved: Partial<Record<string, unknown>> | undefined) => void
   pageSize: PageSizeId
-  columns: 1 | 2
+  columns: 1 | 2 | 3
   theme: ThemeId
   viewMode: ViewMode
   zoom: number
@@ -32,7 +32,7 @@ interface SettingsState {
   rulerGuides: RulerGuide[]
   setRulerGuides: (rulerGuides: RulerGuide[]) => void
   setPageSize: (pageSize: PageSizeId) => void
-  setColumns: (columns: 1 | 2) => void
+  setColumns: (columns: 1 | 2 | 3) => void
   setTheme: (theme: ThemeId) => void
   setViewMode: (viewMode: ViewMode) => void
   language: Language

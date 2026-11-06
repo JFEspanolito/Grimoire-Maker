@@ -53,6 +53,9 @@ it('saves Author at project scope, not in page frontmatter', async () => {
 })
 it('persists columns in the selected Markdown without changing its sibling or the default', async () => {
   const select = host.querySelector<HTMLSelectElement>('[aria-label="Page columns"]')!
+  await act(async () => { select.value = '3'; select.dispatchEvent(new Event('change', { bubbles: true })) })
+  expect(useDocumentStore.getState().toRaw()).toContain('columns: 3')
+  expect(useDocumentStore.getState().document.dirty).toBe(true)
   await act(async () => { select.value = '1'; select.dispatchEvent(new Event('change', { bubbles: true })) })
   expect(useDocumentStore.getState().toRaw()).toContain('columns: 1')
   expect(useDocumentStore.getState().document.dirty).toBe(true)

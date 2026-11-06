@@ -14,7 +14,7 @@ import { renumberSheets } from './bookSheets'
 /** Everything that decides how the document is paginated. */
 export interface PageRequest {
   pageSize: PageSizeId
-  columns: 1 | 2
+  columns: 1 | 2 | 3
   theme: ThemeId
   bleedMm: number
   marginMm: number

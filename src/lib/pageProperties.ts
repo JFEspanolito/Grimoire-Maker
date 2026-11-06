@@ -10,8 +10,8 @@ export function pageTitle(frontmatter: Frontmatter, path?: string | null): strin
   return file ? documentLabel(file) : String(frontmatter.title ?? '')
 }
 
-export function pageColumns(frontmatter: Frontmatter, fallback: 1 | 2): 1 | 2 {
-  return frontmatter.columns === 1 || frontmatter.columns === 2 ? frontmatter.columns : fallback
+export function pageColumns(frontmatter: Frontmatter, fallback: 1 | 2 | 3): 1 | 2 | 3 {
+  return frontmatter.columns === 1 || frontmatter.columns === 2 || frontmatter.columns === 3 ? frontmatter.columns : fallback
 }
 
 export function projectPageText(root: string | null, frontmatter: Frontmatter, project: ProjectSettings = EMPTY_PROJECT, path?: string | null) {

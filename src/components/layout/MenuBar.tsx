@@ -192,9 +192,10 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
           </select>
         </label>
         <label className={styles.layout}>{t('menu.document.columns')}
-          <select aria-label="Columns" value={columns} onChange={(event) => setColumns(Number(event.target.value) as 1 | 2)}>
+          <select aria-label="Columns" value={columns} onChange={(event) => setColumns(Number(event.target.value) as 1 | 2 | 3)}>
             <option value={1}>1</option>
             <option value={2}>2</option>
+            <option value={3}>3</option>
           </select>
         </label>
         <hr />

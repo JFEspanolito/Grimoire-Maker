@@ -3,12 +3,12 @@ import type { Node as PMNode } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
 import { canJoin } from '@tiptap/pm/transform'
 
-export type SectionColumns = 1 | 2 | null
+export type SectionColumns = 1 | 2 | 3 | null
 
 /** A section is a run of pages with its own column count; null follows the file's default. */
 export function sectionColumns(value: unknown): SectionColumns {
   const columns = Number(value)
-  return columns === 1 || columns === 2 ? columns : null
+  return columns === 1 || columns === 2 || columns === 3 ? columns : null
 }
 
 const MARKER = 'div[data-type="section-break"]'

@@ -331,7 +331,7 @@ export function useFileSystem() {
       const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage, panels, language } = await loadSettings()
       const settings = useSettingsStore.getState()
       if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
-      if (columns === 1 || columns === 2) settings.setColumns(columns)
+      if (columns === 1 || columns === 2 || columns === 3) settings.setColumns(columns)
       if (typeof theme === 'string') settings.setTheme(theme)
       if (language === 'en' || language === 'es') settings.setLanguage(language)
       settings.setRulerGuides(rulerGuides ?? [])
@@ -425,7 +425,7 @@ export function useFileSystem() {
     const { pageSize, columns, theme } = template.frontmatter
     const settings = useSettingsStore.getState()
     if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
-    if (columns === 1 || columns === 2) settings.setColumns(columns)
+    if (columns === 1 || columns === 2 || columns === 3) settings.setColumns(columns)
     if (typeof theme === 'string') settings.setTheme(theme)
     return true
   }), [loadFromRaw, persistCurrentDocument, refreshTree, remember])

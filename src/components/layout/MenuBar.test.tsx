@@ -133,6 +133,8 @@ it('keeps page setup only in Document and omits repeated application branding', 
     expect(nav.querySelector('img')).toBeNull()
     expect(nav.textContent).not.toContain('GRIMOIRE MAKER')
     await act(async () => { size!.value = 'letter'; size!.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => { columns!.value = '3'; columns!.dispatchEvent(new Event('change', { bubbles: true })) })
+    expect(useSettingsStore.getState()).toMatchObject({ columns: 3 })
     await act(async () => { columns!.value = '1'; columns!.dispatchEvent(new Event('change', { bubbles: true })) })
     expect(useSettingsStore.getState()).toMatchObject({ pageSize: 'letter', columns: 1 })
     for (const entry of ['Properties…', 'Document Order…', 'Statistics…', 'Export PDF…']) expect(documentMenu.textContent).toContain(entry)

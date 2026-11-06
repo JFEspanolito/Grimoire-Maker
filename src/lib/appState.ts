@@ -9,7 +9,7 @@ import { useSessionStore } from '../stores/sessionStore'
 
 export interface PersistedSettings {
   pageSize?: PageSizeId
-  columns?: 1 | 2
+  columns?: 1 | 2 | 3
   theme?: ThemeId
   rulerGuides?: RulerGuide[]
   zoom?: number
