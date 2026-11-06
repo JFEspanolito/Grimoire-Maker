@@ -16,6 +16,7 @@ it('titles a saved page by its file name and an unsaved page by its frontmatter'
 })
 it('preserves page-column overrides and their fallback', () => {
   expect(pageColumns({ columns: 1 }, 2)).toBe(1)
+  expect(pageColumns({ columns: 3 }, 2)).toBe(3)
   expect(pageColumns({}, 2)).toBe(2)
 })
 

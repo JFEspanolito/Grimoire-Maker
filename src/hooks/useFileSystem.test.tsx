@@ -505,6 +505,47 @@ describe('contextual imports and binder moves', () => {
     expect(useDocumentStore.getState().document).toMatchObject({ path: target, body: 'Unsaved', dirty: true })
     expect(writeTextFile).not.toHaveBeenCalled()
   })
+
+  it('renames folders with sequential suffixes when moved into Trash multiple times', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [
+      { name: 'Draft', path: '/workspace/Draft', isDirectory: true, children: [{ name: 'temp', path: '/workspace/Draft/temp', isDirectory: true, children: [] }] },
+      { name: 'Trash', path: '/workspace/Trash', isDirectory: true, children: [{ name: 'temp', path: '/workspace/Trash/temp', isDirectory: true, children: [] }] },
+    ])
+    directories.add('/workspace/Trash')
+    directories.add('/workspace/Trash/temp')
+
+    // First collision: should rename to "temp 1"
+    const destination1 = await actions.moveEntry('/workspace/Draft/temp', '/workspace/Trash/temp')
+    expect(destination1).toBe('/workspace/Trash/temp 1')
+    expect(rename).toHaveBeenCalledWith('/workspace/Draft/temp', '/workspace/Trash/temp 1')
+
+    // Second collision: both "temp" and "temp 1" exist
+    directories.add('/workspace/Trash/temp 1')
+    vi.mocked(stat).mockResolvedValue({ isDirectory: true, isFile: false, isSymlink: false, size: 0, mtime: null, atime: null, birthtime: null } as any)
+    const destination2 = await actions.moveEntry('/workspace/Draft/temp', '/workspace/Trash/temp')
+    expect(destination2).toBe('/workspace/Trash/temp 2')
+    expect(rename).toHaveBeenCalledWith('/workspace/Draft/temp', '/workspace/Trash/temp 2')
+  })
+
+  it('renames files preserving extension when moved into Trash multiple times', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [
+      { name: 'Draft', path: '/workspace/Draft', isDirectory: true, children: [{ name: 'note.md', path: '/workspace/Draft/note.md', isDirectory: false }] },
+      { name: 'Trash', path: '/workspace/Trash', isDirectory: true, children: [{ name: 'note.md', path: '/workspace/Trash/note.md', isDirectory: false }] },
+    ])
+    directories.add('/workspace/Trash')
+    directories.add('/workspace/Trash/note.md')
+
+    const destination = await actions.moveEntry('/workspace/Draft/note.md', '/workspace/Trash/note.md')
+    expect(destination).toBe('/workspace/Trash/note 1.md')
+    expect(rename).toHaveBeenCalledWith('/workspace/Draft/note.md', '/workspace/Trash/note 1.md')
+  })
+
+  it('still rejects moving into non-trash destinations when the target already exists', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    directories.add('/workspace/Research/note.md')
+
+    await expect(actions.moveEntry('/workspace/Draft/note.md', '/workspace/Research/note.md')).rejects.toThrow('already exists')
+  })
 })
 
 describe('applying templates', () => {

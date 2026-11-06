@@ -63,3 +63,14 @@ it('remembers which sections were generated for a page and which the author star
   reopened.commands.insertSectionBreak()
   expect(reopened.state.doc.children.map((node) => node.attrs.auto)).toEqual([false, true, false, true])
 })
+
+it('supports 3 columns on a section', () => {
+  create('Intro\n\nTriple')
+  editor!.commands.setTextSelection(editor!.state.doc.firstChild!.firstChild!.nodeSize + 2)
+  editor!.commands.insertSectionBreak()
+  editor!.commands.setSectionColumns(3)
+  const saved = markdown(editor!)
+  expect(saved).toContain('<div data-type="section-break" data-columns="3"></div>')
+  const reopened = create(saved)
+  expect(sections(reopened)).toEqual([{ columns: null, text: 'Intro' }, { columns: 3, text: 'Triple' }])
+})

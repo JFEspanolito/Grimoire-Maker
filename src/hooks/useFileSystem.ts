@@ -43,6 +43,17 @@ async function readTree(dir: string): Promise<FileNode[]> {
 }
 
 const parentOf = (path: string): string => path.slice(0, path.lastIndexOf('/'))
+
+function isDirectoryNode(tree: FileNode[], targetPath: string): boolean | null {
+  for (const node of tree) {
+    if (node.path === targetPath) return node.isDirectory
+    if (node.children) {
+      const found = isDirectoryNode(node.children, targetPath)
+      if (found !== null) return found
+    }
+  }
+  return null
+}
 let pendingRestore: Promise<void> | null = null
 let fileActionQueue: Promise<unknown> = Promise.resolve()
 
@@ -248,13 +259,38 @@ export function useFileSystem() {
   /** Moves or renames `from` to `to`, keeping the open document pointed at its file. */
   const moveEntry = useCallback(
     (from: string, to: string) => runFileAction(async () => {
-      if (from === to) return
+      if (from === to) return to
       if (to.startsWith(`${from}/`)) throw new Error('Cannot move a folder into itself')
-      if (await exists(to)) throw new Error(`"${to}" already exists`)
-      await rename(from, to)
-      useDocumentStore.getState().remapDocuments(from, to)
-      useTabStore.getState().remap(from, to)
+      let destination = to
+      const root = useDocumentStore.getState().workspaceRoot
+      const trash = root ? `${root}/Trash` : null
+      const isTrash = Boolean(trash && (to === trash || to.startsWith(`${trash}/`)))
+      if (isTrash) {
+        if (trash && !(await exists(trash))) await mkdir(trash)
+        if (await exists(destination)) {
+          const dir = parentOf(destination)
+          const name = destination.slice(dir.length + 1)
+          const fromNodeIsDir = isDirectoryNode(useDocumentStore.getState().tree, from)
+          const statResult = await Promise.resolve(stat(from)).catch(() => null)
+          const isDir = fromNodeIsDir !== null
+            ? fromNodeIsDir
+            : (statResult?.isDirectory ?? false)
+          const dot = name.lastIndexOf('.')
+          const hasExt = !isDir && dot > 0
+          const base = hasExt ? name.slice(0, dot) : name
+          const ext = hasExt ? name.slice(dot) : ''
+          for (let suffix = 1; await exists(destination); suffix++) {
+            destination = `${dir}/${base} ${suffix}${ext}`
+          }
+        }
+      } else {
+        if (await exists(to)) throw new Error(`"${to}" already exists`)
+      }
+      await rename(from, destination)
+      useDocumentStore.getState().remapDocuments(from, destination)
+      useTabStore.getState().remap(from, destination)
       await refreshTree()
+      return destination
     }),
     [refreshTree],
   )
@@ -328,12 +364,13 @@ export function useFileSystem() {
       const state = await loadAppState()
       useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
 
-      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage, panels, language } = await loadSettings()
+      const { pageSize, columns, theme, rulerGuides, zoom, autoSaveSeconds, autoCommitEnabled, autoCommitMinutes, autoCommitMessage, panels, language, customFonts } = await loadSettings()
       const settings = useSettingsStore.getState()
       if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
-      if (columns === 1 || columns === 2) settings.setColumns(columns)
+      if (columns === 1 || columns === 2 || columns === 3) settings.setColumns(columns)
       if (typeof theme === 'string') settings.setTheme(theme)
       if (language === 'en' || language === 'es') settings.setLanguage(language)
+      if (Array.isArray(customFonts)) settings.setCustomFonts(customFonts)
       settings.setRulerGuides(rulerGuides ?? [])
       settings.restorePanels(panels)
       settings.setZoom(typeof zoom === 'number' ? zoom : 1)
@@ -425,7 +462,7 @@ export function useFileSystem() {
     const { pageSize, columns, theme } = template.frontmatter
     const settings = useSettingsStore.getState()
     if (pageSize && pageSize in PAGE_SIZES) settings.setPageSize(pageSize)
-    if (columns === 1 || columns === 2) settings.setColumns(columns)
+    if (columns === 1 || columns === 2 || columns === 3) settings.setColumns(columns)
     if (typeof theme === 'string') settings.setTheme(theme)
     return true
   }), [loadFromRaw, persistCurrentDocument, refreshTree, remember])

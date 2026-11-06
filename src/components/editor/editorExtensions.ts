@@ -1,6 +1,6 @@
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
-import { Color, FontSize, TextStyle } from '@tiptap/extension-text-style'
+import { Color, FontFamily, FontSize, TextStyle } from '@tiptap/extension-text-style'
 import { Markdown } from 'tiptap-markdown'
 import { CharacterSheet, ReadAloud, Statblock } from './extensions/blocks'
 import { GrimoireImageNode } from './extensions/imageNode'
@@ -20,6 +20,7 @@ export const EDITOR_EXTENSIONS = [
   TextStyle,
   Color,
   FontSize,
+  FontFamily,
   GrimoireImageNode,
   ContentBox,
   MathFormula,

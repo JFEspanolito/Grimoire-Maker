@@ -10,13 +10,13 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: vi.fn(), mkdir: vi.fn(), readTextFile: vi.fn(), writeTextFile: vi.fn(),
 }))
 let stop: (() => void) | undefined
-afterEach(() => { stop?.(); useSettingsStore.setState({ theme: 'parchment', rulerGuides: [], zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically', language: 'en' }); vi.clearAllMocks() })
+afterEach(() => { stop?.(); useSettingsStore.setState({ theme: 'parchment', rulerGuides: [], zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically', language: 'en', customFonts: [] }); vi.clearAllMocks() })
 
 it('saves appearance through the shared native settings writer, not workspace state', async () => {
   stop = watchSettings()
   useSettingsStore.getState().setTheme('sci-fi')
   await Promise.resolve()
-  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], panels: expect.objectContaining({ files: true, documentIndex: true }), zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically', language: 'en' })
+  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], panels: expect.objectContaining({ files: true, documentIndex: true }), zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically', language: 'en', customFonts: [] })
   expect(writeTextFile).not.toHaveBeenCalled()
 })
 

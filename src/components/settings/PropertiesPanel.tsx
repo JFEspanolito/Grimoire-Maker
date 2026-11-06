@@ -6,6 +6,8 @@ import { useLayoutStore } from '../../stores/layoutStore'
 import { currentPage, currentSheet } from '../../lib/pageSections'
 import { ProjectSettings } from './ProjectSettings'
 import { useTranslation } from '../../lib/i18n'
+import { useSettingsStore } from '../../stores/settingsStore'
+import { getAllFonts, loadExternalFont, findMatchingFontOption } from '../../lib/fonts'
 import styles from './ProjectSettings.module.css'
 
 /** Columns of the page under the cursor. Sections are created and merged behind the scenes as pages differ. */
@@ -21,11 +23,11 @@ function PageColumns({ editor }: { editor: Editor }) {
   const change = (value: string) => {
     const ref = currentPage(editor)
     if (!ref || ref.start === null) return
-    editor.chain().focus().setPageColumns({ start: ref.start, next: ref.next, columns: value === '1' ? 1 : value === '2' ? 2 : null }).run()
+    editor.chain().focus().setPageColumns({ start: ref.start, next: ref.next, columns: value === '1' ? 1 : value === '2' ? 2 : value === '3' ? 3 : null }).run()
   }
   return <label>{t('properties.columnsOnThisPage')} ({page.sheet} {t('common.of')} {Math.max(total, page.sheet)})
     <select aria-label="This page columns" value={page.columns ?? ''} onChange={event => change(event.target.value)}>
-      <option value="">{t('common.default')}</option><option value="1">{t('properties.oneColumn')}</option><option value="2">{t('properties.twoColumns')}</option>
+      <option value="">{t('common.default')}</option><option value="1">{t('properties.oneColumn')}</option><option value="2">{t('properties.twoColumns')}</option><option value="3">{t('properties.threeColumns')}</option>
     </select></label>
 }
 
@@ -33,6 +35,8 @@ export function PropertiesPanel({ expanded = false, editor = null }: { expanded?
   const { t } = useTranslation()
   const document = useDocumentStore(state => state.document)
   const setFrontmatter = useDocumentStore(state => state.setFrontmatter)
+  const customFonts = useSettingsStore(state => state.customFonts)
+  const fonts = getAllFonts(customFonts)
   const active = useTabStore(state => state.active)
   const markdown = !active || /\.md$/i.test(active)
   return <div className={styles.panel}>
@@ -40,9 +44,25 @@ export function PropertiesPanel({ expanded = false, editor = null }: { expanded?
     <details open={expanded || undefined}><summary>{t('properties.pageProperties')}</summary>
       {markdown ? <div className={styles.form}>
         <p>{document.path?.split(/[\\/]/).at(-1) ?? t('properties.unsavedPage')} {t('properties.appliesToMarkdownOnly')}</p>
-        <label>{t('properties.defaultColumnsProject')}<select aria-label="Page columns" value={document.frontmatter.columns === 1 || document.frontmatter.columns === 2 ? document.frontmatter.columns : ''}
-          onChange={event => setFrontmatter({ columns: event.target.value === '1' ? 1 : event.target.value === '2' ? 2 : undefined })}>
-          <option value="">{t('common.default')}</option><option value="1">{t('properties.oneColumn')}</option><option value="2">{t('properties.twoColumns')}</option>
+        <label>{t('properties.fontFamily')}
+          <select
+            aria-label="Document font family"
+            value={findMatchingFontOption(fonts, document.frontmatter.fontFamily)?.family ?? ''}
+            onChange={event => {
+              const val = event.target.value
+              if (val) loadExternalFont(val)
+              setFrontmatter({ fontFamily: val || undefined })
+            }}
+          >
+            <option value="">{t('properties.fontDefault')}</option>
+            {fonts.map(f => (
+              <option key={f.id} value={f.family}>{f.label}</option>
+            ))}
+          </select>
+        </label>
+        <label>{t('properties.defaultColumnsProject')}<select aria-label="Page columns" value={document.frontmatter.columns === 1 || document.frontmatter.columns === 2 || document.frontmatter.columns === 3 ? document.frontmatter.columns : ''}
+          onChange={event => setFrontmatter({ columns: event.target.value === '1' ? 1 : event.target.value === '2' ? 2 : event.target.value === '3' ? 3 : undefined })}>
+          <option value="">{t('common.default')}</option><option value="1">{t('properties.oneColumn')}</option><option value="2">{t('properties.twoColumns')}</option><option value="3">{t('properties.threeColumns')}</option>
         </select></label>
         {editor && <PageColumns editor={editor} />}
         <p>{t('properties.savedNotice')}</p>

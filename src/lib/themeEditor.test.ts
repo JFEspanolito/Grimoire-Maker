@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { buildThemeCss, deleteUserTheme, exportUserTheme, loadThemeDraft, saveThemeDraft, themeColors } from './themeEditor'
+import { buildThemeCss, deleteUserTheme, exportUserTheme, loadThemeDraft, saveThemeDraft, themeColors, themeFonts } from './themeEditor'
 
 const fs = vi.hoisted(() => ({ readDir: vi.fn(), readTextFile: vi.fn(), writeTextFile: vi.fn(), rename: vi.fn() }))
 const dialog = vi.hoisted(() => ({ save: vi.fn() }))
@@ -26,6 +26,18 @@ it('copies selectors while preserving fonts and layout, and overrides six indepe
   expect(css).toContain('color: #223344')
   expect(css).not.toContain('--heading-color: #112233')
   expect(buildThemeCss(css, 'my-copy', 'my-copy', 'My Copy', colors).match(/grimoire-colors:start/g)).toHaveLength(1)
+})
+
+it('customizes page and heading fonts and extracts them with themeFonts', () => {
+  const css = buildThemeCss(source, 'custom', 'custom-fonted', 'Custom Fonted', themeColors(source), undefined, undefined, {
+    pageFont: 'Cinzel, serif',
+    headingFont: 'MedievalSharp, fantasy',
+  })
+  expect(css).toContain('--page-font: Cinzel, serif;')
+  expect(css).toContain('--heading-font: MedievalSharp, fantasy;')
+  const extracted = themeFonts(css)
+  expect(extracted.pageFont).toBe('Cinzel, serif')
+  expect(extracted.headingFont).toBe('MedievalSharp, fantasy')
 })
 
 it('rejects injection through names, ids, or color fields', () => {

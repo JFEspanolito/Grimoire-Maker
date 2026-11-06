@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { PageSizeId, ThemeId, ViewMode } from '../types/document'
 import type { RulerGuide } from '../types/ruler'
+import { loadExternalFont } from '../lib/fonts'
 
 /** Which side panels and overlays are shown; every one is on until the author turns it off. */
 export const PANEL_IDS = ['files', 'templates', 'snippets', 'git', 'properties', 'documentIndex'] as const
@@ -15,7 +16,7 @@ interface SettingsState {
   /** Applies a saved layout; unknown or missing entries keep their current value. */
   restorePanels: (saved: Partial<Record<string, unknown>> | undefined) => void
   pageSize: PageSizeId
-  columns: 1 | 2
+  columns: 1 | 2 | 3
   theme: ThemeId
   viewMode: ViewMode
   zoom: number
@@ -32,11 +33,15 @@ interface SettingsState {
   rulerGuides: RulerGuide[]
   setRulerGuides: (rulerGuides: RulerGuide[]) => void
   setPageSize: (pageSize: PageSizeId) => void
-  setColumns: (columns: 1 | 2) => void
+  setColumns: (columns: 1 | 2 | 3) => void
   setTheme: (theme: ThemeId) => void
   setViewMode: (viewMode: ViewMode) => void
   language: Language
   setLanguage: (language: Language) => void
+  customFonts: string[]
+  setCustomFonts: (fonts: string[]) => void
+  addCustomFont: (font: string) => void
+  removeCustomFont: (font: string) => void
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -74,4 +79,18 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setViewMode: (viewMode) => set({ viewMode }),
   language: 'en',
   setLanguage: (language) => { if (language === 'en' || language === 'es') set({ language }) },
+  customFonts: [],
+  setCustomFonts: (customFonts) => {
+    customFonts.forEach(loadExternalFont)
+    set({ customFonts })
+  },
+  addCustomFont: (font) => {
+    const trimmed = font.trim()
+    if (!trimmed) return
+    loadExternalFont(trimmed)
+    set((state) => (state.customFonts.includes(trimmed) ? state : { customFonts: [...state.customFonts, trimmed] }))
+  },
+  removeCustomFont: (font) => {
+    set((state) => ({ customFonts: state.customFonts.filter((f) => f.toLowerCase() !== font.trim().toLowerCase()) }))
+  },
 }))

@@ -160,11 +160,11 @@ it('offers separate Save and Save As operations for user-owned themes', async ()
 
   await act(async () => container.querySelector<HTMLButtonElement>('[data-action="save"]')!.click())
 
-  expect(mocks.save).toHaveBeenLastCalledWith(expect.anything(), 'Parchment', expect.anything(), false, ['parchment'], [], expect.any(Object))
+  expect(mocks.save).toHaveBeenLastCalledWith(expect.anything(), 'Parchment', expect.anything(), false, ['parchment'], [], expect.any(Object), expect.any(Object))
 
   await act(async () => Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Save As')!.click())
 
-  expect(mocks.save).toHaveBeenLastCalledWith(expect.anything(), 'Parchment', expect.anything(), true, ['parchment'], [], expect.any(Object))
+  expect(mocks.save).toHaveBeenLastCalledWith(expect.anything(), 'Parchment', expect.anything(), true, ['parchment'], [], expect.any(Object), expect.any(Object))
 
 })
 
@@ -176,7 +176,7 @@ it('saves a built-in copy, verifies discovery, and selects through settings', as
 
   await act(async () => container.querySelector<HTMLButtonElement>('[data-action="save"]')!.click())
 
-  expect(mocks.save).toHaveBeenCalledWith(expect.anything(), 'Parchment Copy', expect.anything(), true, ['parchment'], [], expect.any(Object))
+  expect(mocks.save).toHaveBeenCalledWith(expect.anything(), 'Parchment Copy', expect.anything(), true, ['parchment'], [], expect.any(Object), expect.any(Object))
 
   expect(mocks.reload).toHaveBeenCalledOnce()
 
@@ -232,13 +232,13 @@ it('imports background artwork, exposes placement controls and saves portable im
 
 
 
-it('provides four theme sections and saves header/footer fields across navigation', async () => {
+it('provides five theme sections and saves header/footer fields across navigation', async () => {
 
   const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
 
-  expect(tabs.map(tab => tab.textContent)).toEqual(['Theme name', 'Colors', 'Backgrounds', 'Header and footer'])
+  expect(tabs.map(tab => tab.textContent)).toEqual(['Theme name', 'Typography', 'Colors', 'Backgrounds', 'Header and footer'])
 
-  await act(async () => tabs[3].click())
+  await act(async () => tabs[4].click())
 
   const field = container.querySelector<HTMLInputElement>('[aria-label="Footer right"]')!
 
@@ -252,7 +252,7 @@ it('provides four theme sections and saves header/footer fields across navigatio
 
   await act(async () => tabs[1].click())
 
-  await act(async () => tabs[3].click())
+  await act(async () => tabs[4].click())
 
   expect(field.value).toBe('{author} · {page}/{pages}')
 
@@ -264,7 +264,7 @@ it('provides four theme sections and saves header/footer fields across navigatio
 
 
 it('previews header and footer live on a page without saving', async () => {
-  await act(async () => container.querySelector<HTMLButtonElement>('#theme-tab-3')!.click())
+  await act(async () => container.querySelector<HTMLButtonElement>('#theme-tab-4')!.click())
   const preview = container.querySelector<HTMLElement>('[aria-label="Header and footer page preview"]')
   expect(preview).not.toBeNull()
   const field = container.querySelector<HTMLInputElement>('[aria-label="Footer right"]')!
@@ -275,6 +275,36 @@ it('previews header and footer live on a page without saving', async () => {
   expect(preview!.textContent).toContain('Sample Author - 1/10')
   expect(preview!.style.aspectRatio).not.toBe('')
   expect(mocks.save).not.toHaveBeenCalled()
+})
+
+it('allows choosing document font and heading font in Typography tab', async () => {
+  await act(async () => container.querySelector<HTMLButtonElement>('#theme-tab-1')!.click())
+  const docFont = container.querySelector<HTMLSelectElement>('[aria-label="Theme document font"]')!
+  const headingFont = container.querySelector<HTMLSelectElement>('[aria-label="Theme heading font"]')!
+  expect(docFont).not.toBeNull()
+  expect(headingFont).not.toBeNull()
+
+  await act(async () => {
+    docFont.value = 'Cinzel, Georgia, serif'
+    docFont.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+
+  await act(async () => {
+    headingFont.value = '"Courier New", monospace'
+    headingFont.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+
+  await act(async () => container.querySelector<HTMLButtonElement>('[data-action="save"]')!.click())
+  expect(mocks.save).toHaveBeenCalledWith(
+    expect.anything(),
+    'Parchment Copy',
+    expect.anything(),
+    true,
+    ['parchment'],
+    [],
+    expect.any(Object),
+    { pageFont: 'Cinzel, Georgia, serif', headingFont: '"Courier New", monospace' },
+  )
 })
 
 
