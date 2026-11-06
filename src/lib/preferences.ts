@@ -19,7 +19,19 @@ export async function loadSettings(): Promise<PersistedSettings> {
 let settingsQueue: Promise<void> = Promise.resolve()
 export function saveSettings(settings: PersistedSettings): Promise<void> {
   if (!isTauri()) return Promise.resolve()
-  const next = settingsQueue.then(() => invoke<void>('save_settings', { settings }))
+  const next = settingsQueue.then(async () => {
+    try {
+      await invoke<void>('save_settings', { settings })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('customFonts') && 'customFonts' in settings) {
+        const { customFonts: _discarded, ...compatibleSettings } = settings
+        await invoke<void>('save_settings', { settings: compatibleSettings })
+        return
+      }
+      throw err
+    }
+  })
   settingsQueue = next.catch(() => undefined)
   return next
 }

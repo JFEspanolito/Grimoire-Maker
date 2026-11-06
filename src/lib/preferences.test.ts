@@ -70,3 +70,15 @@ it('propagates a failed settings save without blocking later saves', async () =>
   await expect(saveSettings({ theme: 'modern' })).rejects.toThrow('disk full')
   await expect(saveSettings({ theme: 'sci-fi' })).resolves.toBeUndefined()
 })
+
+it('retries save_settings without customFonts if native backend rejects unknown field customFonts', async () => {
+  vi.mocked(isTauri).mockReturnValue(true)
+  vi.mocked(invoke)
+    .mockRejectedValueOnce(new Error('invalid args settings for command save_settings: unknown field customFonts'))
+    .mockResolvedValueOnce(undefined)
+
+  await expect(saveSettings({ columns: 2, customFonts: ['CustomFont'] })).resolves.toBeUndefined()
+  expect(invoke).toHaveBeenCalledTimes(2)
+  expect(invoke).toHaveBeenNthCalledWith(1, 'save_settings', { settings: { columns: 2, customFonts: ['CustomFont'] } })
+  expect(invoke).toHaveBeenNthCalledWith(2, 'save_settings', { settings: { columns: 2 } })
+})
