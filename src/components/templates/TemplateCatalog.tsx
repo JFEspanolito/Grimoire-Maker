@@ -5,7 +5,7 @@ import { exportTemplateZip } from '../../lib/templateActions'
 import type { Template } from '../../lib/templates'
 import { useFileSystem } from '../../hooks/useFileSystem'
 import { useDocumentStore } from '../../stores/documentStore'
-import { ConfirmDialog } from '../layout/ConfirmDialog'
+import { TemplatePreviewModal } from './TemplatePreviewModal'
 import { useTranslation } from '../../lib/i18n'
 
 function TemplateList({
@@ -111,19 +111,12 @@ export function TemplateCatalog() {
         </div>
       )}
       {pendingTemplate && (
-        <ConfirmDialog
-          title={`Usar "${pendingTemplate.label}"`}
-          message={hasProject
-            ? 'Añadir conserva los documentos actuales. Reemplazar mueve todo Draft a Trash antes de aplicar la plantilla.'
-            : 'No hay un proyecto abierto. Elige una carpeta donde crear el proyecto para aplicar esta plantilla.'}
-          cancelLabel="Cancelar"
-          secondaryLabel={hasProject ? 'Añadir esto al proyecto actual' : 'Elegir carpeta y crear proyecto'}
-          confirmLabel="Reemplazar existente"
-          danger
-          confirmDisabled={!hasProject}
-          onCancel={() => setPendingTemplate(null)}
-          onSecondary={() => apply(pendingTemplate)}
-          onConfirm={() => apply(pendingTemplate, true)}
+        <TemplatePreviewModal
+          template={pendingTemplate}
+          templates={templates}
+          hasProject={hasProject}
+          onClose={() => setPendingTemplate(null)}
+          onApply={(chosenTemplate, replaceExisting) => apply(chosenTemplate, replaceExisting)}
         />
       )}
     </div>
