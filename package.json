@@ -10,9 +10,11 @@
     "lint": "oxlint",
     "pack:plugin": "node scripts/pack-plugin.mjs",
     "tauri": "tauri",
-    "build:installer": "tauri build --bundles nsis",
+    "build:installer": "tauri build --bundles nsis --no-sign",
+    "build:installer:signed": "tauri build --bundles nsis",
     "build:portable": "tauri build --no-bundle && node scripts/make-portable.mjs",
-    "build:dmg": "tauri build --bundles dmg,app",
+    "build:dmg": "tauri build --bundles dmg,app --no-sign",
+    "build:dmg:signed": "tauri build --bundles dmg,app",
     "preview": "vite preview"
   },
   "dependencies": {
