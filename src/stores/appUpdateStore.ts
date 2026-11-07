@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { checkForAppUpdates, type UpdateInfo } from '../lib/versionCheck'
+import { openExternalUrl } from '../lib/openUrl'
 import { useDocumentStore } from './documentStore'
 
 export type UpdateStatus =
@@ -209,8 +210,12 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => {
     checkUpdates: checkAction,
 
   startDownloadAndInstall: async () => {
-    const { updateHandle, status } = get()
-    if (!updateHandle || status === 'downloading') return
+    const { updateHandle, status, releaseUrl } = get()
+    if (status === 'downloading') return
+    if (!updateHandle) {
+      if (releaseUrl) void openExternalUrl(releaseUrl)
+      return
+    }
 
     set({
       status: 'downloading',

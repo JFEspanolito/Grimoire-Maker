@@ -43,7 +43,7 @@ export function findSignedBundles(bundleDir) {
 
 export function detectPlatforms(filename) {
   const name = filename.toLowerCase()
-  if (name.endsWith('.nsis.zip') || name.includes('setup.nsis.zip')) {
+  if (name.endsWith('.nsis.zip') || name.includes('setup.nsis.zip') || name.endsWith('-setup.exe') || (name.includes('setup') && name.endsWith('.exe'))) {
     return ['windows-x86_64']
   }
   if (name.endsWith('.app.tar.gz') || name.includes('.app.tar.gz')) {

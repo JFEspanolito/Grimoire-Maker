@@ -18,6 +18,7 @@ describe('generate-update-manifest', () => {
 
   it('detects platform identifiers correctly from bundle filenames', () => {
     expect(detectPlatforms('Grimoire Maker_0.2.0_x64-setup.nsis.zip')).toEqual(['windows-x86_64'])
+    expect(detectPlatforms('Grimoire Maker_0.1.12_x64-setup.exe')).toEqual(['windows-x86_64'])
     expect(detectPlatforms('Grimoire Maker.app.tar.gz')).toEqual(['darwin-aarch64', 'darwin-x86_64'])
     expect(detectPlatforms('Grimoire Maker_aarch64.app.tar.gz')).toEqual(['darwin-aarch64'])
     expect(detectPlatforms('Grimoire Maker_x64.app.tar.gz')).toEqual(['darwin-x86_64'])
