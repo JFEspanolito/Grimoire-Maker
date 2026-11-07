@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState, type PointerEvent as ReactPoint
 import type { Editor } from '@tiptap/react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { GUIDE_AXIS } from '../../types/ruler'
-import { clamp, updateGuide } from './guideActions'
+import { clamp, updateGuide, removeGuide } from './guideActions'
 import { MAX_INDENT } from '../editor/extensions/blockFormat'
 import styles from './Ruler.module.css'
 
@@ -25,7 +25,6 @@ interface DragState {
 export function HorizontalRuler({ widthMm, marginMm, onMarginChange, editor }: HorizontalRulerProps) {
   const rulerRef = useRef<HTMLDivElement>(null)
   const rulerGuides = useSettingsStore((s) => s.rulerGuides)
-  const setRulerGuides = useSettingsStore((s) => s.setRulerGuides)
 
   const [draftMargin, setDraftMargin] = useState<number | null>(null)
   const [draftIndent, setDraftIndent] = useState<number | null>(null)
@@ -139,6 +138,13 @@ export function HorizontalRuler({ widthMm, marginMm, onMarginChange, editor }: H
         const blockType = isHeading ? 'heading' : 'paragraph'
         editor.chain().focus().updateAttributes(blockType, { indent: draftIndent }).run()
       }
+    } else if (active.type === 'guide') {
+      if (active.guideId) {
+        const rawX = active.initialMm + (e.clientX - active.startX) * active.mmPerPx
+        if (rawX <= 2 || rawX >= widthMm - 2) {
+          removeGuide(active.guideId)
+        }
+      }
     }
 
     cancelDrag()
@@ -147,19 +153,6 @@ export function HorizontalRuler({ widthMm, marginMm, onMarginChange, editor }: H
   // Double click on margin to reset or set standard 15mm
   const handleMarginDoubleClick = () => {
     onMarginChange?.(15)
-  }
-
-  // Click on ruler to add a column guide
-  const handleRulerClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('[data-handle="true"]')) return
-    const container = rulerRef.current
-    if (!container) return
-    const rect = container.getBoundingClientRect()
-    const xRatio = (e.clientX - rect.left) / rect.width
-    const clickedMm = Math.round(xRatio * widthMm * 10) / 10
-    if (clickedMm > activeMargin && clickedMm < widthMm - activeMargin) {
-      setRulerGuides([...rulerGuides, { id: crypto.randomUUID(), axis: GUIDE_AXIS.COLUMN, positionMm: clickedMm }])
-    }
   }
 
   // SVG graduation generation
@@ -223,8 +216,7 @@ export function HorizontalRuler({ widthMm, marginMm, onMarginChange, editor }: H
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={cancelDrag}
-      onClick={handleRulerClick}
-      title="Ruler: Drag margin markers or indent sliders; click to add vertical guides."
+      title="Ruler: Drag margin markers or indent sliders."
     >
       {/* Visual background and metric scale SVG */}
       <svg
@@ -320,10 +312,22 @@ export function HorizontalRuler({ widthMm, marginMm, onMarginChange, editor }: H
         <div
           key={guide.id}
           data-handle="true"
+          role="slider"
+          aria-label={`Guía de columna en ${guide.positionMm.toFixed(1)} mm`}
+          aria-valuenow={guide.positionMm}
           className={styles.guideRulerMarker}
           style={{ left: `${guide.positionMm}mm` }}
-          title={`Columna: ${guide.positionMm.toFixed(1)} mm`}
+          title={`Columna: ${guide.positionMm.toFixed(1)} mm (Doble clic o clic derecho para eliminar)`}
           onPointerDown={(e) => startDrag(e, 'guide', guide.positionMm, guide.id)}
+          onDoubleClick={(e) => {
+            e.stopPropagation()
+            removeGuide(guide.id)
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            removeGuide(guide.id)
+          }}
         />
       ))}
 

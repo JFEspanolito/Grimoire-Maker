@@ -97,7 +97,7 @@ describe('HorizontalRuler', () => {
     expect(indentSlider?.getAttribute('aria-valuenow')).toBe('2')
   })
 
-  it('renders column guides and adds new column guide on ruler click', async () => {
+  it('renders column guides without adding guides on accidental ruler click', async () => {
     useSettingsStore.setState({
       rulerGuides: [{ id: 'col-1', axis: GUIDE_AXIS.COLUMN, positionMm: 50 }],
     })
@@ -106,29 +106,33 @@ describe('HorizontalRuler', () => {
       root?.render(<HorizontalRuler widthMm={210} marginMm={15} />)
     })
 
-    const guideMarker = container!.querySelector('[title="Columna: 50.0 mm"]')
+    const guideMarker = container!.querySelector('[aria-label="Guía de columna en 50.0 mm"]')
     expect(guideMarker).toBeTruthy()
 
     const rulerEl = container!.firstElementChild as HTMLElement
-    vi.spyOn(rulerEl, 'getBoundingClientRect').mockReturnValue({
-      left: 0,
-      top: 0,
-      width: 210,
-      height: 24,
-      right: 210,
-      bottom: 24,
-      x: 0,
-      y: 0,
-      toJSON: () => {},
-    })
-
     await act(async () => {
       rulerEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 105 }))
     })
 
-    const updatedGuides = useSettingsStore.getState().rulerGuides
-    expect(updatedGuides.length).toBe(2)
-    expect(updatedGuides[1].axis).toBe(GUIDE_AXIS.COLUMN)
-    expect(updatedGuides[1].positionMm).toBe(105)
+    // Rulers should not create accidental guides on click
+    const guides = useSettingsStore.getState().rulerGuides
+    expect(guides.length).toBe(1)
+  })
+
+  it('removes a column guide when double clicked on ruler', async () => {
+    useSettingsStore.setState({
+      rulerGuides: [{ id: 'col-1', axis: GUIDE_AXIS.COLUMN, positionMm: 50 }],
+    })
+
+    await act(async () => {
+      root?.render(<HorizontalRuler widthMm={210} marginMm={15} />)
+    })
+
+    const guideMarker = container!.querySelector('[aria-label="Guía de columna en 50.0 mm"]')!
+    await act(async () => {
+      guideMarker.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+
+    expect(useSettingsStore.getState().rulerGuides.length).toBe(0)
   })
 })
