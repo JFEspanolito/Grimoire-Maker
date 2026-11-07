@@ -29,6 +29,8 @@ interface SettingsState {
   setZoom: (zoom: number) => void
   /** Print bleed in millimetres. */
   bleedMm: number
+  showPrintMarks: boolean
+  setShowPrintMarks: (showPrintMarks: boolean) => void
   marginMm: number
   setMarginMm: (marginMm: number) => void
   rulerGuides: RulerGuide[]
@@ -71,6 +73,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   setZoom: (zoom) => { if (Number.isFinite(zoom)) set({ zoom: Math.max(0.25, Math.min(3, zoom)) }) },
   bleedMm: 3,
+  showPrintMarks: false,
+  setShowPrintMarks: (showPrintMarks) => set({ showPrintMarks: Boolean(showPrintMarks) }),
   marginMm: 15,
   setMarginMm: (marginMm) => {
     if (Number.isFinite(marginMm)) {

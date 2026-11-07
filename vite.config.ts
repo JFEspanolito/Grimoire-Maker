@@ -8,6 +8,12 @@ export default defineConfig({
   resolve: { alias: { '@grimoire/plugin-api': fileURLToPath(new URL('./src/plugins/plugin-api.ts', import.meta.url)) } },
   plugins: [react(), tailwindcss()],
   clearScreen: false,
-  server: { port: 1420, strictPort: true },
+  server: {
+    port: 1420,
+    strictPort: true,
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
+  },
   test: { environment: 'jsdom', css: true },
 })

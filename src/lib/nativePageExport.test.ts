@@ -56,6 +56,15 @@ it.each([0, 3])('prints crop and registration marks only when bleed is enabled (
   } else expect(marks).toBeNull()
 })
 
+it('omits print marks when showPrintMarks is false even if bleedMm > 0', async () => {
+  const target = document.createElement('div')
+  document.body.append(target)
+  await renderNativePages({ ...request, bleedMm: 3, showPrintMarks: false }, target, document.createElement('div'))
+  expect(target.querySelectorAll('[data-print-mark="crop"]')).toHaveLength(0)
+  expect(target.querySelectorAll('[data-print-mark="cross"]')).toHaveLength(0)
+  expect(target.querySelector('svg[data-print-marks]')).toBeNull()
+})
+
 it('splits a spread-spanning image across both facing PDF pages', async () => {
   const content = document.createElement('div')
   content.innerHTML = '<div class="grimoire-content"><div class="ProseMirror"><div class="grimoire-image" data-anchor="free"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" data-x-mm="116" data-y-mm="40" data-width-mm="120" style="left:116mm;top:40mm;width:120mm" /></div></div></div>'

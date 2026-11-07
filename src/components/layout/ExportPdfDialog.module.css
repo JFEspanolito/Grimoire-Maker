@@ -3,6 +3,8 @@
 .dialog::backdrop { background: #0009; }
 .header { display: flex; align-items: center; gap: 1rem; }
 .header h2 { flex: 1; font-size: 1.15rem; font-weight: 600; margin: 0; }
+.printMarks { display: flex; align-items: center; gap: .4rem; color: #bcb7ac; cursor: pointer; user-select: none; font-size: .85rem; }
+.printMarks input { cursor: pointer; }
 .zoom { display: flex; align-items: center; gap: .4rem; color: #bcb7ac; }
 .zoom select { padding: .15rem .3rem; border-radius: .25rem; background: #1f1e1c; color: #f0eee9; color-scheme: dark; }
 .dialog button { padding: .35rem .7rem; border-radius: .25rem; background: #ffffff10; color: #f0eee9; cursor: pointer; }

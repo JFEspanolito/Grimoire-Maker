@@ -9,6 +9,7 @@ import { draftDocuments, includedDocuments, resolveDocumentOrder, toDocumentOrde
 import { usePluginSurface } from '../../plugins/usePluginSurface'
 import { DocumentOrderList } from './DocumentOrderList'
 import { useTranslation } from '../../lib/i18n'
+import { useSettingsStore } from '../../stores/settingsStore'
 import styles from './ExportPdfDialog.module.css'
 
 type Status =
@@ -23,6 +24,8 @@ const ZOOMS = [0.25, 0.35, 0.5, 0.75, 1]
 /** Shows the whole book as it will be printed before the PDF is written. */
 export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; onExport: (book?: Book) => void }) {
   const { t } = useTranslation()
+  const showPrintMarks = useSettingsStore((state) => state.showPrintMarks)
+  const setShowPrintMarks = useSettingsStore((state) => state.setShowPrintMarks)
   const dialog = useRef<HTMLDialogElement>(null)
   const display = useRef<HTMLDivElement>(null)
   const book = useRef<Book | undefined>(undefined)
@@ -82,12 +85,20 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
       }
     })()
     return () => { cancelled = true; stage.remove() }
-  }, [theme, bookKey])
+  }, [theme, bookKey, showPrintMarks])
 
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="export-pdf-title"
     onCancel={(event) => { event.preventDefault(); onClose() }}>
     <header className={styles.header}>
       <h2 id="export-pdf-title">{t('exportPdf.title')}</h2>
+      <label className={styles.printMarks}>
+        <input
+          type="checkbox"
+          checked={showPrintMarks}
+          onChange={(event) => setShowPrintMarks(event.target.checked)}
+        />
+        {t('exportPdf.showPrintMarks')}
+      </label>
       <label className={styles.zoom}>{t('exportPdf.zoom')}
         <select aria-label={t('exportPdf.previewZoom')} value={zoom} onChange={(event) => setZoom(Number(event.target.value))}>
           {zoomOptions.map((value) => <option key={value} value={value}>{Math.round(value * 100)}%</option>)}

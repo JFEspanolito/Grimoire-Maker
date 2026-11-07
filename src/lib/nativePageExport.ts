@@ -108,15 +108,16 @@ export async function renderNativePages(request: PageRequest, target: HTMLElemen
       const spansSpread = sheetIndex % 2 === 0 && xMm < widthMm && xMm + elWidthMm > widthMm
       count = Math.max(count, spansSpread ? sheetIndex + 2 : sheetIndex + 1)
     })
+    const effectiveBleed = request.showPrintMarks === undefined ? request.bleedMm : (request.showPrintMarks ? request.bleedMm : 0)
     const printStyle = document.createElement('style')
     printStyle.dataset.nativePrintStyle = 'true'
-    printStyle.textContent = `@page { size: ${widthMm + 2 * request.bleedMm}mm ${heightMm + 2 * request.bleedMm}mm; margin: 0; }`
+    printStyle.textContent = `@page { size: ${widthMm + 2 * effectiveBleed}mm ${heightMm + 2 * effectiveBleed}mm; margin: 0; }`
     target.append(printStyle)
     for (let index = 0; index < count; index++) {
       const sheet = document.createElement('div')
       sheet.dataset.printSheet = String(index + 1)
       sheet.className = 'native-print-sheet'
-      sheet.style.cssText = `width:${widthMm + 2 * request.bleedMm}mm;height:${heightMm + 2 * request.bleedMm}mm;padding:${request.bleedMm}mm;box-sizing:border-box`
+      sheet.style.cssText = `width:${widthMm + 2 * effectiveBleed}mm;height:${heightMm + 2 * effectiveBleed}mm;padding:${effectiveBleed}mm;box-sizing:border-box`
       const trim = document.createElement('div')
       trim.className = 'grimoire-page native-print-trim'
       trim.style.cssText = `width:${widthMm}mm;height:${heightMm}mm;position:relative;overflow:hidden`
@@ -145,7 +146,7 @@ export async function renderNativePages(request: PageRequest, target: HTMLElemen
         marginMm: request.marginMm,
       })))
       sheet.append(trim)
-      if (request.bleedMm > 0) sheet.append(printMarks(widthMm, heightMm, request.bleedMm))
+      if (effectiveBleed > 0) sheet.append(printMarks(widthMm, heightMm, effectiveBleed))
       target.append(sheet)
     }
     // The physical copies own fresh image elements; printing must not race their loads.

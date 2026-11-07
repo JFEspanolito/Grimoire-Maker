@@ -127,3 +127,16 @@ it('steps the preview zoom with Ctrl+wheel inside the open Export PDF dialog', a
     dispose()
   }
 })
+
+it('toggles show print marks and updates settings store', async () => {
+  seed(['Draft/A.md'])
+  const { container, unmount } = await mount()
+  const checkbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+  expect(checkbox).not.toBeNull()
+  expect(checkbox.checked).toBe(false)
+  await act(async () => {
+    checkbox.click()
+  })
+  expect(checkbox.checked).toBe(true)
+  await unmount()
+})

@@ -72,6 +72,7 @@ export const DICTIONARY = {
     // Menu Document
     'menu.document.pageSize': 'Page size',
     'menu.document.columns': 'Columns',
+    'menu.document.showPrintMarks': 'Show Print Marks',
     'menu.document.findAndReplace': 'Find and Replace…',
     'menu.document.properties': 'Properties…',
     'menu.document.documentOrder': 'Document Order…',
@@ -167,6 +168,7 @@ export const DICTIONARY = {
     'properties.columnsOnThisPage': 'Columns on this page',
     'properties.fontFamily': 'Font family',
     'properties.fontDefault': 'Theme default',
+    'properties.showPrintMarks': 'Show Print Marks',
     'properties.savedNotice': 'Saved with this page using Save or Auto save.',
     'properties.selectMarkdownNotice': 'Select a Markdown page to edit its properties.',
     'properties.openProjectNotice': 'Open a project to edit its properties.',
@@ -194,6 +196,7 @@ export const DICTIONARY = {
     'contributors.saving': 'Saving…',
     // ExportPdfDialog
     'exportPdf.title': 'Export PDF',
+    'exportPdf.showPrintMarks': 'Show Print Marks',
     'exportPdf.zoom': 'Zoom',
     'exportPdf.previewZoom': 'Preview zoom',
     'exportPdf.close': 'Close Export PDF',
@@ -695,6 +698,7 @@ export const DICTIONARY = {
     // Menu Document
     'menu.document.pageSize': 'Tamaño de página',
     'menu.document.columns': 'Columnas',
+    'menu.document.showPrintMarks': 'Mostrar marcas de corte',
     'menu.document.findAndReplace': 'Buscar y reemplazar…',
     'menu.document.properties': 'Propiedades…',
     'menu.document.documentOrder': 'Orden de documentos…',
@@ -790,6 +794,7 @@ export const DICTIONARY = {
     'properties.columnsOnThisPage': 'Columnas en esta página',
     'properties.fontFamily': 'Tipo de letra',
     'properties.fontDefault': 'Por defecto del tema',
+    'properties.showPrintMarks': 'Mostrar marcas de corte',
     'properties.savedNotice': 'Se guarda con esta página al usar Guardar o Guardado automático.',
     'properties.selectMarkdownNotice': 'Selecciona una página Markdown para editar sus propiedades.',
     'properties.openProjectNotice': 'Abre un proyecto para editar sus propiedades.',
@@ -817,6 +822,7 @@ export const DICTIONARY = {
     'contributors.saving': 'Guardando…',
     // ExportPdfDialog
     'exportPdf.title': 'Exportar PDF',
+    'exportPdf.showPrintMarks': 'Mostrar marcas de corte',
     'exportPdf.zoom': 'Zoom',
     'exportPdf.previewZoom': 'Zoom de vista previa',
     'exportPdf.close': 'Cerrar exportar PDF',

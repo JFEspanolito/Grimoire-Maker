@@ -48,7 +48,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
   const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const split = useTabStore((s) => s.split)
-  const { pageSize, columns, setPageSize, setColumns, panels, togglePanel } = useSettingsStore()
+  const { pageSize, columns, setPageSize, setColumns, panels, togglePanel, showPrintMarks, setShowPrintMarks } = useSettingsStore()
   const showDocumentIndex = panels.documentIndex
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
@@ -199,6 +199,15 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
             <option value={3}>3</option>
           </select>
         </label>
+        <button
+          type="button"
+          aria-label={t('menu.document.showPrintMarks')}
+          aria-pressed={showPrintMarks}
+          onClick={() => setShowPrintMarks(!showPrintMarks)}
+        >
+          <span className={styles.check} aria-hidden="true">{showPrintMarks ? '✓' : ''}</span>
+          {t('menu.document.showPrintMarks')}
+        </button>
         <hr />
         <button type="button" aria-keyshortcuts="Control+F" onClick={() => { closeMenus(); openFind() }}>{t('menu.document.findAndReplace')}<kbd style={{ float: 'right', marginLeft: '1.5rem', opacity: 0.7, font: 'inherit' }}>Ctrl+F</kbd></button>
         <button type="button" onClick={() => { closeMenus(); setPropertiesOpen(true) }}>{t('menu.document.properties')}</button>

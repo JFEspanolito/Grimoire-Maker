@@ -26,3 +26,11 @@ it('updates marginMm within bounds and clamps invalid values', () => {
   useSettingsStore.getState().setMarginMm(80)
   expect(useSettingsStore.getState().marginMm).toBe(50)
 })
+
+it('toggles showPrintMarks in store', () => {
+  expect(useSettingsStore.getState().showPrintMarks).toBe(false)
+  useSettingsStore.getState().setShowPrintMarks(true)
+  expect(useSettingsStore.getState().showPrintMarks).toBe(true)
+  useSettingsStore.getState().setShowPrintMarks(false)
+  expect(useSettingsStore.getState().showPrintMarks).toBe(false)
+})

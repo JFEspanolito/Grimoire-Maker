@@ -1,6 +1,8 @@
 .form { display: grid; gap: .75rem; min-width: 0; }
 .form label { display: grid; gap: .35rem; font-size: .8rem; }
+.form label.checkbox { display: flex; align-items: center; gap: .5rem; cursor: pointer; user-select: none; }
 .form input, .form select { min-width: 0; width: 100%; padding: .4rem; border: 1px solid #ffffff25; border-radius: .25rem; background: #201f1d; color: #f0eee9; }
+.form input[type="checkbox"] { width: auto; cursor: pointer; margin: 0; }
 .form p { font-size: .75rem; color: #bcb7ac; overflow-wrap: anywhere; }
 .form button { padding: .4rem .65rem; border-radius: .25rem; background: #ffffff10; cursor: pointer; }
 .form button:disabled { opacity: .5; cursor: default; }
