@@ -12,6 +12,7 @@ import { useTabStore } from '../../stores/tabStore'
 import { useTranslation, type TranslationKey } from '../../lib/i18n'
 import { getAllFonts, loadExternalFont, findMatchingFontOption } from '../../lib/fonts'
 import { useFormatPainterStore } from '../../stores/formatPainterStore'
+import { useRulerStore } from '../../stores/rulerStore'
 import toolbarStyles from '../layout/Toolbar.module.css'
 
 interface Action {
@@ -111,6 +112,8 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
   const documentTools = !active || /\.md$/i.test(active)
   const isFormatPainterArmed = useFormatPainterStore((state) => state.armed)
   const armFormatPainter = useFormatPainterStore((state) => state.arm)
+  const rulerVisible = useRulerStore((state) => state.visible)
+  const toggleRuler = useRulerStore((state) => state.toggle)
   // Re-evaluates the per-button state on every transaction, so active styling follows the caret.
   const state = useEditorState({
     editor,
@@ -247,6 +250,24 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
       <div className="flex items-center gap-0.5">{['h1', 'h2', 'h3', 'h4'].map(actionButton)}</div>
     </div>,
     tools: <div className="flex items-center gap-1">
+      <button
+        type="button"
+        className={`${btn} ${rulerVisible ? 'bg-white/20 text-white' : ''}`}
+        title={t('toolbar.ruler')}
+        aria-label={t('toolbar.ruler')}
+        aria-pressed={rulerVisible}
+        disabled={!documentTools}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggleRuler}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="inline-block mr-1">
+          <path d="M21.3 8.7 8.7 21.3c-1 1-2.5 1-3.4 0l-2.6-2.6c-1-1-1-2.5 0-3.4L15.3 2.7c1-1 2.5-1 3.4 0l2.6 2.6c1 1 1 2.5 0 3.4Z"/>
+          <path d="m7.5 10.5 2 2"/>
+          <path d="m10.5 7.5 2 2"/>
+          <path d="m13.5 4.5 2 2"/>
+        </svg>
+        {t('toolbar.ruler')}
+      </button>
       <PluginSlot slot="editorTools" />
       <button type="button" className={btn} title={t('toolbar.findAndReplace')} aria-label={t('toolbar.findAndReplace')}
         onMouseDown={(e) => e.preventDefault()} onClick={() => useFindStore.getState().show({ seed: editor ? selectedSearchText(editor) : undefined })}>{t('toolbar.find')}</button>

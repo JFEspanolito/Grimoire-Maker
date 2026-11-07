@@ -199,7 +199,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
 
   return (
     <>
-      <DocumentPathContext value={documentPath}><PageView onPageClick={focusWritingArea} onPagePointerDown={focusWritingArea}>
+      <DocumentPathContext value={documentPath}><PageView editor={editor} onPageClick={focusWritingArea} onPagePointerDown={focusWritingArea}>
         <EditorContent editor={editor} className={`grimoire-content ${isFormatPainterArmed ? 'cursor-copy' : ''}`} />
       </PageView></DocumentPathContext>
       {menu && <EditorContextMenu x={menu.x} y={menu.y} onClose={closeMenu} items={menuItems(menu)} />}

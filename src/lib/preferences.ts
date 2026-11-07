@@ -24,9 +24,11 @@ export function saveSettings(settings: PersistedSettings): Promise<void> {
       await invoke<void>('save_settings', { settings })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes('customFonts') && 'customFonts' in settings) {
-        const { customFonts: _discarded, ...compatibleSettings } = settings
-        await invoke<void>('save_settings', { settings: compatibleSettings })
+      if (msg.includes('unknown field') || msg.includes('customFonts') || msg.includes('marginMm')) {
+        const copy = { ...settings }
+        delete copy.customFonts
+        delete copy.marginMm
+        await invoke<void>('save_settings', { settings: copy })
         return
       }
       throw err

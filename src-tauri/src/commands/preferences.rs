@@ -93,6 +93,8 @@ pub struct UserSettings {
     pub language: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_fonts: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub margin_mm: Option<u32>,
 }
 
 /// Which side panels and overlays are shown; a missing entry keeps the app default.
@@ -153,6 +155,9 @@ impl UserSettings {
         }
         if self.language.as_ref().is_some_and(|l| l != "en" && l != "es") {
             return Err("Language must be 'en' or 'es'".into());
+        }
+        if self.margin_mm.is_some_and(|value| !(5..=100).contains(&value)) {
+            return Err("Margin must be between 5 and 100 mm".into());
         }
         if let Some(fonts) = &self.custom_fonts {
             if fonts.len() > 100 {
@@ -511,6 +516,9 @@ fn save_settings_in(config: &Path, mut settings: UserSettings) -> Result<(), Str
     }
     if settings.custom_fonts.is_none() {
         settings.custom_fonts = preferences.settings.custom_fonts.clone();
+    }
+    if settings.margin_mm.is_none() {
+        settings.margin_mm = preferences.settings.margin_mm;
     }
     preferences.settings = settings;
     publish_preferences(config, &preferences)

@@ -30,4 +30,134 @@
 .entry { margin-top: 4px; }
 .entry input { width: 68px; padding: 2px 4px; background: #201f1d; border: 1px solid #59564e; border-radius: 3px; color: #f0eee9; }
 .entry > button { margin-left: auto; }
-@media print { .overlay { display: none !important; } }
+.horizontalRuler {
+  position: relative;
+  height: 24px;
+  box-sizing: border-box;
+  user-select: none;
+  touch-action: none;
+  margin-bottom: 4px;
+  border: 1px solid #59564e;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  overflow: visible;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.rulerSvg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.marginHandle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: auto;
+}
+
+.marginHandleHeadTop,
+.marginHandleHeadBottom {
+  width: 8px;
+  height: 4px;
+  background: #0ea5e9;
+  border-radius: 1px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.marginHandleLine {
+  width: 2px;
+  height: 100%;
+  background: #0ea5e9;
+}
+
+.marginHandle:hover .marginHandleHeadTop,
+.marginHandle:hover .marginHandleHeadBottom,
+.marginHandle:hover .marginHandleLine {
+  background: #38bdf8;
+}
+
+.indentHandle {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  cursor: ew-resize;
+  z-index: 35;
+  pointer-events: auto;
+  padding: 1px;
+}
+
+.indentMarker {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #3b82f6;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+  transition: transform 0.1s ease;
+}
+
+.indentHandle:hover .indentMarker {
+  border-top-color: #60a5fa;
+  transform: scale(1.15);
+}
+
+.guideRulerMarker {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 6px;
+  background: #0891b2;
+  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  cursor: ew-resize;
+  z-index: 25;
+}
+
+.guideRulerMarker:hover {
+  background: #06b6d4;
+}
+
+.rulerTooltip {
+  position: absolute;
+  top: -24px;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  background: #18181b;
+  color: #f4f4f5;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 3px;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 50;
+  border: 1px solid #3f3f46;
+}
+
+.rulerGuideline {
+  position: absolute;
+  top: 24px;
+  height: 2000px;
+  width: 1px;
+  border-left: 1px dashed #0ea5e9;
+  pointer-events: none;
+  z-index: 40;
+}
+
+@media print {
+  .overlay,
+  .horizontalRuler {
+    display: none !important;
+  }
+}
