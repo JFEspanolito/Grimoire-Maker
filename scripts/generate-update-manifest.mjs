@@ -85,7 +85,9 @@ export function createManifest({
   for (const bundle of bundles) {
     const signature = readFileSync(bundle.sigPath, 'utf8').trim()
     const platforms = detectPlatforms(bundle.bundleFileName)
-    const downloadUrl = `https://github.com/${REPO}/releases/download/${tag}/${encodeURIComponent(bundle.bundleFileName)}`
+    // GitHub Releases sanitizes asset filenames by replacing whitespace with dots (.)
+    const sanitizedFileName = bundle.bundleFileName.replace(/\s+/g, '.')
+    const downloadUrl = `https://github.com/${REPO}/releases/download/${tag}/${encodeURIComponent(sanitizedFileName)}`
 
     for (const platform of platforms) {
       manifest.platforms[platform] = {
