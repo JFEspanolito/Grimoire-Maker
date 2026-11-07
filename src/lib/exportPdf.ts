@@ -18,6 +18,7 @@ export interface PageRequest {
   theme: ThemeId
   bleedMm: number
   marginMm: number
+  showPrintMarks?: boolean
   headerFooter?: ThemeHeaderFooter
   pageText?: Omit<PageTextContext, 'page' | 'pages'>
 }
@@ -61,10 +62,11 @@ function printDialog(): Promise<void> {
 }
 
 /** Page rules for this request; they follow the static ones in print.css and override them. */
-function pageRules({ pageSize, bleedMm, marginMm }: PageRequest): string {
+function pageRules({ pageSize, bleedMm, marginMm, showPrintMarks }: PageRequest): string {
   const { widthMm, heightMm } = PAGE_SIZES[pageSize]
-  return `@page { size: ${widthMm}mm ${heightMm}mm; margin: ${marginMm}mm; bleed: ${bleedMm}mm; marks: ${
-    bleedMm > 0 ? 'crop cross' : 'none'
+  const effectiveBleed = showPrintMarks === undefined ? bleedMm : (showPrintMarks ? bleedMm : 0)
+  return `@page { size: ${widthMm}mm ${heightMm}mm; margin: ${marginMm}mm; bleed: ${effectiveBleed}mm; marks: ${
+    effectiveBleed > 0 ? 'crop cross' : 'none'
   }; }
 .pagedjs_page { background: var(--page-bg); color: var(--page-fg); }
 @media print { .print-dialog-dismiss { display: none !important; } }`

@@ -137,7 +137,11 @@ it('keeps page setup only in Document and omits repeated application branding', 
     expect(useSettingsStore.getState()).toMatchObject({ columns: 3 })
     await act(async () => { columns!.value = '1'; columns!.dispatchEvent(new Event('change', { bubbles: true })) })
     expect(useSettingsStore.getState()).toMatchObject({ pageSize: 'letter', columns: 1 })
-    for (const entry of ['Properties…', 'Document Order…', 'Statistics…', 'Export PDF…']) expect(documentMenu.textContent).toContain(entry)
+    for (const entry of ['Properties…', 'Document Order…', 'Statistics…', 'Export PDF…', 'Show Print Marks']) expect(documentMenu.textContent).toContain(entry)
+    const printMarksButton = documentMenu.querySelector<HTMLButtonElement>('button[aria-label="Show Print Marks"]')!
+    expect(printMarksButton).not.toBeNull()
+    await act(async () => { printMarksButton.click() })
+    expect(useSettingsStore.getState().showPrintMarks).toBe(true)
   } finally {
     await act(async () => root.unmount())
     useSettingsStore.setState({ pageSize: initial.pageSize, columns: initial.columns })

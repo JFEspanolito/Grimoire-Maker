@@ -51,6 +51,15 @@ it('saves Author at project scope, not in page frontmatter', async () => {
   expect(useDocumentStore.getState().document.frontmatter.author).toBeUndefined()
   expect(host.textContent).toContain('Project settings saved.')
 })
+it('toggles Show Print Marks in settings store from PropertiesPanel', async () => {
+  const checkbox = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+  expect(checkbox).not.toBeNull()
+  expect(useSettingsStore.getState().showPrintMarks).toBe(false)
+  await act(async () => {
+    checkbox.click()
+  })
+  expect(useSettingsStore.getState().showPrintMarks).toBe(true)
+})
 it('persists columns in the selected Markdown without changing its sibling or the default', async () => {
   const select = host.querySelector<HTMLSelectElement>('[aria-label="Page columns"]')!
   await act(async () => { select.value = '3'; select.dispatchEvent(new Event('change', { bubbles: true })) })

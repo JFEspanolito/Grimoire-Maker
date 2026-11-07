@@ -36,6 +36,8 @@ export function PropertiesPanel({ expanded = false, editor = null }: { expanded?
   const document = useDocumentStore(state => state.document)
   const setFrontmatter = useDocumentStore(state => state.setFrontmatter)
   const customFonts = useSettingsStore(state => state.customFonts)
+  const showPrintMarks = useSettingsStore(state => state.showPrintMarks)
+  const setShowPrintMarks = useSettingsStore(state => state.setShowPrintMarks)
   const fonts = getAllFonts(customFonts)
   const active = useTabStore(state => state.active)
   const markdown = !active || /\.md$/i.test(active)
@@ -64,6 +66,14 @@ export function PropertiesPanel({ expanded = false, editor = null }: { expanded?
           onChange={event => setFrontmatter({ columns: event.target.value === '1' ? 1 : event.target.value === '2' ? 2 : event.target.value === '3' ? 3 : undefined })}>
           <option value="">{t('common.default')}</option><option value="1">{t('properties.oneColumn')}</option><option value="2">{t('properties.twoColumns')}</option><option value="3">{t('properties.threeColumns')}</option>
         </select></label>
+        <label className={styles.checkbox}>
+          <input
+            type="checkbox"
+            checked={showPrintMarks}
+            onChange={event => setShowPrintMarks(event.target.checked)}
+          />
+          {t('properties.showPrintMarks')}
+        </label>
         {editor && <PageColumns editor={editor} />}
         <p>{t('properties.savedNotice')}</p>
       </div> : <p>{t('properties.selectMarkdownNotice')}</p>}

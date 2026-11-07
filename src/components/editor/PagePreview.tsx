@@ -25,7 +25,7 @@ const DEBOUNCE_MS = 400
  * one page at a time or as facing pages (first page on the right, like a book).
  */
 export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
-  const { pageSize, columns: defaultColumns, theme, bleedMm, marginMm } = useSettingsStore()
+  const { pageSize, columns: defaultColumns, theme, bleedMm, marginMm, showPrintMarks } = useSettingsStore()
   const themes = useThemeStore((s) => s.themes)
   const workspace = useDocumentStore(state => state.workspaceRoot)
   const frontmatter = useDocumentStore(state => state.document.frontmatter)
@@ -69,7 +69,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       running = true
       setStatus({ kind: 'rendering' })
       document.body.append(stage)
-      paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm, headerFooter, pageText: projectPageText(workspace, frontmatter, project, path) }, stage).then(
+      paginate(previewer, { pageSize, columns, theme: activeTheme, bleedMm, marginMm, showPrintMarks, headerFooter, pageText: projectPageText(workspace, frontmatter, project, path) }, stage).then(
         () => {
           if (!cancelled) {
             const pages = stage.querySelectorAll('.pagedjs_page').length
@@ -102,7 +102,7 @@ export function PagePreview({ mode }: { mode: 'pages' | 'spreads' }) {
       // An in-flight run still owns its styles; release them once it settles.
       if (!running) release()
     }
-  }, [pageSize, columns, activeTheme, bleedMm, marginMm, body, path, headerFooter, workspace, frontmatter, project])
+  }, [pageSize, columns, activeTheme, bleedMm, marginMm, showPrintMarks, body, path, headerFooter, workspace, frontmatter, project])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

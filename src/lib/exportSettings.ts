@@ -23,7 +23,7 @@ export function planBook(): BookPlan | null {
 
 /** Page setup for an export or its preview. A book uses the default columns; a page may override them. */
 export function pageRequest(book?: BookPlan): PageRequest {
-  const { pageSize, columns, theme, bleedMm, marginMm } = useSettingsStore.getState()
+  const { pageSize, columns, theme, bleedMm, marginMm, showPrintMarks } = useSettingsStore.getState()
   const { document, workspaceRoot } = useDocumentStore.getState()
   const themes = useThemeStore.getState().themes
   const activeTheme = resolveTheme(theme, themes)
@@ -31,7 +31,7 @@ export function pageRequest(book?: BookPlan): PageRequest {
   const first = book?.documents[0]
   const pageText = projectPageText(workspaceRoot, document.frontmatter, project, document.path)
   return {
-    pageSize, theme: activeTheme, bleedMm, marginMm,
+    pageSize, theme: activeTheme, bleedMm, marginMm, showPrintMarks,
     columns: book ? columns : pageColumns(document.frontmatter, columns),
     headerFooter: themes.find((item) => item.id === activeTheme)?.headerFooter,
     pageText: first ? { ...pageText, title: pageTitle({}, first) } : pageText,
