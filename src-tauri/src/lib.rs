@@ -57,9 +57,12 @@ pub fn run() {
         })
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             fs_scope::prepare_project_metadata,
             config_root::config_root,
+            config_root::is_portable,
             commands::files::list_markdown_files,
             commands::export::export_pdf,
             commands::export::pdf_export_route,

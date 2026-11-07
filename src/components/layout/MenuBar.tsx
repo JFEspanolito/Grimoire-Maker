@@ -25,6 +25,7 @@ import type { Editor } from '@tiptap/react'
 import { insertDivider, insertFloatingBox, insertFormula, insertImage, insertQuote, insertSectionBreak, insertTable } from '../../lib/insertActions'
 import { urlGithubBugReport, urlGithubFeatureRequest } from '../../data/contributors'
 import { openExternalUrl } from '../../lib/openUrl'
+import { useAppUpdateStore } from '../../stores/appUpdateStore'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
@@ -212,7 +213,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <div className={styles.menu}>
         <button type="button" onClick={() => { closeMenus(); setModsOpen(true) }}>{t('menu.settings.modManager')}</button>
         <button type="button" onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}>{t('menu.settings.preferences')}</button>
-
+        <hr />
+        <button type="button" onClick={() => { closeMenus(); void useAppUpdateStore.getState().checkForUpdates(true) }}>{t('menu.settings.checkUpdates')}</button>
       </div>
     </details>
     <details name="application-menu">

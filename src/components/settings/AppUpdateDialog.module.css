@@ -1,0 +1,219 @@
+.dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(30rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 4rem);
+  padding: 1.25rem;
+  border: 1px solid #625c50;
+  border-radius: 0.4rem;
+  background: #272623;
+  color: #f0eee9;
+  font-size: 0.85rem;
+  box-shadow: 0 0.75rem 2rem #000a;
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog::backdrop {
+  background: #0009;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #625c5050;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f0eee9;
+}
+
+.dismiss {
+  border: none;
+  background: transparent;
+  color: #d6d1c6;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.dismiss:hover {
+  color: #fff;
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.versionGrid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 0.75rem;
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.8rem;
+  background: #1f1e1b;
+  border-radius: 0.25rem;
+  border: 1px solid #3d3a33;
+}
+
+.versionGrid dt {
+  color: #a8a398;
+}
+
+.versionGrid dd {
+  margin: 0;
+  font-weight: 500;
+  color: #cfb37c;
+}
+
+.notice {
+  margin: 0.5rem 0;
+  color: #d6d1c6;
+}
+
+.warningBox {
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.25rem;
+  background: #3e2e1e;
+  border: 1px solid #8e682e;
+  color: #f3dfb5;
+}
+
+.errorBox {
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.25rem;
+  background: #3a1e1b;
+  border: 1px solid #8a362e;
+  color: #f5b7b1;
+}
+
+.releaseNotes {
+  margin-top: 0.75rem;
+}
+
+.releaseNotes h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: #a8a398;
+}
+
+.notesContent {
+  max-height: 10rem;
+  overflow-y: auto;
+  padding: 0.5rem 0.75rem;
+  background: #1f1e1b;
+  border-radius: 0.25rem;
+  border: 1px solid #3d3a33;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  color: #d6d1c6;
+}
+
+.progressContainer {
+  margin: 1rem 0;
+}
+
+.progressBar {
+  width: 100%;
+  height: 0.5rem;
+  background: #1f1e1b;
+  border-radius: 0.25rem;
+  overflow: hidden;
+  border: 1px solid #3d3a33;
+  margin-top: 0.4rem;
+}
+
+.progressBarFill {
+  height: 100%;
+  background: #cfb37c;
+  transition: width 0.2s ease-in-out;
+}
+
+.progressBarIndeterminate {
+  height: 100%;
+  width: 35%;
+  background: #cfb37c;
+  animation: indeterminate 1.4s infinite ease-in-out;
+}
+
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #a8a398;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #625c5050;
+}
+
+.footer button,
+.footer a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.25rem;
+  background: #ffffff10;
+  color: #f0eee9;
+  text-decoration: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: none;
+}
+
+.footer button:hover,
+.footer a:hover {
+  background: #ffffff20;
+}
+
+.footer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.footer .primary {
+  background: #cfb37c;
+  color: #1c1b19;
+  font-weight: 600;
+}
+
+.footer .primary:hover {
+  background: #dcc48f;
+}
+
+.footer .danger {
+  background: #b4402f;
+  color: #fff;
+  font-weight: 600;
+}
+
+.footer .danger:hover {
+  background: #c94d3b;
+}
+
+.dialog :focus-visible {
+  outline: 2px solid #cfb37c;
+  outline-offset: 2px;
+}

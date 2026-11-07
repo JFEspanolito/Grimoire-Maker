@@ -25,6 +25,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "publisher": "JFEspanolito",
     "copyright": "©2026 JFEspanolito",
     "shortDescription": "Grimoire Maker",
@@ -50,6 +51,14 @@
         "installerHooks": "nsis/hooks.nsh",
         "template": "nsis/installer.nsi"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyMDA0MzBCMzRFQTE1NzMKUldSekZlbzBDME1BMHJpOWw2ODZHcEtqaEVCenA1ekE3QU1FMXR3eVhjZ0tPanF1b0NpQlBQeGYK",
+      "endpoints": [
+        "https://github.com/JFEspanolito/Grimoire-Maker/releases/latest/download/latest.json"
+      ]
     }
   }
 }

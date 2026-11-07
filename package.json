@@ -12,7 +12,7 @@
     "tauri": "tauri",
     "build:installer": "tauri build --bundles nsis",
     "build:portable": "tauri build --no-bundle && node scripts/make-portable.mjs",
-    "build:dmg": "tauri build --bundles dmg",
+    "build:dmg": "tauri build --bundles dmg,app",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -22,6 +22,8 @@
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "@tauri-apps/plugin-fs": "^2.7.1",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.14.1",
     "@tiptap/extension-image": "^3.32.1",
     "@tiptap/extension-table": "^3.32.1",
     "@tiptap/extension-text-align": "^3.32.1",
