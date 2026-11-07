@@ -85,6 +85,11 @@ pub fn config_root(app: AppHandle) -> Result<String, String> {
         .ok_or_else(|| "Application configuration path is not valid Unicode".into())
 }
 
+#[tauri::command]
+pub fn is_portable(app: AppHandle) -> bool {
+    mode(&app) == Mode::Portable
+}
+
 fn prepare_in(old: &Path) -> Result<PathBuf, String> {
     prepare_with_publish(old, publish_no_replace)
 }

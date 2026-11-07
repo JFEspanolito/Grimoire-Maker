@@ -42,16 +42,26 @@ jobs:
 
       - name: Build Full NSIS Installer
         run: pnpm build:installer
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Package Portable Edition ZIP
         run: node scripts/make-portable.mjs
+
+      - name: Generate Update Manifest (latest.json)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: node scripts/generate-update-manifest.mjs --tag ${{ github.ref_name }}
 
       - name: Upload Full Installer artifact
         uses: actions/upload-artifact@v7.0.2
         with:
           name: GrimoireMaker-Installer-x64
-          path: src-tauri/target/release/bundle/nsis/*-setup.exe
-          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/nsis/*-setup.nsis.zip*
+            release/latest.json
+          if-no-files-found: warn
 
       - name: Upload Portable Edition artifact
         uses: actions/upload-artifact@v7.0.2
@@ -69,4 +79,7 @@ jobs:
           generate_release_notes: true
           files: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/nsis/*-setup.nsis.zip
+            src-tauri/target/release/bundle/nsis/*-setup.nsis.zip.sig
+            release/latest.json
             release/GrimoireMaker-portable-*-x64.zip

@@ -34,6 +34,7 @@ import { ConfirmDialog } from './components/layout/ConfirmDialog'
 import { useTranslation } from './lib/i18n'
 import { useAppUpdateStore } from './stores/appUpdateStore'
 import { openExternalUrl } from './lib/openUrl'
+import { AppUpdateDialog } from './components/settings/AppUpdateDialog'
 
 export default function App() {
   const { t } = useTranslation()
@@ -206,6 +207,7 @@ export default function App() {
           />
         )}
         <ToastHost />
+        <AppUpdateDialog />
         {contextMenu && (
           <div
             role="menu"

@@ -472,7 +472,7 @@ it('translates menu summaries dynamically when language is changed', async () =>
 
     const menusEs = Array.from(container.querySelectorAll('details[name="application-menu"]'))
     const settingsButtonsEs = Array.from(menusEs[4].querySelectorAll('button')).map((b) => b.textContent)
-    expect(settingsButtonsEs).toEqual(['Administrador de mods', 'Preferencias…'])
+    expect(settingsButtonsEs).toEqual(['Administrador de mods', 'Preferencias…', 'Buscar actualizaciones…'])
 
     const helpButtonsEs = Array.from(menusEs[5].querySelectorAll('button')).map((b) => b.textContent)
     expect(helpButtonsEs).toEqual(['Reportar un error…', 'Sugerir una función…', 'Tutorial', 'Acerca de'])
