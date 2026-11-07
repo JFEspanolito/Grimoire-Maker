@@ -77,4 +77,28 @@ describe('generate-update-manifest', () => {
     expect(manifest.platforms['darwin-aarch64']).toBeDefined()
     expect(manifest.platforms['darwin-aarch64'].signature).toBe('sig-mac')
   })
+
+  it('normalizes spaces to dots in download URL to match GitHub Releases asset naming', () => {
+    const bundleFile = join(testDir, 'Grimoire Maker_0.1.14_x64-setup.exe')
+    const sigFile = join(testDir, 'Grimoire Maker_0.1.14_x64-setup.exe.sig')
+    writeFileSync(bundleFile, 'dummy exe content')
+    writeFileSync(sigFile, 'test-signature')
+
+    const bundles = [{
+      sigPath: sigFile,
+      bundlePath: bundleFile,
+      sigFileName: 'Grimoire Maker_0.1.14_x64-setup.exe.sig',
+      bundleFileName: 'Grimoire Maker_0.1.14_x64-setup.exe',
+    }]
+
+    const manifest = createManifest({
+      version: '0.1.14',
+      tag: 'v0.1.14',
+      bundles,
+    })
+
+    expect(manifest.platforms['windows-x86_64'].url).toBe(
+      'https://github.com/JFEspanolito/Grimoire-Maker/releases/download/v0.1.14/Grimoire.Maker_0.1.14_x64-setup.exe',
+    )
+  })
 })
