@@ -12,6 +12,11 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`
 }
 
+function formatVersion(version: string | null | undefined): string {
+  if (!version) return '—'
+  return version.replace(/^v/, '')
+}
+
 export function AppUpdateDialog() {
   const { t } = useTranslation()
   const { saveAll } = useFileSystem()
@@ -28,6 +33,7 @@ export function AppUpdateDialog() {
     errorMessage,
     progress,
     confirmingUnsavedRestart,
+    updateHandle,
     startDownloadAndInstall,
     restartApp,
     confirmSaveAndRestart,
@@ -114,7 +120,7 @@ export function AppUpdateDialog() {
             {currentVersion && (
               <dl className={styles.versionGrid}>
                 <dt>{t('updater.currentVersion')}</dt>
-                <dd>{currentVersion}</dd>
+                <dd>{formatVersion(currentVersion)}</dd>
               </dl>
             )}
           </div>
@@ -126,7 +132,7 @@ export function AppUpdateDialog() {
             {currentVersion && (
               <dl className={styles.versionGrid}>
                 <dt>{t('updater.currentVersion')}</dt>
-                <dd>{currentVersion}</dd>
+                <dd>{formatVersion(currentVersion)}</dd>
               </dl>
             )}
           </div>
@@ -137,9 +143,9 @@ export function AppUpdateDialog() {
             </div>
             <dl className={styles.versionGrid}>
               <dt>{t('updater.currentVersion')}</dt>
-              <dd>{currentVersion || '—'}</dd>
+              <dd>{formatVersion(currentVersion)}</dd>
               <dt>{t('updater.availableVersion')}</dt>
-              <dd>{availableVersion || '—'}</dd>
+              <dd>{formatVersion(availableVersion)}</dd>
             </dl>
             {releaseNotes && (
               <div className={styles.releaseNotes}>
@@ -181,9 +187,9 @@ export function AppUpdateDialog() {
             <p className={styles.notice}>{t('updater.readyToRestart')}</p>
             <dl className={styles.versionGrid}>
               <dt>{t('updater.currentVersion')}</dt>
-              <dd>{currentVersion || '—'}</dd>
+              <dd>{formatVersion(currentVersion)}</dd>
               <dt>{t('updater.availableVersion')}</dt>
-              <dd>{availableVersion || '—'}</dd>
+              <dd>{formatVersion(availableVersion)}</dd>
             </dl>
           </div>
         ) : (
@@ -191,9 +197,9 @@ export function AppUpdateDialog() {
             <p className={styles.notice}>{t('updater.newVersionAvailable')}</p>
             <dl className={styles.versionGrid}>
               <dt>{t('updater.currentVersion')}</dt>
-              <dd>{currentVersion || '—'}</dd>
+              <dd>{formatVersion(currentVersion)}</dd>
               <dt>{t('updater.availableVersion')}</dt>
-              <dd>{availableVersion || '—'}</dd>
+              <dd>{formatVersion(availableVersion)}</dd>
             </dl>
             {releaseNotes && (
               <div className={styles.releaseNotes}>
@@ -264,6 +270,19 @@ export function AppUpdateDialog() {
               onClick={() => void restartApp(saveAll)}
             >
               {t('updater.restartNow')}
+            </button>
+          </>
+        ) : !updateHandle ? (
+          <>
+            <button type="button" onClick={postponeUpdate}>
+              {t('updater.later')}
+            </button>
+            <button
+              type="button"
+              className={styles.primary}
+              onClick={handleOpenRelease}
+            >
+              {t('updater.openReleases')}
             </button>
           </>
         ) : (
