@@ -8,6 +8,9 @@ import { pageColumns, projectPageText } from '../../lib/pageProperties'
 import { PageHeaderFooter } from './PageHeaderFooter'
 import { useEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEventHandler, type ReactNode } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useRulerStore } from '../../stores/rulerStore'
+import { HorizontalRuler } from '../ruler/HorizontalRuler'
+import type { Editor } from '@tiptap/react'
 import { useLayoutStore } from '../../stores/layoutStore'
 import { PAGE_GAP_MM, pageGeometry, sheetCountForHeight } from '../../lib/pageLayout'
 import { alignSections, isSectionContentMutation } from '../../lib/sectionLayout'
@@ -18,8 +21,9 @@ import styles from './PageView.module.css'
 
 
 /** One continuous editor, flowing down each column and then onto the next sheet. */
-export function PageView({ children, onPageClick, onPagePointerDown }: { children: ReactNode; onPageClick?: MouseEventHandler<HTMLDivElement>; onPagePointerDown?: PointerEventHandler<HTMLDivElement> }) {
-  const { pageSize, columns: defaultColumns, theme, marginMm, zoom, setZoom, viewMode } = useSettingsStore()
+export function PageView({ children, onPageClick, onPagePointerDown, editor }: { children: ReactNode; onPageClick?: MouseEventHandler<HTMLDivElement>; onPagePointerDown?: PointerEventHandler<HTMLDivElement>; editor?: Editor | null }) {
+  const { pageSize, columns: defaultColumns, theme, marginMm, setMarginMm, zoom, setZoom, viewMode } = useSettingsStore()
+  const rulerVisible = useRulerStore((s) => s.visible)
   const path = useContext(DocumentPathContext)
   const current = useDocumentStore(state => path === undefined || state.document.path === path ? state.document : state.buffers[path ?? '__untitled__'])
   const workspace = useDocumentStore(state => state.workspaceRoot)
@@ -112,6 +116,12 @@ export function PageView({ children, onPageClick, onPagePointerDown }: { childre
       <div className={spreads ? styles.spread : undefined}
         data-page-layout={spreads ? 'spreads' : 'pages'}
         style={{ '--page-width': `${size.widthMm}mm`, '--page-height': `${size.heightMm}mm` } as CSSProperties}>
+      {rulerVisible && (
+        <div className={`mb-1 ${spreads ? 'flex gap-[8mm]' : ''}`} data-horizontal-ruler-bar="true">
+          <HorizontalRuler widthMm={size.widthMm} marginMm={marginMm} onMarginChange={setMarginMm} editor={editor} />
+          {spreads && <HorizontalRuler widthMm={size.widthMm} marginMm={marginMm} onMarginChange={setMarginMm} editor={editor} />}
+        </div>
+      )}
       <div data-editor-stack className={`grimoire-page ${paginated ? styles.pages : ''} relative`} style={style} onClick={onPageClick} onPointerDown={onPagePointerDown}>
         {Array.from({ length: visibleSheets }, (_, index) => <div key={index}>
           {paginated && <div aria-hidden="true" data-editor-sheet={index + 1} className={`grimoire-page ${styles.paper}`}

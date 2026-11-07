@@ -19,6 +19,7 @@
 .sheets { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; align-items: flex-start; }
 .sheets[hidden] { display: none; }
 .sheets :global(.native-print-sheet) { box-shadow: 0 .2rem .8rem #0008; flex: none; }
+.sheets :global(.grimoire-page) { font-size: 16px; line-height: 1.5; }
 .footer { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; }
 .footer [role="status"] { margin-right: auto; color: #bcb7ac; }
 .footer .primary { background: #cfb37c; color: #1c1b19; font-weight: 600; }

@@ -30,6 +30,7 @@ interface SettingsState {
   /** Print bleed in millimetres. */
   bleedMm: number
   marginMm: number
+  setMarginMm: (marginMm: number) => void
   rulerGuides: RulerGuide[]
   setRulerGuides: (rulerGuides: RulerGuide[]) => void
   setPageSize: (pageSize: PageSizeId) => void
@@ -71,6 +72,11 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setZoom: (zoom) => { if (Number.isFinite(zoom)) set({ zoom: Math.max(0.25, Math.min(3, zoom)) }) },
   bleedMm: 3,
   marginMm: 15,
+  setMarginMm: (marginMm) => {
+    if (Number.isFinite(marginMm)) {
+      set({ marginMm: Math.max(5, Math.min(50, Math.round(marginMm * 10) / 10)) })
+    }
+  },
   rulerGuides: [],
   setRulerGuides: (rulerGuides) => set({ rulerGuides }),
   setPageSize: (pageSize) => set({ pageSize }),

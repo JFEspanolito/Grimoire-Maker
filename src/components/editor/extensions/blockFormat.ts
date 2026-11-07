@@ -1,4 +1,5 @@
 import { Fragment, type Node as PMNode } from '@tiptap/pm/model'
+import { Selection, type EditorState } from '@tiptap/pm/state'
 import { Extension, getHTMLFromFragment } from '@tiptap/react'
 
 export const INDENT_STEP_EM = 2
@@ -60,7 +61,126 @@ export const BlockFormat = Extension.create({
       if (extension) (extension.config as { addStorage?: () => unknown }).addStorage = () => ({ markdown: { serialize, parse: {} } })
     }
   },
+  addKeyboardShortcuts() {
+    return {
+      Tab: () => {
+        if (this.editor.isActive('listItem')) {
+          if (this.editor.can().sinkListItem('listItem')) {
+            return this.editor.commands.sinkListItem('listItem')
+          }
+          return sinkListIntoPrevious(this.editor)
+        }
+        return false
+      },
+    }
+  },
 })
+
+export function findEnclosingList(state: EditorState) {
+  const { $from } = state.selection
+  for (let d = $from.depth; d > 0; d--) {
+    const name = $from.node(d).type.name
+    if (name === 'bulletList' || name === 'orderedList') {
+      return { node: $from.node(d), depth: d, pos: $from.before(d) }
+    }
+  }
+  return null
+}
+
+export function canSinkListIntoPrevious(state: EditorState): boolean {
+  const currentList = findEnclosingList(state)
+  if (!currentList) return false
+  const $listPos = state.doc.resolve(currentList.pos)
+  const prevNode = $listPos.nodeBefore
+  if (!prevNode) return false
+  return prevNode.type.name === 'orderedList' || prevNode.type.name === 'bulletList'
+}
+
+export function sinkListIntoPrevious(editor: any): boolean {
+  const state: EditorState | undefined = editor.state
+  if (!state) return false
+  const currentList = findEnclosingList(state)
+  if (!currentList) return false
+  const $listPos = state.doc.resolve(currentList.pos)
+  const prevNode = $listPos.nodeBefore
+  if (!prevNode || (prevNode.type.name !== 'orderedList' && prevNode.type.name !== 'bulletList')) return false
+
+  const listNode = currentList.node
+  const listSize = listNode.nodeSize
+  const relativeCursorPos = state.selection.from - currentList.pos
+
+  const tr = state.tr
+  // Inside the last listItem of prevNode:
+  const insideLastItemPos = currentList.pos - 2
+
+  tr.delete(currentList.pos, currentList.pos + listSize)
+  tr.insert(insideLastItemPos, listNode)
+  const newCursorPos = insideLastItemPos + relativeCursorPos
+  try {
+    tr.setSelection(Selection.near(tr.doc.resolve(newCursorPos)))
+  } catch {
+    // Keep fallback selection if pos boundary shifted
+  }
+  if (editor.view?.dispatch) {
+    editor.view.dispatch(tr)
+  }
+  return true
+}
+
+export function getPreviousOrderedList(state: EditorState): { node: PMNode; pos: number } | null {
+  const { doc, selection } = state
+  let prevList: { node: PMNode; pos: number } | null = null
+  let lastHeadingPos = -1
+  let lastListPos = -1
+
+  doc.nodesBetween(0, selection.from, (node, pos) => {
+    if (node.type.name === 'heading') {
+      lastHeadingPos = pos
+    } else if (node.type.name === 'orderedList') {
+      prevList = { node, pos }
+      lastListPos = pos
+    }
+  })
+
+  if (prevList && lastListPos > lastHeadingPos) {
+    return prevList
+  }
+  return null
+}
+
+export function toggleOrderedListSmart(editor: any): boolean {
+  if (editor.isActive('orderedList')) {
+    return editor.chain().focus().toggleOrderedList().run()
+  }
+
+  const state: EditorState | undefined = editor.state
+  if (!state) return editor.chain().focus().toggleOrderedList().run()
+
+  const prev = getPreviousOrderedList(state)
+  if (prev) {
+    const nextStart = (Number(prev.node.attrs.start) || 1) + prev.node.childCount
+    return editor.chain().focus().toggleOrderedList().updateAttributes('orderedList', { start: nextStart }).run()
+  }
+
+  return editor.chain().focus().toggleOrderedList().run()
+}
+
+export function setListStart(editor: any, start: number): boolean {
+  return editor.chain().updateAttributes('orderedList', { start: Math.max(1, start) }).run()
+}
+
+export function restartListNumbering(editor: any): boolean {
+  return setListStart(editor, 1)
+}
+
+export function continueListNumbering(editor: any): boolean {
+  const state: EditorState | undefined = editor.state
+  if (!state) return false
+  const prev = getPreviousOrderedList(state)
+  if (!prev) return false
+  const nextStart = (Number(prev.node.attrs.start) || 1) + prev.node.childCount
+  return setListStart(editor, nextStart)
+}
 
 interface IndentTarget {
   isActive(name: string): boolean
@@ -81,13 +201,25 @@ const nextIndent = (editor: IndentTarget, delta: 1 | -1) =>
 
 /** Lists nest or lift their item; any other block moves by one indent step. */
 export function canChangeIndent(editor: IndentTarget, delta: 1 | -1): boolean {
-  if (editor.isActive('listItem')) return delta > 0 ? editor.can().sinkListItem('listItem') : editor.can().liftListItem('listItem')
+  if (editor.isActive('listItem')) {
+    if (delta > 0) {
+      if (editor.can().sinkListItem('listItem')) return true
+      if ('state' in editor && canSinkListIntoPrevious((editor as any).state)) return true
+      return false
+    }
+    return editor.can().liftListItem('listItem')
+  }
   return nextIndent(editor, delta) !== (Number(editor.getAttributes(blockType(editor)).indent) || 0)
 }
 
 export function changeIndent(editor: IndentTarget, delta: 1 | -1): boolean {
   if (editor.isActive('listItem')) {
-    return delta > 0 ? editor.chain().focus().sinkListItem('listItem').run() : editor.chain().focus().liftListItem('listItem').run()
+    if (delta > 0) {
+      if (editor.can().sinkListItem('listItem')) return editor.chain().focus().sinkListItem('listItem').run()
+      if ('state' in editor && sinkListIntoPrevious(editor)) return true
+      return false
+    }
+    return editor.chain().focus().liftListItem('listItem').run()
   }
   return editor.chain().focus().updateAttributes(blockType(editor), { indent: nextIndent(editor, delta) }).run()
 }

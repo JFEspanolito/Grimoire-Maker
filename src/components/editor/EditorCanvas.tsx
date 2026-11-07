@@ -13,6 +13,9 @@ import { focusDocumentEnd, insertContentBox } from '../../lib/contentBoxes'
 import { EditorContextMenu, type EditorMenuItem } from './EditorContextMenu'
 import { selectionMarkdown } from './selectionMarkdown'
 import { SaveSnippetDialog } from '../snippets/SaveSnippetDialog'
+import { continueListNumbering, getPreviousOrderedList, restartListNumbering, setListStart } from './extensions/blockFormat'
+import { useTranslation } from '../../lib/i18n'
+import { useFormatPainterStore } from '../../stores/formatPainterStore'
 
 function getMarkdown(editor: Editor): string {
   return (editor.storage as unknown as { markdown: { getMarkdown(): string } }).markdown.getMarkdown()
@@ -25,11 +28,13 @@ interface Props {
 }
 
 export function EditorCanvas({ onReady, path, active = true }: Props) {
+  const { t } = useTranslation()
+  const isFormatPainterArmed = useFormatPainterStore((s) => s.armed)
   const body = useDocumentStore((s) => path === undefined ? s.document.body : (s.buffers[path ?? '__untitled__']?.body ?? ''))
   const activePath = useDocumentStore((s) => s.document.path)
   const documentPath = path === undefined ? activePath : path
 
-  const [menu, setMenu] = useState<{ x: number; y: number; markdown: string; actions: PluginContextAction[]; context: PluginContextActionContext } | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; markdown: string; actions: PluginContextAction[]; listActions: EditorMenuItem[]; context: PluginContextActionContext } | null>(null)
   const [snippetMarkdown, setSnippetMarkdown] = useState<string | null>(null)
 
   const editor = useEditor({
@@ -113,20 +118,78 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
       const actions = usePluginRegistry.getState().contextActions.filter((action) => {
         try { return action.when ? action.when(context) === true : true } catch (error) { reportError('plugin.contextAction.when', error); return false }
       })
-      if (!markdown && !actions.length) return
+      const isOrdered = editor.isActive('orderedList')
+      if (!markdown && !actions.length && !isOrdered) return
       event.preventDefault()
       event.stopPropagation()
-      const count = actions.length + (markdown ? 1 : 0)
+
+      const currentStart = isOrdered ? (Number(editor.getAttributes('orderedList').start) || 1) : 1
+      const prevOrdered = isOrdered ? getPreviousOrderedList(editor.state) : null
+      const listActions: EditorMenuItem[] = isOrdered ? [
+        ...(currentStart !== 1 ? [{
+          id: 'host.restart-numbering',
+          label: t('toolbar.restartNumbering'),
+          run: () => restartListNumbering(editor),
+        }] : []),
+        ...(prevOrdered ? [{
+          id: 'host.continue-numbering',
+          label: t('toolbar.continueNumbering'),
+          run: () => continueListNumbering(editor),
+        }] : []),
+        {
+          id: 'host.set-start-number',
+          label: t('toolbar.setStartNumber'),
+          run: () => {
+            const input = window.prompt(t('toolbar.promptStartNumber'), String(currentStart))
+            if (input !== null) {
+              const val = parseInt(input.trim(), 10)
+              if (!isNaN(val) && val >= 1) setListStart(editor, val)
+            }
+          },
+        },
+      ] : []
+
+      const count = actions.length + listActions.length + (markdown ? 1 : 0)
       setMenu({
-        markdown, actions, context,
+        markdown, actions, listActions, context,
         x: Math.min(event.clientX, window.innerWidth - 220), y: Math.min(event.clientY, window.innerHeight - (count * 34 + 12)),
       })
     }
     dom.addEventListener('contextmenu', handler, true)
     return () => dom.removeEventListener('contextmenu', handler, true)
-  }, [editor, documentPath])
+  }, [editor, documentPath, t])
+
+  useEffect(() => {
+    if (!editor || !isFormatPainterArmed) return
+    let dom: HTMLElement
+    try { dom = editor.view.dom } catch { return }
+
+    const onPointerUp = (event: globalThis.MouseEvent) => {
+      if (dom.contains(event.target as Node)) {
+        setTimeout(() => {
+          if (useFormatPainterStore.getState().armed) {
+            useFormatPainterStore.getState().apply(editor)
+          }
+        }, 10)
+      }
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        useFormatPainterStore.getState().disarm()
+      }
+    }
+
+    document.addEventListener('pointerup', onPointerUp)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerup', onPointerUp)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [editor, isFormatPainterArmed])
 
   const menuItems = (current: NonNullable<typeof menu>): EditorMenuItem[] => [
+    ...current.listActions,
     ...current.actions.map((action) => ({
       id: action.id, label: String(action.label),
       run: () => { try { action.run(current.context) } catch (error) { reportError('plugin.contextAction.run', error) } },
@@ -136,8 +199,8 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
 
   return (
     <>
-      <DocumentPathContext value={documentPath}><PageView onPageClick={focusWritingArea} onPagePointerDown={focusWritingArea}>
-        <EditorContent editor={editor} className="grimoire-content" />
+      <DocumentPathContext value={documentPath}><PageView editor={editor} onPageClick={focusWritingArea} onPagePointerDown={focusWritingArea}>
+        <EditorContent editor={editor} className={`grimoire-content ${isFormatPainterArmed ? 'cursor-copy' : ''}`} />
       </PageView></DocumentPathContext>
       {menu && <EditorContextMenu x={menu.x} y={menu.y} onClose={closeMenu} items={menuItems(menu)} />}
       {snippetMarkdown !== null && <SaveSnippetDialog markdown={snippetMarkdown} onClose={() => setSnippetMarkdown(null)} />}

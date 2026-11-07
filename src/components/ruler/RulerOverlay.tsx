@@ -32,9 +32,11 @@ function GuideLine({ guide, maximum, pageWidthMm }: { guide: RulerGuide; maximum
   return <div className={row ? styles.row : styles.column} data-guide-axis={guide.axis}
     style={row ? { top: `${position}mm` } : { left: `${position}mm` }}>
     <button type="button" className={styles.handle} aria-label={`Move ${guide.axis} guide`}
-      title={`${guide.axis === GUIDE_AXIS.ROW ? 'Row' : 'Column'}: ${position} mm. Drag or use arrow keys; Delete to remove.`}
+      title={`${guide.axis === GUIDE_AXIS.ROW ? 'Row' : 'Column'}: ${position} mm. Drag or use arrow keys; Double-click, right-click, or Delete to remove.`}
       role="slider" aria-orientation={row ? 'vertical' : 'horizontal'} aria-valuemin={0} aria-valuemax={maximum} aria-valuenow={position}
       onPointerDown={start} onPointerMove={move} onPointerCancel={cancel} onLostPointerCapture={cancel}
+      onDoubleClick={(event) => { event.stopPropagation(); removeGuide(guide.id) }}
+      onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); removeGuide(guide.id) }}
       onPointerUp={(event) => {
         const active = drag.current
         if (!active || active.pointerId !== event.pointerId) return

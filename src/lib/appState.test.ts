@@ -16,7 +16,7 @@ it('saves appearance through the shared native settings writer, not workspace st
   stop = watchSettings()
   useSettingsStore.getState().setTheme('sci-fi')
   await Promise.resolve()
-  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], panels: expect.objectContaining({ files: true, documentIndex: true }), zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically', language: 'en', customFonts: [] })
+  expect(saveSettings).toHaveBeenCalledWith({ pageSize: 'a4', columns: 2, theme: 'sci-fi', rulerGuides: [], panels: expect.objectContaining({ files: true, documentIndex: true }), zoom: 1, autoSaveSeconds: 300, autoCommitEnabled: true, autoCommitMinutes: 20, autoCommitMessage: 'update content automatically', language: 'en', customFonts: [], marginMm: 15 })
   expect(writeTextFile).not.toHaveBeenCalled()
 })
 
@@ -34,6 +34,14 @@ it('persists editor zoom through setting.json', async () => {
   useSettingsStore.getState().setZoom(2)
   await Promise.resolve()
   expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ zoom: 2 }))
+  expect(writeTextFile).not.toHaveBeenCalled()
+})
+
+it('persists page margin through setting.json', async () => {
+  stop = watchSettings()
+  useSettingsStore.getState().setMarginMm(25)
+  await Promise.resolve()
+  expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ marginMm: 25 }))
   expect(writeTextFile).not.toHaveBeenCalled()
 })
 

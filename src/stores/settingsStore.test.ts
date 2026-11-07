@@ -15,3 +15,14 @@ it('restores a saved layout and ignores anything that is not a known on/off valu
   useSettingsStore.getState().restorePanels(undefined)
   expect(useSettingsStore.getState().panels.files).toBe(false)
 })
+
+it('updates marginMm within bounds and clamps invalid values', () => {
+  useSettingsStore.getState().setMarginMm(20)
+  expect(useSettingsStore.getState().marginMm).toBe(20)
+
+  useSettingsStore.getState().setMarginMm(2)
+  expect(useSettingsStore.getState().marginMm).toBe(5)
+
+  useSettingsStore.getState().setMarginMm(80)
+  expect(useSettingsStore.getState().marginMm).toBe(50)
+})

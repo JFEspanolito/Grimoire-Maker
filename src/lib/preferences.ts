@@ -19,7 +19,21 @@ export async function loadSettings(): Promise<PersistedSettings> {
 let settingsQueue: Promise<void> = Promise.resolve()
 export function saveSettings(settings: PersistedSettings): Promise<void> {
   if (!isTauri()) return Promise.resolve()
-  const next = settingsQueue.then(() => invoke<void>('save_settings', { settings }))
+  const next = settingsQueue.then(async () => {
+    try {
+      await invoke<void>('save_settings', { settings })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('unknown field') || msg.includes('customFonts') || msg.includes('marginMm')) {
+        const copy = { ...settings }
+        delete copy.customFonts
+        delete copy.marginMm
+        await invoke<void>('save_settings', { settings: copy })
+        return
+      }
+      throw err
+    }
+  })
   settingsQueue = next.catch(() => undefined)
   return next
 }

@@ -50,6 +50,8 @@ body,
   background: var(--page-bg);
   color: var(--page-fg);
   font-family: var(--page-font);
+  font-size: 16px;
+  line-height: 1.5;
   column-gap: 8mm;
   box-sizing: border-box;
 }
