@@ -65,7 +65,7 @@ export function toggleBlockColumnSpan(editor: Editor): boolean {
   }
 
   if (targets.length === 0) {
-    doc.nodesBetween(from, to, (node, pos, parent) => {
+    doc.nodesBetween(from, to, (node, pos) => {
       if (node.attrs.columnSpan !== undefined && (node.type.name === 'heading' || node.type.name === 'paragraph' || node.type.name === 'blockquote' || node.type.name === 'horizontalRule')) {
         targets.push({ pos, node })
         return false
@@ -104,6 +104,8 @@ interface SerializerState {
   closeBlock(node: PMNode): void
   renderInline(node: PMNode, escape?: boolean): void
   repeat(text: string, count: number): string
+  wrapBlock(delim: string, firstDelim: string | null, node: PMNode, f: () => void): void
+  renderContent(node: PMNode): void
 }
 
 /** Plain Markdown cannot carry alignment, indentation, or column span, so only those blocks are written as HTML. */
@@ -153,7 +155,7 @@ export const BlockFormat = Extension.create({
       },
       blockquote(state, node) {
         if (isFormatted(node)) return writeHtml(state, node)
-        state.wrapIn('> ', () => state.renderContent(node))
+        state.wrapBlock('> ', null, node, () => state.renderContent(node))
       },
       horizontalRule(state, node) {
         if (isFormatted(node)) return writeHtml(state, node)
