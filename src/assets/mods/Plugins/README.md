@@ -1,5 +1,4 @@
 # Plugins
 
-Each folder here is one plugin. A folder with a `manifest.json` and `dist/index.js` is a plugin
-package and runs isolated; `zoom` and `pixel-ruler` are examples. A folder with TSX, TS or JS
-source files is a trusted plugin. See the mods README for details.
+Official built-in plugins for Grimoire Maker (such as Bookmarks and Zoom).
+Enable, disable, or restore them from the Plugins tab in the Mod Manager.
