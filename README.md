@@ -91,9 +91,10 @@ Grimoire Maker is built around an open, shareable modding ecosystem. Users can f
 ### Option A: Prebuilt Releases (End Users)
 
 1. Go to the [**Releases**](../../releases) page of this repository.
-2. Choose between the two official editions for Windows (`x64`):
-   - **Full Installer (`Grimoire Maker_<version>_x64-setup.exe`):** Standard NSIS per-user installer with Start Menu/Desktop shortcuts and uninstaller. Stores configuration and mods in `%APPDATA%\app.grimoiremaker.desktop`.
-   - **Portable Edition (`GrimoireMaker-portable-<version>-x64.zip`):** Zero-install archive containing `Grimoire Maker.exe`, `portable.flag`, and `README-portable.txt`. Keeps all settings, mods, logs, and WebView2 data inside a self-contained `Data\` folder next to the executable (ideal for USB drives or synced folders).
+2. Choose the download package for your operating system:
+   - **Windows Full Installer (`Grimoire.Maker_<version>_x64-setup.exe`):** Standard NSIS per-user installer with Start Menu/Desktop shortcuts and uninstaller.
+   - **Windows Portable Edition (`GrimoireMaker-portable-<version>-x64.zip`):** Zero-install archive containing `Grimoire Maker.exe`, `portable.flag`, and `README-portable.txt`. Keeps all settings, mods, logs, and WebView2 data inside a self-contained `Data\` folder next to the executable.
+   - **macOS Disk Image (`Grimoire.Maker_<version>_aarch64.dmg`):** Standard Apple Disk Image for Apple Silicon (M1/M2/M3/M4) Macs. Mount and drag into `/Applications`.
 3. Launch **Grimoire Maker**. On first launch, default Templates, Snippets, Themes, and Plugins are automatically seeded into your configuration folder.
 
 ### Option B: Build from Source (Developers)
@@ -120,11 +121,14 @@ pnpm install
 # 3. Start the full desktop app in development mode
 pnpm tauri dev
 
-# 4. Build the Full NSIS Installer (src-tauri/target/release/bundle/nsis/)
+# 4. Build the Full NSIS Installer (Windows)
 pnpm build:installer
 
-# 5. Build the Portable Edition ZIP (release/GrimoireMaker-portable-<version>-x64.zip)
+# 5. Build the Portable Edition ZIP (Windows)
 pnpm build:portable
+
+# 6. Build the macOS Disk Image (macOS)
+pnpm build:dmg
 ```
 
 ---
