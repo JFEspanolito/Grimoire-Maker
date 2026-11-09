@@ -28,7 +28,14 @@ export function isBlockColumnSpanned(editor: Editor): boolean {
     const table = findTable(editor)
     return table?.node.attrs.columnSpan === 'all'
   }
-  const { $from } = editor.state.selection
+  const { selection } = editor.state
+  if ('node' in selection) {
+    const selNode = (selection as { node?: PMNode }).node
+    if (selNode && selNode.attrs.columnSpan !== undefined) {
+      return selNode.attrs.columnSpan === 'all'
+    }
+  }
+  const { $from } = selection
   for (let d = $from.depth; d > 0; d--) {
     const node = $from.node(d)
     if (node.attrs.columnSpan !== undefined) {
@@ -49,19 +56,29 @@ export function toggleBlockColumnSpan(editor: Editor): boolean {
 
   const targets: { pos: number; node: PMNode }[] = []
 
-  doc.nodesBetween(from, to, (node, pos, parent) => {
-    if (node.attrs.columnSpan !== undefined && (node.type.name === 'heading' || node.type.name === 'paragraph' || node.type.name === 'blockquote')) {
-      targets.push({ pos, node })
-      return false
+  // Check if current selection is a NodeSelection (e.g. horizontalRule or image)
+  if ('node' in selection) {
+    const selNode = (selection as { node?: PMNode }).node
+    if (selNode && selNode.attrs.columnSpan !== undefined) {
+      targets.push({ pos: selection.from, node: selNode })
     }
-    return true
-  })
+  }
+
+  if (targets.length === 0) {
+    doc.nodesBetween(from, to, (node, pos, parent) => {
+      if (node.attrs.columnSpan !== undefined && (node.type.name === 'heading' || node.type.name === 'paragraph' || node.type.name === 'blockquote' || node.type.name === 'horizontalRule')) {
+        targets.push({ pos, node })
+        return false
+      }
+      return true
+    })
+  }
 
   if (targets.length === 0) {
     const { $from } = selection
     for (let d = $from.depth; d > 0; d--) {
       const node = $from.node(d)
-      if (node.attrs.columnSpan !== undefined && (node.type.name === 'heading' || node.type.name === 'paragraph' || node.type.name === 'blockquote')) {
+      if (node.attrs.columnSpan !== undefined && (node.type.name === 'heading' || node.type.name === 'paragraph' || node.type.name === 'blockquote' || node.type.name === 'horizontalRule')) {
         targets.push({ pos: $from.before(d), node })
         break
       }
@@ -113,7 +130,7 @@ declare module '@tiptap/react' {
 export const BlockFormat = Extension.create({
   name: 'blockFormat',
   addGlobalAttributes() {
-    return [{ types: ['paragraph', 'heading', 'blockquote'], attributes: blockAttributes }]
+    return [{ types: ['paragraph', 'heading', 'blockquote', 'horizontalRule'], attributes: blockAttributes }]
   },
   addCommands() {
     return {
@@ -137,6 +154,11 @@ export const BlockFormat = Extension.create({
       blockquote(state, node) {
         if (isFormatted(node)) return writeHtml(state, node)
         state.wrapIn('> ', () => state.renderContent(node))
+      },
+      horizontalRule(state, node) {
+        if (isFormatted(node)) return writeHtml(state, node)
+        state.write('---')
+        state.closeBlock(node)
       },
     }
     for (const [name, serialize] of Object.entries(serializers)) {

@@ -121,3 +121,34 @@ it('toggles column span on headings and paragraphs and preserves it through save
   expect(markdown(reopened)).toContain('## 4. Modelos de Dron')
   expect(markdown(reopened)).not.toContain('data-column-span="all"')
 })
+
+it('toggles column span on horizontalRule and preserves it through save/load', () => {
+  create('Before\n\n---\n\nAfter')
+  let hrPos = -1
+  editor!.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'horizontalRule') hrPos = pos
+  })
+  expect(hrPos).toBeGreaterThanOrEqual(0)
+  editor!.commands.setNodeSelection(hrPos)
+  expect(isBlockColumnSpanned(editor!)).toBe(false)
+  toggleBlockColumnSpan(editor!)
+  expect(isBlockColumnSpanned(editor!)).toBe(true)
+  expect(editor!.state.doc.nodeAt(hrPos)?.attrs.columnSpan).toBe('all')
+
+  const saved = markdown(editor!)
+  expect(saved).toContain('data-column-span="all"')
+  expect(saved).toContain('<hr')
+
+  const reopened = create(saved)
+  let reopenedHrPos = -1
+  reopened.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'horizontalRule') reopenedHrPos = pos
+  })
+  expect(reopened.state.doc.nodeAt(reopenedHrPos)?.attrs.columnSpan).toBe('all')
+
+  reopened.commands.setNodeSelection(reopenedHrPos)
+  toggleBlockColumnSpan(reopened)
+  expect(reopened.state.doc.nodeAt(reopenedHrPos)?.attrs.columnSpan).toBeNull()
+  expect(markdown(reopened)).toContain('---')
+  expect(markdown(reopened)).not.toContain('data-column-span="all"')
+})
