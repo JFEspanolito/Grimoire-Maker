@@ -55,6 +55,29 @@ describe('tables in Markdown', () => {
     expect(countOf(again, 'table')).toBe(1)
     expect(countOf(again, 'tableRow')).toBe(2)
   })
+
+  it('preserves columnSpan="all" through save and reload as HTML', () => {
+    const source = '<table data-column-span="all"><thead><tr><th>Model</th><th>Gas</th></tr></thead><tbody><tr><td>Wasp</td><td>14</td></tr></tbody></table>'
+    const e = createEditor(source)
+    expect(countOf(e, 'table')).toBe(1)
+    expect(e.state.doc.firstChild?.attrs.columnSpan).toBe('all')
+
+    const saved = markdownOf(e)
+    expect(saved).toContain('data-column-span="all"')
+
+    const reloaded = createEditor(saved)
+    expect(reloaded.state.doc.firstChild?.attrs.columnSpan).toBe('all')
+  })
+
+  it('preserves custom column widths through save and reload as HTML', () => {
+    const source = '<table><colgroup><col style="width: 150px;"><col style="width: 300px;"></colgroup><thead><tr><th colwidth="150"><p>Model</p></th><th colwidth="300"><p>Gas</p></th></tr></thead><tbody><tr><td colwidth="150"><p>Wasp</p></td><td colwidth="300"><p>14</p></td></tr></tbody></table>'
+    const e = createEditor(source)
+    const saved = markdownOf(e)
+    expect(saved).toContain('colwidth')
+
+    const reloaded = createEditor(saved)
+    expect(countOf(reloaded, 'table')).toBe(1)
+  })
 })
 
 describe('buildTable', () => {

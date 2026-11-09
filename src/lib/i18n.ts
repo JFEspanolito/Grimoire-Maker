@@ -67,6 +67,7 @@ export const DICTIONARY = {
     'menu.insert.quote': 'Quote',
     'menu.insert.floatingBox': 'Floating Box',
     'menu.insert.formula': 'Insert Formula',
+    'menu.insert.columnBreak': 'Column Break',
     'menu.insert.sectionBreak': 'Section Break',
 
     // Menu Document
@@ -515,6 +516,9 @@ export const DICTIONARY = {
     'table.addColLeft': 'Add column left',
     'table.addColRight': 'Add column right',
     'table.deleteCol': 'Delete column',
+    'table.spanAll': 'Span all columns (full page width)',
+    'table.colWidth': 'Column width (px)',
+    'table.resetColWidth': 'Reset column width to auto',
     'table.deleteTable': 'Delete table',
 
     // File Tree & Explorer
@@ -694,6 +698,7 @@ export const DICTIONARY = {
     'menu.insert.quote': 'Cita',
     'menu.insert.floatingBox': 'Caja flotante',
     'menu.insert.formula': 'Insertar fórmula',
+    'menu.insert.columnBreak': 'Salto de columna',
     'menu.insert.sectionBreak': 'Salto de sección',
 
     // Menu Document
@@ -1142,6 +1147,9 @@ export const DICTIONARY = {
     'table.addColLeft': 'Añadir columna a la izquierda',
     'table.addColRight': 'Añadir columna a la derecha',
     'table.deleteCol': 'Eliminar columna',
+    'table.spanAll': 'Ocupar ancho completo (todas las columnas)',
+    'table.colWidth': 'Ancho de columna (px)',
+    'table.resetColWidth': 'Restablecer ancho a automático',
     'table.deleteTable': 'Eliminar tabla',
 
     // File Tree & Explorer

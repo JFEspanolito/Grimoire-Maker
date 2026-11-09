@@ -303,8 +303,16 @@ body,
 .grimoire-content table {
   border-collapse: collapse;
   width: 100%;
+  max-width: 100%;
   margin: 0.8em 0;
   font-size: 0.95em;
+  table-layout: fixed;
+}
+
+.grimoire-content table[data-column-span='all'],
+.grimoire-content [data-column-span='all'] {
+  column-span: all !important;
+  width: 100% !important;
 }
 
 .grimoire-content tr {
@@ -317,6 +325,27 @@ body,
   padding: 0.25em 0.5em;
   text-align: left;
   vertical-align: top;
+  position: relative;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+
+.grimoire-content .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  z-index: 20;
+  background-color: #f59e0b;
+  pointer-events: none;
+}
+
+.grimoire-content.resize-cursor,
+.ProseMirror.resize-cursor {
+  cursor: col-resize !important;
 }
 
 .grimoire-content th {
@@ -388,3 +417,25 @@ body,
  * would land on the break between sheets and the heading would be left behind at the end of the last one.
  */
 [data-page-layout='spreads'] .grimoire-section + .grimoire-section { margin-top: 0; break-before: column; }
+
+/* Column break forces following text into the next column within the same page */
+[data-type='column-break'],
+.grimoire-column-break {
+  display: block;
+  break-before: column !important;
+  margin: 0.25em 0;
+  height: 2px;
+  border: none;
+  background: transparent;
+}
+.grimoire-content .ProseMirror [data-type='column-break'] {
+  border-top: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent);
+}
+@media print {
+  [data-type='column-break'],
+  .grimoire-column-break {
+    border: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+  }
+}

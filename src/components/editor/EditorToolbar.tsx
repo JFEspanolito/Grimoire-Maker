@@ -81,7 +81,7 @@ const ACTION_TITLE_KEYS: Record<string, TranslationKey> = {
 
 type Group = string[] | 'font' | 'format' | 'structure' | 'tools'
 /** Groups in order; a thin divider separates them. Controls with their own widget sit in named groups. */
-const LAYOUT: Group[] = [['undo', 'redo'], 'font', ['bold', 'italic', 'underline', 'strike'], 'format', 'structure', ['outdent', 'indent', 'bullet', 'ordered', 'divider', 'formula'], 'tools']
+const LAYOUT: Group[] = [['undo', 'redo'], 'font', ['bold', 'italic', 'underline', 'strike'], 'format', 'structure', ['outdent', 'indent', 'bullet', 'ordered', 'formula', 'divider'], 'tools']
 
 const btn = 'min-w-8 rounded px-2 py-1 text-sm hover:bg-white/10 disabled:opacity-30'
 const control = 'rounded bg-white/10 px-1 py-0.5 text-sm text-white'

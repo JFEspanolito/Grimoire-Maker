@@ -22,7 +22,7 @@ import { ExportPdfDialog, type Book } from './ExportPdfDialog'
 import { DocumentOrderDialog } from '../settings/DocumentOrderDialog'
 import { PropertiesDialog } from '../settings/PropertiesDialog'
 import type { Editor } from '@tiptap/react'
-import { insertDivider, insertFloatingBox, insertFormula, insertImage, insertQuote, insertSectionBreak, insertTable } from '../../lib/insertActions'
+import { insertColumnBreak, insertDivider, insertFloatingBox, insertFormula, insertImage, insertQuote, insertSectionBreak, insertTable } from '../../lib/insertActions'
 import { urlGithubBugReport, urlGithubFeatureRequest } from '../../data/contributors'
 import { openExternalUrl } from '../../lib/openUrl'
 import { useAppUpdateStore } from '../../stores/appUpdateStore'
@@ -181,6 +181,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <button disabled={!editor} onClick={() => void run(() => insertQuote(editor!))}>{t('menu.insert.quote')}</button>
         <button disabled={!editor} onClick={() => void run(() => insertFloatingBox(editor!))}>{t('menu.insert.floatingBox')}</button>
         <button disabled={!editor} onClick={() => void run(() => insertFormula(editor!))}>{t('menu.insert.formula')}</button>
+        <button disabled={!editor} onClick={() => void run(() => insertColumnBreak(editor!))}>{t('menu.insert.columnBreak')}</button>
         <button disabled={!editor} onClick={() => void run(() => insertSectionBreak(editor!))}>{t('menu.insert.sectionBreak')}</button>
       </div>
     </details>}
