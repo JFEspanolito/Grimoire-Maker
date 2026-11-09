@@ -1,6 +1,7 @@
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { Fragment } from '@tiptap/pm/model'
+import { TextSelection } from '@tiptap/pm/state'
 import { getHTMLFromFragment, mergeAttributes } from '@tiptap/react'
 
 export interface MarkdownSerializerState {
@@ -59,6 +60,37 @@ export const GrimoireTable = Table.extend({
     return ['table', mergeAttributes(HTMLAttributes, {
       ...(node.attrs.columnSpan === 'all' ? { 'data-column-span': 'all', style: 'column-span: all;' } : {}),
     }), 0]
+  },
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      ArrowDown: () => {
+        const { state, view } = this.editor
+        const { selection, schema } = state
+        if (!schema.nodes.paragraph) return false
+        const { $from } = selection
+        let tableDepth = 0
+        for (let d = $from.depth; d > 0; d--) {
+          if ($from.node(d).type.name === 'table') { tableDepth = d; break }
+        }
+        if (!tableDepth) return false
+        const tableEnd = $from.end(tableDepth)
+        if ($from.pos < tableEnd - 2) return false
+        const afterTable = $from.after(tableDepth)
+        const $after = state.doc.resolve(afterTable)
+        if ($after.nodeAfter && $after.nodeAfter.type.name === 'paragraph') {
+          const nextSelection = TextSelection.findFrom($after, 1)
+          if (nextSelection) {
+            view.dispatch(state.tr.setSelection(nextSelection).scrollIntoView())
+            return true
+          }
+        }
+        const tr = state.tr.insert(afterTable, schema.nodes.paragraph.create())
+        tr.setSelection(TextSelection.create(tr.doc, afterTable + 1)).scrollIntoView()
+        view.dispatch(tr)
+        return true
+      },
+    }
   },
   addStorage() {
     return {
