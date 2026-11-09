@@ -234,15 +234,10 @@ Write standard Markdown (tables, blockquotes, headings, task lists) inside each 
 
 ### 4. Official Plugins
 
-This release supports only the **Bookmarks**, **Zoom**, and **Pixel Ruler** plugins shipped with Grimoire Maker.
+Grimoire Maker includes official built-in plugins such as **Bookmarks** and **Zoom**.
 
-- Enable, disable, remove, or restore official plugins in the Plugins tab.
-- Implementations are compiled with the application. Bookmarks uses bundled TSX; Zoom and Pixel Ruler use bundled declarations rendered by the host.
-- Source copies in the Plugins folder are kept for reference. Editing those copies does not change the running plugin, and existing edits are not overwritten.
-- Creating, importing, approving, or activating third-party plugins is unavailable. Previously imported plugins are not started.
+- Enable, disable, remove, or restore official plugins in the **Plugins** tab of the Mod Manager.
 - Snippet, template, and theme creation/import remain available.
-
-TypeScript 7 checks the app during the build. The running app does not depend on the removed TypeScript JavaScript compiler API to execute plugins.
 
 ---
 
