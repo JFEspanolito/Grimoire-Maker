@@ -431,6 +431,15 @@ body,
 .grimoire-content .ProseMirror [data-type='column-break'] {
   border-top: 1px dashed color-mix(in srgb, var(--accent) 50%, transparent);
 }
+
+/* First element in a section or after a column break starts flush at the top of the column */
+.grimoire-content .grimoire-section > :first-child,
+.grimoire-section > :first-child,
+[data-type='column-break'] + *,
+.grimoire-column-break + * {
+  margin-top: 0 !important;
+}
+
 @media print {
   [data-type='column-break'],
   .grimoire-column-break {
