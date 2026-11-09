@@ -11,7 +11,8 @@
   - [What Does Grimoire Maker Include?](#what-does-grimoire-maker-include)
   - [Mods & Community Contributions](#mods--community-contributions)
   - [How to Install](#how-to-install)
-- **Part II — For Developers: Mods & Contributing**
+- **Part II — For Developers: Architecture, Mods & Contributing**
+  - [Architecture & Developer Guide](docs/architecture.md)
   - [For Developers: How to Make Mods](#for-developers-how-to-make-mods)
     - [1. Creating Templates](#1-creating-templates)
     - [2. Creating Snippets](#2-creating-snippets)
