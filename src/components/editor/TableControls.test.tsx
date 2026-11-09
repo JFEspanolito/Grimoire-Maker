@@ -36,6 +36,7 @@ describe('TableControls', () => {
       editorProps: { handleScrollToSelection: () => true },
     })
     const container = document.createElement('div')
+    document.body.append(container)
     root = createRoot(container)
     return { container, editor }
   }
@@ -86,5 +87,30 @@ describe('TableControls', () => {
 
     const resetCell = editor.state.doc.firstChild?.firstChild?.firstChild
     expect(resetCell?.attrs.colwidth).toBeNull()
+  })
+
+  it('steps width by +/-1 with buttons and preserves input focus', async () => {
+    const source = '<table><thead><tr><th>Header 1</th><th>Header 2</th></tr></thead><tbody><tr><td>Cell 1</td><td>Cell 2</td></tr></tbody></table>'
+    const { container, editor } = mountTableEditor(source)
+    editor.commands.setTextSelection(3)
+
+    await act(async () => root?.render(<TableControls editor={editor} />))
+
+    const widthInput = container.querySelector<HTMLInputElement>('input[type="number"]')!
+    widthInput.focus()
+    expect(document.activeElement).toBe(widthInput)
+
+    const plusBtn = container.querySelector<HTMLButtonElement>('[aria-label="+1 px"]')!
+    await act(async () => plusBtn.click())
+
+    const firstCell = editor.state.doc.firstChild?.firstChild?.firstChild
+    // In headless test, renderedWidth falls back to 100, so 100 + 1 = 101
+    expect(firstCell?.attrs.colwidth).toEqual([101])
+
+    const minusBtn = container.querySelector<HTMLButtonElement>('[aria-label="-1 px"]')!
+    await act(async () => minusBtn.click())
+    const updatedCell = editor.state.doc.firstChild?.firstChild?.firstChild
+    expect(updatedCell?.attrs.colwidth).toEqual([100])
+    expect(document.activeElement).toBe(widthInput)
   })
 })

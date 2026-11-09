@@ -59,7 +59,21 @@ export function findCurrentCellInfo(editor: Editor) {
   const colwidth = cellNode.attrs.colwidth as number[] | null
   const currentWidth = colwidth && colwidth.length > 0 ? colwidth[0] : null
 
-  return { tableNode, tablePos, colIndex, currentWidth }
+  let renderedWidth: number | null = null
+  try {
+    const dom = editor.view.nodeDOM(cellPos)
+    const element = dom instanceof HTMLElement ? dom : (dom instanceof Node ? dom.parentElement : null)
+    if (element) {
+      const rect = element.getBoundingClientRect()
+      if (rect.width > 0) {
+        renderedWidth = Math.round(rect.width)
+      }
+    }
+  } catch {
+    // In headless test environments getBoundingClientRect may be 0
+  }
+
+  return { tableNode, tablePos, colIndex, currentWidth, renderedWidth }
 }
 
 export function toggleColumnSpan(editor: Editor): boolean {
@@ -67,33 +81,36 @@ export function toggleColumnSpan(editor: Editor): boolean {
   if (!table) return false
   const isSpanAll = table.node.attrs.columnSpan === 'all'
   const nextSpan = isSpanAll ? null : 'all'
-  return editor.chain().focus().command(({ tr }) => {
-    tr.setNodeMarkup(table.pos, undefined, { ...table.node.attrs, columnSpan: nextSpan })
-    return true
-  }).run()
+  const tr = editor.state.tr.setNodeMarkup(table.pos, undefined, { ...table.node.attrs, columnSpan: nextSpan })
+  editor.view.dispatch(tr)
+  return true
 }
 
+/**
+ * Updates column width for all cells in that column.
+ * Note: Does not call editor.focus() so typing in width input is never interrupted.
+ */
 export function setTableColumnWidth(editor: Editor, widthPx: number | null): boolean {
   const info = findCurrentCellInfo(editor)
   if (!info) return false
   const { tableNode, tablePos, colIndex } = info
 
-  return editor.chain().focus().command(({ tr }) => {
-    let rowStart = tablePos + 1
-    tableNode.forEach((row) => {
-      let cellStart = rowStart + 1
-      for (let i = 0; i < row.childCount; i++) {
-        const cell = row.child(i)
-        if (i === colIndex) {
-          const colwidth = widthPx !== null && widthPx > 0 ? [Math.round(widthPx)] : null
-          tr.setNodeMarkup(cellStart, undefined, { ...cell.attrs, colwidth })
-        }
-        cellStart += cell.nodeSize
+  const tr = editor.state.tr
+  let rowStart = tablePos + 1
+  tableNode.forEach((row) => {
+    let cellStart = rowStart + 1
+    for (let i = 0; i < row.childCount; i++) {
+      const cell = row.child(i)
+      if (i === colIndex) {
+        const colwidth = widthPx !== null && widthPx > 0 ? [Math.round(widthPx)] : null
+        tr.setNodeMarkup(cellStart, undefined, { ...cell.attrs, colwidth })
       }
-      rowStart += row.nodeSize
-    })
-    return true
-  }).run()
+      cellStart += cell.nodeSize
+    }
+    rowStart += row.nodeSize
+  })
+  editor.view.dispatch(tr)
+  return true
 }
 
 const GROUPS: ActionDef[][] = [
@@ -133,6 +150,12 @@ export function TableControls({ editor }: { editor: Editor }) {
     } else if (value.trim() === '') {
       setTableColumnWidth(editor, null)
     }
+  }
+
+  const stepWidth = (delta: number) => {
+    const base = cellInfo?.currentWidth ?? cellInfo?.renderedWidth ?? 100
+    const next = Math.max(25, Math.min(2000, base + delta))
+    applyWidth(String(next))
   }
 
   return (
@@ -177,26 +200,64 @@ export function TableControls({ editor }: { editor: Editor }) {
       </button>
 
       {/* Individual Column Width */}
-      <label className="flex items-center gap-1 text-xs text-white/70" title={t('table.colWidth')}>
+      <div className="flex items-center gap-1 text-xs text-white/70" title={t('table.colWidth')}>
         <span>W:</span>
+        <button
+          type="button"
+          title="-1 px"
+          aria-label="-1 px"
+          className="flex h-5 w-5 items-center justify-center rounded bg-white/10 text-xs font-semibold text-white hover:bg-white/20 active:bg-white/30"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => stepWidth(-1)}
+        >
+          -
+        </button>
         <input
           type="number"
           min="25"
           max="2000"
-          placeholder="Auto"
+          placeholder={cellInfo?.renderedWidth ? `Auto (${cellInfo.renderedWidth})` : 'Auto'}
           value={widthInput}
           aria-label={t('table.colWidth')}
           title={t('table.colWidth')}
-          className="w-14 rounded bg-white/10 px-1 py-0.5 text-xs text-white placeholder-white/30 focus:bg-white/20 focus:outline-none"
+          className="w-14 rounded bg-white/10 px-1 py-0.5 text-xs text-white placeholder-white/40 focus:bg-white/20 focus:outline-none"
           onMouseDown={(e) => e.stopPropagation()}
-          onChange={(e) => applyWidth(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowUp') {
+              e.preventDefault()
+              stepWidth(e.shiftKey ? 10 : 1)
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault()
+              stepWidth(e.shiftKey ? -10 : -1)
+            }
+          }}
+          onChange={(e) => {
+            const val = e.target.value
+            if (widthInput === '' && (val === '0' || val === '1' || val === '25')) {
+              const base = cellInfo?.renderedWidth ?? 100
+              const adjusted = val === '0' ? base - 1 : base + 1
+              applyWidth(String(Math.max(25, adjusted)))
+              return
+            }
+            applyWidth(val)
+          }}
         />
+        <button
+          type="button"
+          title="+1 px"
+          aria-label="+1 px"
+          className="flex h-5 w-5 items-center justify-center rounded bg-white/10 text-xs font-semibold text-white hover:bg-white/20 active:bg-white/30"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => stepWidth(1)}
+        >
+          +
+        </button>
         <span>px</span>
         <button
           type="button"
           title={t('table.resetColWidth')}
           aria-label={t('table.resetColWidth')}
-          className="rounded px-1 text-xs text-white/50 hover:bg-white/10 hover:text-white"
+          className="rounded px-1.5 py-0.5 text-xs text-white/50 hover:bg-white/10 hover:text-white"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             setWidthInput('')
@@ -205,7 +266,7 @@ export function TableControls({ editor }: { editor: Editor }) {
         >
           Auto
         </button>
-      </label>
+      </div>
 
       {/* Delete Table */}
       <button
