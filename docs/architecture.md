@@ -9,15 +9,15 @@ This guide provides developers and contributors with a concise overview of Grimo
 Grimoire Maker is a local-first desktop publishing app built with **Tauri v2** and **React 19**:
 
 ```text
-┌────────────────────────────────────────────────────────┐
-│                      Desktop Shell                     │
-│    Tauri v2 (Rust Backend) + WebView2 (Win) / WebKit (macOS) │
-├───────────────────────────┬────────────────────────────┤
-│       Frontend Core       │      Publishing Engine     │
-│ React 19 + TypeScript 7   │ Tiptap v3 (ProseMirror)    │
-│ Vite 8 + Tailwind CSS v4  │ Paged.js (Physical Print)  │
-│ Zustand (State Management)│ KaTeX (Math) + PDF.js      │
-└───────────────────────────┴────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                      Desktop Shell                         │
+│ Tauri v2 (Rust Backend) + WebView2 (Win) / WebKit (macOS)  │
+├────────────────────────────┬───────────────────────────────┤
+│       Frontend Core        │      Publishing Engine        │
+│ React 19 + TypeScript 7    │ Tiptap v3 (ProseMirror)       │
+│ Vite 8 + Tailwind CSS v4   │ Paged.js (Physical Print)     │
+│ Zustand (State Management) │ KaTeX (Math) + PDF.js         │
+└────────────────────────────┴───────────────────────────────┘
 ```
 
 - **Desktop Shell (Rust / Tauri v2):** Handles native file system access (`tauri-plugin-fs`), native dialogs (`tauri-plugin-dialog`), in-app updates (`tauri-plugin-updater`), process spawning, and thread-safe preference locking.
