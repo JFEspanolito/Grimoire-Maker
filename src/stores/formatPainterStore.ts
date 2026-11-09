@@ -10,6 +10,7 @@ export interface CopiedFormat {
   fontSize: string | null
   fontFamily: string | null
   textAlign: string | null
+  indent: number
 }
 
 interface FormatPainterState {
@@ -23,7 +24,9 @@ interface FormatPainterState {
 export function captureFormat(editor: Editor): CopiedFormat {
   const textStyle = (editor.getAttributes('textStyle') || {}) as { color?: string; fontSize?: string; fontFamily?: string }
   const block = editor.isActive('heading') ? 'heading' : 'paragraph'
-  const align = (editor.getAttributes(block) as { textAlign?: string }).textAlign
+  const blockAttrs = (editor.getAttributes(block) || {}) as { textAlign?: string; indent?: number }
+  const align = blockAttrs.textAlign
+  const indent = Number(blockAttrs.indent) || 0
   return {
     bold: editor.isActive('bold'),
     italic: editor.isActive('italic'),
@@ -33,6 +36,7 @@ export function captureFormat(editor: Editor): CopiedFormat {
     fontSize: textStyle.fontSize || null,
     fontFamily: textStyle.fontFamily || null,
     textAlign: align && align !== 'left' ? align : null,
+    indent,
   }
 }
 
@@ -49,6 +53,9 @@ export function applyCopiedFormat(editor: Editor, format: CopiedFormat) {
   if (format.fontFamily) chain.setFontFamily(format.fontFamily); else chain.unsetFontFamily()
 
   if (format.textAlign) chain.setTextAlign(format.textAlign)
+
+  if (editor.isActive('heading')) chain.updateAttributes('heading', { indent: format.indent })
+  if (editor.isActive('paragraph')) chain.updateAttributes('paragraph', { indent: format.indent })
 
   chain.run()
 }

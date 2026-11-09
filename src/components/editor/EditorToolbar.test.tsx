@@ -103,6 +103,15 @@ describe('block formatting and underline', () => {
     await act(async () => { editor!.commands.setTextSelection({ from: 1, to: 12 }); button!.click() })
     expect(editor!.getHTML()).not.toContain('<u>')
   })
+
+  it('inserts horizontal rule and persists it as Markdown', async () => {
+    const toolbar = await mountToolbar()
+    const button = toolbar.querySelector<HTMLButtonElement>('[aria-label="Horizontal Rule"]')
+    expect(button).not.toBeNull()
+    expect(button!.getAttribute('title')).toBe('Horizontal Rule')
+    await act(async () => button!.click())
+    expect(editor!.getHTML()).toContain('<hr>')
+  })
 })
 
 describe('context row', () => {
@@ -131,8 +140,8 @@ describe('toolbar layout and text controls', () => {
       item.getAttribute('role') === 'separator' ? '//' : item.getAttribute('aria-label') ?? item.textContent)
     expect(sequence).toEqual([
       'Undo', 'Redo', '//', 'Copy format', 'Font family', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
-      'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', '//',
-      'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', 'Insert Formula', '//', 'Ruler', 'Find and Replace (Ctrl+F)', 'Page view',
+      'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', 'Span all columns (full width)', '//',
+      'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', 'Insert Formula', 'Horizontal Rule', '//', 'Ruler', 'Find and Replace (Ctrl+F)', 'Page view',
     ])
     const alignment = bar.querySelector<HTMLSelectElement>('[aria-label="Alignment"]')!
     expect(Array.from(alignment.options, (option) => option.textContent)).toEqual(['Left', 'Centered', 'Right', 'Justified'])

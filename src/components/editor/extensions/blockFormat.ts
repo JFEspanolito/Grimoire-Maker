@@ -1,11 +1,12 @@
 import { Fragment, type Node as PMNode } from '@tiptap/pm/model'
 import { Selection, type EditorState } from '@tiptap/pm/state'
-import { Extension, getHTMLFromFragment } from '@tiptap/react'
+import { Extension, getHTMLFromFragment, type Editor } from '@tiptap/react'
+import { findTable, toggleColumnSpan } from '../TableControls'
 
 export const INDENT_STEP_EM = 2
 export const MAX_INDENT = 6
 
-const indent = {
+const blockAttributes = {
   indent: {
     default: 0,
     parseHTML: (element: HTMLElement) => Math.min(MAX_INDENT, Math.max(0, Number(element.getAttribute('data-indent')) || 0)),
@@ -13,6 +14,89 @@ const indent = {
       ? { 'data-indent': String(attributes.indent), style: `margin-left: ${Number(attributes.indent) * INDENT_STEP_EM}em` }
       : {},
   },
+  columnSpan: {
+    default: null,
+    parseHTML: (element: HTMLElement) => (element.getAttribute('data-column-span') === 'all' || element.style.columnSpan === 'all' ? 'all' : null),
+    renderHTML: (attributes: Record<string, unknown>) => attributes.columnSpan === 'all'
+      ? { 'data-column-span': 'all', style: 'column-span: all;' }
+      : {},
+  },
+}
+
+export function isBlockColumnSpanned(editor: Editor): boolean {
+  if (editor.isActive('table')) {
+    const table = findTable(editor)
+    return table?.node.attrs.columnSpan === 'all'
+  }
+  const { selection } = editor.state
+  if ('node' in selection) {
+    const selNode = (selection as { node?: PMNode }).node
+    if (selNode && selNode.attrs.columnSpan !== undefined) {
+      return selNode.attrs.columnSpan === 'all'
+    }
+  }
+  const { $from } = selection
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d)
+    if (node.attrs.columnSpan !== undefined) {
+      return node.attrs.columnSpan === 'all'
+    }
+  }
+  return false
+}
+
+export function toggleBlockColumnSpan(editor: Editor): boolean {
+  if (editor.isActive('table')) {
+    return toggleColumnSpan(editor)
+  }
+
+  const { state, view } = editor
+  const { doc, selection } = state
+  const { from, to } = selection
+
+  const targets: { pos: number; node: PMNode }[] = []
+
+  // Check if current selection is a NodeSelection (e.g. horizontalRule or image)
+  if ('node' in selection) {
+    const selNode = (selection as { node?: PMNode }).node
+    if (selNode && selNode.attrs.columnSpan !== undefined) {
+      targets.push({ pos: selection.from, node: selNode })
+    }
+  }
+
+  if (targets.length === 0) {
+    doc.nodesBetween(from, to, (node, pos, parent) => {
+      if (node.attrs.columnSpan !== undefined && (node.type.name === 'heading' || node.type.name === 'paragraph' || node.type.name === 'blockquote' || node.type.name === 'horizontalRule')) {
+        targets.push({ pos, node })
+        return false
+      }
+      return true
+    })
+  }
+
+  if (targets.length === 0) {
+    const { $from } = selection
+    for (let d = $from.depth; d > 0; d--) {
+      const node = $from.node(d)
+      if (node.attrs.columnSpan !== undefined && (node.type.name === 'heading' || node.type.name === 'paragraph' || node.type.name === 'blockquote' || node.type.name === 'horizontalRule')) {
+        targets.push({ pos: $from.before(d), node })
+        break
+      }
+    }
+  }
+
+  if (targets.length === 0) return false
+
+  const allSpanned = targets.every(({ node }) => node.attrs.columnSpan === 'all')
+  const nextSpan = allSpanned ? null : 'all'
+
+  let tr = state.tr
+  for (const { pos, node } of targets) {
+    tr = tr.setNodeMarkup(pos, undefined, { ...node.attrs, columnSpan: nextSpan })
+  }
+
+  view.dispatch(tr)
+  return true
 }
 
 interface SerializerState {
@@ -22,23 +106,36 @@ interface SerializerState {
   repeat(text: string, count: number): string
 }
 
-/** Plain Markdown cannot carry alignment or indentation, so only those blocks are written as HTML. */
-const isFormatted = (node: PMNode) => (node.attrs.textAlign && node.attrs.textAlign !== 'left') || node.attrs.indent > 0
+/** Plain Markdown cannot carry alignment, indentation, or column span, so only those blocks are written as HTML. */
+const isFormatted = (node: PMNode) => (node.attrs.textAlign && node.attrs.textAlign !== 'left') || node.attrs.indent > 0 || node.attrs.columnSpan === 'all'
 
 function writeHtml(state: SerializerState, node: PMNode) {
   state.write(getHTMLFromFragment(Fragment.from(node), node.type.schema))
   state.closeBlock(node)
 }
 
-/** Paragraph that remembers its indent and keeps alignment and indent when saved as Markdown. */
+declare module '@tiptap/react' {
+  interface Commands<ReturnType> {
+    blockFormat: {
+      toggleBlockColumnSpan: () => ReturnType
+    }
+  }
+}
+
+/** Paragraph that remembers its indent and keeps alignment, indent and column span when saved as Markdown. */
 /**
- * StarterKit owns the paragraph and heading nodes, so this adds the indent attribute globally and
+ * StarterKit owns the paragraph and heading nodes, so this adds the indent and columnSpan attributes globally and
  * replaces their Markdown serializers once the editor exists (the serializer reads them lazily).
  */
 export const BlockFormat = Extension.create({
   name: 'blockFormat',
   addGlobalAttributes() {
-    return [{ types: ['paragraph', 'heading'], attributes: indent }]
+    return [{ types: ['paragraph', 'heading', 'blockquote', 'horizontalRule'], attributes: blockAttributes }]
+  },
+  addCommands() {
+    return {
+      toggleBlockColumnSpan: () => ({ editor }) => toggleBlockColumnSpan(editor),
+    }
   },
   onBeforeCreate() {
     const nodes = this.editor.extensionManager.extensions
@@ -54,6 +151,15 @@ export const BlockFormat = Extension.create({
         state.renderInline(node, false)
         state.closeBlock(node)
       },
+      blockquote(state, node) {
+        if (isFormatted(node)) return writeHtml(state, node)
+        state.wrapIn('> ', () => state.renderContent(node))
+      },
+      horizontalRule(state, node) {
+        if (isFormatted(node)) return writeHtml(state, node)
+        state.write('---')
+        state.closeBlock(node)
+      },
     }
     for (const [name, serialize] of Object.entries(serializers)) {
       const extension = nodes.find((candidate) => candidate.name === name)
@@ -63,6 +169,7 @@ export const BlockFormat = Extension.create({
   },
   addKeyboardShortcuts() {
     return {
+      'Alt-c': () => toggleBlockColumnSpan(this.editor),
       Tab: () => {
         if (this.editor.isActive('listItem')) {
           if (this.editor.can().sinkListItem('listItem')) {

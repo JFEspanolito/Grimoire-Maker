@@ -68,10 +68,43 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     if (!editor || event.button !== 0 || !(event.target instanceof Element)) return
     const target = event.target
     if (target.closest('button, input, select, textarea, a, [contenteditable="false"]')) return
+
+    // If clicking in the blank space of a section below its last element (e.g. below a table or box)
+    const sectionEl = target.closest<HTMLElement>('.grimoire-section')
+    if (sectionEl) {
+      const lastChildEl = Array.from(sectionEl.children).filter(el => !el.hasAttribute('data-section-layout-probe') && !el.classList.contains('ProseMirror-trailingBreak')).at(-1)
+      const clickedBelow = !lastChildEl || event.clientY > lastChildEl.getBoundingClientRect().bottom
+      const isBareSectionClick = target === sectionEl || target.classList.contains('ProseMirror')
+
+      if (clickedBelow && (isBareSectionClick || target === sectionEl)) {
+        event.preventDefault()
+        try {
+          const pos = editor.view.posAtDOM(sectionEl, 0)
+          const $pos = editor.state.doc.resolve(pos)
+          const sectionDepth = $pos.depth >= 1 ? 1 : 0
+          const sectionNode = $pos.node(sectionDepth)
+          const lastBlock = sectionNode.lastChild
+          const endPos = $pos.end(sectionDepth)
+          if (lastBlock && (lastBlock.type.name !== 'paragraph' || lastBlock.content.size > 0)) {
+            const tr = editor.state.tr.insert(endPos, editor.schema.nodes.paragraph.create())
+            tr.setSelection(TextSelection.create(tr.doc, endPos + 1))
+            editor.view.dispatch(tr)
+            editor.view.focus()
+            return
+          } else if (lastBlock) {
+            const tr = editor.state.tr.setSelection(TextSelection.create(editor.state.doc, endPos - 1))
+            editor.view.dispatch(tr)
+            editor.view.focus()
+            return
+          }
+        } catch {
+          // Fall through to general focus handler
+        }
+      }
+    }
+
     const insideProseMirror = target !== editor.view.dom && !!target.closest('.ProseMirror')
     if (insideProseMirror) {
-      // In paginated/column mode, .grimoire-section fills the full column height, so clicking blank space
-      // below a trailing content box lands directly on the section or ProseMirror root instead of a child block.
       const isBareContainer = target.classList.contains('grimoire-section') || target.classList.contains('ProseMirror')
       if (!isBareContainer) return
       const lastBox = Array.from(target.querySelectorAll<HTMLElement>(':scope > .grimoire-content-box, :scope > .node-standardContentBox')).at(-1)

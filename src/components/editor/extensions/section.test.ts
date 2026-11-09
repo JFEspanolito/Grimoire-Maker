@@ -74,3 +74,22 @@ it('supports 3 columns on a section', () => {
   const reopened = create(saved)
   expect(sections(reopened)).toEqual([{ columns: null, text: 'Intro' }, { columns: 3, text: 'Triple' }])
 })
+
+it('splits section on insertSectionBreak and binds Mod-Enter shortcut', () => {
+  create('First paragraph\n\nSecond paragraph')
+  editor!.commands.setTextSelection(5)
+  const initialSections = editor!.state.doc.childCount
+  const event = new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })
+  let handledBy = ''
+  for (const plugin of editor!.state.plugins) {
+    if (plugin.props.handleKeyDown) {
+      const res = plugin.props.handleKeyDown(editor!.view, event)
+      if (res) {
+        handledBy = plugin.key
+        break
+      }
+    }
+  }
+  expect(handledBy).toBeTruthy()
+  expect(editor!.state.doc.childCount).toBe(initialSections + 1)
+})

@@ -4,8 +4,8 @@ import { ImageControls, type ImageAttrs } from './ImageControls'
 import { TableControls } from './TableControls'
 import { selectedSearchText } from './extensions/searchHighlight'
 import { useFindStore } from '../../stores/findStore'
-import { insertFormula } from '../../lib/insertActions'
-import { canChangeIndent, changeIndent, setListStart, toggleOrderedListSmart } from './extensions/blockFormat'
+import { insertDivider, insertFormula } from '../../lib/insertActions'
+import { canChangeIndent, changeIndent, isBlockColumnSpanned, setListStart, toggleBlockColumnSpan, toggleOrderedListSmart } from './extensions/blockFormat'
 import { PluginSlot } from '../../plugins/PluginSlot'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
@@ -43,10 +43,18 @@ const ACTION_LIST: Action[] = [
   heading(2),
   heading(3),
   heading(4),
+  {
+    id: 'colSpan',
+    label: '⇿ Span',
+    title: 'Span all columns (full width)',
+    run: (e) => toggleBlockColumnSpan(e),
+    isActive: (e) => isBlockColumnSpanned(e),
+  },
   { id: 'outdent', label: '⇤', title: 'Decrease indent', run: (e) => changeIndent(e, -1), canRun: (e) => canChangeIndent(e, -1) },
   { id: 'indent', label: '⇥', title: 'Increase indent', run: (e) => changeIndent(e, 1), canRun: (e) => canChangeIndent(e, 1) },
   { id: 'bullet', label: '• List', title: 'Bulleted list', run: (e) => e.chain().focus().toggleBulletList().run(), isActive: (e) => e.isActive('bulletList') },
   { id: 'ordered', label: '1. List', title: 'Numbered list', run: (e) => toggleOrderedListSmart(e), isActive: (e) => e.isActive('orderedList') },
+  { id: 'divider', label: '―', title: 'Horizontal Rule', run: (e) => insertDivider(e) },
   { id: 'formula', label: '∑ Formula', title: 'Insert Formula', run: (e) => insertFormula(e), isActive: (e) => e.isActive('mathFormula') },
 ]
 const ACTIONS: Record<string, Action> = Object.fromEntries(ACTION_LIST.map((action) => [action.id, action]))
@@ -70,16 +78,18 @@ const ACTION_TITLE_KEYS: Record<string, TranslationKey> = {
   h2: 'toolbar.h2Title',
   h3: 'toolbar.h3Title',
   h4: 'toolbar.h4Title',
+  colSpan: 'toolbar.colSpan',
   outdent: 'toolbar.outdent',
   indent: 'toolbar.indent',
   bullet: 'toolbar.bulletList',
   ordered: 'toolbar.orderedList',
+  divider: 'toolbar.horizontalRule',
   formula: 'toolbar.insertFormula',
 }
 
 type Group = string[] | 'font' | 'format' | 'structure' | 'tools'
 /** Groups in order; a thin divider separates them. Controls with their own widget sit in named groups. */
-const LAYOUT: Group[] = [['undo', 'redo'], 'font', ['bold', 'italic', 'underline', 'strike'], 'format', 'structure', ['outdent', 'indent', 'bullet', 'ordered', 'formula'], 'tools']
+const LAYOUT: Group[] = [['undo', 'redo'], 'font', ['bold', 'italic', 'underline', 'strike'], 'format', 'structure', ['outdent', 'indent', 'bullet', 'ordered', 'formula', 'divider'], 'tools']
 
 const btn = 'min-w-8 rounded px-2 py-1 text-sm hover:bg-white/10 disabled:opacity-30'
 const control = 'rounded bg-white/10 px-1 py-0.5 text-sm text-white'
@@ -247,7 +257,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         onChange={(event) => editor?.chain().focus().setTextAlign(event.target.value).run()}>
         {ALIGNMENTS.map(([value, labelKey]) => <option key={value} value={value} className="text-black">{t(labelKey)}</option>)}
       </select>
-      <div className="flex items-center gap-0.5">{['h1', 'h2', 'h3', 'h4'].map(actionButton)}</div>
+      <div className="flex items-center gap-0.5">{['h1', 'h2', 'h3', 'h4', 'colSpan'].map(actionButton)}</div>
     </div>,
     tools: <div className="flex items-center gap-1">
       <button

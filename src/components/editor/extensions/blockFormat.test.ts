@@ -1,7 +1,7 @@
 import { afterEach, expect, it } from 'vitest'
 import { Editor } from '@tiptap/react'
 import { EDITOR_EXTENSIONS } from '../editorExtensions'
-import { canChangeIndent, changeIndent, continueListNumbering, restartListNumbering, setListStart, toggleOrderedListSmart } from './blockFormat'
+import { canChangeIndent, changeIndent, continueListNumbering, isBlockColumnSpanned, restartListNumbering, setListStart, toggleBlockColumnSpan, toggleOrderedListSmart } from './blockFormat'
 
 let editor: Editor | null = null
 afterEach(() => { editor?.destroy(); editor = null })
@@ -97,4 +97,58 @@ it('allows setting start number, restarting at 1, and continuing from previous l
   continueListNumbering(editor!)
   expect(editor!.getHTML()).toContain('start="2"')
   expect(markdown(editor!)).toContain('2. Item 2')
+})
+
+it('toggles column span on headings and paragraphs and preserves it through save/load', () => {
+  create('## 4. Modelos de Dron\n\nCada modelo cuenta con estadísticas')
+  editor!.commands.setTextSelection(5)
+  expect(isBlockColumnSpanned(editor!)).toBe(false)
+  toggleBlockColumnSpan(editor!)
+  expect(isBlockColumnSpanned(editor!)).toBe(true)
+  expect(editor!.getAttributes('heading').columnSpan).toBe('all')
+
+  const saved = markdown(editor!)
+  expect(saved).toContain('data-column-span="all"')
+  expect(saved).toContain('4. Modelos de Dron')
+
+  const reopened = create(saved)
+  expect(reopened.getAttributes('heading').columnSpan).toBe('all')
+  expect(isBlockColumnSpanned(reopened)).toBe(true)
+
+  // Toggle off reverts to plain markdown
+  toggleBlockColumnSpan(reopened)
+  expect(reopened.getAttributes('heading').columnSpan).toBeNull()
+  expect(markdown(reopened)).toContain('## 4. Modelos de Dron')
+  expect(markdown(reopened)).not.toContain('data-column-span="all"')
+})
+
+it('toggles column span on horizontalRule and preserves it through save/load', () => {
+  create('Before\n\n---\n\nAfter')
+  let hrPos = -1
+  editor!.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'horizontalRule') hrPos = pos
+  })
+  expect(hrPos).toBeGreaterThanOrEqual(0)
+  editor!.commands.setNodeSelection(hrPos)
+  expect(isBlockColumnSpanned(editor!)).toBe(false)
+  toggleBlockColumnSpan(editor!)
+  expect(isBlockColumnSpanned(editor!)).toBe(true)
+  expect(editor!.state.doc.nodeAt(hrPos)?.attrs.columnSpan).toBe('all')
+
+  const saved = markdown(editor!)
+  expect(saved).toContain('data-column-span="all"')
+  expect(saved).toContain('<hr')
+
+  const reopened = create(saved)
+  let reopenedHrPos = -1
+  reopened.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'horizontalRule') reopenedHrPos = pos
+  })
+  expect(reopened.state.doc.nodeAt(reopenedHrPos)?.attrs.columnSpan).toBe('all')
+
+  reopened.commands.setNodeSelection(reopenedHrPos)
+  toggleBlockColumnSpan(reopened)
+  expect(reopened.state.doc.nodeAt(reopenedHrPos)?.attrs.columnSpan).toBeNull()
+  expect(markdown(reopened)).toContain('---')
+  expect(markdown(reopened)).not.toContain('data-column-span="all"')
 })

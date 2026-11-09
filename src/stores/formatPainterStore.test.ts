@@ -51,4 +51,28 @@ describe('formatPainterStore', () => {
     expect(editor.getAttributes('textStyle').color).toBe('#00ff00')
     expect(editor.getAttributes('textStyle').fontSize).toBe('18px')
   })
+
+  it('copies and applies block indentation', () => {
+    const editor = new Editor({
+      extensions: EDITOR_EXTENSIONS,
+      content: '<p data-indent="3">Indented</p><p>Normal</p>',
+    })
+
+    let indentedPos = -1
+    let normalPos = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === 'Indented') indentedPos = pos
+      if (node.isText && node.text === 'Normal') normalPos = pos
+    })
+
+    editor.commands.setTextSelection({ from: indentedPos, to: indentedPos + 8 })
+    useFormatPainterStore.getState().arm(editor)
+    expect(useFormatPainterStore.getState().format?.indent).toBe(3)
+
+    editor.commands.setTextSelection({ from: normalPos, to: normalPos + 6 })
+    useFormatPainterStore.getState().apply(editor)
+
+    editor.commands.setTextSelection(normalPos + 1)
+    expect(editor.getAttributes('paragraph').indent).toBe(3)
+  })
 })

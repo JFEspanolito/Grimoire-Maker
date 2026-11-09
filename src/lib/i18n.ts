@@ -67,6 +67,7 @@ export const DICTIONARY = {
     'menu.insert.quote': 'Quote',
     'menu.insert.floatingBox': 'Floating Box',
     'menu.insert.formula': 'Insert Formula',
+    'menu.insert.columnBreak': 'Column Break',
     'menu.insert.sectionBreak': 'Section Break',
 
     // Menu Document
@@ -439,6 +440,7 @@ export const DICTIONARY = {
     'toolbar.h2Title': 'Heading 2',
     'toolbar.h3Title': 'Heading 3',
     'toolbar.h4Title': 'Heading 4',
+    'toolbar.colSpan': 'Span all columns (full width)',
     'toolbar.outdent': 'Decrease indent',
     'toolbar.indent': 'Increase indent',
     'toolbar.bulletList': 'Bulleted list',
@@ -451,6 +453,7 @@ export const DICTIONARY = {
     'toolbar.list': 'List',
     'toolbar.insertFormula': 'Insert Formula',
     'toolbar.formula': 'Formula',
+    'toolbar.horizontalRule': 'Horizontal Rule',
     'toolbar.textColor': 'Text color',
     'toolbar.textSize': 'Text size',
     'toolbar.sizePlaceholder': 'Size',
@@ -514,6 +517,9 @@ export const DICTIONARY = {
     'table.addColLeft': 'Add column left',
     'table.addColRight': 'Add column right',
     'table.deleteCol': 'Delete column',
+    'table.spanAll': 'Span all columns (full page width)',
+    'table.colWidth': 'Column width (px)',
+    'table.resetColWidth': 'Reset column width to auto',
     'table.deleteTable': 'Delete table',
 
     // File Tree & Explorer
@@ -693,6 +699,7 @@ export const DICTIONARY = {
     'menu.insert.quote': 'Cita',
     'menu.insert.floatingBox': 'Caja flotante',
     'menu.insert.formula': 'Insertar fórmula',
+    'menu.insert.columnBreak': 'Salto de columna',
     'menu.insert.sectionBreak': 'Salto de sección',
 
     // Menu Document
@@ -1065,6 +1072,7 @@ export const DICTIONARY = {
     'toolbar.h2Title': 'Encabezado 2',
     'toolbar.h3Title': 'Encabezado 3',
     'toolbar.h4Title': 'Encabezado 4',
+    'toolbar.colSpan': 'Abarcar todas las columnas (ancho completo)',
     'toolbar.outdent': 'Disminuir sangría',
     'toolbar.indent': 'Aumentar sangría',
     'toolbar.bulletList': 'Lista con viñetas',
@@ -1077,6 +1085,7 @@ export const DICTIONARY = {
     'toolbar.list': 'Lista',
     'toolbar.insertFormula': 'Insertar fórmula',
     'toolbar.formula': 'Fórmula',
+    'toolbar.horizontalRule': 'Línea horizontal',
     'toolbar.textColor': 'Color del texto',
     'toolbar.textSize': 'Tamaño del texto',
     'toolbar.sizePlaceholder': 'Tamaño',
@@ -1140,6 +1149,9 @@ export const DICTIONARY = {
     'table.addColLeft': 'Añadir columna a la izquierda',
     'table.addColRight': 'Añadir columna a la derecha',
     'table.deleteCol': 'Eliminar columna',
+    'table.spanAll': 'Ocupar ancho completo (todas las columnas)',
+    'table.colWidth': 'Ancho de columna (px)',
+    'table.resetColWidth': 'Restablecer ancho a automático',
     'table.deleteTable': 'Eliminar tabla',
 
     // File Tree & Explorer

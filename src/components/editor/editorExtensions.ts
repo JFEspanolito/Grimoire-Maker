@@ -9,6 +9,7 @@ import { ContentBox } from './extensions/ContentBox'
 import { BlockFormat } from './extensions/blockFormat'
 import { MathFormula } from './extensions/formula'
 import { Section, SectionDocument } from './extensions/section'
+import { ColumnBreak } from './extensions/columnBreak'
 import { SearchHighlight } from './extensions/searchHighlight'
 
 /** What the page editor can read and write; the book export renders documents with the same set. */
@@ -16,6 +17,7 @@ export const EDITOR_EXTENSIONS = [
   StarterKit.configure({ document: false }),
   SectionDocument,
   Section,
+  ColumnBreak,
   BlockFormat,
   TextStyle,
   Color,
