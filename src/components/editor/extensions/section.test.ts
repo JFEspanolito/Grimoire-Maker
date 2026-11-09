@@ -74,3 +74,10 @@ it('supports 3 columns on a section', () => {
   const reopened = create(saved)
   expect(sections(reopened)).toEqual([{ columns: null, text: 'Intro' }, { columns: 3, text: 'Triple' }])
 })
+
+it('splits section on insertSectionBreak and binds Mod-Enter shortcut', () => {
+  create('First paragraph\n\nSecond paragraph')
+  editor!.commands.setTextSelection(5)
+  expect(editor!.commands.insertSectionBreak()).toBe(true)
+  expect(editor!.state.doc.childCount).toBe(2)
+})

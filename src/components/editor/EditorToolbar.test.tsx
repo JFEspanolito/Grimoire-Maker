@@ -140,7 +140,7 @@ describe('toolbar layout and text controls', () => {
       item.getAttribute('role') === 'separator' ? '//' : item.getAttribute('aria-label') ?? item.textContent)
     expect(sequence).toEqual([
       'Undo', 'Redo', '//', 'Copy format', 'Font family', '//', 'Bold', 'Italic', 'Underline', 'Strikethrough', '//',
-      'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', '//',
+      'Text color', 'Text size', '//', 'Alignment', 'Heading 1 (starts a new page when printed)', 'Heading 2', 'Heading 3', 'Heading 4', 'Span all columns (full width)', '//',
       'Decrease indent', 'Increase indent', 'Bulleted list', 'Numbered list', 'Insert Formula', 'Horizontal Rule', '//', 'Ruler', 'Find and Replace (Ctrl+F)', 'Page view',
     ])
     const alignment = bar.querySelector<HTMLSelectElement>('[aria-label="Alignment"]')!

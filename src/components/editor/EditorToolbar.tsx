@@ -5,7 +5,7 @@ import { TableControls } from './TableControls'
 import { selectedSearchText } from './extensions/searchHighlight'
 import { useFindStore } from '../../stores/findStore'
 import { insertDivider, insertFormula } from '../../lib/insertActions'
-import { canChangeIndent, changeIndent, setListStart, toggleOrderedListSmart } from './extensions/blockFormat'
+import { canChangeIndent, changeIndent, isBlockColumnSpanned, setListStart, toggleBlockColumnSpan, toggleOrderedListSmart } from './extensions/blockFormat'
 import { PluginSlot } from '../../plugins/PluginSlot'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useTabStore } from '../../stores/tabStore'
@@ -43,6 +43,13 @@ const ACTION_LIST: Action[] = [
   heading(2),
   heading(3),
   heading(4),
+  {
+    id: 'colSpan',
+    label: '⇿ Span',
+    title: 'Span all columns (full width)',
+    run: (e) => toggleBlockColumnSpan(e),
+    isActive: (e) => isBlockColumnSpanned(e),
+  },
   { id: 'outdent', label: '⇤', title: 'Decrease indent', run: (e) => changeIndent(e, -1), canRun: (e) => canChangeIndent(e, -1) },
   { id: 'indent', label: '⇥', title: 'Increase indent', run: (e) => changeIndent(e, 1), canRun: (e) => canChangeIndent(e, 1) },
   { id: 'bullet', label: '• List', title: 'Bulleted list', run: (e) => e.chain().focus().toggleBulletList().run(), isActive: (e) => e.isActive('bulletList') },
@@ -71,6 +78,7 @@ const ACTION_TITLE_KEYS: Record<string, TranslationKey> = {
   h2: 'toolbar.h2Title',
   h3: 'toolbar.h3Title',
   h4: 'toolbar.h4Title',
+  colSpan: 'toolbar.colSpan',
   outdent: 'toolbar.outdent',
   indent: 'toolbar.indent',
   bullet: 'toolbar.bulletList',
@@ -249,7 +257,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         onChange={(event) => editor?.chain().focus().setTextAlign(event.target.value).run()}>
         {ALIGNMENTS.map(([value, labelKey]) => <option key={value} value={value} className="text-black">{t(labelKey)}</option>)}
       </select>
-      <div className="flex items-center gap-0.5">{['h1', 'h2', 'h3', 'h4'].map(actionButton)}</div>
+      <div className="flex items-center gap-0.5">{['h1', 'h2', 'h3', 'h4', 'colSpan'].map(actionButton)}</div>
     </div>,
     tools: <div className="flex items-center gap-1">
       <button

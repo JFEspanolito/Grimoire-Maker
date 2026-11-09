@@ -1,7 +1,7 @@
 import { Node } from '@tiptap/react'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
-import { canJoin } from '@tiptap/pm/transform'
+import { canJoin, canSplit } from '@tiptap/pm/transform'
 
 export type SectionColumns = 1 | 2 | 3 | null
 
@@ -95,9 +95,25 @@ export const Section = Node.create({
       insertSectionBreak: () => ({ state, dispatch }) => {
         const { $from } = state.selection
         if ($from.depth < 2) return false
+        const type = state.schema.nodes.section
+        let splitDepth = $from.depth
+        while (splitDepth >= 1 && !canSplit(state.doc, $from.pos, splitDepth)) {
+          splitDepth--
+        }
+        if (splitDepth < 1) {
+          const afterBlock = $from.after(Math.min($from.depth, 2))
+          if (canSplit(state.doc, afterBlock, 1)) {
+            if (dispatch) {
+              const tr = state.tr.split(afterBlock, 1, [{ type, attrs: { ...$from.node(1).attrs, auto: false } }])
+              tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(tr.doc.content.size, afterBlock + 1))))
+              dispatch(tr.scrollIntoView())
+            }
+            return true
+          }
+          return false
+        }
         if (dispatch) {
-          const type = state.schema.nodes.section
-          const tr = state.tr.split($from.pos, $from.depth, [{ type, attrs: { ...$from.node(1).attrs, auto: false } }])
+          const tr = state.tr.split($from.pos, splitDepth, [{ type, attrs: { ...$from.node(1).attrs, auto: false } }])
           const sectionStart = tr.selection.$from
           tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(tr.doc.content.size, sectionStart.pos + 1))))
           dispatch(tr.scrollIntoView())
@@ -143,6 +159,11 @@ export const Section = Node.create({
         if (dispatch) dispatch(state.tr.join(boundary).scrollIntoView())
         return true
       },
+    }
+  },
+  addKeyboardShortcuts() {
+    return {
+      'Mod-Enter': () => this.editor.commands.insertSectionBreak(),
     }
   },
   addStorage() {
