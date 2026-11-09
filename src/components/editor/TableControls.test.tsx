@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { TableControls, findTable, toggleColumnSpan, setTableColumnWidth } from './TableControls'
+import { TableControls, findTable, setTableColumnWidth } from './TableControls'
 import { TableExtensions } from './extensions/tables'
 
 let root: Root | null = null
