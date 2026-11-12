@@ -40,6 +40,9 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
   const editor = useEditor({
     extensions: EDITOR_EXTENSIONS,
     content: body,
+    editorProps: {
+      attributes: { spellcheck: 'false' },
+    },
     onUpdate: ({ editor: e }) => {
       const store = useDocumentStore.getState()
       store.setBodyForPath(path === undefined ? store.document.path : path, getMarkdown(e))
