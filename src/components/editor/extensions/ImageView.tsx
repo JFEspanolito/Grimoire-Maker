@@ -32,7 +32,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   const activePath = useDocumentStore((s) => s.document.path)
   const panePath = useContext(DocumentPathContext)
   const documentPath = panePath === undefined ? activePath : panePath
-  const { src, alt, align, widthMm, frame, opacity, anchor, xMm, yMm } = node.attrs
+  const { src, alt, align, widthMm, frame, opacity, anchor, xMm, yMm, columnSpan } = node.attrs
   const [shown, setShown] = useState<{ src: string; url: string } | null>(null)
   const [failure, setFailure] = useState<{ src: string; message: string } | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
@@ -70,7 +70,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       window.removeEventListener('scroll', placeHandle, true)
       window.removeEventListener('resize', placeHandle)
     }
-  }, [selected, shown, widthMm, anchor, align, xMm, yMm, viewMode, zoom])
+  }, [selected, shown, widthMm, anchor, align, xMm, yMm, columnSpan, viewMode, zoom])
 
   useEffect(() => () => stopDrag.current?.(), [])
 
@@ -360,6 +360,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       data-align={align}
       data-anchor={anchor}
       data-frame={frame}
+      data-column-span={columnSpan === 'all' ? 'all' : undefined}
       data-selected={selected}
     >
       {anchor !== 'flow' && anchor !== 'free' && (

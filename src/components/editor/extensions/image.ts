@@ -47,6 +47,7 @@ function needsHtml(attrs: PMNode['attrs']): boolean {
     attrs.anchor !== 'flow' ||
     attrs.xMm !== null ||
     attrs.yMm !== null ||
+    attrs.columnSpan === 'all' ||
     /[\s()]/.test(String(attrs.src))
   )
 }
@@ -62,6 +63,7 @@ function toHtml(attrs: PMNode['attrs']): string {
   if (attrs.anchor !== 'flow') parts.push(`data-anchor="${attrs.anchor}"`)
   if (attrs.xMm !== null) parts.push(`data-x-mm="${attrs.xMm}"`)
   if (attrs.yMm !== null) parts.push(`data-y-mm="${attrs.yMm}"`)
+  if (attrs.columnSpan === 'all') parts.push('data-column-span="all" style="column-span: all;"')
   return `<img ${parts.join(' ')} />`
 }
 
@@ -70,6 +72,13 @@ export const GrimoireImage = Image.extend({
   addAttributes() {
     return {
       ...this.parent?.(),
+      columnSpan: {
+        default: null,
+        parseHTML: (el) => el.getAttribute('data-column-span') === 'all' || el.style.columnSpan === 'all' ? 'all' : null,
+        renderHTML: (attrs) => attrs.columnSpan === 'all'
+          ? { 'data-column-span': 'all', style: 'column-span: all;' }
+          : {},
+      },
       align: {
         default: 'none',
         parseHTML: (el) => oneOf(el.getAttribute('data-align'), IMAGE_ALIGNS, 'none'),
