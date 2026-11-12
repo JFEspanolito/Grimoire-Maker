@@ -179,6 +179,10 @@ body,
   margin-inline: auto;
 }
 
+.grimoire-image[data-anchor='flow'][data-column-span='all'] {
+  float: none;
+}
+
 .grimoire-image[data-frame='simple'] img {
   border: 0.4mm solid var(--accent);
   padding: 1.5mm;

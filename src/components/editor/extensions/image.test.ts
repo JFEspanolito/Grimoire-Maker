@@ -32,6 +32,19 @@ afterEach(() => {
 })
 
 describe('GrimoireImage markdown', () => {
+  it('preserves column span alone through HTML and Markdown round trips', () => {
+    for (const span of ['data-column-span="all"', 'style="column-span: all"']) {
+      const e = createEditor(`<img src="map.png" ${span} />`)
+      expect(firstImage(e).columnSpan).toBe('all')
+      expect(e.getHTML()).toContain('column-span: all')
+      const saved = markdownOf(e)
+      expect(saved).toContain('data-column-span="all"')
+      e.destroy()
+      expect(firstImage(createEditor(saved)).columnSpan).toBe('all')
+      editor!.destroy()
+    }
+  })
+
   it('keeps an unstyled image as plain Markdown between paragraphs', () => {
     const e = createEditor('Before\n\n![A map](assets/map.png)\n\nAfter')
     expect(markdownOf(e)).toBe('Before\n\n![A map](assets/map.png)\n\nAfter')

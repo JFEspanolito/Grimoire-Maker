@@ -122,6 +122,30 @@ it('toggles column span on headings and paragraphs and preserves it through save
   expect(markdown(reopened)).not.toContain('data-column-span="all"')
 })
 
+it('toggles column span on a selected image and preserves its layout through save/load', () => {
+  const source = '<img src="../Research/EchoesTCG_Playmat.jpeg" alt="EchoesTCG_Playmat" data-align="center" data-width-mm="91" data-frame="shadow" />'
+  create(source)
+  let imagePos = -1
+  editor!.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'image') imagePos = pos
+  })
+  editor!.commands.setNodeSelection(imagePos)
+  expect(toggleBlockColumnSpan(editor!)).toBe(true)
+  expect(isBlockColumnSpanned(editor!)).toBe(true)
+  const saved = markdown(editor!)
+  expect(saved).toContain('data-column-span="all"')
+  const reopened = create(saved)
+  reopened.commands.setNodeSelection(imagePos)
+  expect(reopened.getAttributes('image')).toMatchObject({
+    src: '../Research/EchoesTCG_Playmat.jpeg', alt: 'EchoesTCG_Playmat',
+    align: 'center', widthMm: 91, frame: 'shadow', columnSpan: 'all',
+  })
+  expect(isBlockColumnSpanned(reopened)).toBe(true)
+  expect(toggleBlockColumnSpan(reopened)).toBe(true)
+  expect(isBlockColumnSpanned(reopened)).toBe(false)
+  expect(markdown(reopened)).toBe(source)
+})
+
 it('toggles column span on horizontalRule and preserves it through save/load', () => {
   create('Before\n\n---\n\nAfter')
   let hrPos = -1
