@@ -38,15 +38,19 @@ export function DocumentIndex({ path, visible }: { path: string | null; visible:
 
   if (!enabled) return null
   return <div ref={anchor} className={styles.anchor}>
-    {entries.length > 0 && <nav className={styles.panel} aria-label="Document index">
+    <nav className={styles.panel} aria-label="Document index">
       <h2>{name}</h2>
-      <ol>
-        {entries.map((entry, index) => <li key={index} data-level={entry.level}>
-          <button type="button" onClick={() => entry.element.scrollIntoView({ block: 'start', behavior: 'smooth' })}>
-            <span className={styles.text}>{entry.text}</span><span className={styles.page}>{entry.page}</span>
-          </button>
-        </li>)}
-      </ol>
-    </nav>}
+      {entries.length > 0 ? (
+        <ol>
+          {entries.map((entry, index) => <li key={index} data-level={entry.level}>
+            <button type="button" onClick={() => entry.element.scrollIntoView({ block: 'start', behavior: 'smooth' })}>
+              <span className={styles.text}>{entry.text}</span><span className={styles.page}>{entry.page}</span>
+            </button>
+          </li>)}
+        </ol>
+      ) : (
+        <p className={styles.empty}>No headings found</p>
+      )}
+    </nav>
   </div>
 }
