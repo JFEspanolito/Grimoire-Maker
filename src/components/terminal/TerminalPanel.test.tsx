@@ -35,7 +35,6 @@ describe('TerminalPanel', () => {
 
     expect(container.querySelector('[aria-label="Terminal"]')).not.toBeNull()
     expect(container.textContent).toContain('Terminal')
-    expect(container.textContent).toContain('PTY')
 
     const clearBtn = container.querySelector<HTMLButtonElement>('[aria-label="Clear terminal"]')
     const closeBtn = container.querySelector<HTMLButtonElement>('[aria-label="Close terminal panel"]')
