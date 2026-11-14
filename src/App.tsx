@@ -44,6 +44,7 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(224)
   const [snippetsWidth, setSnippetsWidth] = useState(256)
   const sidebarCollapsed = !visiblePanels.files && !visiblePanels.templates && !visiblePanels.git
+  const rightSidebarCollapsed = !visiblePanels.snippets && !visiblePanels.properties
   const [sessionReady, setSessionReady] = useState(false)
   const [startupProjectOpen, setStartupProjectOpen] = useState(false)
   useAutoSave(sessionReady)
@@ -181,20 +182,24 @@ export default function App() {
               </div>
             </aside>
           {!sidebarCollapsed && <PanelResizeHandle label="Resize Files panel" controls="project-sidebar"
-            width={sidebarWidth} otherWidth={snippetsWidth} direction={1} onResize={setSidebarWidth} />}
+            width={sidebarWidth} otherWidth={rightSidebarCollapsed ? 0 : snippetsWidth} direction={1} onResize={setSidebarWidth} />}
           <main data-tour="editor-workspace" className={styles.main}>
             <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
           </main>
-          <PanelResizeHandle label="Resize Snippets and Properties panel" controls="snippets-sidebar"
-            width={snippetsWidth} otherWidth={sidebarCollapsed ? 40 : sidebarWidth} direction={-1} onResize={setSnippetsWidth} />
-          <aside id="snippets-sidebar" data-tour="snippets-sidebar" style={{ width: snippetsWidth }} className={styles.snippets}>
-            <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
-            <div className={styles.sourceControl}>
-              <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
-                onClick={() => togglePanel('properties')}>{t('properties.title')}</button>
-              {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /><ExportPageSnippetButton /></div>}
-            </div>
-          </aside>
+          {!rightSidebarCollapsed && (
+            <>
+              <PanelResizeHandle label="Resize Snippets and Properties panel" controls="snippets-sidebar"
+                width={snippetsWidth} otherWidth={sidebarCollapsed ? 40 : sidebarWidth} direction={-1} onResize={setSnippetsWidth} />
+              <aside id="snippets-sidebar" data-tour="snippets-sidebar" style={{ width: snippetsWidth }} className={styles.snippets}>
+                <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
+                <div className={styles.sourceControl}>
+                  <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
+                    onClick={() => togglePanel('properties')}>{t('properties.title')}</button>
+                  {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /><ExportPageSnippetButton /></div>}
+                </div>
+              </aside>
+            </>
+          )}
         </div>
         <FindReplaceDialog editor={activeEditor} />
         <FormulaDialog />

@@ -4,7 +4,7 @@ import { DEFAULT_PANELS, useSettingsStore } from './settingsStore'
 afterEach(() => useSettingsStore.setState({ panels: DEFAULT_PANELS }))
 
 it('shows every panel until one is turned off, and toggles them independently', () => {
-  expect(useSettingsStore.getState().panels).toEqual({ files: true, templates: true, snippets: true, git: true, properties: true, documentIndex: true })
+  expect(useSettingsStore.getState().panels).toEqual({ files: true, templates: true, snippets: true, git: true, properties: true, documentIndex: true, bottomPanel: false })
   useSettingsStore.getState().togglePanel('git')
   expect(useSettingsStore.getState().panels).toMatchObject({ git: false, files: true })
 })

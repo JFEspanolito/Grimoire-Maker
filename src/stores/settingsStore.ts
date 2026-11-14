@@ -4,10 +4,10 @@ import type { RulerGuide } from '../types/ruler'
 import { loadExternalFont } from '../lib/fonts'
 
 /** Which side panels and overlays are shown; every one is on until the author turns it off. */
-export const PANEL_IDS = ['files', 'templates', 'snippets', 'git', 'properties', 'documentIndex'] as const
+export const PANEL_IDS = ['files', 'templates', 'snippets', 'git', 'properties', 'documentIndex', 'bottomPanel'] as const
 export type PanelId = (typeof PANEL_IDS)[number]
 export type PanelVisibility = Record<PanelId, boolean>
-export const DEFAULT_PANELS: PanelVisibility = { files: true, templates: true, snippets: true, git: true, properties: true, documentIndex: true }
+export const DEFAULT_PANELS: PanelVisibility = { files: true, templates: true, snippets: true, git: true, properties: true, documentIndex: true, bottomPanel: false }
 export type Language = 'en' | 'es'
 
 interface SettingsState {

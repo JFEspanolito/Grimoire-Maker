@@ -486,3 +486,52 @@ it('translates menu summaries dynamically when language is changed', async () =>
     await act(async () => root.unmount())
   }
 })
+
+it('provides layout and settings/properties buttons in the top bar', async () => {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  const toggle = vi.fn()
+  try {
+    await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: false, snippets: true, git: false, properties: false }} onTogglePanel={toggle} />))
+    const toolbar = container.querySelector('[role="toolbar"][aria-label="Layout controls"]')
+    expect(toolbar).not.toBeNull()
+
+    const primaryBtn = container.querySelector<HTMLButtonElement>('[aria-label="Toggle Primary Side Bar"]')
+    const bottomBtn = container.querySelector<HTMLButtonElement>('[aria-label="Toggle Bottom Panel"]')
+    const secondaryBtn = container.querySelector<HTMLButtonElement>('[aria-label="Toggle Secondary Side Bar"]')
+    const docIndexBtn = container.querySelector<HTMLButtonElement>('[aria-label="Toggle Document Index"]')
+    const propertiesBtn = container.querySelector<HTMLButtonElement>('[aria-label="Document Properties"]')
+    const preferencesBtn = container.querySelector<HTMLButtonElement>('[aria-label="Preferences"]')
+
+    expect(primaryBtn).not.toBeNull()
+    expect(bottomBtn).not.toBeNull()
+    expect(secondaryBtn).not.toBeNull()
+    expect(docIndexBtn).not.toBeNull()
+    expect(propertiesBtn).not.toBeNull()
+    expect(preferencesBtn).not.toBeNull()
+
+    expect(primaryBtn?.getAttribute('aria-pressed')).toBe('true')
+    expect(bottomBtn?.getAttribute('aria-pressed')).toBe('false')
+    expect(secondaryBtn?.getAttribute('aria-pressed')).toBe('true')
+
+    await act(async () => primaryBtn?.click())
+    expect(toggle).toHaveBeenCalledWith('files')
+
+    await act(async () => bottomBtn?.click())
+    expect(useSettingsStore.getState().panels.bottomPanel).toBe(true)
+
+    await act(async () => secondaryBtn?.click())
+    expect(toggle).toHaveBeenCalledWith('snippets')
+
+    const initialDocIndex = useSettingsStore.getState().panels.documentIndex
+    await act(async () => docIndexBtn?.click())
+    expect(useSettingsStore.getState().panels.documentIndex).toBe(!initialDocIndex)
+
+    await act(async () => preferencesBtn?.click())
+    expect(container.querySelector('[data-testid="preferences"]')).not.toBeNull()
+  } finally {
+    container.remove()
+    await act(async () => root.unmount())
+  }
+})

@@ -5,6 +5,7 @@ import App from './App'
 import { useToastStore } from './stores/toastStore'
 import { useThemeStore } from './stores/themeStore'
 import { useTemplateStore } from './stores/templateStore'
+import { DEFAULT_PANELS, useSettingsStore } from './stores/settingsStore'
 
 const runtime = vi.hoisted(() => ({ native: false, restore: vi.fn(async () => {}), startExternal: vi.fn(async () => {}) }))
 vi.mock('./plugins/isolated/externalHost', () => ({ startActiveExternalPlugins: runtime.startExternal }))
@@ -32,7 +33,11 @@ vi.mock('./plugins/PluginContext', () => ({ PluginProvider: ({ children }: { chi
 
 let root: Root | null = null
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
-afterEach(async () => { if (root) await act(async () => root?.unmount()); root = null })
+afterEach(async () => {
+  if (root) await act(async () => root?.unmount())
+  root = null
+  useSettingsStore.setState({ panels: DEFAULT_PANELS })
+})
 
 it('does not activate previously imported plugins at desktop startup', async () => {
   runtime.native = true
@@ -139,4 +144,26 @@ it('offers Export Page Content as Snippet in the properties panel and hosts toas
   await act(async () => { useToastStore.getState().show('Snippet añadido a la paleta lateral', 0) })
   expect(container.querySelector('[role="status"]')?.textContent).toBe('Snippet añadido a la paleta lateral')
   await act(async () => useToastStore.setState({ toasts: [] }))
+})
+
+it('collapses the right sidebar completely when both snippets and properties are hidden', async () => {
+  const container = document.createElement('div')
+  root = createRoot(container)
+  await act(async () => root?.render(<App />))
+  expect(container.querySelector('[data-tour="snippets-sidebar"]')).not.toBeNull()
+  expect(container.querySelector('[aria-label="Resize Snippets and Properties panel"]')).not.toBeNull()
+
+  // Hide snippets
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Hide snippets panel"]')!.click())
+  // Collapse properties from the sidebar button
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-controls="properties-panel"]')!.click())
+
+  // Right sidebar and resize handle are completely collapsed
+  expect(container.querySelector('[data-tour="snippets-sidebar"]')).toBeNull()
+  expect(container.querySelector('[aria-label="Resize Snippets and Properties panel"]')).toBeNull()
+
+  // Show snippets again from the View menu
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Show snippets panel"]')!.click())
+  expect(container.querySelector('[data-tour="snippets-sidebar"]')).not.toBeNull()
+  expect(container.querySelector('[aria-label="Resize Snippets and Properties panel"]')).not.toBeNull()
 })
