@@ -158,7 +158,6 @@ export function TerminalPanel({ workspace }: Props) {
       <header className={styles.header}>
         <div className={styles.title}>
           <span>Terminal</span>
-          <span className={styles.badge}>PTY</span>
         </div>
         <div className={styles.actions}>
           <button
