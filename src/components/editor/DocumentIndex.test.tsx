@@ -40,3 +40,17 @@ it('is hidden when Document Index is turned off', async () => {
   expect(pane.querySelector('nav')).toBeNull()
   await unmount()
 })
+
+it('shows an empty notice when there are no headings and documentIndex is enabled', async () => {
+  useSettingsStore.getState().restorePanels({ documentIndex: true })
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  await act(async () => root.render(<section>
+    <DocumentIndex path={null} visible />
+    <div className="ProseMirror"><p>Just plain text with no headings</p></div>
+  </section>))
+
+  expect(container.querySelector('nav')).not.toBeNull()
+  expect(container.textContent).toContain('No headings found')
+  await act(async () => root.unmount())
+})

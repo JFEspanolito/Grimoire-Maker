@@ -113,6 +113,8 @@ pub struct Panels {
     properties: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     document_index: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bottom_panel: Option<bool>,
 }
 
 #[derive(Clone, Deserialize, Serialize, PartialEq, Debug)]
@@ -1548,9 +1550,10 @@ mod preferences_tests {
 
     #[test]
     fn saved_panels_round_trip_and_unknown_panels_are_rejected() {
-        let settings: UserSettings = serde_json::from_str(r#"{"panels":{"files":false,"documentIndex":true}}"#).unwrap();
+        let settings: UserSettings = serde_json::from_str(r#"{"panels":{"files":false,"documentIndex":true,"bottomPanel":false}}"#).unwrap();
         assert_eq!(settings.panels.as_ref().and_then(|p| p.files), Some(false));
-        assert_eq!(serde_json::to_string(&settings).unwrap(), r#"{"panels":{"files":false,"documentIndex":true}}"#);
+        assert_eq!(settings.panels.as_ref().and_then(|p| p.bottom_panel), Some(false));
+        assert_eq!(serde_json::to_string(&settings).unwrap(), r#"{"panels":{"files":false,"documentIndex":true,"bottomPanel":false}}"#);
         assert!(serde_json::from_str::<UserSettings>(r#"{"panels":{"bogus":true}}"#).is_err());
     }
 

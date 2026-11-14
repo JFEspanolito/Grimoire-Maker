@@ -29,7 +29,7 @@ import { useAppUpdateStore } from '../../stores/appUpdateStore'
 
 const PreferencesDialog = lazy(() => import('../settings/PreferencesDialog').then((module) => ({ default: module.PreferencesDialog })))
 
-type Panel = Exclude<PanelId, 'documentIndex'>
+type Panel = Exclude<PanelId, 'documentIndex' | 'bottomPanel'>
 interface Props {
   visiblePanels: Record<Panel, boolean>
   onTogglePanel: (panel: Panel) => void
@@ -48,8 +48,34 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
   const importSection = useImportSection()
   const readOnly = useTabStore((s) => !!s.active && !/\.md$/i.test(s.active))
   const split = useTabStore((s) => s.split)
-  const { pageSize, columns, setPageSize, setColumns, panels, togglePanel, showPrintMarks, setShowPrintMarks } = useSettingsStore()
+  const { pageSize, columns, setPageSize, setColumns, showPrintMarks, setShowPrintMarks } = useSettingsStore()
+  const panels = useSettingsStore((s) => s.panels)
+  const togglePanel = useSettingsStore((s) => s.togglePanel)
   const showDocumentIndex = panels.documentIndex
+  const showBottomPanel = Boolean(panels.bottomPanel)
+  const leftActive = Boolean(visiblePanels.files || visiblePanels.templates || visiblePanels.git)
+  const rightActive = Boolean(visiblePanels.snippets || visiblePanels.properties)
+
+  const toggleLeftSidebar = () => {
+    closeMenus()
+    if (leftActive) {
+      if (visiblePanels.files) onTogglePanel('files')
+      if (visiblePanels.templates) onTogglePanel('templates')
+      if (visiblePanels.git) onTogglePanel('git')
+    } else {
+      onTogglePanel('files')
+    }
+  }
+
+  const toggleRightSidebar = () => {
+    closeMenus()
+    if (rightActive) {
+      if (visiblePanels.snippets) onTogglePanel('snippets')
+      if (visiblePanels.properties) onTogglePanel('properties')
+    } else {
+      onTogglePanel('snippets')
+    }
+  }
   const [error, setError] = useState('')
   const [modsOpen, setModsOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
@@ -243,6 +269,84 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       </div>
     </details>
     {error && <span role="alert" className={styles.error}>{error}</span>}
+    <div className={styles.windowControls} role="toolbar" aria-label="Layout controls">
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label="Toggle Primary Side Bar"
+        title="Toggle Primary Side Bar"
+        aria-pressed={leftActive}
+        onClick={toggleLeftSidebar}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="5.5" y1="2.5" x2="5.5" y2="13.5" stroke="currentColor" strokeWidth="1.2" />
+          {leftActive && <rect x="2.5" y="3.5" width="2" height="9" fill="currentColor" />}
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label="Toggle Bottom Panel"
+        title="Toggle Bottom Panel"
+        aria-pressed={showBottomPanel}
+        onClick={() => togglePanel('bottomPanel')}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="1.5" y1="10.5" x2="14.5" y2="10.5" stroke="currentColor" strokeWidth="1.2" />
+          {showBottomPanel && <rect x="2.5" y="11.5" width="11" height="1.5" fill="currentColor" />}
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label="Toggle Secondary Side Bar"
+        title="Toggle Secondary Side Bar"
+        aria-pressed={rightActive}
+        onClick={toggleRightSidebar}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+          <line x1="10.5" y1="2.5" x2="10.5" y2="13.5" stroke="currentColor" strokeWidth="1.2" />
+          {rightActive && <rect x="11.5" y="3.5" width="2" height="9" fill="currentColor" />}
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label="Toggle Document Index"
+        title="Toggle Document Index"
+        aria-pressed={showDocumentIndex}
+        onClick={() => togglePanel('documentIndex')}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M2.5 3.5h2.5v1.2H2.5v-1.2zm4 0h7v1.2h-7v-1.2zm-4 3.8h2.5v1.2H2.5v-1.2zm4 0h7v1.2h-7v-1.2zm-4 3.8h2.5v1.2H2.5v-1.2zm4 0h7v1.2h-7v-1.2z" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label="Document Properties"
+        title="Document Properties"
+        onClick={() => { closeMenus(); setPropertiesOpen(true) }}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M3 2h6.5l3.5 3.5V14H3V2zm6 1v3h3L9 3zM5 8h6v1H5V8zm0 2.5h6v1H5v-1z" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        className={styles.iconButton}
+        aria-label="Preferences"
+        title="Preferences"
+        onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path fillRule="evenodd" clipRule="evenodd" d="M9.1 1H6.9l-.3 1.5-.7.3-1.3-1-1.6 1.6 1 1.3-.3.7L2.4 7v2.2l1.4.3.3.7-1 1.3 1.6 1.6 1.3-1 .7.3.3 1.4h2.2l.3-1.4.7-.3 1.3 1 1.6-1.6-1-1.3.3-.7 1.4-.3V6.9l-1.4-.3-.3-.7 1-1.3-1.6-1.6-1.3 1-.7-.3-.3-1.5zM8 10.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" />
+        </svg>
+      </button>
+    </div>
   </nav>{modsOpen && <ModManager onClose={() => setModsOpen(false)} onEditPaths={() => { setModsOpen(false); setPreferencesSection('folders'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}
     onOpenThemeCustomizer={() => openThemeCustomizer(() => setModsOpen(false))} />}
     {templateExportOpen && <CreateModDialog initialTab="Templates" onClose={() => setTemplateExportOpen(false)}

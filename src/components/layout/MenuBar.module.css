@@ -19,3 +19,7 @@
 .layout select { padding: .3rem; border-radius: .25rem; background: #201f1d; color: #f0eee9; }
 .layout select:hover:not(:disabled) { background: #ffffff12; }
 .layout option { background: #272623; color: #f0eee9; }
+.windowControls { margin-left: auto; display: flex; align-items: center; gap: .25rem; }
+.iconButton { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.5rem; padding: 0; border-radius: .25rem; color: #bcb7ac; background: transparent; border: none; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.iconButton:hover { background: #ffffff15; color: #f0eee9; }
+.iconButton[aria-pressed='true'] { color: #cfb37c; background: #ffffff18; }

@@ -11,3 +11,4 @@
 .panel button:focus-visible { outline: 2px solid #cfb37c; outline-offset: 1px; }
 .text { overflow-wrap: anywhere; }
 .page { flex: none; font-variant-numeric: tabular-nums; opacity: .85; }
+.empty { margin: .25rem 0 0; color: #ffffffaa; font-style: italic; }
