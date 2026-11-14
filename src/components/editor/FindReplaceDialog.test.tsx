@@ -114,7 +114,7 @@ describe('floating panel', () => {
 
   it('keeps counting while the page changes', async () => {
     const { find, set, status, unmount } = await open('dragon')
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     await set(find, 'dragon')
     expect(status()).toBe('1 match')
     await act(async () => { editor!.commands.insertContentAt(editor!.state.doc.content.size - 1, ' dragon') })

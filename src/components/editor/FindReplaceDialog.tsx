@@ -55,7 +55,7 @@ function FindPanel({ editor }: { editor: Editor | null }) {
     return () => { editor.off('update', later); clearTimeout(timer) }
   }, [editor, refresh])
   // The page highlights the matches in both scopes (in Project scope: the ones in the file on screen).
-  useEffect(() => { editor?.commands.setSearch(query) }, [editor, query])
+  useEffect(() => { if (editor && !editor.isDestroyed) editor.commands.setSearch(query) }, [editor, query])
   useEffect(() => () => { if (editor && !editor.isDestroyed) editor.commands.setSearch({ term: '', caseSensitive: false }) }, [editor])
   const selection = useEditorState({ editor, selector: ({ editor: e }) => e ? `${e.state.selection.from}:${e.state.selection.to}` : '' })
 
