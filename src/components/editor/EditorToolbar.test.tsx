@@ -78,14 +78,16 @@ describe('block formatting and underline', () => {
   }
 
   it.each([
-    ['Bulleted list', 'ul', 'listStyle', 'disc outside', '- Sample text'],
-    ['Numbered list', 'ol', 'listStyle', 'decimal outside', '1. Sample text'],
-  ])('%s applies a visible block and persists Markdown', async (label, selector, property, expectedStyle, markdown) => {
+    ['Bulleted list', 'ul', 'disc outside', '- Sample text'],
+    ['Numbered list', 'ol', 'decimal outside', '1. Sample text'],
+  ])('%s applies a visible block and persists Markdown', async (label, selector, expectedStyle, markdown) => {
     const toolbar = await mountToolbar()
     await act(async () => toolbar.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)?.click())
     const block = host!.querySelector(selector)
     expect(block).not.toBeNull()
-    expect(getComputedStyle(block!).getPropertyValue(property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`))).toBe(expectedStyle)
+    // Read the longhands: jsdom drops list-style-type when it serializes the list-style shorthand.
+    const computed = getComputedStyle(block!)
+    expect(`${computed.getPropertyValue('list-style-type')} ${computed.getPropertyValue('list-style-position')}`).toBe(expectedStyle)
     expect(markdownOf(editor!)).toContain(markdown)
     expect(editor!.getText()).toContain('Sample text')
   })
