@@ -1,0 +1,84 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  border-top: 1px solid #ffffff18;
+  color: #cccccc;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 20;
+}
+
+.handle {
+  height: 5px;
+  cursor: row-resize;
+  background: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.handle:hover {
+  background: #cfb37c88;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.75rem;
+  background: #252526;
+  border-bottom: 1px solid #ffffff12;
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #cccccc;
+}
+
+.badge {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
+  background: #ffffff15;
+  color: #cfb37c;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0.2rem;
+  color: #cccccc;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.actionButton:hover {
+  background: #ffffff18;
+  color: #ffffff;
+}
+
+.terminalContainer {
+  flex: 1;
+  min-height: 0;
+  padding: 0.25rem 0.5rem;
+  overflow: hidden;
+  background: #181818;
+}

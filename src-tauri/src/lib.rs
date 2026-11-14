@@ -59,6 +59,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(commands::terminal::TerminalState::default())
         .invoke_handler(tauri::generate_handler![
             fs_scope::prepare_project_metadata,
             config_root::config_root,
@@ -106,6 +107,10 @@ pub fn run() {
             commands::preferences::load_settings,
             commands::preferences::save_settings,
             commands::error_logs::append_error_log,
+            commands::terminal::spawn_terminal,
+            commands::terminal::write_terminal,
+            commands::terminal::resize_terminal,
+            commands::terminal::close_terminal,
         ])
         .run(context)
         .expect("error while running Grimoire Maker");

@@ -33,6 +33,7 @@ import { PanelResizeHandle } from './components/layout/PanelResizeHandle'
 import { ConfirmDialog } from './components/layout/ConfirmDialog'
 import { useTranslation } from './lib/i18n'
 import { useAppUpdateStore } from './stores/appUpdateStore'
+import { TerminalPanel } from './components/terminal/TerminalPanel'
 import { openExternalUrl } from './lib/openUrl'
 import { AppUpdateDialog } from './components/settings/AppUpdateDialog'
 
@@ -185,6 +186,7 @@ export default function App() {
             width={sidebarWidth} otherWidth={rightSidebarCollapsed ? 0 : snippetsWidth} direction={1} onResize={setSidebarWidth} />}
           <main data-tour="editor-workspace" className={styles.main}>
             <DocumentWorkspace editor={activeEditor} onReady={setEditor} />
+            {visiblePanels.bottomPanel && <TerminalPanel workspace={workspace} />}
           </main>
           {!rightSidebarCollapsed && (
             <>
