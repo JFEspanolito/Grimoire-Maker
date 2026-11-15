@@ -32,6 +32,29 @@ vi.mock('./components/version-control/VersionControlPanel', () => ({ VersionCont
 vi.mock('./plugins/PluginContext', () => ({ PluginProvider: ({ children }: { children: React.ReactNode }) => children }))
 
 let root: Root | null = null
+
+it.each(['input', 'textarea', 'editable', 'editor'])('preserves the native editing context menu in %s', async (kind) => {
+  runtime.native = false
+  const themes = useThemeStore.getState().reload
+  const templates = useTemplateStore.getState().reload
+  useThemeStore.setState({ reload: vi.fn(async () => {}) })
+  useTemplateStore.setState({ reload: vi.fn(async () => {}) })
+  const container = document.body.appendChild(document.createElement('div'))
+  try {
+    root = createRoot(container)
+    await act(async () => root?.render(<App />))
+    const target = container.appendChild(document.createElement(kind === 'input' || kind === 'textarea' ? kind : 'div'))
+    if (kind === 'editable') target.setAttribute('contenteditable', 'true')
+    if (kind === 'editor') target.className = 'ProseMirror'
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    await act(async () => target.dispatchEvent(event))
+    expect(event.defaultPrevented).toBe(false)
+    expect(container.querySelector('[role="menu"]')).toBeNull()
+  } finally {
+    await act(async () => root?.unmount()); root = null; container.remove()
+    useThemeStore.setState({ reload: themes }); useTemplateStore.setState({ reload: templates })
+  }
+})
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
 afterEach(async () => {
   if (root) await act(async () => root?.unmount())

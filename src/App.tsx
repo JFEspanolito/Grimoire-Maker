@@ -81,7 +81,7 @@ export default function App() {
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
-      if (target?.closest('input, textarea')) return
+      if (target?.closest('input, textarea, [contenteditable="true"], .ProseMirror')) return
       if (event.defaultPrevented) return
       event.preventDefault()
       setContextMenu({ x: event.clientX, y: event.clientY })

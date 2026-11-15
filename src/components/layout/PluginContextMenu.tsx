@@ -18,7 +18,7 @@ export function PluginContextMenu() {
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return
+      if (target?.closest('input, textarea, [contenteditable="true"], .ProseMirror')) return
 
       const selectionText = window.getSelection()?.toString().trim() ?? ''
       const path = useTabStore.getState().active
