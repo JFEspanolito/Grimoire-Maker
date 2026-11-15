@@ -10,3 +10,4 @@ pub mod rename_references;
 pub mod replace_text;
 pub mod plugins;
 pub mod terminal;
+pub mod app_state;

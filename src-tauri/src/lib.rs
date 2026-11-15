@@ -81,6 +81,8 @@ pub fn run() {
             commands::version_control::git_init,
             commands::workspace::restore_workspace,
             commands::workspace::grant_document_folder,
+            commands::app_state::read_app_state,
+            commands::app_state::write_app_state,
             commands::workspace::rename_workspace,
             commands::rename_references::snapshot_rename_references,
             commands::rename_references::commit_rename_references,

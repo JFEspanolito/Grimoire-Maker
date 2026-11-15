@@ -1,6 +1,4 @@
-import { join } from '@tauri-apps/api/path'
-import { configRoot } from './configRoot'
-import { exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
+import { invoke } from '@tauri-apps/api/core'
 import { useSettingsStore, type PanelId } from '../stores/settingsStore'
 import type { PageSizeId, ThemeId } from '../types/document'
 import type { RulerGuide } from '../types/ruler'
@@ -44,18 +42,14 @@ const emptyState = (): AppState => ({
 
 const asPath = (v: unknown): string | null => (typeof v === 'string' && v ? v : null)
 
-async function statePath(): Promise<string> {
-  const dir = await configRoot()
-  if (!(await exists(dir))) await mkdir(dir, { recursive: true })
-  return (await join(dir, 'state.json')).replaceAll('\\', '/')
-}
-
-/** A missing or corrupt file means "nothing remembered", never an error. */
+/**
+ * A missing or corrupt file means "nothing remembered", never an error. The page cannot
+ * read or write `state.json` itself: Rust owns it, because the remembered projects decide
+ * which folders Git, replace and the terminal may touch.
+ */
 export async function loadAppState(): Promise<AppState> {
   try {
-    const path = await statePath()
-    if (!(await exists(path))) return emptyState()
-    const raw = JSON.parse(await readTextFile(path)) as Partial<AppState>
+    const raw = (await invoke<Partial<AppState> | null>('read_app_state')) ?? {}
     return {
       lastWorkspace: asPath(raw.lastWorkspace),
       recentWorkspaces: Array.isArray(raw.recentWorkspaces)
@@ -82,9 +76,8 @@ export function withAppStateLock<T>(operation: () => Promise<T>): Promise<T> {
 
 export function updateAppState(change: (state: AppState) => AppState): Promise<AppState> {
   return withAppStateLock(async () => {
-    const state = change(await loadAppState())
-    await writeTextFile(await statePath(), JSON.stringify(state, null, 2))
-    return state
+    // Rust accepts a project only if it was already remembered or the user just opened it.
+    return invoke<AppState>('write_app_state', { state: change(await loadAppState()) })
   })
 }
 
