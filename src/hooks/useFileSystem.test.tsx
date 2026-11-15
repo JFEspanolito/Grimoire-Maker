@@ -363,6 +363,36 @@ afterEach(async () => {
 })
 
 describe('workspace opening', () => {
+  it.each(['openWorkspace', 'openRecent', 'createProject'] as const)('keeps the current workspace intact when native session persistence rejects %s', async (action) => {
+    const path = '/previous/Draft/chapter.md'
+    state = { ...emptyState(), lastWorkspace: '/previous', recentWorkspaces: ['/previous'], lastFile: path }
+    useDocumentStore.getState().setWorkspace('/previous', [{ name: 'chapter.md', path, isDirectory: false }])
+    useDocumentStore.getState().loadFromRaw(path, '# Previous chapter')
+    useTabStore.getState().reset(path)
+    useExplorerStore.getState().selectPath(path)
+    useSessionStore.getState().setRecentWorkspaces(['/previous'])
+    useSessionStore.getState().setWorkspaceError(null)
+    const previous = useDocumentStore.getState()
+    const tabs = useTabStore.getState()
+    const saved = structuredClone(state)
+    vi.mocked(updateAppState).mockRejectedValueOnce(new Error('Folder is not a project you opened'))
+
+    if (action === 'createProject') expect(await actions.createProject('Rejected')).toBe(false)
+    else if (action === 'openRecent') await actions.openRecent('/workspace')
+    else await actions.openWorkspace()
+
+    expect(useDocumentStore.getState().workspaceRoot).toBe('/previous')
+    expect(useDocumentStore.getState().tree).toBe(previous.tree)
+    expect(useDocumentStore.getState().document).toBe(previous.document)
+    expect(useDocumentStore.getState().buffers).toBe(previous.buffers)
+    expect(useTabStore.getState().paths).toEqual(tabs.paths)
+    expect(useTabStore.getState().active).toBe(path)
+    expect(useExplorerStore.getState().selectedPath).toBe(path)
+    expect(useSessionStore.getState().recentWorkspaces).toEqual(['/previous'])
+    expect(useSessionStore.getState().workspaceError).toContain('Folder is not a project you opened')
+    expect(state).toEqual(saved)
+  })
+
   it('creates binder sections when opening an empty project and remembers it', async () => {
     await actions.openWorkspace()
 

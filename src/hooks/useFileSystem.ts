@@ -196,7 +196,15 @@ export function useFileSystem() {
       : tree)
     const markdown = initial && /\.md$/i.test(initial)
     const raw = markdown ? await readTextFile(initial) : ''
-    await remember((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
+    // Native acceptance must succeed before the UI switches to this project.
+    try {
+      const state = await updateAppState((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
+      useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
+    } catch (e) {
+      console.warn('Could not save app state', e)
+      useSessionStore.getState().setWorkspaceError(`Could not save session: ${e instanceof Error ? e.message : String(e)}`)
+      return
+    }
     setWorkspace(root, tree)
     useDocumentStore.getState().resetDocuments()
     if (!initial || markdown) loadFromRaw(initial, raw)
@@ -204,7 +212,7 @@ export function useFileSystem() {
     useExplorerStore.getState().selectPath(null)
     useSessionStore.getState().setWorkspaceError(null)
     notifyRepositoryChanged()
-  }, [loadFromRaw, saveAllDocuments, remember, setWorkspace])
+  }, [loadFromRaw, saveAllDocuments, setWorkspace])
 
   const openWorkspace = useCallback(async () => {
     if (!isTauri()) return
