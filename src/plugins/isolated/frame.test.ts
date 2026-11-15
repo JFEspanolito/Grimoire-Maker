@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { frameCsp, frameScriptHash } from './frame'
 import { WORKER_BOOTSTRAP } from './workerBootstrap'

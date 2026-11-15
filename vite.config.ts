@@ -15,5 +15,5 @@ export default defineConfig({
       ignored: ['**/src-tauri/**'],
     },
   },
-  test: { environment: 'jsdom', css: true },
+  test: { environment: 'jsdom', css: true, pool: 'vmThreads', vmMemoryLimit: '512MB' },
 })
