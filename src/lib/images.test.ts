@@ -26,6 +26,12 @@ it('reuses an image that is already in the project instead of copying it again',
   expect(mocks.copyFile).not.toHaveBeenCalled()
 })
 
+it('reuses an existing Windows project image even when path capitalization differs', async () => {
+  mocks.open.mockResolvedValue('c:\\BOOK\\Assets\\Map.png')
+  expect(await importImage('C:/Book/Draft/Scene.md', 'C:/Book')).toBe('../Assets/Map.png')
+  expect(mocks.copyFile).not.toHaveBeenCalled()
+})
+
 it('copies an outside image into the mirrored Assets folder and opens the picker on Assets when it exists', async () => {
   mocks.exists.mockImplementation(async (path: string) => path === '/w/Assets')
   mocks.open.mockResolvedValue('/Users/me/Pictures/new map.png')

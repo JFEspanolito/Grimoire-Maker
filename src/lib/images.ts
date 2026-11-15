@@ -1,6 +1,6 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { copyFile, exists, mkdir, readFile } from '@tauri-apps/plugin-fs'
-import { assetFolder, imageReference, normalizePath, relativePath } from './assetPaths'
+import { assetFolder, imageReference, isPathInside, normalizePath, relativePath } from './assetPaths'
 
 const MIME: Record<string, string> = {
   png: 'image/png',
@@ -68,7 +68,7 @@ export async function importImage(documentPath: string, workspaceRoot: string | 
 
   const source = picked.replaceAll('\\', '/')
   // An image that already lives in the project is referenced in place: no second copy.
-  if (projectRoot && source.startsWith(`${projectRoot}/`)) return imageReference(documentPath, source)
+  if (projectRoot && isPathInside(source, projectRoot)) return imageReference(documentPath, source)
   const assets = assetFolder(documentPath, workspaceRoot) ?? `${dirOf(documentPath)}/assets`
   if (!(await exists(assets))) await mkdir(assets, { recursive: true })
 
