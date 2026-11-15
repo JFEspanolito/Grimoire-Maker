@@ -4,7 +4,9 @@ import { useSettingsStore } from '../../stores/settingsStore'
 import { documentLabel } from '../../lib/documentLabel'
 import styles from './DocumentIndex.module.css'
 
-interface Entry { level: 1 | 2 | 3; text: string; page: number; element: HTMLElement }
+interface Entry { id: number; level: 1 | 2 | 3; text: string; page: number; element: HTMLElement }
+const headingIds = new WeakMap<HTMLElement, number>()
+let nextHeadingId = 0
 
 /** Reads the rendered headings so page numbers match the sheets the writer actually sees. */
 function collectEntries(pane: HTMLElement): Entry[] {
@@ -13,9 +15,11 @@ function collectEntries(pane: HTMLElement): Entry[] {
   return Array.from(pane.querySelectorAll<HTMLElement>('.ProseMirror h1, .ProseMirror h2, .ProseMirror h3'))
     .filter((heading) => heading.textContent?.trim())
     .map((element) => {
+      let id = headingIds.get(element)
+      if (id === undefined) { id = ++nextHeadingId; headingIds.set(element, id) }
       const top = element.getBoundingClientRect().top
       const page = Math.max(1, sheets.filter((sheetTop) => sheetTop <= top + 1).length)
-      return { level: Number(element.tagName[1]) as 1 | 2 | 3, text: element.textContent!.trim(), page, element }
+      return { id, level: Number(element.tagName[1]) as 1 | 2 | 3, text: element.textContent!.trim(), page, element }
     })
 }
 
@@ -42,7 +46,7 @@ export function DocumentIndex({ path, visible }: { path: string | null; visible:
       <h2>{name}</h2>
       {entries.length > 0 ? (
         <ol>
-          {entries.map((entry, index) => <li key={index} data-level={entry.level}>
+          {entries.map((entry) => <li key={entry.id} data-level={entry.level}>
             <button type="button" onClick={() => entry.element.scrollIntoView({ block: 'start', behavior: 'smooth' })}>
               <span className={styles.text}>{entry.text}</span><span className={styles.page}>{entry.page}</span>
             </button>

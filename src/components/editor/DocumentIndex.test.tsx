@@ -41,6 +41,17 @@ it('is hidden when Document Index is turned off', async () => {
   await unmount()
 })
 
+it('preserves the existing heading button when a heading is inserted before it', async () => {
+  const { pane, unmount } = await mount()
+  const existing = pane.querySelectorAll('nav button')[1]
+  const heading = document.createElement('h1')
+  heading.textContent = 'Inserted'
+  pane.querySelector('.ProseMirror')!.prepend(heading)
+  await act(async () => window.dispatchEvent(new Event('resize')))
+  expect(pane.querySelectorAll('nav button')[2]).toBe(existing)
+  await unmount()
+})
+
 it('shows an empty notice when there are no headings and documentIndex is enabled', async () => {
   useSettingsStore.getState().restorePanels({ documentIndex: true })
   const container = document.createElement('div')
