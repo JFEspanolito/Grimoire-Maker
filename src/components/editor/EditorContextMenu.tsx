@@ -1,9 +1,11 @@
 import { ContextMenu } from '../layout/ContextMenu'
 import styles from './EditorContextMenu.module.css'
+import type { ReactNode } from 'react'
 
 export interface EditorMenuItem {
   id: string
   label: string
+  icon?: ReactNode
   run: () => void
 }
 
@@ -20,7 +22,9 @@ export function EditorContextMenu({ x, y, items, onClose }: Props) {
   return (
     <ContextMenu className={styles.menu} label="Editor actions" x={x} y={y} onClose={onClose}>
       {items.map((item) => (
-        <button key={item.id} type="button" role="menuitem" onClick={item.run}>{item.label}</button>
+        <button key={item.id} type="button" role="menuitem" onClick={item.run}>
+          {item.icon && <span aria-hidden="true">{item.icon} </span>}{item.label}
+        </button>
       ))}
     </ContextMenu>
   )

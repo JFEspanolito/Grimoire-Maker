@@ -5,6 +5,7 @@ import { QuotesButton } from './QuotesButton'
 
 export const addToQuote = {
   id: 'quotes.add',
+  icon: '❝',
   label: 'Add to quote',
   when: ({ selectionText }: PluginContextActionContext) => selectionText.trim().length > 0,
   run({ selectionText, path }: PluginContextActionContext) {

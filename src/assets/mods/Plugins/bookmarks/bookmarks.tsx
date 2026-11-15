@@ -8,6 +8,7 @@ const isPage = (path: string | null): path is string => !!path && /\.md$/i.test(
 /** The editor's right-click menu lists this item for text blocks of a Markdown page; everything else keeps its own items. */
 export const addToBookmark = {
   id: 'bookmarks.add',
+  icon: '🔖',
   label: 'Add to bookmark',
   when: ({ target, path }: PluginContextActionContext) => isPage(path) && describeBlock(target) !== null,
   run({ target, path }: PluginContextActionContext) {

@@ -4,6 +4,7 @@ import { usePluginRegistry } from '../../plugins/plugin-manager'
 import type { PluginContextAction, PluginContextActionContext } from '../../types/plugin'
 import { useTabStore } from '../../stores/tabStore'
 import { ContextMenu } from './ContextMenu'
+import { contextActionApplies, runContextAction } from '../../lib/pluginContextActions'
 
 interface MenuState {
   x: number
@@ -32,13 +33,7 @@ export function PluginContextMenu() {
         y: e.clientY,
       }
 
-      const activeActions = contextActions.filter((action) => {
-        try {
-          return !action.when || action.when(ctx)
-        } catch {
-          return false
-        }
-      })
+      const activeActions = contextActions.filter(action => contextActionApplies(action, ctx))
 
       if (activeActions.length > 0) {
         e.preventDefault()
@@ -73,16 +68,11 @@ export function PluginContextMenu() {
           role="menuitem"
           className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs font-medium text-[#f0eee9] transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none"
           onClick={() => {
-            try {
-              action.run(menu.context)
-            } catch (err) {
-              console.error('Error running context action:', err)
-            }
+            runContextAction(action, menu.context)
             setMenu(null)
           }}
         >
-          {action.id === 'quotes.add' && <span aria-hidden="true">❝</span>}
-          {action.id === 'bookmarks.add' && <span aria-hidden="true">🔖</span>}
+          {action.icon && <span aria-hidden="true">{action.icon}</span>}
           {action.label}
         </button>
       ))}

@@ -4,7 +4,7 @@ import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { isDocumentRestoring, useDocumentStore } from '../../stores/documentStore'
 import { emitPluginEvent, setPluginHost, usePluginRegistry } from '../../plugins/plugin-manager'
 import type { PluginContextAction, PluginContextActionContext } from '../../types/plugin'
-import { reportError } from '../../lib/errorLogging'
+import { contextActionApplies, runContextAction } from '../../lib/pluginContextActions'
 import { PageView } from './PageView'
 import { EDITOR_EXTENSIONS } from './editorExtensions'
 import { DocumentPathContext } from './DocumentPathContext'
@@ -173,9 +173,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
         target, path: documentPath ?? null, x: event.clientX, y: event.clientY,
         selectionText: from === to ? '' : editor.state.doc.textBetween(from, to, '\n'),
       }
-      const actions = usePluginRegistry.getState().contextActions.filter((action) => {
-        try { return action.when ? action.when(context) === true : true } catch (error) { reportError('plugin.contextAction.when', error); return false }
-      })
+      const actions = usePluginRegistry.getState().contextActions.filter(action => contextActionApplies(action, context))
       const isOrdered = editor.isActive('orderedList')
       if (!markdown && !actions.length && !isOrdered) return
       event.preventDefault()
@@ -249,8 +247,8 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
   const menuItems = (current: NonNullable<typeof menu>): EditorMenuItem[] => [
     ...current.listActions,
     ...current.actions.map((action) => ({
-      id: action.id, label: String(action.label),
-      run: () => { try { action.run(current.context) } catch (error) { reportError('plugin.contextAction.run', error) } },
+      id: action.id, label: String(action.label), icon: action.icon,
+      run: () => runContextAction(action, current.context),
     })),
     ...(current.markdown ? [{ id: 'host.save-snippet', label: 'Save Selection as Snippet...', run: () => setSnippetMarkdown(current.markdown) }] : []),
   ]
