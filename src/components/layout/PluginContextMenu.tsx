@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
 import type { PluginContextAction, PluginContextActionContext } from '../../types/plugin'
 import { useTabStore } from '../../stores/tabStore'
+import { ContextMenu } from './ContextMenu'
 
 interface MenuState {
   x: number
@@ -41,47 +42,29 @@ export function PluginContextMenu() {
 
       if (activeActions.length > 0) {
         e.preventDefault()
-        const x = Math.min(e.clientX, window.innerWidth - 180)
-        const y = Math.min(e.clientY, window.innerHeight - (activeActions.length * 36 + 20))
-        setMenu({ x, y, actions: activeActions, context: ctx })
+        setMenu({ x: e.clientX, y: e.clientY, actions: activeActions, context: ctx })
       } else {
         setMenu(null)
       }
     }
 
-    const handleClickOutside = () => {
-      setMenu(null)
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenu(null)
-    }
-
     window.addEventListener('contextmenu', handleContextMenu)
-    window.addEventListener('pointerdown', handleClickOutside)
-    window.addEventListener('keydown', handleKeyDown)
 
     return () => {
       window.removeEventListener('contextmenu', handleContextMenu)
-      window.removeEventListener('pointerdown', handleClickOutside)
-      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [contextActions])
 
   if (!menu) return null
 
   return createPortal(
-    <div
-      role="menu"
-      aria-label="Context Actions"
+    <ContextMenu
+      label="Context Actions"
+      x={menu.x} y={menu.y} onClose={() => setMenu(null)}
       style={{
-        position: 'fixed',
-        left: menu.x,
-        top: menu.y,
         zIndex: 9999,
       }}
       className="min-w-44 rounded-md border border-[#4a4539] bg-[#22201d] p-1 shadow-2xl shadow-black/80 font-sans text-xs text-[#f0eee9]"
-      onPointerDown={(e) => e.stopPropagation()}
     >
       {menu.actions.map((action) => (
         <button
@@ -103,7 +86,7 @@ export function PluginContextMenu() {
           {action.label}
         </button>
       ))}
-    </div>,
+    </ContextMenu>,
     document.body
   )
 }

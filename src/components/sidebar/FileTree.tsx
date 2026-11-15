@@ -2,6 +2,7 @@ import { reportError } from "../../lib/errorLogging";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ConfirmDialog } from "../layout/ConfirmDialog";
+import { ContextMenu } from "../layout/ContextMenu";
 import { useTranslation, type TranslationKey } from "../../lib/i18n";
 import {
   DndContext,
@@ -329,20 +330,6 @@ export function FileTree() {
     return () => window.removeEventListener('keydown', onRenameKey);
   }, [editing, root, selected, tree]);
 
-  useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [menu]);
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
@@ -654,12 +641,10 @@ export function FileTree() {
         style={{ position: 'fixed', pointerEvents: 'none', zIndex: 1000, left: imageCaret.left,
           top: imageCaret.top, height: imageCaret.height, borderLeft: '3px solid #f59e0b' }} />, document.body)}
       {menu && (
-        <div
-          role="menu"
-          aria-label={`${fileLabel(menu.node.name, menu.node.isDirectory)} actions`}
+        <ContextMenu
+          label={`${fileLabel(menu.node.name, menu.node.isDirectory)} actions`}
+          x={menu.x} y={menu.y} onClose={() => setMenu(null)}
           className="fixed z-50 min-w-36 rounded border border-white/20 bg-neutral-800 p-1 shadow-xl"
-          style={{ left: menu.x, top: menu.y }}
-          onPointerDown={(event) => event.stopPropagation()}
         >
           {menu.node.isDirectory ? (
             <button
@@ -756,7 +741,7 @@ export function FileTree() {
               {t("files.moveToTrash")}
             </button>
           )}
-        </div>
+        </ContextMenu>
       )}
       {pendingDelete && (
         <ConfirmDialog

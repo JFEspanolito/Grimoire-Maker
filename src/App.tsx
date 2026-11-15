@@ -21,6 +21,7 @@ import { useTabStore } from './stores/tabStore'
 import { useUnsavedClose } from './hooks/useUnsavedClose'
 import { MenuBar } from './components/layout/MenuBar'
 import { NewProjectDialog } from './components/project/NewProjectDialog'
+import { ContextMenu } from './components/layout/ContextMenu'
 import { FindReplaceDialog } from './components/editor/FindReplaceDialog'
 import { FormulaDialog } from './components/editor/FormulaDialog'
 import styles from './App.module.css'
@@ -86,17 +87,10 @@ export default function App() {
       event.preventDefault()
       setContextMenu({ x: event.clientX, y: event.clientY })
     }
-    const onPointerDown = () => setContextMenu(null)
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
-
     window.addEventListener('contextmenu', onContextMenu)
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       window.removeEventListener('contextmenu', onContextMenu)
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
 
@@ -216,12 +210,10 @@ export default function App() {
         <ToastHost />
         <AppUpdateDialog />
         {contextMenu && (
-          <div
-            role="menu"
-            aria-label={t('common.reload')}
+          <ContextMenu
+            label={t('common.reload')}
+            x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}
             className="fixed z-50 min-w-36 rounded border border-white/20 bg-neutral-800 p-1 shadow-xl text-sm"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onPointerDown={(e) => e.stopPropagation()}
           >
             <button
               type="button"
@@ -231,7 +223,7 @@ export default function App() {
             >
               ↻ {t('common.reload')}
             </button>
-          </div>
+          </ContextMenu>
         )}
         {pendingReload && (
           <ConfirmDialog

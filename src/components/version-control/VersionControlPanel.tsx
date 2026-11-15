@@ -7,6 +7,7 @@ import { notifyRepositoryChanged, REPOSITORY_CHANGED } from '../../lib/repositor
 import { GitDiffDialog } from './GitDiffDialog'
 import { GitRollbackDialog } from './GitRollbackDialog'
 import { ConfirmDialog } from '../layout/ConfirmDialog'
+import { ContextMenu } from '../layout/ContextMenu'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useTranslation } from '../../lib/i18n'
 import { restoreGitDocuments } from '../../lib/gitDocumentRestore'
@@ -55,18 +56,6 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
   const pending = useRef(false)
   const refreshQueued = useRef(false)
   const flushRefresh = useRef(() => {})
-
-  useEffect(() => {
-    if (!menu) return
-    const close = () => setMenu(null)
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenu(null) }
-    window.addEventListener('pointerdown', close)
-    window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('pointerdown', close)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [menu])
 
   useEffect(() => {
     const current = ++epoch.current
@@ -251,8 +240,8 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
       )}
       {selection && <GitDiffDialog path={selection.path} staged={selection.staged} diff={diff} loading={busy}
         error={error} onClose={() => setSelection(null)} />}
-      {menu && <div role="menu" aria-label={`${menu.entry.path} actions`} className={styles.contextMenu}
-        style={{ left: menu.x, top: menu.y }} onPointerDown={(event) => event.stopPropagation()}>
+      {menu && <ContextMenu label={`${menu.entry.path} actions`} className={styles.contextMenu}
+        x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
         <button type="button" role="menuitem" disabled={busy}
           onClick={() => { const { entry, staged: isStaged } = menu; setMenu(null); void showDiff(entry.path, isStaged) }}>
           View Diff
@@ -269,7 +258,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
           onClick={() => { const { entry } = menu; setMenu(null); setPendingRevert(entry) }}>
           Revert
         </button>
-      </div>}
+      </ContextMenu>}
       {pendingRevert && <ConfirmDialog title="Revert changes"
         message={pendingRevert.indexStatus === '?' || pendingRevert.indexStatus === 'A'
           ? `Delete "${pendingRevert.path}"? This untracked or newly added file will be permanently removed.`
