@@ -4,6 +4,8 @@ import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { LoadedLibraryPaths } from './preferences'
+// Real filesystem seeding competes with other workers on Windows. Let it finish before cleanup.
+vi.setConfig({ testTimeout: 30000, hookTimeout: 60000 })
 const scope = vi.hoisted(() => ({ root: '', rejectRename: false, picked: '', saved: '', reads: [] as string[], paths: null as LoadedLibraryPaths | null }))
 vi.mock('./preferences', async (original) => {
   const actual = await original<typeof import('./preferences')>()
