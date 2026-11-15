@@ -8,6 +8,16 @@ it('compares Windows drive and UNC segments without changing their spelling', ()
   expect(assetFolder('/book/Draft/a.md', '/Book')).toBeNull()
 })
 
+it('rejects traversal beyond POSIX, drive, UNC and relative roots', () => {
+  for (const path of ['/../secret', 'C:/../../secret', '//server/share/../secret', '../secret', 'a/../../secret']) {
+    expect(() => normalizePath(path)).toThrow(/root|traversal/i)
+  }
+  expect(normalizePath('a/../map.png')).toBe('map.png')
+  expect(normalizePath('/book/../map.png')).toBe('/map.png')
+  expect(normalizePath('C:\\book\\..\\map.png')).toBe('C:/map.png')
+  expect(normalizePath('//server/share/book/../map.png')).toBe('//server/share/map.png')
+})
+
 it('mirrors the document folder under Assets, dropping the Draft section name', () => {
   expect(assetFolder('/w/Draft/Chapter 1/Scene.md', '/w')).toBe('/w/Assets/Chapter 1')
   expect(assetFolder('/w/Draft/Part/Chapter 1/Scene.md', '/w')).toBe('/w/Assets/Part/Chapter 1')

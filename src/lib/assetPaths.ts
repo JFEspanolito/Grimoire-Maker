@@ -20,12 +20,30 @@ export function imageReference(documentPath: string, imagePath: string): string 
 
 /** Resolves `.` and `..` segments so a relative asset path can be read inside the fs scope. */
 export function normalizePath(path: string): string {
+  const source = path.replaceAll('\\', '/')
+  const drive = /^([a-z]:)\//i.exec(source)
+  let prefix = ''
+  let parts = source.split('/')
+  if (drive) {
+    prefix = `${drive[1]}/`
+    parts = source.slice(drive[0].length).split('/')
+  } else if (source.startsWith('//')) {
+    const segments = source.slice(2).split('/').filter(Boolean)
+    const [server, share] = segments
+    if (!server || !share || ['.', '..'].includes(server) || ['.', '..'].includes(share)) throw new Error('Invalid UNC path root')
+    prefix = `//${server}/${share}/`
+    parts = segments.slice(2)
+  } else if (source.startsWith('/')) prefix = '/'
   const out: string[] = []
-  for (const part of path.split('/')) {
-    if (part === '..' && out.length > 1) out.pop()
-    else if (part !== '.') out.push(part)
+  for (const part of parts) {
+    if (!part || part === '.') continue
+    if (part === '..') {
+      if (!out.length) throw new Error('Path traversal exceeds its root')
+      out.pop()
+    } else out.push(part)
   }
-  return out.join('/')
+  if (!out.length && prefix.startsWith('//')) return prefix.slice(0, -1)
+  return prefix + out.join('/')
 }
 
 /** Relative path from the folder `fromDir` to `to`, e.g. `../Assets/Chapter 1/map.png`. */

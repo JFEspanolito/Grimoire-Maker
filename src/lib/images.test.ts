@@ -32,6 +32,11 @@ it('reuses an existing Windows project image even when path capitalization diffe
   expect(mocks.copyFile).not.toHaveBeenCalled()
 })
 
+it.each(['../../../secret.png', '..\\..\\..\\secret.png', 'C:/../secret.png'])('rejects unresolved traversal %s before reading an image', async (source) => {
+  await expect(loadImageUrl(source, 'C:/book/Draft/page.md')).rejects.toThrow(/root|traversal/i)
+  expect(mocks.readFile).not.toHaveBeenCalled()
+})
+
 it('copies an outside image into the mirrored Assets folder and opens the picker on Assets when it exists', async () => {
   mocks.exists.mockImplementation(async (path: string) => path === '/w/Assets')
   mocks.open.mockResolvedValue('/Users/me/Pictures/new map.png')

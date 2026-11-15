@@ -24,7 +24,7 @@ const isAbsolute = (src: string): boolean => /^[a-zA-Z]:[\\/]|^\//.test(src)
 export async function loadImageUrl(src: string, documentPath: string | null): Promise<string> {
   if (isInline(src)) return src
   let path = isAbsolute(src)
-    ? src.replaceAll('\\', '/')
+    ? normalizePath(src)
     : documentPath
       ? normalizePath(`${dirOf(documentPath.replaceAll('\\', '/'))}/${src}`)
       : null
@@ -37,7 +37,7 @@ export async function loadImageUrl(src: string, documentPath: string | null): Pr
     let decoded: string
     try { decoded = decodeURIComponent(src.replace(/[?#].*$/, '')) }
     catch { throw error }
-    const fallback = isAbsolute(decoded) ? decoded.replaceAll('\\', '/')
+    const fallback = isAbsolute(decoded) ? normalizePath(decoded)
       : documentPath ? normalizePath(`${dirOf(documentPath.replaceAll('\\', '/'))}/${decoded}`) : null
     if (!fallback || fallback === path) throw error
     path = fallback
