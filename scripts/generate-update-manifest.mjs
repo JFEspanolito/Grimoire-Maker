@@ -47,13 +47,16 @@ export function detectPlatforms(filename) {
     return ['windows-x86_64']
   }
   if (name.endsWith('.app.tar.gz') || name.includes('.app.tar.gz')) {
+    if (/(?:^|[_ .-])universal\.app\.tar\.gz$/.test(name)) {
+      return ['darwin-aarch64', 'darwin-x86_64']
+    }
     if (name.includes('aarch64') || name.includes('arm64')) {
       return ['darwin-aarch64']
     }
     if (name.includes('x86_64') || name.includes('x64')) {
       return ['darwin-x86_64']
     }
-    return ['darwin-aarch64', 'darwin-x86_64']
+    return []
   }
   if (name.endsWith('.appimage.tar.gz') || name.endsWith('.deb') || name.endsWith('.rpm')) {
     if (name.includes('aarch64') || name.includes('arm64')) return ['linux-aarch64']
@@ -85,6 +88,9 @@ export function createManifest({
   for (const bundle of bundles) {
     const signature = readFileSync(bundle.sigPath, 'utf8').trim()
     const platforms = detectPlatforms(bundle.bundleFileName)
+    if (bundle.bundleFileName.toLowerCase().endsWith('.app.tar.gz') && platforms.length === 0) {
+      throw new Error(`macOS updater bundle needs an explicit architecture or _universal suffix: ${bundle.bundleFileName}`)
+    }
     // GitHub Releases sanitizes asset filenames by replacing whitespace with dots (.)
     const sanitizedFileName = bundle.bundleFileName.replace(/\s+/g, '.')
     const downloadUrl = `https://github.com/${REPO}/releases/download/${tag}/${encodeURIComponent(sanitizedFileName)}`

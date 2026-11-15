@@ -38,10 +38,20 @@ describe('release workflow coordination', () => {
     expect(job('build')).not.toContain('release/latest.json')
     expect(job('publish')).toContain('release/latest.json')
   })
+  it('builds a universal macOS app and labels its archive and unchanged signature together', () => {
+    const build = job('build')
+    expect(build).toContain('rustup target add aarch64-apple-darwin x86_64-apple-darwin')
+    expect(build).toContain('--target universal-apple-darwin')
+    expect(build).toContain('src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg')
+    expect(build).toContain('src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz*')
+    expect(build).toContain('universal="${archive%.app.tar.gz}_universal.app.tar.gz"')
+    expect(build).toContain('mv "$archive" "$universal"')
+    expect(build).toContain('mv "$archive.sig" "$universal.sig"')
+  })
   it('combines the signed updater bundles from both platforms without existing release state', () => {
     const scratch = mkdtempSync(join(tmpdir(), 'grimoire-release-manifest-'))
     console.info(`release manifest scratch retained: ${scratch}`)
-    for (const [name, signature] of [['Book_x64-setup.exe', 'windows-signature'], ['Book.app.tar.gz', 'mac-signature']]) {
+    for (const [name, signature] of [['Book_x64-setup.exe', 'windows-signature'], ['Book_universal.app.tar.gz', 'mac-signature']]) {
       writeFileSync(join(scratch, name), 'bundle')
       writeFileSync(join(scratch, `${name}.sig`), signature)
     }

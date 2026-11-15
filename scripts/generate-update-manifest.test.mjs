@@ -19,7 +19,8 @@ describe('generate-update-manifest', () => {
   it('detects platform identifiers correctly from bundle filenames', () => {
     expect(detectPlatforms('Grimoire Maker_0.2.0_x64-setup.nsis.zip')).toEqual(['windows-x86_64'])
     expect(detectPlatforms('Grimoire Maker_0.1.12_x64-setup.exe')).toEqual(['windows-x86_64'])
-    expect(detectPlatforms('Grimoire Maker.app.tar.gz')).toEqual(['darwin-aarch64', 'darwin-x86_64'])
+    expect(detectPlatforms('Grimoire Maker.app.tar.gz')).toEqual([])
+    expect(detectPlatforms('Grimoire Maker_universal.app.tar.gz')).toEqual(['darwin-aarch64', 'darwin-x86_64'])
     expect(detectPlatforms('Grimoire Maker_aarch64.app.tar.gz')).toEqual(['darwin-aarch64'])
     expect(detectPlatforms('Grimoire Maker_x64.app.tar.gz')).toEqual(['darwin-x86_64'])
   })
@@ -34,6 +35,14 @@ describe('generate-update-manifest', () => {
     expect(found).toHaveLength(1)
     expect(found[0].bundleFileName).toBe('app-setup.nsis.zip')
     expect(found[0].sigFileName).toBe('app-setup.nsis.zip.sig')
+  })
+
+  it('rejects a signed macOS archive whose architecture is unknown', () => {
+    writeFileSync(join(testDir, 'Book.app.tar.gz'), 'arm-only bundle')
+    writeFileSync(join(testDir, 'Book.app.tar.gz.sig'), 'mac-signature')
+
+    expect(() => createManifest({ tag: 'v0.2.0', bundles: findSignedBundles(testDir) }))
+      .toThrow('macOS updater bundle needs an explicit architecture or _universal suffix')
   })
 
   it('creates valid manifest and merges with existing platforms', () => {
