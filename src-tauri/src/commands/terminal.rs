@@ -51,6 +51,35 @@ fn retire_session(sessions: &Mutex<SessionSlot>, id: &str) -> Result<(), String>
     Ok(())
 }
 
+fn decode_output(pending: &mut Vec<u8>, bytes: &[u8], eof: bool) -> String {
+    pending.extend_from_slice(bytes);
+    let mut output = String::new();
+    let mut consumed = 0;
+    while consumed < pending.len() {
+        match std::str::from_utf8(&pending[consumed..]) {
+            Ok(text) => { output.push_str(text); consumed = pending.len(); }
+            Err(error) => {
+                let valid_end = consumed + error.valid_up_to();
+                output.push_str(&String::from_utf8_lossy(&pending[consumed..valid_end]));
+                consumed = valid_end;
+                if let Some(length) = error.error_len() {
+                    output.push('\u{fffd}');
+                    consumed += length;
+                } else {
+                    // Keep only the incomplete suffix, at most three bytes, until more arrive.
+                    if eof {
+                        output.push_str(&String::from_utf8_lossy(&pending[consumed..]));
+                        consumed = pending.len();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    pending.drain(..consumed);
+    output
+}
+
 /// The page chooses only where the terminal opens and its size. The program it runs
 /// is fixed here, so script running in the webview cannot start an arbitrary binary.
 #[derive(Deserialize)]
@@ -128,10 +157,15 @@ pub async fn spawn_terminal(
         let session_id = id.clone();
         std::thread::spawn(move || {
             let mut buffer = [0u8; 4096];
+            let mut pending = Vec::new();
             while let Ok(n) = reader.read(&mut buffer) {
                 if n == 0 { break; }
-                let data = String::from_utf8_lossy(&buffer[..n]).to_string();
+                let data = decode_output(&mut pending, &buffer[..n], false);
                 if app.emit("terminal-output", TerminalOutput { session_id: session_id.clone(), data }).is_err() { break; }
+            }
+            let data = decode_output(&mut pending, &[], true);
+            if !data.is_empty() {
+                let _ = app.emit("terminal-output", TerminalOutput { session_id: session_id.clone(), data });
             }
             drop(reader);
             let _ = retire_session(&sessions, &session_id);
@@ -176,6 +210,27 @@ pub async fn close_terminal(state: State<'_, TerminalState>, session_id: String)
 #[cfg(test)]
 mod terminal_tests {
     use super::*;
+
+    #[test]
+    fn terminal_utf8_survives_every_chunk_boundary_and_flushes_incomplete_eof() {
+        for bytes in ["ASCII é ñ 🪲 end".as_bytes(), &[0xff, b'a', 0xe2, b'(', 0xa1], &[b'a', 0xf0, 0x9f]] {
+            for split in 0..=bytes.len() {
+                let mut pending = Vec::new();
+                let mut text = decode_output(&mut pending, &bytes[..split], false);
+                text.push_str(&decode_output(&mut pending, &bytes[split..], false));
+                text.push_str(&decode_output(&mut pending, &[], true));
+                assert_eq!(text, String::from_utf8_lossy(bytes), "split at {split}");
+                assert!(pending.is_empty());
+            }
+        }
+        let mut pending = Vec::new();
+        let mut text = String::new();
+        for byte in "éñ🪲".as_bytes() {
+            text.push_str(&decode_output(&mut pending, &[*byte], false));
+            assert!(pending.len() <= 3);
+        }
+        assert_eq!(text, "éñ🪲");
+    }
 
     #[derive(Debug, Clone)]
     struct TestChild(Arc<Mutex<Vec<&'static str>>>);
