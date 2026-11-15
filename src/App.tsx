@@ -38,6 +38,7 @@ import { useAppUpdateStore } from './stores/appUpdateStore'
 import { TerminalPanel } from './components/terminal/TerminalPanel'
 import { openExternalUrl } from './lib/openUrl'
 import { AppUpdateDialog } from './components/settings/AppUpdateDialog'
+import { reportError } from './lib/errorLogging'
 
 export default function App() {
   const { t } = useTranslation()
@@ -148,8 +149,8 @@ export default function App() {
       await reloadThemes()
       await reloadTemplates()
     }
-    void reload()
-    const onFocus = () => void reload()
+    const onFocus = () => { void reload().catch(error => reportError('library.reload', error)) }
+    onFocus()
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [reloadThemes, reloadTemplates])

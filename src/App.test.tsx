@@ -6,6 +6,29 @@ import { useToastStore } from './stores/toastStore'
 import { useThemeStore } from './stores/themeStore'
 import { useTemplateStore } from './stores/templateStore'
 import { DEFAULT_PANELS, useSettingsStore } from './stores/settingsStore'
+import { reportError } from './lib/errorLogging'
+vi.mock('./lib/errorLogging', () => ({ reportError: vi.fn(), friendlyErrorMessage: (error: unknown) => String(error) }))
+
+it('reports failed library reloads on startup and focus', async () => {
+  runtime.native = true
+  const themes = useThemeStore.getState().reload
+  const templates = useTemplateStore.getState().reload
+  const error = new Error('Cannot read themes')
+  useThemeStore.setState({ reload: vi.fn(async () => { throw error }) })
+  useTemplateStore.setState({ reload: vi.fn(async () => {}) })
+  vi.mocked(reportError).mockClear()
+  try {
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<App />))
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    expect(reportError).toHaveBeenCalledTimes(2)
+    expect(reportError).toHaveBeenCalledWith('library.reload', error)
+  } finally {
+    runtime.native = false
+    await act(async () => root?.unmount()); root = null
+    useThemeStore.setState({ reload: themes }); useTemplateStore.setState({ reload: templates })
+  }
+})
 
 const runtime = vi.hoisted(() => ({ native: false, restore: vi.fn(async () => {}), startExternal: vi.fn(async () => {}) }))
 vi.mock('./plugins/isolated/externalHost', () => ({ startActiveExternalPlugins: runtime.startExternal }))
