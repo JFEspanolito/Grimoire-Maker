@@ -26,6 +26,7 @@ function parseScalar(raw: string): string | number | boolean {
 function formatScalar(value: unknown): string {
   if (typeof value === 'string') {
     return /^[\w .,-]+$/.test(value) && value.trim() === value && Number.isNaN(Number(value))
+      && value !== 'true' && value !== 'false'
       ? value
       : JSON.stringify(value)
   }

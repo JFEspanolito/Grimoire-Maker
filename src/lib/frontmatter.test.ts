@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { parseDocument, serializeDocument } from './frontmatter'
 
 describe('quoted frontmatter scalars', () => {
+  it.each(['true', 'false', '1984', '-2.5', '1e3', '0x10', ''])('keeps the string type of %j', (title) => {
+    const raw = serializeDocument({ title }, 'Body')
+    expect(parseDocument(raw).frontmatter.title).toBe(title)
+  })
+  it('continues to round-trip real booleans and numbers with their original types', () => {
+    const metadata = { enabled: true, hidden: false, columns: 2 as const, scale: 1.25 }
+    expect(parseDocument(serializeDocument(metadata, 'Body')).frontmatter).toEqual(metadata)
+  })
   it.each(['He said "hi"', 'C:\\x\\chapter.md', "O'Brien", 'Line\nTab\tValue', '\\'])('keeps %j stable across repeated saves', (title) => {
     let raw = serializeDocument({ title }, '# Chapter')
     for (let save = 0; save < 4; save++) {
