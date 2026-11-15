@@ -1,3 +1,4 @@
+import { useTranslation, type TranslationKey } from '../../lib/i18n'
 import { useProjectStore } from "../../stores/projectStore";
 import { coAuthorNames } from "../../lib/projectContributors";
 import { useDocumentStore } from "../../stores/documentStore";
@@ -60,7 +61,7 @@ interface ThemeCustomizerProps {
   onBusyChange?: (busy: boolean) => void;
 }
 
-function preview(draft: ThemeDraft, colors: ThemeColors, fonts?: ThemeFonts): string {
+function preview(draft: ThemeDraft, colors: ThemeColors, fonts: ThemeFonts | undefined, t: (key: TranslationKey) => string): string {
   const css = buildThemeCss(
     draft.css,
     draft.theme.id,
@@ -80,7 +81,7 @@ h1,h2,h3 { font-family: var(--heading-font, Georgia, serif); line-height: 1.2; }
 
 .statblock { padding: 12px; background: var(--statblock-bg); } .readaloud { padding: 12px; background: var(--readaloud-bg); border-left: 3px solid var(--accent); }
 
-${css}</style></head><body><article data-theme="sample"><div class="grimoire-content"><h1>H1: Chapter One</h1><h2>H2: The ancient library</h2><h3>H3: A hidden passage</h3><hr><p>P: A new adventure begins. This sample stays separate from your document.</p><p class="readaloud">A quiet voice echoes through the hall.</p><div class="statblock"><strong>Library guardian</strong><p>Armor 12 · Health 24</p></div></div></article></body></html>`;
+${css}</style></head><body><article data-theme="sample"><div class="grimoire-content"><h1>${t('ui.sample.h1')}</h1><h2>${t('ui.sample.h2')}</h2><h3>${t('ui.sample.h3')}</h3><hr><p>${t('ui.sample.paragraph')}</p><p class="readaloud">${t('ui.sample.readaloud')}</p><div class="statblock"><strong>${t('ui.sample.guardian')}</strong><p>${t('ui.sample.stats')}</p></div></div></article></body></html>`;
 }
 
 /** Embedded in Preferences; the host owns its only modal and Escape handling. */
@@ -89,6 +90,7 @@ export function ThemeCustomizer({
   onClose,
   onBusyChange,
 }: ThemeCustomizerProps) {
+  const { t } = useTranslation();
   const workspace = useDocumentStore((state) => state.workspaceRoot);
   const project = useProjectStore((state) =>
     workspace ? state.entries[workspace]?.settings : undefined,
@@ -111,11 +113,11 @@ export function ThemeCustomizer({
   }));
 
   const sections = [
-    "Theme name",
-    "Typography",
-    "Colors",
-    "Backgrounds",
-    "Header and footer",
+    t('ui.theme_name'),
+    t('ui.typography'),
+    t('ui.colors'),
+    t('ui.backgrounds'),
+    t('ui.header_and_footer'),
   ] as const;
 
   const [section, setSection] = useState(0);
@@ -130,7 +132,7 @@ export function ThemeCustomizer({
 
   const [busy, setBusy] = useState(false);
 
-  const [operation, setOperation] = useState("Saving theme…");
+  const [operation, setOperation] = useState(t('ui.saving_theme'));
 
   const [error, setError] = useState("");
 
@@ -148,12 +150,12 @@ export function ThemeCustomizer({
     const selected = themes.find((theme) => theme.id === themeId);
 
     if (!isTauri()) {
-      setError("Custom themes can be saved in the desktop app.");
+      setError(t('ui.custom_themes_can_be_saved_in_the_desktop_app'));
       return;
     }
 
     if (!selected) {
-      setError("The selected theme is no longer available.");
+      setError(t('ui.the_selected_theme_is_no_longer_available'));
       return;
     }
 
@@ -176,12 +178,12 @@ export function ThemeCustomizer({
 
         setFonts(themeFonts(value.css));
 
-        setName(value.path ? selected.name : `${selected.name} Copy`);
+        setName(value.path ? selected.name : t('ui.copyName', { name: selected.name }));
       },
       (cause: unknown) => {
         if (!cancelled) {
           reportError("theme.customize.load", cause);
-          setError(friendlyErrorMessage(cause, "Could not load this theme for customization."));
+          setError(friendlyErrorMessage(cause, t('ui.could_not_load_this_theme_for_customization')));
         }
       },
     );
@@ -200,7 +202,7 @@ export function ThemeCustomizer({
 
     locked.current = true;
 
-    setOperation("Saving theme…");
+    setOperation(t('ui.saving_theme'));
 
     setBusy(true);
 
@@ -229,7 +231,7 @@ export function ThemeCustomizer({
         refreshed.errors.length
       ) {
         throw new Error(
-          `Theme saved, but could not be reloaded. ${refreshed.errors.join("; ")} Reopen Preferences after resolving the folder errors.`,
+          t('ui.themeReloadFailed', { errors: refreshed.errors.join('; ') }),
         );
       }
 
@@ -239,7 +241,7 @@ export function ThemeCustomizer({
     } catch (cause) {
       reportError("theme.customize.save", cause);
 
-      setError(friendlyErrorMessage(cause, "Could not save the theme."));
+      setError(friendlyErrorMessage(cause, t('ui.could_not_save_the_theme')));
     } finally {
       locked.current = false;
 
@@ -255,7 +257,7 @@ export function ThemeCustomizer({
 
     locked.current = true;
 
-    setOperation("Exporting theme…");
+    setOperation(t('ui.exporting_theme'));
 
     setBusy(true);
 
@@ -270,13 +272,13 @@ export function ThemeCustomizer({
 
       if (result) {
         setNotice(
-          typeof result === "string" ? `Theme saved to ${result}` : "Theme exported.",
+          typeof result === "string" ? t('ui.themeSavedTo', { path: result }) : t('ui.theme_exported'),
         );
       }
     } catch (cause) {
       reportError("theme.customize.export", cause);
 
-      setError(friendlyErrorMessage(cause, "Could not export the theme."));
+      setError(friendlyErrorMessage(cause, t('ui.could_not_export_the_theme')));
     } finally {
       locked.current = false;
 
@@ -291,7 +293,7 @@ export function ThemeCustomizer({
 
     locked.current = true;
 
-    setOperation("Importing background image…");
+    setOperation(t('ui.importing_background_image'));
 
     setBusy(true);
 
@@ -306,7 +308,7 @@ export function ThemeCustomizer({
     } catch (cause) {
       reportError("theme.background.import", cause);
 
-      setError(friendlyErrorMessage(cause, "Could not import the background image."));
+      setError(friendlyErrorMessage(cause, t('ui.could_not_import_the_background_image')));
     } finally {
       locked.current = false;
 
@@ -323,24 +325,24 @@ export function ThemeCustomizer({
       aria-busy={busy}
     >
       <header className={styles.header}>
-        <h2 id="customize-theme-title">Customize Theme</h2>
+        <h2 id="customize-theme-title">{t('ui.customize_theme')}</h2>
         <button type="button" disabled={busy} onClick={onClose}>
-          Back
+          {t('ui.back')}
         </button>
       </header>
 
       <p className={styles.description}>
         {draft?.path
-          ? "Save updates this user theme. Save As creates a separate copy."
-          : "Built-in and template themes are kept intact. Save creates a named copy."}{" "}
-        Divider color applies throughout the theme.
+          ? t('ui.save_updates_this_user_theme_save_as_creates_a_separate_copy')
+          : t('ui.built_in_and_template_themes_are_kept_intact_save_creates_a_named_copy')}{" "}
+        {t('ui.dividerColorHint')}
       </p>
 
       <div className={styles.sectionLayout}>
         <nav
           className={styles.sections}
           role="tablist"
-          aria-label="Theme sections"
+          aria-label={t('ui.theme_sections')}
           aria-orientation="vertical"
         >
           {sections.map((label, index) => (
@@ -392,9 +394,9 @@ export function ThemeCustomizer({
                 hidden={section !== 0}
               >
                 <label className={styles.name}>
-                  Theme name
+                  {t('ui.theme_name')}
                   <input
-                    aria-label="Theme name"
+                    aria-label={t('ui.theme_name')}
                     maxLength={80}
                     value={name}
                     disabled={busy}
@@ -412,9 +414,9 @@ export function ThemeCustomizer({
                 <div className={styles.workspace}>
                   <div className={styles.typography}>
                     <label>
-                      Document font
+                      {t('ui.document_font')}
                       <select
-                        aria-label="Theme document font"
+                        aria-label={t('ui.theme_document_font')}
                         value={findMatchingFontOption(availableFonts, fonts.pageFont)?.family ?? ''}
                         disabled={busy}
                         onChange={(event) => {
@@ -429,9 +431,9 @@ export function ThemeCustomizer({
                       </select>
                     </label>
                     <label>
-                      Heading font
+                      {t('ui.heading_font')}
                       <select
-                        aria-label="Theme heading font"
+                        aria-label={t('ui.theme_heading_font')}
                         value={findMatchingFontOption(availableFonts, fonts.headingFont)?.family ?? ''}
                         disabled={busy}
                         onChange={(event) => {
@@ -448,10 +450,10 @@ export function ThemeCustomizer({
                   </div>
 
                   <iframe
-                    title="Theme typography preview"
+                    title={t('ui.theme_typography_preview')}
                     sandbox=""
                     className={styles.preview}
-                    srcDoc={preview(draft, colors, fonts)}
+                    srcDoc={preview(draft, colors, fonts, t)}
                   />
                 </div>
               </section>
@@ -469,11 +471,11 @@ export function ThemeCustomizer({
                         keyof ThemeColors,
                         string,
                       ][]
-                    ).map(([key, label]) => (
+                    ).map(([key]) => (
                       <label key={key}>
-                        {label}
+                        {t(`ui.color.${key}`)}
                         <input
-                          aria-label={label}
+                          aria-label={t(`ui.color.${key}`)}
                           type="color"
                           value={colors[key]}
                           disabled={busy}
@@ -489,10 +491,10 @@ export function ThemeCustomizer({
                   </div>
 
                   <iframe
-                    title="Theme preview"
+                    title={t('ui.theme_preview')}
                     sandbox=""
                     className={styles.preview}
-                    srcDoc={preview(draft, colors, fonts)}
+                    srcDoc={preview(draft, colors, fonts, t)}
                   />
                 </div>
               </section>
@@ -521,17 +523,16 @@ export function ThemeCustomizer({
                 aria-labelledby="theme-tab-4"
                 hidden={section !== 4}
               >
-                <h3>Header and footer</h3>
+                <h3>{t('ui.header_and_footer')}</h3>
 
                 <p className={styles.description}>
-                  Text repeats on every page. Use fixed text or these
-                  placeholders:
+                  {t('ui.text_repeats_on_every_page_use_fixed_text_or_these_placeholders')}
                 </p>
 
                 <ul>
-                  {Object.entries(PAGE_TEXT_TOKENS).map(([token, label]) => (
+                  {Object.keys(PAGE_TEXT_TOKENS).map((token) => (
                     <li key={token}>
-                      <code>{token}</code> — {label}
+                      <code>{token}</code> — {t(`ui.token.${token.slice(1, -1)}` as TranslationKey)}
                     </li>
                   ))}
                 </ul>
@@ -545,15 +546,15 @@ export function ThemeCustomizer({
                         disabled={busy}
                       >
                         <legend>
-                          {area === "header" ? "Header" : "Footer"}
+                          {area === "header" ? t('ui.header') : t('ui.footer')}
                         </legend>
 
                         {PAGE_TEXT_POSITIONS.map((position) => (
                           <label key={position}>
-                            {position[0].toUpperCase() + position.slice(1)}
+                            {t(`ui.position.${position}`)}
 
                             <input
-                              aria-label={`${area === "header" ? "Header" : "Footer"} ${position}`}
+                              aria-label={t('ui.textSlot', { area: t(area === 'header' ? 'ui.header' : 'ui.footer'), position: t(`ui.slot.${position}`) })}
                               maxLength={500}
                               value={headerFooter[area][position]}
                               onChange={(event) => {
@@ -573,11 +574,11 @@ export function ThemeCustomizer({
                       </fieldset>
                     ))}
                     <fieldset className={styles.pageText} disabled={busy}>
-                      <legend>Divider</legend>
+                      <legend>{t('ui.divider')}</legend>
                       {PAGE_TEXT_AREAS.map(area => <fieldset key={area} className={styles.dividerRow}>
-                        <legend>{area === 'header' ? 'Header' : 'Footer'}</legend>
+                        <legend>{area === 'header' ? t('ui.header') : t('ui.footer')}</legend>
                         {DIVIDER_SIDES.map(side => <label key={side}>
-                          <input type="checkbox" aria-label={`${area} divider ${side}`}
+                          <input type="checkbox" aria-label={t('ui.dividerSide', { area: t(`ui.area.${area}`), side: t(`ui.slot.${side}`) })}
                             checked={headerFooter.divider?.[area][side] ?? false}
                             onChange={event => {
                               const checked = event.target.checked;
@@ -586,11 +587,11 @@ export function ThemeCustomizer({
                                 return { ...current, divider: { ...divider, [area]: { ...divider[area], [side]: checked } } };
                               });
                             }} />
-                          {side[0].toUpperCase() + side.slice(1)}
+                          {t(`ui.position.${side}`)}
                         </label>)}
                       </fieldset>)}
-                      <label>Color
-                        <input type="color" aria-label="Header and footer divider color"
+                      <label>{t('ui.color')}
+                        <input type="color" aria-label={t('ui.header_and_footer_divider_color')}
                           value={headerFooter.divider?.color ?? emptyDivider().color}
                           onChange={event => {
                             const color = event.target.value;
@@ -602,7 +603,7 @@ export function ThemeCustomizer({
                   <div
                     className={styles.headerFooterPreview}
                     role="img"
-                    aria-label="Header and footer page preview"
+                    aria-label={t('ui.header_and_footer_page_preview')}
                     style={{
                       aspectRatio: `${PAGE_SIZES[pageSize].widthMm} / ${PAGE_SIZES[pageSize].heightMm}`,
                       background: colors.background,
@@ -624,8 +625,8 @@ export function ThemeCustomizer({
                       />
                     ))}
                     <div className={styles.backgroundSample}>
-                      <strong style={{ color: colors.h1 }}>Chapter One</strong>
-                      <p>Your text stays above the background artwork.</p>
+                      <strong style={{ color: colors.h1 }}>{t('ui.chapter_one')}</strong>
+                      <p>{t('ui.your_text_stays_above_the_background_artwork')}</p>
                     </div>
                     {PAGE_TEXT_AREAS.map((area) => (
                       <div
@@ -640,11 +641,11 @@ export function ThemeCustomizer({
                               book:
                                 project?.name ||
                                 bookName(workspace) ||
-                                "Sample Book",
-                              title: "Chapter One",
-                              author: project?.author || "Sample Author",
+                                t('ui.sample_book'),
+                              title: t('ui.chapter_one'),
+                              author: project?.author || t('ui.sample_author'),
                               coAuthor:
-                                coAuthorNames(project) || "Sample Co-Author",
+                                coAuthorNames(project) || t('ui.sample_co_author'),
                               page: 1,
                               pages: 10,
                             })}
@@ -655,21 +656,17 @@ export function ThemeCustomizer({
                   </div>
                 </div>
                 <p className={styles.description}>
-                  Preview uses project credits when available and sample values
-                  otherwise. Title and page numbers are examples. Changes are
-                  saved only when you save the theme.
+                  {t('ui.preview_uses_project_credits_when_available_and_sample_values_otherwise_title_an')}
                 </p>
               </section>
 
               <p className={styles.description}>
-                Preview only: your document changes after Save. Custom CSS
-                colors outside six-digit hex values use picker defaults;
-                original fonts and layout rules are retained.
+                {t('ui.preview_only_your_document_changes_after_save_custom_css_colors_outside_six_digi')}
               </p>
             </>
           )}
 
-          {!draft && !error && <p role="status">Loading theme…</p>}
+          {!draft && !error && <p role="status">{t('ui.loading_theme')}</p>}
 
           {error && (
             <p role="alert" className={styles.error}>
@@ -685,18 +682,18 @@ export function ThemeCustomizer({
 
       <footer className={styles.footer}>
         <button type="button" disabled={busy} onClick={onClose}>
-          Cancel
+          {t('ui.cancel')}
         </button>
 
         {draft?.path && (
           <button type="button" disabled={busy} onClick={() => void exportCurrent()}>
-            Export
+            {t('ui.export')}
           </button>
         )}
 
         {draft?.path && (
           <button type="button" disabled={busy} onClick={() => void save(true)}>
-            Save As
+            {t('ui.save_as')}
           </button>
         )}
 
@@ -706,7 +703,7 @@ export function ThemeCustomizer({
           disabled={!draft || busy}
           onClick={() => void save(!draft?.path)}
         >
-          {draft?.path ? "Save" : "Save New Theme"}
+          {draft?.path ? t('ui.save') : t('ui.save_new_theme')}
         </button>
       </footer>
     </section>

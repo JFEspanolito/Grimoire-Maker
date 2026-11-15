@@ -3,10 +3,30 @@ import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import { DocumentTabs } from './DocumentTabs'
 import { useTabStore } from '../../stores/tabStore'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 const openFile = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 const closeTab = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openFile, closeTab }) }))
+
+it('translates tab controls into Spanish while keeping document names intact', async () => {
+  const previous = useSettingsStore.getState().language
+  useSettingsStore.setState({ language: 'es' })
+  useTabStore.getState().reset('/book/My Chapter.md')
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  try {
+    await act(async () => root.render(<DocumentTabs markdownViews={{}} onChangeView={() => {}} />))
+    expect(container.querySelector('nav')?.getAttribute('aria-label')).toBe('Documentos abiertos')
+    expect(container.querySelector('[aria-label="Cambiar vista de My Chapter"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Cerrar My Chapter"]')).not.toBeNull()
+    expect(container.querySelector('[title="Ver en modo Markdown"]')).not.toBeNull()
+  } finally {
+    await act(async () => root.unmount())
+    useSettingsStore.setState({ language: previous })
+    useTabStore.getState().reset(null)
+  }
+})
 
 it('hides Markdown suffixes in tabs, tooltips and close labels without changing file actions', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)

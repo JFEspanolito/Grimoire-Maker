@@ -4,6 +4,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { PreferencesDialog } from './PreferencesDialog'
 import { useSettingsStore } from '../../stores/settingsStore'
 
+function labeledInput(scope: ParentNode, name: string): HTMLInputElement {
+  const label = Array.from(scope.querySelectorAll('label')).find(item => item.textContent?.trim() === name)
+  expect(label?.control).toBeInstanceOf(HTMLInputElement)
+  return label!.control as HTMLInputElement
+}
+
 const mocks = vi.hoisted(() => ({
   load: vi.fn(), change: vi.fn(), themes: vi.fn().mockResolvedValue(undefined), templates: vi.fn().mockResolvedValue(undefined),
   deleteTheme: vi.fn().mockResolvedValue(undefined), exportTheme: vi.fn().mockResolvedValue(true),
@@ -197,8 +203,8 @@ it('exposes Auto save directly and applies minutes plus seconds without acceptin
   await act(async () => container.querySelector<HTMLButtonElement>('#preferences-tab-autosave')!.click())
   const panel = container.querySelector<HTMLElement>('#preferences-autosave')!
   expect(panel.hidden).toBe(false)
-  const minutes = panel.querySelector<HTMLInputElement>('[aria-label="Auto save minutes"]')!
-  const seconds = panel.querySelector<HTMLInputElement>('[aria-label="Auto save seconds"]')!
+  const minutes = labeledInput(panel.querySelectorAll('form')[0], 'Minutes')
+  const seconds = labeledInput(panel.querySelectorAll('form')[0], 'Seconds')
   expect(minutes.value).toBe('5'); expect(seconds.value).toBe('0')
   const change = async (input: HTMLInputElement, value: string) => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
@@ -225,9 +231,9 @@ it('exposes project settings in Preferences', async () => {
 it('offers a separate Auto commits form with editable defaults and an off switch', async () => {
   await act(async () => container.querySelector<HTMLButtonElement>('#preferences-tab-autosave')!.click())
   const panel = container.querySelector<HTMLElement>('#preferences-autosave')!
-  const enabled = panel.querySelector<HTMLInputElement>('[aria-label="Enable auto commits"]')!
-  const minutes = panel.querySelector<HTMLInputElement>('[aria-label="Auto commit minutes"]')!
-  const message = panel.querySelector<HTMLInputElement>('[aria-label="Auto commit message"]')!
+  const enabled = labeledInput(panel, 'Enable auto commits')
+  const minutes = labeledInput(panel.querySelectorAll('form')[1], 'Minutes')
+  const message = labeledInput(panel, 'Commit message')
   expect(enabled.checked).toBe(true)
   expect(minutes.value).toBe('20')
   expect(message.value).toBe('update content automatically')

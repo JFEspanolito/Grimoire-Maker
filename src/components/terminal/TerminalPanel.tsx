@@ -1,3 +1,4 @@
+import { getTranslation, useTranslation } from '../../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -22,6 +23,7 @@ function scheduleLifecycle(action: () => Promise<void>): Promise<void> {
 }
 
 export function TerminalPanel({ workspace }: Props) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(240)
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null)
@@ -29,6 +31,7 @@ export function TerminalPanel({ workspace }: Props) {
   const togglePanel = useSettingsStore((s) => s.togglePanel)
 
   useEffect(() => {
+    const translate = (key: Parameters<typeof getTranslation>[0]) => getTranslation(key, useSettingsStore.getState().language)
     if (!containerRef.current) return
 
     let isMounted = true
@@ -42,7 +45,7 @@ export function TerminalPanel({ workspace }: Props) {
       if (!sessionId) { earlyEvents.push(payload); return }
       if (payload.sessionId !== sessionId) return
       if ('data' in payload) term.write(payload.data)
-      else term.write('\r\n\x1b[33m[Process exited]\x1b[0m\r\n')
+      else term.write(`\r\n\x1b[33m${translate('ui.process_exited')}\x1b[0m\r\n`)
     }
 
     const term = new Terminal({
@@ -105,14 +108,14 @@ export function TerminalPanel({ workspace }: Props) {
           })
         } catch (error) {
           if (isMounted) {
-            term.writeln(`\x1b[31mFailed to start terminal session: ${String(error)}\x1b[0m`)
+            term.writeln(`\x1b[31m${getTranslation('ui.terminalFailed', useSettingsStore.getState().language, { error: String(error) })}\x1b[0m`)
           }
         }
       })()
     } else {
-      term.writeln('\x1b[33m[Grimoire Maker Terminal - Web Preview]\x1b[0m')
-      term.writeln('PTY process execution is active in the Tauri desktop application.')
-      term.writeln('Run `agy` directly inside the desktop terminal.\r\n')
+      term.writeln(`\x1b[33m${translate('ui.grimoire_maker_terminal_web_preview')}\x1b[0m`)
+      term.writeln(translate('ui.pty_process_execution_is_active_in_the_tauri_desktop_application'))
+      term.writeln(`${translate('ui.run_agy_directly_inside_the_desktop_terminal')}\r\n`)
       term.onData((data) => {
         if (data === '\r') {
           term.write('\r\n$ ')
@@ -180,14 +183,14 @@ export function TerminalPanel({ workspace }: Props) {
   return (
     <section
       id="terminal-panel"
-      aria-label="Terminal"
+      aria-label={t('ui.terminal')}
       className={styles.panel}
       style={{ height }}
     >
       <div
         role="separator"
         aria-orientation="horizontal"
-        aria-label="Resize terminal panel"
+        aria-label={t('ui.resize_terminal_panel')}
         className={styles.handle}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -195,14 +198,14 @@ export function TerminalPanel({ workspace }: Props) {
       />
       <header className={styles.header}>
         <div className={styles.title}>
-          <span>Terminal</span>
+          <span>{t('ui.terminal')}</span>
         </div>
         <div className={styles.actions}>
           <button
             type="button"
             className={styles.actionButton}
-            aria-label="Clear terminal"
-            title="Clear terminal"
+            aria-label={t('ui.clear_terminal')}
+            title={t('ui.clear_terminal')}
             onClick={clearTerminal}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -213,8 +216,8 @@ export function TerminalPanel({ workspace }: Props) {
           <button
             type="button"
             className={styles.actionButton}
-            aria-label="Close terminal panel"
-            title="Close terminal"
+            aria-label={t('ui.close_terminal_panel')}
+            title={t('ui.close_terminal')}
             onClick={() => togglePanel('bottomPanel')}
           >
             ✕

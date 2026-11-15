@@ -1,3 +1,4 @@
+import { useTranslation } from '../../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
@@ -24,6 +25,7 @@ function collectEntries(pane: HTMLElement): Entry[] {
 }
 
 export function DocumentIndex({ path, visible }: { path: string | null; visible: boolean }) {
+  const { t } = useTranslation();
   const enabled = useSettingsStore((s) => s.panels.documentIndex)
   const body = useDocumentStore((s) => s.buffers[path ?? '__untitled__']?.body ?? (s.document.path === path ? s.document.body : ''))
   const title = useDocumentStore((s) => (s.buffers[path ?? '__untitled__'] ?? s.document).frontmatter.title)
@@ -42,7 +44,7 @@ export function DocumentIndex({ path, visible }: { path: string | null; visible:
 
   if (!enabled) return null
   return <div ref={anchor} className={styles.anchor}>
-    <nav className={styles.panel} aria-label="Document index">
+    <nav className={styles.panel} aria-label={t('ui.document_index')}>
       <h2>{name}</h2>
       {entries.length > 0 ? (
         <ol>
@@ -53,7 +55,7 @@ export function DocumentIndex({ path, visible }: { path: string | null; visible:
           </li>)}
         </ol>
       ) : (
-        <p className={styles.empty}>No headings found</p>
+        <p className={styles.empty}>{t('ui.no_headings_found')}</p>
       )}
     </nav>
   </div>

@@ -38,6 +38,26 @@ vi.mock('../settings/PreferencesDialog', async () => {
   return { PreferencesDialog: (props: { initialCustomizing?: boolean }) => createElement('div', { 'data-testid': 'preferences', 'data-customizing': String(!!props.initialCustomizing) }) }
 })
 
+it('translates menu accessibility names and panel actions into Spanish', async () => {
+  const previous = useSettingsStore.getState().language
+  useSettingsStore.setState({ language: 'es' })
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  const toggle = vi.fn()
+  try {
+    await act(async () => root.render(<MenuBar visiblePanels={useSettingsStore.getState().panels} onTogglePanel={toggle} />))
+    expect(container.querySelector('[aria-label="Menú de la aplicación"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Alternar barra lateral principal"]')).not.toBeNull()
+    const files = container.querySelector<HTMLButtonElement>('[aria-label="Ocultar panel de archivos"], [aria-label="Mostrar panel de archivos"]')!
+    expect(files).not.toBeNull()
+    await act(async () => files.click())
+    expect(toggle).toHaveBeenCalledWith('files')
+  } finally {
+    await act(async () => root.unmount())
+    useSettingsStore.setState({ language: previous })
+  }
+})
+
 it('groups application actions in keyboard-accessible menus', async () => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   const container = document.createElement('div')

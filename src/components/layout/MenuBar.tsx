@@ -142,7 +142,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-  return <><nav ref={bar} className={styles.bar} aria-label="Application menu"
+  return <><nav ref={bar} className={styles.bar} aria-label={t('ui.application_menu')}
     onKeyDown={(event) => {
       if (event.key === 'Escape') {
         const summary = (event.target as Element).closest('details')?.querySelector('summary')
@@ -159,7 +159,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <button onClick={() => void run(actions.openWorkspace)}>{t('menu.file.openFolder')}</button>
         <details className={styles.recent}>
           <summary>{t('menu.file.recentFolders')}</summary>
-          <div role="group" aria-label="Recent folders">
+          <div role="group" aria-label={t('ui.recent_folders')}>
             {recent.length ? recent.map(path => <button key={path} title={path} className={styles.recentPath}
               onClick={() => void run(() => actions.openRecent(path))}>{path}</button>) : <button disabled>{t('menu.file.noRecentFolders')}</button>}
           </div>
@@ -168,13 +168,13 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
         <button disabled={readOnly} onClick={() => void run(actions.saveFile)}>{t('menu.file.save')}</button>
         <button onClick={() => void run(actions.saveAll)}>{t('menu.file.saveAll')}</button>
         <hr />
-        <button disabled={!workspace || !importSection} title={importSection ? `Import into ${importSection}` : 'Select Draft or Research'} onClick={() => void run(() => actions.importInto())}>{t('menu.file.import')}</button>
+        <button disabled={!workspace || !importSection} title={importSection ? t('ui.importInto', { section: importSection }) : t('ui.select_draft_or_research')} onClick={() => void run(() => actions.importInto())}>{t('menu.file.import')}</button>
         <hr />
         <details className={styles.recent}>
           <summary>{t('menu.file.export')}</summary>
-          <div role="group" aria-label="Export">
+          <div role="group" aria-label={t('ui.export')}>
             <button disabled={readOnly} onClick={() => { closeMenus(); setExportOpen(true) }}>{t('menu.file.exportPdf')}</button>
-            <button disabled={!workspace} title={workspace ? 'Export the open project as a template' : 'Open a project first'}
+            <button disabled={!workspace} title={workspace ? t('ui.export_the_open_project_as_a_template') : t('ui.open_a_project_first')}
               onClick={() => { closeMenus(); setTemplateExportOpen(true) }}>{t('menu.file.exportAsTemplate')}</button>
           </div>
         </details>
@@ -185,15 +185,15 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <summary>{t('menu.view')}</summary>
       <div className={styles.menu}>
         {(['files', 'templates', 'snippets', 'git', 'properties'] as const).map((panel) => <button key={panel}
-          aria-label={`${visiblePanels[panel] ? 'Hide' : 'Show'} ${panel} panel`}
+          aria-label={t(visiblePanels[panel] ? 'ui.hidePanel' : 'ui.showPanel', { panel: t(`ui.panel.${panel}` as const) })}
           aria-pressed={visiblePanels[panel]} onClick={() => onTogglePanel(panel)}>
           <span className={styles.check} aria-hidden="true">{visiblePanels[panel] ? '✓' : ''}</span>{t(`menu.view.${panel}` as const)}
         </button>)}
         <hr />
-        <button aria-label="Split View" aria-pressed={split} onClick={() => void run(() => useTabStore.getState().toggleSplit())}>
+        <button aria-label={t('ui.split_view')} aria-pressed={split} onClick={() => void run(() => useTabStore.getState().toggleSplit())}>
           <span className={styles.check} aria-hidden="true">{split ? '✓' : ''}</span>{t('menu.view.splitView')}
         </button>
-        <button aria-label="Document Index" aria-pressed={showDocumentIndex} onClick={() => togglePanel('documentIndex')}>
+        <button aria-label={t('ui.document_index')} aria-pressed={showDocumentIndex} onClick={() => togglePanel('documentIndex')}>
           <span className={styles.check} aria-hidden="true">{showDocumentIndex ? '✓' : ''}</span>{t('menu.view.documentIndex')}
         </button>
       </div>
@@ -215,12 +215,12 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <summary>{t('menu.document')}</summary>
       <div className={styles.menu}>
         <label className={styles.layout}>{t('menu.document.pageSize')}
-          <select aria-label="Page size" value={pageSize} onChange={(event) => setPageSize(event.target.value as PageSizeId)}>
+          <select aria-label={t('ui.page_size')} value={pageSize} onChange={(event) => setPageSize(event.target.value as PageSizeId)}>
             {Object.values(PAGE_SIZES).map((size) => <option key={size.id} value={size.id}>{size.label}</option>)}
           </select>
         </label>
         <label className={styles.layout}>{t('menu.document.columns')}
-          <select aria-label="Columns" value={columns} onChange={(event) => setColumns(Number(event.target.value) as 1 | 2 | 3)}>
+          <select aria-label={t('ui.columns')} value={columns} onChange={(event) => setColumns(Number(event.target.value) as 1 | 2 | 3)}>
             <option value={1}>1</option>
             <option value={2}>2</option>
             <option value={3}>3</option>
@@ -269,12 +269,12 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       </div>
     </details>
     {error && <span role="alert" className={styles.error}>{error}</span>}
-    <div className={styles.windowControls} role="toolbar" aria-label="Layout controls">
+    <div className={styles.windowControls} role="toolbar" aria-label={t('ui.layout_controls')}>
       <button
         type="button"
         className={styles.iconButton}
-        aria-label="Toggle Primary Side Bar"
-        title="Toggle Primary Side Bar"
+        aria-label={t('ui.toggle_primary_side_bar')}
+        title={t('ui.toggle_primary_side_bar')}
         aria-pressed={leftActive}
         onClick={toggleLeftSidebar}
       >
@@ -287,8 +287,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <button
         type="button"
         className={styles.iconButton}
-        aria-label="Toggle Bottom Panel"
-        title="Toggle Bottom Panel"
+        aria-label={t('ui.toggle_bottom_panel')}
+        title={t('ui.toggle_bottom_panel')}
         aria-pressed={showBottomPanel}
         onClick={() => togglePanel('bottomPanel')}
       >
@@ -301,8 +301,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <button
         type="button"
         className={styles.iconButton}
-        aria-label="Toggle Secondary Side Bar"
-        title="Toggle Secondary Side Bar"
+        aria-label={t('ui.toggle_secondary_side_bar')}
+        title={t('ui.toggle_secondary_side_bar')}
         aria-pressed={rightActive}
         onClick={toggleRightSidebar}
       >
@@ -315,8 +315,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <button
         type="button"
         className={styles.iconButton}
-        aria-label="Toggle Document Index"
-        title="Toggle Document Index"
+        aria-label={t('ui.toggle_document_index')}
+        title={t('ui.toggle_document_index')}
         aria-pressed={showDocumentIndex}
         onClick={() => togglePanel('documentIndex')}
       >
@@ -327,8 +327,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <button
         type="button"
         className={styles.iconButton}
-        aria-label="Document Properties"
-        title="Document Properties"
+        aria-label={t('ui.document_properties')}
+        title={t('ui.document_properties')}
         onClick={() => { closeMenus(); setPropertiesOpen(true) }}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -338,8 +338,8 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
       <button
         type="button"
         className={styles.iconButton}
-        aria-label="Preferences"
-        title="Preferences"
+        aria-label={t('ui.preferences')}
+        title={t('ui.preferences')}
         onClick={() => { closeMenus(); setPreferencesSection('appearance'); setPreferencesCustomizing(false); setPreferencesOpen(true) }}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -352,7 +352,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
     {templateExportOpen && <CreateModDialog initialTab="Templates" onClose={() => setTemplateExportOpen(false)}
       onOpenThemeCustomizer={() => openThemeCustomizer(() => setTemplateExportOpen(false))} />}
     {newProjectOpen && <NewProjectDialog onCreate={actions.createProject} onClose={() => setNewProjectOpen(false)} />}
-    {preferencesOpen && <Suspense fallback={<span role="status">Loading preferences…</span>}><PreferencesDialog initialSection={preferencesSection} initialCustomizing={preferencesCustomizing} onClose={() => setPreferencesOpen(false)} /></Suspense>}
+    {preferencesOpen && <Suspense fallback={<span role="status">{t('ui.loading_preferences')}</span>}><PreferencesDialog initialSection={preferencesSection} initialCustomizing={preferencesCustomizing} onClose={() => setPreferencesOpen(false)} /></Suspense>}
     {statisticsOpen && <StatisticsDialog onClose={() => setStatisticsOpen(false)} />}
     {propertiesOpen && <PropertiesDialog editor={editor} onClose={() => setPropertiesOpen(false)} />}
     {orderOpen && workspace && <DocumentOrderDialog root={workspace} onClose={() => setOrderOpen(false)} />}

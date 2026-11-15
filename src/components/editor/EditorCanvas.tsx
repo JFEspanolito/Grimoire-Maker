@@ -250,7 +250,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
       id: action.id, label: String(action.label), icon: action.icon,
       run: () => runContextAction(action, current.context),
     })),
-    ...(current.markdown ? [{ id: 'host.save-snippet', label: 'Save Selection as Snippet...', run: () => setSnippetMarkdown(current.markdown) }] : []),
+    ...(current.markdown ? [{ id: 'host.save-snippet', label: t('ui.save_selection_as_snippet'), run: () => setSnippetMarkdown(current.markdown) }] : []),
   ]
 
   return (

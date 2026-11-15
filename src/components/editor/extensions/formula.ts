@@ -1,7 +1,11 @@
+import { getTranslation, type TranslationKey } from '../../../lib/i18n'
+import { useSettingsStore } from '../../../stores/settingsStore'
 import { Node, mergeAttributes } from '@tiptap/react'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import katex from 'katex'
 import { useFormulaStore, type FormulaDisplay } from '../../../stores/formulaStore'
+
+const t = (key: TranslationKey, values?: Record<string, string>) => getTranslation(key, useSettingsStore.getState().language, values)
 
 export interface FormulaValidation {
   html: string
@@ -11,7 +15,7 @@ export interface FormulaValidation {
 /** Renders LaTeX to KaTeX HTML + MathML and reports syntax errors for the live preview dialog. */
 export function validateAndRenderFormula(latex: string, display: FormulaDisplay): FormulaValidation {
   const source = latex.trim()
-  if (!source) return { html: '', error: 'Enter a LaTeX expression to preview and insert.' }
+  if (!source) return { html: '', error: t('ui.enter_a_latex_expression_to_preview_and_insert') }
   try {
     const html = katex.renderToString(source, {
       displayMode: display === 'block',
@@ -110,13 +114,14 @@ export const MathFormula = Node.create({
         const display: FormulaDisplay = current.attrs.display === 'inline' ? 'inline' : 'block'
         dom.setAttribute('data-latex', latex)
         dom.setAttribute('data-display', display)
-        dom.title = `Formula (${display}): ${latex} — Double-click to edit`
+        dom.title = t('ui.formula.title', { display: t(display === 'inline' ? 'ui.formula.inline' : 'ui.formula.block'), latex })
         dom.innerHTML = renderFormulaHtml(latex, display)
       }
 
       sync(node)
 
       let currentNode = node
+      const unsubscribe = useSettingsStore.subscribe((state, previous) => { if (state.language !== previous.language) sync(currentNode) })
       dom.addEventListener('dblclick', (event) => {
         if (!editor.isEditable) return
         event.preventDefault()
@@ -131,6 +136,7 @@ export const MathFormula = Node.create({
 
       return {
         dom,
+        destroy: unsubscribe,
         update(next) {
           if (next.type !== currentNode.type) return false
           currentNode = next

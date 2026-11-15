@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
+import { useSettingsStore } from '../../stores/settingsStore'
 import { useDocumentStore } from '../../stores/documentStore'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
@@ -44,6 +45,22 @@ vi.mock('../../lib/images', () => ({
 }))
 
 let root: Root | null = null
+it('updates existing formula tooltips when the app language changes', async () => {
+  const previous = useSettingsStore.getState().language
+  useSettingsStore.setState({ language: 'en' })
+  useDocumentStore.getState().loadFromRaw('/book/math.md', '<span data-type="math-formula" data-latex="x+1" data-display="block"></span>')
+  const container = document.body.appendChild(document.createElement('div'))
+  root = createRoot(container)
+  try {
+    await act(async () => root?.render(<EditorCanvas onReady={() => {}} />))
+    const formula = container.querySelector<HTMLElement>('[data-type="math-formula"]')!
+    expect(formula.title).toContain('Double-click to edit')
+    await act(async () => useSettingsStore.setState({ language: 'es' }))
+    expect(formula.title).toBe('Fórmula (en bloque): x+1 — Haz doble clic para editar')
+  } finally {
+    await act(async () => useSettingsStore.setState({ language: previous }))
+  }
+})
 it('edits list numbering in an app dialog and cancels without changing the list', async () => {
   const prompt = vi.spyOn(window, 'prompt').mockReturnValue(null)
   HTMLDialogElement.prototype.showModal = function () { this.open = true }

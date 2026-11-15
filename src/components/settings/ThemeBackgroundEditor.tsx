@@ -1,3 +1,4 @@
+import { useTranslation } from '../../lib/i18n'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { moveDecoration, type ThemeDecoration } from '../../lib/themeDecorations'
 import styles from './ThemeCustomizer.module.css'
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function ThemeBackgroundEditor({ images, onChange, onImport, disabled, pageWidthMm, pageHeightMm, background, foreground }: Props) {
+  const { t } = useTranslation();
   const [selectedId, select] = useState<string | null>(null)
   const page = useRef<HTMLDivElement>(null)
   const stopDrag = useRef<(() => void) | null>(null)
@@ -60,20 +62,20 @@ export function ThemeBackgroundEditor({ images, onChange, onImport, disabled, pa
     element.addEventListener('lostpointercapture', cancel)
   }
   return <section className={styles.backgrounds} aria-labelledby="theme-backgrounds-title">
-    <div className={styles.header}><h3 id="theme-backgrounds-title">Page backgrounds</h3><button type="button" disabled={disabled} onClick={onImport}>Import image…</button></div>
-    <p className={styles.description}>Drag images on the sheet. They repeat behind the text on every page using this theme. Images near the bottom stay anchored to the footer.</p>
+    <div className={styles.header}><h3 id="theme-backgrounds-title">{t('ui.page_backgrounds')}</h3><button type="button" disabled={disabled} onClick={onImport}>{t('ui.import_image')}</button></div>
+    <p className={styles.description}>{t('ui.drag_images_on_the_sheet_they_repeat_behind_the_text_on_every_page_using_this_th')}</p>
     <div className={styles.backgroundWorkspace}>
       <div className={styles.backgroundControls}>
         {selected ? <>
-          <label>Image<select aria-label="Background image" disabled={disabled} value={selected.id} onChange={event => select(event.target.value)}>
+          <label>{t('ui.image')}<select aria-label={t('ui.background_image')} disabled={disabled} value={selected.id} onChange={event => select(event.target.value)}>
             {images.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select></label>
-          <label>Anchor<select aria-label="Background anchor" disabled={disabled} value={selected.anchor}
+          <label>{t('ui.anchor')}<select aria-label={t('ui.background_anchor')} disabled={disabled} value={selected.anchor}
             onChange={event => update({ ...selected, anchor: event.target.value === 'footer' ? 'footer' : 'header' })}>
-            <option value="header">Header</option><option value="footer">Footer</option>
+            <option value="header">{t('ui.header')}</option><option value="footer">{t('ui.footer')}</option>
           </select></label>
-          {(['xMm', 'yMm', 'widthMm'] as const).map((key, index) => <label key={key}>{['Left', 'Edge offset', 'Width'][index]}
-            <input type="number" aria-label={`Background ${['left', 'offset', 'width'][index]}`} title="Millimetres" disabled={disabled}
+          {(['xMm', 'yMm', 'widthMm'] as const).map((key, index) => <label key={key}>{[t('ui.left'), t('ui.edge_offset'), t('ui.width')][index]}
+            <input type="number" aria-label={t((['ui.backgroundLeft', 'ui.backgroundOffset', 'ui.backgroundWidth'] as const)[index])} title={t('ui.millimetres')} disabled={disabled}
               min={key === 'widthMm' ? 1 : 0} max={key === 'widthMm' ? pageWidthMm : 1000} step="1" value={Math.round(selected[key] * 100) / 100}
               onChange={event => {
                 if (event.target.value === '') return
@@ -84,14 +86,14 @@ export function ThemeBackgroundEditor({ images, onChange, onImport, disabled, pa
                 update({ ...selected, [key]: value, heightMm: height })
               }} />
           </label>)}
-          <button type="button" disabled={disabled} onClick={() => onChange(images.filter(item => item.id !== selected.id))}>Remove image</button>
-        </> : <p className={styles.description}>Import flowers, borders or other artwork to begin. Transparent PNG images work well.</p>}
+          <button type="button" disabled={disabled} onClick={() => onChange(images.filter(item => item.id !== selected.id))}>{t('ui.remove_image')}</button>
+        </> : <p className={styles.description}>{t('ui.import_flowers_borders_or_other_artwork_to_begin_transparent_png_images_work_wel')}</p>}
       </div>
-      <div ref={page} className={styles.backgroundPage} aria-label="Background placement preview"
+      <div ref={page} className={styles.backgroundPage} aria-label={t('ui.background_placement_preview')}
         style={{ aspectRatio: `${pageWidthMm} / ${pageHeightMm}`, background, color: foreground }}>
-        <div className={styles.backgroundSample} aria-hidden="true"><strong>Chapter One</strong><p>Your text stays above the background artwork.</p></div>
+        <div className={styles.backgroundSample} aria-hidden="true"><strong>{t('ui.chapter_one')}</strong><p>{t('ui.your_text_stays_above_the_background_artwork')}</p></div>
         {images.map((item, index) => <button key={item.id} type="button" className={styles.backgroundImage}
-          aria-label={`Move background ${item.name}`} aria-pressed={selected?.id === item.id} disabled={disabled}
+          aria-label={t('ui.moveBackground', { name: item.name })} aria-pressed={selected?.id === item.id} disabled={disabled}
           style={{ left: `${item.xMm / pageWidthMm * 100}%`, top: `${(item.anchor === 'footer' ? pageHeightMm - item.yMm - item.heightMm : item.yMm) / pageHeightMm * 100}%`,
             width: `${item.widthMm / pageWidthMm * 100}%`, height: `${item.heightMm / pageHeightMm * 100}%`, zIndex: selected?.id === item.id ? 35 : images.length - index }}
           onPointerDown={event => drag(event, item)} onClick={() => select(item.id)}
