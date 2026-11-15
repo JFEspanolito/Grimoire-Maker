@@ -35,6 +35,7 @@ export function TerminalPanel({ workspace }: Props) {
     let unlistenOutput: UnlistenFn | undefined
     let unlistenExit: UnlistenFn | undefined
     let sessionId: string | null = null
+    const pendingResize: { size?: { rows: number; cols: number } } = {}
     const earlyEvents: Array<TerminalOutput | TerminalExit> = []
     const receive = (payload: TerminalOutput | TerminalExit) => {
       if (!isMounted) return
@@ -82,6 +83,7 @@ export function TerminalPanel({ workspace }: Props) {
           })
 
           term.onResize(({ rows, cols }) => {
+            pendingResize.size = { rows, cols }
             if (isMounted && sessionId) void invoke('resize_terminal', { sessionId, rows, cols }).catch(() => {})
           })
 
@@ -94,6 +96,10 @@ export function TerminalPanel({ workspace }: Props) {
               await invoke('close_terminal', { sessionId })
               sessionId = null
               return
+            }
+            if (pendingResize.size) {
+              void invoke('resize_terminal', { sessionId, ...pendingResize.size }).catch(() => {})
+              pendingResize.size = undefined
             }
             earlyEvents.splice(0).forEach(receive)
           })
@@ -120,15 +126,19 @@ export function TerminalPanel({ workspace }: Props) {
     }
 
     const onResizeWindow = () => {
+      if (!isMounted) return
       try {
         fitAddon.fit()
       } catch {}
     }
     window.addEventListener('resize', onResizeWindow)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResizeWindow)
+    observer?.observe(containerRef.current)
 
     return () => {
       isMounted = false
       window.removeEventListener('resize', onResizeWindow)
+      observer?.disconnect()
       if (unlistenOutput) unlistenOutput()
       if (unlistenExit) unlistenExit()
       term.dispose()

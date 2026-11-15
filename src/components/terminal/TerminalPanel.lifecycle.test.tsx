@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   listeners: new Map<string, (event: { payload: Payload }) => void>(),
   unlisten: [] as Array<ReturnType<typeof vi.fn>>,
   invoke: vi.fn(), listen: vi.fn(), fit: vi.fn(),
+  observers: [] as Array<{ callback: () => void; observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>,
 }))
 vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke: h.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: h.listen }))
@@ -37,6 +38,12 @@ beforeEach(() => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   h.terms.length = 0; h.listeners.clear(); h.unlisten.length = 0
   h.invoke.mockReset().mockResolvedValue('session-1'); h.listen.mockReset(); h.fit.mockReset()
+  h.observers.length = 0
+  vi.stubGlobal('ResizeObserver', class {
+    observe = vi.fn(); disconnect = vi.fn()
+    callback: () => void
+    constructor(callback: () => void) { this.callback = callback; h.observers.push(this) }
+  })
   h.listen.mockImplementation(async (name: string, callback: (event: { payload: Payload }) => void) => {
     h.listeners.set(name, callback)
     const off = vi.fn(); h.unlisten.push(off); return off
@@ -46,6 +53,7 @@ beforeEach(() => {
 afterEach(async () => {
   if (root) await act(async () => root?.unmount())
   root = null
+  vi.unstubAllGlobals()
 })
 it.each([0, 1])('disposes a listener that resolves after unmount (registration %s)', async (index) => {
   const pending = deferred<() => void>(); const off = vi.fn()
@@ -88,4 +96,30 @@ it('keeps early output and does not spawn a discarded StrictMode effect', async 
   await act(async () => root?.render(<StrictMode><TerminalPanel workspace="/book" /></StrictMode>))
   expect(h.invoke.mock.calls.filter(([name]) => name === 'spawn_terminal')).toHaveLength(1)
   expect(h.terms.at(-1)!.write).toHaveBeenCalledWith('prompt')
+})
+
+it('fits the observed container, forwards its size and disconnects on unmount', async () => {
+  h.fit.mockImplementation(() => h.terms.at(-1)?.resize?.({ rows: 35, cols: 100 }))
+  await act(async () => root?.render(<TerminalPanel workspace="/book" />))
+  expect(h.observers).toHaveLength(1)
+  expect(h.observers[0].observe).toHaveBeenCalledTimes(1)
+  const before = h.fit.mock.calls.length
+  h.observers[0].callback()
+  expect(h.fit).toHaveBeenCalledTimes(before + 1)
+  expect(h.invoke).toHaveBeenCalledWith('resize_terminal', { sessionId: 'session-1', rows: 35, cols: 100 })
+  await act(async () => root?.unmount()); root = null
+  expect(h.observers[0].disconnect).toHaveBeenCalledTimes(1)
+  h.observers[0].callback()
+  expect(h.fit).toHaveBeenCalledTimes(before + 1)
+})
+
+it.each(['observer', 'window'])('replays a resize during pending spawn from %s', async (source) => {
+  const pending = deferred<string>()
+  h.invoke.mockImplementation((name: string) => name === 'spawn_terminal' ? pending.promise : Promise.resolve())
+  await act(async () => root?.render(<TerminalPanel workspace="/book" />))
+  h.fit.mockImplementation(() => h.terms.at(-1)?.resize?.({ rows: 35, cols: 100 }))
+  if (source === 'observer') h.observers[0].callback()
+  else window.dispatchEvent(new Event('resize'))
+  await act(async () => pending.resolve('session-1'))
+  expect(h.invoke).toHaveBeenCalledWith('resize_terminal', { sessionId: 'session-1', rows: 35, cols: 100 })
 })
