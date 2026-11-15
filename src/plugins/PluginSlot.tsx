@@ -3,12 +3,12 @@ import { usePluginRegistry } from './plugin-manager'
 import { reportError } from '../lib/errorLogging'
 
 class PluginBoundary extends Component<{ children: ReactNode; identity: unknown; title: string }, { failed: boolean }> {
-  state = { failed: false }
+  state = { failed: false, identity: this.props.identity }
+  static getDerivedStateFromProps(props: { identity: unknown }, state: { identity: unknown }) {
+    return props.identity !== state.identity ? { failed: false, identity: props.identity } : null
+  }
   static getDerivedStateFromError() { return { failed: true } }
   componentDidCatch(error: Error) { reportError('plugin.render', error) }
-  componentDidUpdate(previous: Readonly<typeof this.props>) {
-    if (previous.identity !== this.props.identity && this.state.failed) this.setState({ failed: false })
-  }
   render() {
     return this.state.failed ? <span role="alert" title="Disable or fix the plugin, then refresh Mods.">{this.props.title}: plugin failed</span> : this.props.children
   }

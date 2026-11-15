@@ -169,12 +169,6 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
   // When switching currentTemplate
   useEffect(() => {
     let cancelled = false
-    setSelectedFile('index.md')
-    setCollapsed(new Set())
-    setPreviewContent({
-      frontmatter: currentTemplate.frontmatter,
-      body: currentTemplate.body,
-    })
     void collectTemplateTree(currentTemplate).then((nodes) => {
       if (!cancelled) setTree(nodes)
     })
@@ -183,13 +177,7 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
 
   // When changing selectedFile
   useEffect(() => {
-    if (selectedFile === 'index.md') {
-      setPreviewContent({
-        frontmatter: currentTemplate.frontmatter,
-        body: currentTemplate.body,
-      })
-      return
-    }
+    if (selectedFile === 'index.md') return
 
     if (currentTemplate.location?.kind === 'package' && /\.md$/i.test(selectedFile)) {
       let cancelled = false
@@ -217,10 +205,9 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
   // Render markdown body to HTML for preview
   useEffect(() => {
     let cancelled = false
-    setRenderError('')
     void renderDocumentHtml(previewContent.body, null)
       .then((html) => {
-        if (!cancelled) setRenderedHtml(html)
+        if (!cancelled) { setRenderedHtml(html); setRenderError('') }
       })
       .catch((error: unknown) => {
         if (!cancelled) {
@@ -230,6 +217,9 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
       })
     return () => { cancelled = true }
   }, [previewContent.body])
+
+  const [renderSource, setRenderSource] = useState(previewContent.body)
+  if (renderSource !== previewContent.body) { setRenderSource(previewContent.body); setRenderError('') }
 
   const pageSizeId = (previewContent.frontmatter.pageSize ?? 'a4') as PageSizeId
   const pageSize = PAGE_SIZES[pageSizeId] ?? PAGE_SIZES.a4
@@ -255,7 +245,12 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
             value={currentTemplate.id}
             onChange={(e) => {
               const next = templates.find((t) => t.id === e.target.value)
-              if (next) setCurrentTemplate(next)
+              if (next) {
+                setCurrentTemplate(next)
+                setSelectedFile('index.md')
+                setCollapsed(new Set())
+                setPreviewContent({ frontmatter: next.frontmatter, body: next.body })
+              }
             }}
           >
             {templates.map((t) => (
@@ -289,7 +284,10 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
                     return next
                   })
                 }}
-                onSelectFile={setSelectedFile}
+                onSelectFile={(path) => {
+                  setSelectedFile(path)
+                  if (path === 'index.md') setPreviewContent({ frontmatter: currentTemplate.frontmatter, body: currentTemplate.body })
+                }}
               />
             ))}
           </ul>

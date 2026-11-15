@@ -18,7 +18,7 @@ function walk(root, relative, found) {
     const info = lstatSync(join(root, path))
     if (info.isSymbolicLink()) throw new Error(`${path} is a link; links are not allowed in a package`)
     if (path.split('/').length > LIMITS.depth) throw new Error(`${path} is deeper than ${LIMITS.depth} levels`)
-    if (/[\\:<>"|?*\u0000-\u001f]/.test(path) || /[. ]$/.test(name)) throw new Error(`${path} has a name Windows cannot store`)
+    if (/[\\:<>"|?*]/.test(path) || Array.from(path).some(character => character.charCodeAt(0) < 32) || /[. ]$/.test(name)) throw new Error(`${path} has a name Windows cannot store`)
     if (info.isDirectory()) walk(root, path, found)
     else if (info.isFile()) {
       if (info.size > LIMITS.file) throw new Error(`${path} is larger than ${LIMITS.file / 1024 / 1024} MiB`)

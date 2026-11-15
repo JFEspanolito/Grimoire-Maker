@@ -1,5 +1,5 @@
-import { useActivePath, usePageSettings, type GrimoirePlugin, type PluginSurface } from '@grimoire/plugin-api'
-import { EDITOR_ZOOMS, PREVIEW_ZOOMS, mountWheelZoom } from './script'
+import { useActivePath, usePageSettings, type PluginSurface } from '@grimoire/plugin-api'
+import { EDITOR_ZOOMS, PREVIEW_ZOOMS } from './script'
 import styles from './Zoom.module.css'
 
 export function ZoomControl() {
@@ -22,13 +22,3 @@ export function PreviewZoomControl({ surface }: { surface: PluginSurface }) {
     </select>
   </label>
 }
-
-const zoom: GrimoirePlugin = {
-  id: 'builtin.zoom', name: 'Zoom', version: '1.0.0',
-  activate(api) {
-    api.registerToolbar({ id: 'zoom.control', title: 'Zoom', component: ZoomControl })
-    api.registerPreviewToolbar({ id: 'zoom.preview', title: 'Preview zoom', component: PreviewZoomControl })
-    api.registerPageBehavior({ id: 'zoom.wheel', mount: mountWheelZoom })
-  },
-}
-export default zoom

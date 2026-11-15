@@ -11,6 +11,27 @@ vi.mock('../../../lib/errorLogging', () => ({ reportError: vi.fn() }))
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks() })
 
+it('clears decoded state when the source changes and ignores the previous source response', async () => {
+  let finish!: (url: string) => void
+  mocks.load.mockReturnValueOnce(new Promise<string>(resolve => { finish = resolve }))
+    .mockResolvedValueOnce('blob:next')
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  const props = { node: { attrs: { src: 'old.png', anchor: 'flow' } }, selected: false } as unknown as NodeViewProps
+  const next = { ...props, node: { attrs: { src: 'next.png', anchor: 'flow' } } } as unknown as NodeViewProps
+  try {
+    await act(async () => root.render(<ImageView {...props} />))
+    await act(async () => root.render(<ImageView {...next} />))
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:next')
+    expect(container.querySelector('.grimoire-image')?.getAttribute('data-image-state')).toBe('loading')
+    await act(async () => finish('blob:old'))
+    expect(mocks.revoke).toHaveBeenCalledWith('blob:old')
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:next')
+    await act(async () => container.querySelector('img')!.dispatchEvent(new Event('load')))
+    expect(container.querySelector('.grimoire-image')?.getAttribute('data-image-state')).toBe('ready')
+  } finally { await act(async () => root.unmount()) }
+})
+
 it('hides the resize handle outside the clipping viewport and restores it after scrolling', async () => {
   mocks.load.mockResolvedValue('blob:map')
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })

@@ -27,9 +27,7 @@ export function DocumentOrderDialog({ root, onClose }: { root: string; onClose: 
   useEffect(() => {
     if (!useProjectStore.getState().entries[root]?.ready) void useProjectStore.getState().load(root)
   }, [root])
-  useEffect(() => {
-    if (entry.ready && items === null) setItems(resolveDocumentOrder(draftDocuments(tree, root), entry.settings.documentOrder))
-  }, [entry.ready, entry.settings.documentOrder, items, root, tree])
+  if (entry.ready && items === null) setItems(resolveDocumentOrder(draftDocuments(tree, root), entry.settings.documentOrder))
 
   const included = items?.filter((item) => item.included).length ?? 0
   const save = async () => {

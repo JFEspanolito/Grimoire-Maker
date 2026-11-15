@@ -2,7 +2,7 @@ import { moveItem, type OrderItem } from '../../lib/documentOrder'
 import { useTranslation } from '../../lib/i18n'
 import styles from './DocumentOrderList.module.css'
 
-export const documentLabel = (path: string) => path.replace(/^Draft\//i, '').replace(/\.md$/i, '')
+import { documentLabel } from './documentOrderLabel'
 
 /** The Document Order rows: an include checkbox and move up/down buttons per Draft document. */
 export function DocumentOrderList({ items, onChange, disabled = false }: {

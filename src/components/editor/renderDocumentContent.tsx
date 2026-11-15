@@ -1,14 +1,8 @@
 import { createRoot } from 'react-dom/client'
-import { EditorContent, useEditor } from '@tiptap/react'
-import { EDITOR_EXTENSIONS } from './editorExtensions'
+import { DocumentRenderPage } from './DocumentRenderPage'
 import { DocumentPathContext } from './DocumentPathContext'
 
 const SETTLE_TIMEOUT_MS = 15000
-
-function Page({ markdown }: { markdown: string }) {
-  const editor = useEditor({ extensions: EDITOR_EXTENSIONS, content: markdown, editable: false })
-  return <EditorContent editor={editor} className="grimoire-content" />
-}
 
 const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
   const reader = new FileReader()
@@ -48,7 +42,7 @@ export async function renderDocumentHtml(markdown: string, path: string | null):
   document.body.append(host)
   const root = createRoot(host)
   try {
-    root.render(<DocumentPathContext value={path}><Page markdown={markdown} /></DocumentPathContext>)
+    root.render(<DocumentPathContext value={path}><DocumentRenderPage markdown={markdown} /></DocumentPathContext>)
     await settled(host)
     const editor = host.querySelector('.ProseMirror')!
     await Promise.all(Array.from(editor.querySelectorAll('img')).filter((image) => image.src.startsWith('blob:')).map(async (image) => {

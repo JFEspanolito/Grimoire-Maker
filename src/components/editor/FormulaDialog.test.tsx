@@ -49,6 +49,18 @@ afterEach(async () => {
 })
 
 describe('Insert Formula (toolbar, Insert menu, KaTeX rendering, and Markdown round-trip)', () => {
+  it('resets the draft when the dialog reopens for a different formula', async () => {
+    editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: '<p>Formula</p>' })
+    root = createRoot(container!)
+    await act(async () => root?.render(<FormulaDialog />))
+    await act(async () => useFormulaStore.getState().show(editor!, { latex: 'first', display: 'inline' }))
+    expect(container!.querySelector('textarea')?.value).toBe('first')
+    await act(async () => useFormulaStore.getState().hide())
+    await act(async () => useFormulaStore.getState().show(editor!, { latex: 'second', display: 'block' }))
+    expect(container!.querySelector('textarea')?.value).toBe('second')
+    expect(container!.querySelector('.katex-display')).not.toBeNull()
+  })
+
   it('places Insert Formula immediately to the right of 1. List in the toolbar and opens the formula builder', async () => {
     editor = new Editor({ extensions: EDITOR_EXTENSIONS, content: '<p>Theorem:</p>', editorProps: { handleScrollToSelection: () => true } })
     root = createRoot(container!)

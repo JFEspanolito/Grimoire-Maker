@@ -5,8 +5,8 @@ import { CreateModTemplates } from './CreateModTemplates'
 import { CreateModThemes } from './CreateModThemes'
 import styles from './CreateMod.module.css'
 
-export const CREATE_MOD_TABS = ['Themes', 'Snippets', 'Templates'] as const
-export type CreateModTab = (typeof CREATE_MOD_TABS)[number]
+import { CREATE_MOD_TABS, type CreateModTab } from './createModTabs'
+export { CREATE_MOD_TABS, type CreateModTab } from './createModTabs'
 
 const TAB_LABELS: Record<CreateModTab, TranslationKey> = {
   Themes: 'mod.themes',

@@ -35,7 +35,7 @@ export function HorizontalRuler({ widthMm, marginMm, onMarginChange, editor }: H
   const activeMargin = draftMargin ?? marginMm
 
   // Calculate current block indent (0..MAX_INDENT)
-  const currentIndentLevel = useMemo(() => {
+  const currentIndentLevel = (() => {
     if (!editor) return 0
     try {
       const isHeading = editor.isActive('heading')
@@ -46,7 +46,7 @@ export function HorizontalRuler({ widthMm, marginMm, onMarginChange, editor }: H
     } catch {
       return 0
     }
-  }, [editor, editor?.state?.selection])
+  })()
 
   const activeIndentLevel = draftIndent ?? currentIndentLevel
   const indentStepMm = 10

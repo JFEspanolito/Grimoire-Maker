@@ -1,16 +1,9 @@
-import { useActivePath, type GrimoirePlugin } from '@grimoire/plugin-api'
+import type { GrimoirePlugin } from '@grimoire/plugin-api'
+import { RulerToggle } from './RulerToggle'
+export { RulerToggle } from './RulerToggle'
 import { useRulerState } from './rulerState'
 import { RulerOverlay } from './RulerOverlay'
 import { GuidesMenu } from './GuidesMenu'
-import styles from './Ruler.module.css'
-
-export function RulerToggle() {
-  const { visible, toggle } = useRulerState()
-  const path = useActivePath()
-  return <button type="button" className={styles.toggle} aria-label="Ruler" aria-pressed={visible}
-    disabled={!!path && !/\.md$/i.test(path)} title="Show or hide page measurements in editing view"
-    onClick={toggle}>Ruler</button>
-}
 
 const ruler: GrimoirePlugin = {
   id: 'builtin.pixel-ruler', name: 'Ruler', version: '1.0.0',

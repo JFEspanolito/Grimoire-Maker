@@ -1,4 +1,4 @@
-import { act } from 'react'
+import { act, useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useRepositoryStatus } from './useRepositoryStatus'
@@ -10,7 +10,7 @@ const dirty = { isRepository: true, branch: 'Dev', indexFingerprint: 'a', entrie
 const clean = { ...dirty, entries: [] }
 let current: ReturnType<typeof useRepositoryStatus>
 let root: ReturnType<typeof createRoot>
-function Harness({ workspace = '/a' }) { current = useRepositoryStatus(workspace); return null }
+function Harness({ workspace = '/a' }) { const result = useRepositoryStatus(workspace); useLayoutEffect(() => { current = result }); return null }
 beforeEach(() => {
   Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
   vi.useFakeTimers(); vi.mocked(getRepositoryStatus).mockReset().mockResolvedValue(dirty)

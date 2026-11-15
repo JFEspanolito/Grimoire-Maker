@@ -333,9 +333,6 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   useEffect(() => {
     let cancelled = false
     let created: string | null = null
-    setShown(null)
-    setFailure(null)
-    setDecoded(null)
     const timer = window.setTimeout(() => {
       cancelled = true
       const message = `Image loading timed out: ${src}`
@@ -361,6 +358,14 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       if (created) revokeImageUrl(created)
     }
   }, [src, documentPath, loadAttempt])
+
+  const [loadSource, setLoadSource] = useState({ src, documentPath, loadAttempt })
+  if (loadSource.src !== src || loadSource.documentPath !== documentPath || loadSource.loadAttempt !== loadAttempt) {
+    setLoadSource({ src, documentPath, loadAttempt })
+    setShown(null)
+    setFailure(null)
+    setDecoded(null)
+  }
 
   const url = shown && shown.src === src ? shown.url : null
   const error = failure && failure.src === src ? failure.message : null
