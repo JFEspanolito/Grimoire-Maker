@@ -14,6 +14,19 @@ function job(name) {
 }
 
 describe('release workflow coordination', () => {
+  it('runs reusable mandatory quality checks before building release artifacts', () => {
+    const ci = readFileSync(new URL('ci.yml', workflowsDir), 'utf8')
+    expect(ci).toContain('pull_request:')
+    expect(ci).toContain('workflow_call:')
+    expect(ci).toContain('runs-on: windows-latest')
+    for (const command of ['pnpm test', 'pnpm lint', 'pnpm exec tsc -b', 'cargo test --locked', 'cargo clippy --locked --all-targets']) {
+      expect(ci).toContain(`run: ${command}`)
+    }
+    expect(ci).not.toContain('continue-on-error:')
+    expect(release).toMatch(/quality:\s*\n\s+uses: \.\/\.github\/workflows\/ci.yml/)
+    expect(job('build')).toMatch(/needs:\s*\[?quality\]?/)
+    expect(job('publish')).toMatch(/needs:\s*\[?build\]?/)
+  })
   it('builds both operating systems in one matrix before a single publisher', () => {
     expect(job('build')).toContain('matrix:')
     expect(job('build')).toContain('windows-latest')

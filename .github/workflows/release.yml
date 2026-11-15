@@ -20,8 +20,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  quality:
+    uses: ./.github/workflows/ci.yml
+
   build:
     name: Build ${{ matrix.platform }}
+    needs: quality
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
