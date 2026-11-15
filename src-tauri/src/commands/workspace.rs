@@ -48,8 +48,9 @@ pub fn restore_workspace(app: AppHandle, path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// The folder whose contents a standalone document may read: its own folder, but only
-/// for a file already in scope, and never the home folder or a drive root as a whole.
+/// The folder a standalone document may read: its own folder, resolved through links,
+/// and only for a Markdown or text file already in scope. A document directly in the
+/// home folder gets only its `assets/` folder; one at a drive root gets nothing more.
 fn document_folder(path: &Path, allowed: bool, home: Option<&Path>) -> Result<PathBuf, String> {
     if !path.is_file() {
         return Err(format!("\"{}\" is not an existing file", path.display()));
@@ -57,16 +58,25 @@ fn document_folder(path: &Path, allowed: bool, home: Option<&Path>) -> Result<Pa
     if !allowed {
         return Err("Only a document you opened or saved can share its folder".into());
     }
-    let folder = fs::canonicalize(path)
-        .map_err(|e| e.to_string())?
+    let document = path.extension().and_then(|ext| ext.to_str()).map(str::to_ascii_lowercase);
+    if !matches!(document.as_deref(), Some("md" | "txt")) {
+        return Err("Only Markdown and text documents can share their folder".into());
+    }
+    // Grant the canonical folder, the one checked below, so a link cannot point the grant elsewhere.
+    let canonical = |path: &Path| -> Result<PathBuf, String> {
+        Ok(PathBuf::from(super::rename_references::portable(&fs::canonicalize(path).map_err(|e| e.to_string())?)?))
+    };
+    let folder = canonical(path)?
         .parent()
         .map(Path::to_path_buf)
         .ok_or("The document has no folder")?;
-    let home = home.and_then(|home| fs::canonicalize(home).ok());
-    if folder.parent().is_none() || home.as_deref() == Some(folder.as_path()) {
-        return Err("Documents directly in your home folder or a drive root keep access to the file only".into());
+    if folder.parent().is_none() {
+        return Err("Documents at a drive root keep access to the file only".into());
     }
-    Ok(path.parent().map(Path::to_path_buf).unwrap_or(folder))
+    if home.map(canonical).transpose()?.as_deref() == Some(folder.as_path()) {
+        return Ok(folder.join("assets"));
+    }
+    Ok(folder)
 }
 
 /// Lets a document opened or saved outside a project read the images next to it
@@ -316,16 +326,21 @@ mod tests {
         fs::create_dir_all(&notes).unwrap();
         fs::write(notes.join("chapter.md"), "# Chapter").unwrap();
         fs::write(base.join("home/loose.md"), "# Loose").unwrap();
+        fs::write(notes.join("font.ttf"), "font").unwrap();
         let home = base.join("home");
+        let canonical = |path: &Path| PathBuf::from(super::super::rename_references::portable(&fs::canonicalize(path).unwrap()).unwrap());
 
-        assert_eq!(document_folder(&notes.join("chapter.md"), true, Some(&home)).unwrap(), notes);
+        // The grant is always the canonical folder, the one the guard checked.
+        assert_eq!(document_folder(&notes.join("chapter.md"), true, Some(&home)).unwrap(), canonical(&notes));
         assert_eq!(
             document_folder(&notes.join("chapter.md"), false, Some(&home)).unwrap_err(),
             "Only a document you opened or saved can share its folder"
         );
+        // Directly in home: only its assets/ folder, never the whole home.
+        assert_eq!(document_folder(&home.join("loose.md"), true, Some(&home)).unwrap(), canonical(&home).join("assets"));
         assert_eq!(
-            document_folder(&home.join("loose.md"), true, Some(&home)).unwrap_err(),
-            "Documents directly in your home folder or a drive root keep access to the file only"
+            document_folder(&notes.join("font.ttf"), true, Some(&home)).unwrap_err(),
+            "Only Markdown and text documents can share their folder"
         );
         assert!(document_folder(&notes, true, Some(&home)).is_err());
         assert!(document_folder(&notes.join("missing.md"), true, Some(&home)).is_err());

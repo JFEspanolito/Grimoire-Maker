@@ -124,7 +124,7 @@ async function archiveDraft(root: string): Promise<{ from: string; to: string } 
  */
 async function grantDocumentFolder(path: string): Promise<void> {
   const root = useDocumentStore.getState().workspaceRoot
-  if (root && path.startsWith(`${root}/`)) return
+  if ((root && path.startsWith(`${root}/`)) || !/\.(md|txt)$/i.test(path)) return
   try { await invoke('grant_document_folder', { path }) }
   catch (error) { console.warn('Images next to this document are unavailable', error) }
 }

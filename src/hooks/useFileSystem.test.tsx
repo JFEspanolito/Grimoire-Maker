@@ -323,6 +323,11 @@ describe('switching Markdown files', () => {
     expect(invoke).not.toHaveBeenCalledWith('grant_document_folder', expect.anything())
   })
 
+  it('asks no folder access for a PDF or image opened outside a project', async () => {
+    await actions.openFile('/downloads/manual.pdf')
+    expect(invoke).not.toHaveBeenCalledWith('grant_document_folder', expect.anything())
+  })
+
   it('still opens the document when its folder cannot be shared', async () => {
     vi.mocked(invoke).mockRejectedValueOnce(new Error('Documents directly in your home folder or a drive root keep access to the file only'))
     await actions.openFile('/home/loose.md')
