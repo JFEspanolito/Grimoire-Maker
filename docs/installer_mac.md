@@ -5,7 +5,7 @@ The release workflow builds a universal macOS application bundle (`Grimoire Make
 | Artifact | How to build | Output |
 | --- | --- | --- |
 | macOS Disk Image (local/unsigned) | `pnpm build:dmg` | `src-tauri/target/release/bundle/dmg/Grimoire.Maker_<version>_<arch>.dmg` |
-| macOS Disk Image (signed) | `pnpm build:dmg:signed` | `src-tauri/target/release/bundle/dmg/Grimoire.Maker_<version>_<arch>.dmg` |
+| macOS Disk Image (updater-signed) | `pnpm build:dmg:signed` | `src-tauri/target/release/bundle/dmg/Grimoire.Maker_<version>_<arch>.dmg` |
 | Universal macOS release | `pnpm exec tauri build --bundles dmg,app --target universal-apple-darwin` | `src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg` |
 
 The two host-architecture commands execute `tauri build --bundles dmg,app`, which compiles the frontend first (`pnpm build`, including strict typechecking via `tsc -b`) before invoking `cargo build --release`.
@@ -44,16 +44,18 @@ On first launch, default Templates, Snippets, Themes, and Plugins are automatica
 
 ## 3. macOS Security & Gatekeeper Troubleshooting
 
-If installing a release that is self-signed or pending Apple Notarization, macOS Gatekeeper may display a warning:
-> *"Grimoire Maker" cannot be opened because Apple cannot check it for malicious software.*  
-> or *"Grimoire Maker is damaged and can't be opened."*
+The current release workflow does not configure Apple Developer ID signing or Apple notarization. Its `TAURI_SIGNING_PRIVATE_KEY` signs updater packages for the in-app updater; that signature does not establish an Apple-verified developer identity or notarize the application. Gatekeeper may therefore block the first launch.
 
-### Resolution
-1. **From Finder:** Right-click (or Control-click) `Grimoire Maker.app` in `/Applications` and select **Open**. Click **Open** again in the confirmation prompt.
-2. **From Terminal (Remove quarantine flag):**
-   ```bash
-   xattr -cr "/Applications/Grimoire Maker.app"
-   ```
+### Open a trusted download
+
+Only proceed if you trust the official download and believe it has not been altered. Following [Apple's instructions for an app that has not been notarized](https://support.apple.com/en-us/102445):
+
+1. Download from this project's [GitHub Releases](https://github.com/JFEspanolito/Grimoire-Maker/releases), install the app in `/Applications`, and attempt to open it once.
+2. Dismiss the blocked-launch dialog. Open **System Settings → Privacy & Security**.
+3. Find the entry for **Grimoire Maker** and select **Open Anyway**.
+4. Authenticate if requested, then confirm **Open**. This creates an exception for this application.
+
+Leave Gatekeeper enabled. If macOS reports malware, damage, or modification, do not bypass that warning: delete the download and obtain a fresh copy from the official release. If the warning persists or **Open Anyway** is unavailable, stop and report the exact message rather than removing quarantine attributes.
 
 ---
 

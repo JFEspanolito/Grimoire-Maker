@@ -96,7 +96,7 @@ Grimoire Maker is built around an open, shareable modding ecosystem. Users can f
 2. Choose the download package for your operating system:
    - **Windows Full Installer (`Grimoire.Maker_<version>_x64-setup.exe`):** Standard NSIS per-user installer with Start Menu/Desktop shortcuts and uninstaller.
    - **Windows Portable Edition (`GrimoireMaker-portable-<version>-x64.zip`):** Zero-install archive containing `Grimoire Maker.exe`, `portable.flag`, and `README-portable.txt`. Keeps all settings, mods, logs, and WebView2 data inside a self-contained `Data\` folder next to the executable.
-   - **macOS Disk Image (`Grimoire.Maker_<version>_aarch64.dmg`):** Standard Apple Disk Image for Apple Silicon (M1/M2/M3/M4) Macs. Mount and drag into `/Applications`.
+   - **macOS Disk Image (`.dmg`):** Universal release for Apple Silicon and Intel Macs. Mount and drag into `/Applications`. The release workflow does not configure Apple Developer ID signing or notarization; see the [macOS installation guide](docs/installer_mac.md#3-macos-security--gatekeeper-troubleshooting) for Apple's app-specific **Open Anyway** procedure. The updater package signature does not replace Apple signing or notarization.
 3. Launch **Grimoire Maker**. On first launch, default Templates, Snippets, Themes, and Plugins are automatically seeded into your configuration folder.
 
 ### Option B: Build from Source (Developers)
