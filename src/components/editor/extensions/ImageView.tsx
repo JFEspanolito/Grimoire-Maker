@@ -44,11 +44,23 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   const placeHandle = () => {
     const image = imageRef.current
     const page = image?.closest('.grimoire-page')
-    if (!image || !page) return
+    if (!image || !page) { setCorner(null); return }
     const rect = image.getBoundingClientRect()
-    if (!rect.width) return
+    if (!rect.width) { setCorner(null); return }
     // Viewport pixels: the handle lives outside the page, so it can never alter the page layout.
     const next = { left: rect.left + rect.width, top: rect.top + rect.height }
+    const clips = (overflow: string) => /auto|scroll|hidden|clip/.test(overflow)
+    let visible = next.left >= 0 && next.left <= window.innerWidth && next.top >= 0 && next.top <= window.innerHeight
+    for (let parent = image.parentElement; parent && visible; parent = parent.parentElement) {
+      const style = getComputedStyle(parent)
+      const clipX = clips(style.overflowX || style.overflow)
+      const clipY = clips(style.overflowY || style.overflow)
+      if (!clipX && !clipY) continue
+      const bounds = parent.getBoundingClientRect()
+      if ((clipX && (next.left < bounds.left || next.left > bounds.right))
+        || (clipY && (next.top < bounds.top || next.top > bounds.bottom))) visible = false
+    }
+    if (!visible) { setCorner(null); return }
     // Sub-pixel noise must not re-render.
     setCorner((old) => old && Math.abs(old.left - next.left) < 0.3 && Math.abs(old.top - next.top) < 0.3 ? old : next)
   }
@@ -59,10 +71,13 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const image = imageRef.current
     const page = image?.closest('.grimoire-page')
     if (!image || !page || typeof ResizeObserver === 'undefined') return
-    // Only the image: the page also resizes because of the handle itself (it is absolute inside a
-    // spread's fragmented stack), which made the handle and the page chase each other forever.
+    // The portaled handle cannot alter the image or clipping viewport's layout.
     const observer = new ResizeObserver(placeHandle)
     observer.observe(image)
+    for (let parent = image.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent)
+      if (/auto|scroll|hidden|clip/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`)) observer.observe(parent)
+    }
     // The handle is fixed to the viewport, so it follows scrolling and window changes itself.
     window.addEventListener('scroll', placeHandle, true)
     window.addEventListener('resize', placeHandle)

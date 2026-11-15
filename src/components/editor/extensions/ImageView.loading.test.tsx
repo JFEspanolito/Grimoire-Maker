@@ -11,6 +11,32 @@ vi.mock('../../../lib/errorLogging', () => ({ reportError: vi.fn() }))
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks() })
 
+it('hides the resize handle outside the clipping viewport and restores it after scrolling', async () => {
+  mocks.load.mockResolvedValue('blob:map')
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  const viewport = document.body.appendChild(document.createElement('div'))
+  viewport.style.overflow = 'auto'
+  const page = viewport.appendChild(document.createElement('div')); page.className = 'grimoire-page'
+  let bottom = 500
+  const bounds = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    return this.tagName === 'IMG' ? new DOMRect(100, bottom - 100, 100, 100) : new DOMRect(50, 100, 400, 300)
+  })
+  const root = createRoot(page)
+  const props = { node: { attrs: { src: 'map.jpeg', anchor: 'flow' } }, selected: true } as unknown as NodeViewProps
+  try {
+    await act(async () => root.render(<ImageView {...props} />))
+    expect(document.querySelector('[aria-label="Resize image"]')).toBeNull()
+    bottom = 300
+    await act(async () => window.dispatchEvent(new Event('scroll')))
+    expect(document.querySelector('[aria-label="Resize image"]')).not.toBeNull()
+    bottom = -10
+    await act(async () => window.dispatchEvent(new Event('scroll')))
+    expect(document.querySelector('[aria-label="Resize image"]')).toBeNull()
+  } finally {
+    await act(async () => root.unmount()); viewport.remove(); bounds.mockRestore(); vi.unstubAllGlobals()
+  }
+})
+
 it('applies column span to the wrapper while preserving the image width', async () => {
   mocks.load.mockResolvedValue('blob:map')
   const container = document.createElement('div')
