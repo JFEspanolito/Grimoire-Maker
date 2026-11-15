@@ -102,6 +102,15 @@ it('configured paths survive reload, keep disabled IDs and legacy templates, and
   expect(scope.reads.some(path => path.endsWith('.js'))).toBe(false)
 })
 
+it('adds the renamed RPG examples without deleting edited retired snippet folders', async () => {
+  await put('Mods/Snippets/Rol Adventures/Community/custom.md', '---\nsnippetName: My edited notes\n---\nKeep my adventure')
+  await fs.rm(`${scope.root}/Mods/Snippets/.rpg-adventures-snippets-v3-seeded`, { force: true })
+  await prepareModLibrary()
+  expect(await fs.readFile(`${scope.root}/Mods/Snippets/Rol Adventures/Community/custom.md`, 'utf8')).toContain('Keep my adventure')
+  expect(await fs.readFile(`${scope.root}/Mods/Snippets/RPG Adventures/General & Utilities/loot-table-d100.md`, 'utf8')).toContain('snippetName: Loot table (d100)')
+  expect(await fs.readFile(`${scope.root}/Mods/Snippets/.rpg-adventures-snippets-v3-seeded`, 'utf8')).toBe('1\n')
+})
+
 const exampleKeys = (folder: string) => Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`${folder}/`)).map(path => path.slice(folder.length + 1))
 const present = (path: string) => fs.access(path).then(() => true, () => false)
 it('seeds the shipped examples into native-managed folders (portable Data or installer content root) exactly once', async () => {
@@ -115,7 +124,7 @@ it('seeds the shipped examples into native-managed folders (portable Data or ins
   for (const relative of exampleKeys('Templates')) expect(await present(`${managedPaths.templates}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Snippets')) expect(await present(`${managedPaths.snippets}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Plugins')) expect(await present(`${managedPaths.plugins}/${relative}`)).toBe(true)
-  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.editorial-templates-v3-seeded`, `${managedPaths.plugins}/.executable-plugins-v2-seeded`, `${managedPaths.snippets}/.rol-adventures-snippets-v2-seeded`]) expect(await present(marker)).toBe(true)
+  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.editorial-templates-v3-seeded`, `${managedPaths.plugins}/.executable-plugins-v2-seeded`, `${managedPaths.snippets}/.rpg-adventures-snippets-v3-seeded`]) expect(await present(marker)).toBe(true)
   expect(await present(`${managedPaths.themes}/.examples-seeded`)).toBe(false)
   // A removed or edited example is never restored or replaced on the next start.
   const removed = exampleKeys('Templates')[0]

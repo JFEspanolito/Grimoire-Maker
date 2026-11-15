@@ -11,6 +11,29 @@ import { TableExtensions } from '../components/editor/extensions/tables'
 import { insertContentBox } from './contentBoxes'
 import { MOD_EXAMPLES } from './modLibrary'
 import { parseDocument } from './frontmatter'
+import readme from '../../README.md?raw'
+
+it('documents the shipped template count and snippet category names', () => {
+  const templates = Object.keys(MOD_EXAMPLES).filter(path => /^Templates\/[^/]+\/index\.md$/.test(path))
+  expect(readme).toContain(`Built-in Project Templates (${templates.length} Complete Blueprints)`)
+  const categories = new Set(Object.keys(MOD_EXAMPLES).filter(path => path.startsWith('Snippets/')).map(path => path.split('/')[1]))
+  for (const category of categories) expect(readme).toContain(category)
+  expect(readme).not.toContain('Rol Adventures')
+})
+
+it('ships consistently named English snippet categories and labels', () => {
+  const paths = Object.keys(MOD_EXAMPLES).filter(path => path.startsWith('Snippets/'))
+  expect(paths.some(path => path.startsWith('Snippets/Rol Adventures/'))).toBe(false)
+  expect(paths.some(path => path.startsWith('Snippets/RPG Adventures/'))).toBe(true)
+  expect(parseDocument(MOD_EXAMPLES['Snippets/RPG Adventures/General & Utilities/loot-table-d100.md']).frontmatter.snippetName).toBe('Loot table (d100)')
+  expect(parseDocument(MOD_EXAMPLES['Snippets/Zines and Newsletters/figure-caption.md']).frontmatter.snippetName).toBe('Figure caption and copyright')
+  for (const name of ['statblock.md', 'character-sheet.md']) {
+    const { body } = parseDocument(MOD_EXAMPLES[`Snippets/RPG Adventures/Hitos/${name}`])
+    expect(body).not.toMatch(/\b(?:FOR|VOL|RD)\b/)
+    expect(body).toContain('STR')
+    expect(body).toContain('WIL')
+  }
+})
 
 it('inserts all shipped default snippets across every category and blocks script execution', () => {
   const editor = new Editor({

@@ -637,6 +637,7 @@ fn grant_seed_markers(
     for (path, folder, managed, marker) in [
         (&paths.plugins, "Plugins", managed.plugins, ".executable-plugins-v2-seeded"),
         (&paths.snippets, "Snippets", managed.snippets, ".rol-adventures-snippets-v2-seeded"),
+        (&paths.snippets, "Snippets", managed.snippets, ".rpg-adventures-snippets-v3-seeded"),
         (&paths.templates, "Templates", managed.templates, ".editorial-templates-v2-seeded"),
         (&paths.templates, "Templates", managed.templates, ".editorial-templates-v3-seeded"),
     ] {
