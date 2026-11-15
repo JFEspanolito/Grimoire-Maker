@@ -3,6 +3,20 @@ use std::path::Path;
 use tauri::scope::fs::Scope;
 use tauri_plugin_fs::FsExt;
 
+/// Saved library paths authorize access on startup; only native commands may change them.
+pub(crate) fn protect_preferences(scope: &Scope, root: &Path) -> Result<(), String> {
+    // Legacy paths and installer selections also feed the preferences migration.
+    for name in [
+        "setting.json",
+        "library-paths.json",
+        "install-content-root.txt",
+        "install-content-root-v2.txt",
+    ] {
+        scope.forbid_file(root.join(name)).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 pub(crate) fn allow_owned_file(scope: &Scope, root: &Path, name: &str) -> Result<(), String> {
     let path = root.join(name);
     match std::fs::symlink_metadata(&path) {

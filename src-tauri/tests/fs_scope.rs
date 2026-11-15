@@ -8,6 +8,34 @@ mod tests {
     use tauri::utils::config::FsScope;
 
     #[test]
+    fn preferences_stay_native_owned_after_new_grants() {
+        let root = std::env::temp_dir().join(format!("grimoire-preferences-scope-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let app = tauri::test::mock_app();
+        let scope = Scope::new(&app, &FsScope::default()).unwrap();
+        scope.allow_directory(&root, true).unwrap();
+        protect_preferences(&scope, &root).unwrap();
+        for existing in [false, true] {
+            for name in ["setting.json", "library-paths.json", "install-content-root.txt", "install-content-root-v2.txt"] {
+                let path = root.join(name);
+                if existing {
+                    std::fs::write(&path, "{}").unwrap();
+                }
+                scope.allow_directory(&root, true).unwrap();
+                scope.allow_file(&path).unwrap();
+                assert!(!scope.is_allowed(&path), "renderer can access {name} (existing={existing})");
+            }
+        }
+        assert!(scope.is_allowed(root.join("themes/custom.css")));
+        assert!(scope.is_allowed(root.join("Mods/Templates/example.md")));
+        assert!(!scope.is_allowed(root.with_file_name("unselected/example.md")));
+        // Native publication bypasses renderer scope.
+        std::fs::write(root.join("setting.json"), "{\"paths\":{}}").unwrap();
+        assert_eq!(std::fs::read_to_string(root.join("setting.json")).unwrap(), "{\"paths\":{}}");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
     fn unix_scope_allows_only_the_named_dotfile() {
         let app = tauri::test::mock_builder()
             .build(tauri::test::mock_context(tauri::test::noop_assets()))

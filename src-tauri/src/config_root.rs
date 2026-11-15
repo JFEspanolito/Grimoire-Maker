@@ -51,6 +51,7 @@ pub fn initialize(app: &AppHandle) -> Result<(), String> {
             .forbid_file(root.join(file))
             .map_err(|error| error.to_string())?;
     }
+    crate::fs_scope::protect_preferences(&app.fs_scope(), &root)?;
     if !app.manage(PreparedRoot {
         path: root,
         mode,
