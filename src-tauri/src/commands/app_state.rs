@@ -35,12 +35,23 @@ fn remembered(previous: &Value) -> Vec<String> {
 /// Checks a state the page wants to save against the one on disk. A project path is
 /// accepted when it was already remembered, or when it is a folder the page may read
 /// (picked in the folder dialog, or created inside one). Removing paths is always allowed.
-fn accept_state(previous: &Value, next: Value, granted: impl Fn(&Path) -> bool) -> Result<Value, String> {
+fn accept_state(
+    previous: &Value,
+    next: Value,
+    granted: impl Fn(&Path) -> bool,
+    config_root: &Path,
+) -> Result<Value, String> {
     let Value::Object(mut next) = next else {
         return Err("The session state must be an object".into());
     };
     let known = remembered(previous);
+    let config = fs::canonicalize(config_root).unwrap_or_else(|_| config_root.to_path_buf());
     let check = |path: &str| -> Result<String, String> {
+        // Git would then run in the settings folder and could restore a state.json the page wrote.
+        let candidate = fs::canonicalize(path).unwrap_or_else(|_| Path::new(path).to_path_buf());
+        if candidate.starts_with(&config) || config.starts_with(&candidate) {
+            return Err(format!("\"{path}\" holds the app settings and cannot be a project"));
+        }
         let normal = normalize(path);
         if known.contains(&normal) || (Path::new(path).is_dir() && granted(Path::new(path))) {
             Ok(path.to_string())
@@ -77,9 +88,9 @@ fn read_in(path: &Path) -> Value {
         .unwrap_or_else(|| Value::Object(Map::new()))
 }
 
-fn write_in(path: &Path, next: Value, granted: impl Fn(&Path) -> bool) -> Result<Value, String> {
+fn write_in(path: &Path, next: Value, granted: impl Fn(&Path) -> bool, config_root: &Path) -> Result<Value, String> {
     let _guard = STATE_LOCK.lock().map_err(|_| "Session state lock unavailable")?;
-    let accepted = accept_state(&read_in(path), next, granted)?;
+    let accepted = accept_state(&read_in(path), next, granted, config_root)?;
     let raw = serde_json::to_string_pretty(&accepted).map_err(|e| e.to_string())?;
     // Write beside the file and rename, so a crash never leaves half a state behind.
     let temporary = path.with_extension("json.tmp");
@@ -99,9 +110,9 @@ pub fn read_app_state(app: AppHandle) -> Result<Value, String> {
 /// Saves the session and returns what was stored.
 #[tauri::command(async)]
 pub fn write_app_state(app: AppHandle, state: Value) -> Result<Value, String> {
-    let path = crate::config_root::path(&app)?.join(crate::config::STATE_FILE);
+    let root = crate::config_root::path(&app)?;
     let scope = app.fs_scope();
-    write_in(&path, state, |folder| scope.is_allowed(folder))
+    write_in(&root.join(crate::config::STATE_FILE), state, |folder| scope.is_allowed(folder), &root)
 }
 
 #[cfg(test)]
@@ -114,6 +125,11 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    /// A config root unrelated to the scratch projects.
+    fn outside_config() -> std::path::PathBuf {
+        std::env::temp_dir().join("grimoire-app-state-tests-config")
     }
 
     fn scratch() -> (Scratch, String, String) {
@@ -135,7 +151,7 @@ mod tests {
         let (_base, book, _) = scratch();
         let granted = |path: &Path| normalize(path.to_str().unwrap()) == book;
         let next = json!({ "lastWorkspace": book, "recentWorkspaces": [book], "lastFile": format!("{book}/a.md"), "settings": { "zoom": 2 } });
-        assert_eq!(accept_state(&json!({}), next.clone(), granted).unwrap(), next);
+        assert_eq!(accept_state(&json!({}), next.clone(), granted, &outside_config()).unwrap(), next);
     }
 
     #[test]
@@ -143,9 +159,9 @@ mod tests {
         let (_base, book, other) = scratch();
         let previous = json!({ "lastWorkspace": book, "recentWorkspaces": [book] });
         let message = format!("\"{other}\" is not a project folder you opened");
-        assert_eq!(accept_state(&previous, json!({ "lastWorkspace": other, "recentWorkspaces": [book] }), |_| false).unwrap_err(), message);
-        assert_eq!(accept_state(&previous, json!({ "lastWorkspace": book, "recentWorkspaces": [book, other] }), |_| false).unwrap_err(), message);
-        assert!(accept_state(&previous, json!({ "lastWorkspace": "C:/", "recentWorkspaces": [] }), |_| false).is_err());
+        assert_eq!(accept_state(&previous, json!({ "lastWorkspace": other, "recentWorkspaces": [book] }), |_| false, &outside_config()).unwrap_err(), message);
+        assert_eq!(accept_state(&previous, json!({ "lastWorkspace": book, "recentWorkspaces": [book, other] }), |_| false, &outside_config()).unwrap_err(), message);
+        assert!(accept_state(&previous, json!({ "lastWorkspace": "C:/", "recentWorkspaces": [] }), |_| false, &outside_config()).is_err());
     }
 
     #[test]
@@ -153,7 +169,7 @@ mod tests {
         let (_base, book, other) = scratch();
         let previous = json!({ "lastWorkspace": other, "recentWorkspaces": [other, book] });
         let next = json!({ "lastWorkspace": book.replace('/', "\\"), "recentWorkspaces": [book, other] });
-        assert!(accept_state(&previous, next, |_| false).is_ok());
+        assert!(accept_state(&previous, next, |_| false, &outside_config()).is_ok());
     }
 
     #[test]
@@ -161,17 +177,34 @@ mod tests {
         let (_base, book, _) = scratch();
         let previous = json!({ "lastWorkspace": book, "recentWorkspaces": [book] });
         let next = json!({ "lastWorkspace": null, "recentWorkspaces": [], "lastFile": null });
-        assert_eq!(accept_state(&previous, next.clone(), |_| false).unwrap(), next);
+        assert_eq!(accept_state(&previous, next.clone(), |_| false, &outside_config()).unwrap(), next);
     }
 
     #[test]
     fn rejects_malformed_states_and_caps_the_recent_list() {
         let (_base, book, _) = scratch();
-        assert!(accept_state(&json!({}), json!([]), |_| true).is_err());
-        assert!(accept_state(&json!({}), json!({ "lastWorkspace": 3 }), |_| true).is_err());
-        assert!(accept_state(&json!({}), json!({ "recentWorkspaces": [1] }), |_| true).is_err());
+        assert!(accept_state(&json!({}), json!([]), |_| true, &outside_config()).is_err());
+        assert!(accept_state(&json!({}), json!({ "lastWorkspace": 3 }), |_| true, &outside_config()).is_err());
+        assert!(accept_state(&json!({}), json!({ "recentWorkspaces": [1] }), |_| true, &outside_config()).is_err());
         let many = json!({ "recentWorkspaces": vec![book.clone(); 9] });
-        assert_eq!(accept_state(&json!({}), many, |_| true).unwrap()["recentWorkspaces"].as_array().unwrap().len(), MAX_RECENT);
+        assert_eq!(accept_state(&json!({}), many, |_| true, &outside_config()).unwrap()["recentWorkspaces"].as_array().unwrap().len(), MAX_RECENT);
+    }
+
+    #[test]
+    fn never_accepts_the_config_folder_or_a_folder_around_it_as_a_project() {
+        let (base, book, _) = scratch();
+        let config = base.0.join("book/config");
+        fs::create_dir_all(config.join("Mods")).unwrap();
+        let config_text = normalize(config.to_str().unwrap());
+        let inside = format!("{config_text}/Mods");
+        // Granted (the config root is allowed recursively) and even already remembered.
+        let previous = json!({ "lastWorkspace": config_text, "recentWorkspaces": [config_text, inside, book] });
+        for path in [&config_text, &inside, &book] {
+            assert_eq!(
+                accept_state(&previous, json!({ "lastWorkspace": path, "recentWorkspaces": [] }), |_| true, &config).unwrap_err(),
+                format!("\"{path}\" holds the app settings and cannot be a project")
+            );
+        }
     }
 
     #[test]
@@ -179,9 +212,9 @@ mod tests {
         let (base, book, other) = scratch();
         let path = base.0.join("state.json");
         let granted = |p: &Path| normalize(p.to_str().unwrap()) == book;
-        write_in(&path, json!({ "lastWorkspace": book, "recentWorkspaces": [book] }), granted).unwrap();
+        write_in(&path, json!({ "lastWorkspace": book, "recentWorkspaces": [book] }), granted, &outside_config()).unwrap();
         let saved = fs::read(&path).unwrap();
-        assert!(write_in(&path, json!({ "lastWorkspace": other, "recentWorkspaces": [other] }), granted).is_err());
+        assert!(write_in(&path, json!({ "lastWorkspace": other, "recentWorkspaces": [other] }), granted, &outside_config()).is_err());
         assert_eq!(fs::read(&path).unwrap(), saved);
         assert_eq!(read_in(&path)["lastWorkspace"], json!(book));
         assert_eq!(read_in(&base.0.join("missing.json")), json!({}));
