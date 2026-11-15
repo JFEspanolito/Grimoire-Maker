@@ -53,8 +53,16 @@ export function frameCsp(scriptHash: string): string {
   ].join('; ')
 }
 
+/**
+ * The frame's srcdoc inherits the app CSP, so `app.security.csp` in `src-tauri/tauri.conf.json`
+ * must list this hash in `script-src`. A test fails when the two drift apart.
+ */
+export function frameScriptHash(): Promise<string> {
+  return sha256Base64(FRAME_SCRIPT)
+}
+
 export async function buildFrameDocument(): Promise<string> {
-  const csp = frameCsp(await sha256Base64(FRAME_SCRIPT))
+  const csp = frameCsp(await frameScriptHash())
   return `<!doctype html><meta http-equiv="Content-Security-Policy" content="${csp}"><script>${FRAME_SCRIPT}</script>`
 }
 

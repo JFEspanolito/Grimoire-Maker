@@ -20,7 +20,9 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'sha256-luoXhSkyE1jZKfAr1iipCgfuXX7RQyU/BkglxdTVytI='; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: blob: https:; connect-src 'self' ipc: http://ipc.localhost https://api.github.com blob: data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline' http://localhost:1420; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: blob: https:; connect-src 'self' ipc: http://ipc.localhost https://api.github.com blob: data: ws://localhost:1420 http://localhost:1420; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'",
+      "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
   "bundle": {
