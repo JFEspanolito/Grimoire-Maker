@@ -126,6 +126,7 @@ fn rename_workspace_in(
     name: &str,
     grant_scope: impl FnOnce(&Path) -> Result<(), String>,
 ) -> Result<String, String> {
+    let _guard = super::app_state::STATE_LOCK.lock().map_err(|_| "Session state lock unavailable")?;
     if !valid_project_name(name) {
         return Err("Invalid project name".into());
     }
@@ -345,6 +346,50 @@ mod tests {
         assert!(document_folder(&notes, true, Some(&home)).is_err());
         assert!(document_folder(&notes.join("missing.md"), true, Some(&home)).is_err());
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn workspace_rename_holds_the_session_lock_through_scope_grant_and_rollback() {
+        let base = std::env::temp_dir().join(format!("grimoire-rename-state-lock-{}", std::process::id()));
+        fs::create_dir_all(base.join("Old/Draft")).unwrap();
+        let old = base.join("Old");
+        let state_path = base.join("state.json");
+        let raw = serde_json::json!({
+            "lastWorkspace": normalize(&old.to_string_lossy()),
+            "recentWorkspaces": [normalize(&old.to_string_lossy())],
+            "lastFile": normalize(&old.join("Draft/chapter.md").to_string_lossy()),
+            "settings": { "theme": "parchment" }
+        }).to_string();
+        fs::write(&state_path, &raw).unwrap();
+        // A second session operation must not enter after the folder moved but before
+        // the new state is published (or the folder and original state are restored).
+        for fail_grant in [true, false] {
+            let mut locked = false;
+            let result = rename_workspace_in(&state_path, &old, "New", |_| {
+                locked = matches!(
+                    super::super::app_state::STATE_LOCK.try_lock(),
+                    Err(std::sync::TryLockError::WouldBlock)
+                );
+                if fail_grant { Err("scope denied".into()) } else { Ok(()) }
+            });
+            assert!(locked, "workspace rename must hold the same lock as session reads and writes");
+            if fail_grant {
+                assert!(result.unwrap_err().contains("scope denied"));
+                assert!(old.is_dir());
+                assert!(!base.join("New").exists());
+                assert_eq!(fs::read_to_string(&state_path).unwrap(), raw);
+            } else {
+                let next = result.unwrap();
+                assert!(!old.exists());
+                assert!(base.join("New/Draft").is_dir());
+                let saved: Value = serde_json::from_str(&fs::read_to_string(&state_path).unwrap()).unwrap();
+                assert_eq!(saved["lastWorkspace"], next);
+                assert_eq!(saved["recentWorkspaces"][0], next);
+                assert_eq!(saved["lastFile"], format!("{next}/Draft/chapter.md"));
+                assert_eq!(saved["settings"]["theme"], "parchment");
+            }
+        }
+        fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

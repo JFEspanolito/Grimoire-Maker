@@ -14,7 +14,7 @@ use tauri_plugin_fs::FsExt;
 const MAX_RECENT: usize = 6;
 
 /// Serialises the read-modify-write of `state.json` between these commands.
-static STATE_LOCK: Mutex<()> = Mutex::new(());
+pub(super) static STATE_LOCK: Mutex<()> = Mutex::new(());
 
 fn normalize(path: &str) -> String {
     path.replace('\\', "/").trim_end_matches('/').to_string()
