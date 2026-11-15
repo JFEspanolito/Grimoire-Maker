@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { TextSelection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import { useDocumentStore } from '../../stores/documentStore'
+import { isDocumentRestoring, useDocumentStore } from '../../stores/documentStore'
 import { emitPluginEvent, setPluginHost, usePluginRegistry } from '../../plugins/plugin-manager'
 import type { PluginContextAction, PluginContextActionContext } from '../../types/plugin'
 import { reportError } from '../../lib/errorLogging'
@@ -45,10 +45,32 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     },
     onUpdate: ({ editor: e }) => {
       const store = useDocumentStore.getState()
+      const target = path === undefined ? store.document.path : path
+      if (isDocumentRestoring(store, target)) {
+        const current = store.document.path === target ? store.document : store.buffers[target ?? '__untitled__']
+        e.commands.setContent(current?.body ?? '', { emitUpdate: false })
+        return
+      }
       store.setBodyForPath(path === undefined ? store.document.path : path, getMarkdown(e))
       emitPluginEvent('document:changed')
     },
   })
+
+  useEffect(() => {
+    if (!editor) return
+    const sync = () => {
+      if (editor.isDestroyed) return
+      const store = useDocumentStore.getState()
+      const restoring = isDocumentRestoring(store, documentPath ?? null)
+      editor.setEditable(!restoring, false)
+      if (restoring) {
+        const current = store.document.path === documentPath ? store.document : store.buffers[documentPath ?? '__untitled__']
+        if (current && getMarkdown(editor) !== current.body) editor.commands.setContent(current.body, { emitUpdate: false })
+      }
+    }
+    sync()
+    return useDocumentStore.subscribe(sync)
+  }, [editor, documentPath])
 
   useEffect(() => editor ? registerSnippetDropTarget(editor, documentPath ?? null) : undefined, [editor, documentPath])
 

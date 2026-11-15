@@ -9,21 +9,7 @@ import { GitRollbackDialog } from './GitRollbackDialog'
 import { ConfirmDialog } from '../layout/ConfirmDialog'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useTranslation } from '../../lib/i18n'
-
-async function reloadActiveDocumentFromDisk(workspace: string) {
-  if (!('__TAURI_INTERNALS__' in window)) return
-  const activePath = useDocumentStore.getState().document.path
-  if (!activePath || !activePath.startsWith(`${workspace}/`) || !/\.md$/i.test(activePath)) return
-  try {
-    const { exists, readTextFile } = await import('@tauri-apps/plugin-fs')
-    if (await exists(activePath)) {
-      const raw = await readTextFile(activePath)
-      useDocumentStore.getState().loadFromRaw(activePath, raw)
-    }
-  } catch {
-    // Keep the existing buffer if disk reload is unavailable.
-  }
-}
+import { restoreGitDocuments } from '../../lib/gitDocumentRestore'
 
 interface VersionControlPanelProps {
   workspace: string | null
@@ -245,7 +231,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
           onRollback={(commit, targetPaths) => {
             setRollbackOpen(false)
             void run(
-              async (project) => {
+              (project) => restoreGitDocuments(project, targetPaths, async () => {
                 if (targetPaths && targetPaths.length > 0) {
                   for (const targetPath of targetPaths) {
                     await rollbackToCommit(project, commit.hash, targetPath)
@@ -253,8 +239,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
                 } else {
                   await rollbackToCommit(project, commit.hash)
                 }
-                await reloadActiveDocumentFromDisk(project)
-              },
+              }),
               targetPaths && targetPaths.length > 0
                 ? targetPaths.length === 1
                   ? `Restored ${targetPaths[0]} to its version before ${commit.shortHash}.`
@@ -293,10 +278,7 @@ function ProjectVersionControlPanel({ workspace, hasUnsavedChanges = false }: Ve
         onConfirm={() => {
           const entry = pendingRevert
           setPendingRevert(null)
-          void run(async (project) => {
-            await revertChange(project, entry.path)
-            await reloadActiveDocumentFromDisk(project)
-          }, `Reverted ${entry.path}.`)
+          void run((project) => restoreGitDocuments(project, [entry.path, ...(entry.originalPath ? [entry.originalPath] : [])], () => revertChange(project, entry.path)), `Reverted ${entry.path}.`)
         }} />}
     </>}
   </section>

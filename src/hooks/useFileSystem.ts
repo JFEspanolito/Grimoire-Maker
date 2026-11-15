@@ -57,7 +57,7 @@ function isDirectoryNode(tree: FileNode[], targetPath: string): boolean | null {
 let pendingRestore: Promise<void> | null = null
 let fileActionQueue: Promise<unknown> = Promise.resolve()
 
-function runFileAction<T>(action: () => Promise<T>): Promise<T> {
+export function runFileAction<T>(action: () => Promise<T>): Promise<T> {
   const next = fileActionQueue.then(action)
   fileActionQueue = next.catch(() => undefined)
   return next

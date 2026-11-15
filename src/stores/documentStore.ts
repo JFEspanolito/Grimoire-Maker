@@ -4,6 +4,10 @@ import { parseDocument, serializeDocument } from '../lib/frontmatter'
 import { remapPath } from '../lib/binder'
 
 interface DocumentState {
+  restoringPaths: string[]
+  beginRestore: (paths: string[]) => void
+  endRestore: () => void
+  restoreFromDisk: (path: string, raw: string) => void
   document: GrimoireDocument
   buffers: Record<string, GrimoireDocument>
   activate: (path: string) => void
@@ -28,13 +32,27 @@ interface DocumentState {
 
 const emptyDocument = (): GrimoireDocument => ({ path: null, frontmatter: { title: 'Untitled Grimoire', pageSize: 'a4', columns: 2, theme: 'parchment' }, body: '', dirty: false })
 const keyOf = (path: string | null) => path ?? '__untitled__'
+export function isDocumentRestoring(state: Pick<DocumentState, 'restoringPaths'>, path: string | null): boolean {
+  return path !== null && state.restoringPaths.some((scope) => path === scope || path.startsWith(`${scope}/`))
+}
 function updateDocument(state: DocumentState, document: GrimoireDocument) {
   return { buffers: { ...state.buffers, [keyOf(document.path)]: document }, ...(state.document.path === document.path ? { document } : {}) }
 }
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
+  restoringPaths: [],
+  beginRestore: (restoringPaths) => {
+    const state = get()
+    const affected = { restoringPaths }
+    const dirty = Object.values({ ...state.buffers, [keyOf(state.document.path)]: state.document })
+      .find((document) => document.dirty && isDocumentRestoring(affected, document.path))
+    if (dirty) throw new Error(`Save unsaved changes in ${dirty.path} before restoring files.`)
+    set({ restoringPaths })
+  },
+  endRestore: () => set({ restoringPaths: [] }),
+  restoreFromDisk: (path, raw) => set((state) => updateDocument(state, { path, ...parseDocument(raw), dirty: false })),
   buffers: {},
-  resetDocuments: () => set({ document: emptyDocument(), buffers: {} }),
+  resetDocuments: () => set({ document: emptyDocument(), buffers: {}, restoringPaths: [] }),
   deactivate: () => set((state) => ({ document: emptyDocument(), buffers: {
     ...state.buffers, ...(state.document.path ? { [state.document.path]: state.document } : {}),
   } })),
@@ -45,11 +63,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     return { buffers, ...(state.document.path === path ? { document: emptyDocument() } : {}) }
   }),
   setBodyForPath: (path, body) => set((state) => {
+    if (isDocumentRestoring(state, path)) return state
     const current = state.document.path === path ? state.document : state.buffers[keyOf(path)]
     if (!current || current.body === body) return state
     return updateDocument(state, { ...current, body, dirty: true })
   }),
   setRawForPath: (path, raw) => set((state) => {
+    if (isDocumentRestoring(state, path)) return state
     const current = state.document.path === path ? state.document : state.buffers[path]
     if (!current || serializeDocument(current.frontmatter, current.body) === raw) return state
     return updateDocument(state, { ...current, ...parseDocument(raw), dirty: true })
@@ -81,7 +101,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   tree: [],
   setBody: (body) => get().setBodyForPath(get().document.path, body),
   setFrontmatter: (patch) =>
-    set((s) => updateDocument(s, { ...s.document, frontmatter: { ...s.document.frontmatter, ...patch }, dirty: true })),
+    set((s) => isDocumentRestoring(s, s.document.path) ? s : updateDocument(s, { ...s.document, frontmatter: { ...s.document.frontmatter, ...patch }, dirty: true })),
   loadFromRaw: (path, raw) => {
     const { frontmatter, body } = parseDocument(raw)
     const document = { path, frontmatter, body, dirty: false }

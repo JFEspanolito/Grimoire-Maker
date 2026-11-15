@@ -21,6 +21,29 @@ vi.mock('../../lib/images', () => ({
 
 let root: Root | null = null
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
+it('locks the affected editor and synchronizes restored text before unlocking', async () => {
+  const path = '/book/restore-lock.md'
+  useDocumentStore.getState().loadFromRaw(path, '# Before')
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  let currentEditor: import('@tiptap/react').Editor | undefined
+  await act(async () => root?.render(<EditorCanvas path={path} onReady={(editor) => { currentEditor = editor }} />))
+  try {
+    await act(async () => useDocumentStore.getState().beginRestore([path]))
+    expect(currentEditor!.isEditable).toBe(false)
+    await act(async () => currentEditor!.commands.insertContent('stale plugin edit'))
+    expect(useDocumentStore.getState().document.body).toBe('# Before')
+    expect(currentEditor!.getText()).not.toContain('stale plugin edit')
+    await act(async () => useDocumentStore.getState().restoreFromDisk(path, '# Restored'))
+    expect(currentEditor!.getText().trim()).toBe('Restored')
+    expect(currentEditor!.isEditable).toBe(false)
+  } finally {
+    await act(async () => useDocumentStore.getState().endRestore())
+  }
+  expect(currentEditor!.isEditable).toBe(true)
+})
+
 it('keeps the loaded image node view across repeated section alignment', async () => {
   useDocumentStore.getState().loadFromRaw('/book/Draft/Chapter 1/page.md', 'asd\n\n<img src="../../Assets/Chapter 1/FB_IMG_1736916217646.jpg" alt="FB_IMG_1736916217646" data-align="center" data-width-mm="55" data-frame="shadow" />')
   const container = document.createElement('div')
