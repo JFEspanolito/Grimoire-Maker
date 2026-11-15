@@ -228,7 +228,8 @@ fn open_folder_in(
         return Err("The folder is outside the active project".into());
     }
     // Use native separators for the OS launcher rather than the UI's portable paths.
-    let launch_path: std::path::PathBuf = folder.components().collect();
+    let resolved = super::rename_references::portable(&selected)?;
+    let launch_path: std::path::PathBuf = Path::new(&resolved).components().collect();
     launch(&launch_path)
 }
 
@@ -507,9 +508,12 @@ mod tests {
         .unwrap();
 
         let mut launched = false;
-        let normalized_folder = normalize(&project.join("Draft").to_string_lossy());
+        let normalized_folder = normalize(&project.join("Draft/../Draft").to_string_lossy());
+        let resolved = fs::canonicalize(project.join("Draft")).unwrap();
+        let expected = PathBuf::from(super::super::rename_references::portable(&resolved).unwrap());
         open_folder_in(&state_path, Path::new(&normalized_folder), |folder| {
             launched = true;
+            assert_eq!(folder, expected.components().collect::<PathBuf>());
             #[cfg(target_os = "windows")]
             assert!(!folder.as_os_str().to_string_lossy().contains('/'));
             Ok(())
