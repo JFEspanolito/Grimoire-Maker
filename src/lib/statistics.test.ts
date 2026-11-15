@@ -1,6 +1,19 @@
 import { expect, it } from 'vitest'
 import { computeStatistics, formatDuration } from './statistics'
 
+it('excludes fenced and indented code while keeping surrounding prose and inline code', () => {
+  const stats = computeStatistics(['Before.\n\n```typescript\nconst hidden = "never counted"\n```\n\n~~~python\nhidden too\n~~~\n\n    indented hidden\n\nAfter `inline` words.'])
+  expect(stats).toMatchObject({ words: 4, paragraphs: 2, sentences: 2 })
+  expect(stats.frequency.map(({ word }) => word).sort()).toEqual(['after', 'before', 'inline', 'words'])
+})
+
+it('keeps snake_case words separate and removes underscore emphasis', () => {
+  const stats = computeStatistics(['_Hello_ __world__ snake_case'])
+  expect(stats.words).toBe(4)
+  expect(stats.frequency.map(({ word }) => word).sort()).toEqual(['case', 'hello', 'snake', 'world'])
+  expect(stats.characters).toBe('Hello world snake_case'.length)
+})
+
 it('counts words, characters, paragraphs and sentences without Markdown syntax', () => {
   const stats = computeStatistics(['# Title\n\nHello **brave** world. Again [link](http://x.y)!\n![img](a.png)'])
   expect(stats).toMatchObject({ words: 6, paragraphs: 2, sentences: 3, documents: 1, pages: 1 })
