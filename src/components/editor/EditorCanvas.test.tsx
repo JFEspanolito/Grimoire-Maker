@@ -20,6 +20,43 @@ vi.mock('../../lib/images', () => ({
 }))
 
 let root: Root | null = null
+it('edits list numbering in an app dialog and cancels without changing the list', async () => {
+  const prompt = vi.spyOn(window, 'prompt').mockReturnValue(null)
+  HTMLDialogElement.prototype.showModal = function () { this.open = true }
+  HTMLDialogElement.prototype.close = function () { this.open = false }
+  useDocumentStore.getState().loadFromRaw('/book/list.md', '1. First\n2. Second')
+  const container = document.body.appendChild(document.createElement('div'))
+  root = createRoot(container)
+  let editor!: Editor
+  await act(async () => root?.render(<EditorCanvas onReady={value => { editor = value }} />))
+  // jsdom has no text Range geometry for ProseMirror's scroll-to-selection.
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  await act(async () => editor.commands.setTextSelection(4))
+  const open = async () => {
+    await act(async () => container.querySelector('li p')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).at(-1)!.click())
+  }
+  await open()
+  expect(prompt).not.toHaveBeenCalled()
+  expect(container.querySelector('dialog')?.open).toBe(true)
+  const input = container.querySelector<HTMLInputElement>('dialog input')!
+  const change = async (value: string) => {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+  await change('0')
+  expect(container.querySelector<HTMLButtonElement>('dialog button:last-child')!.disabled).toBe(true)
+  await change('7')
+  await act(async () => container.querySelector<HTMLButtonElement>('dialog button:last-child')!.click())
+  expect(editor.getAttributes('orderedList').start).toBe(7)
+  await open()
+  await act(async () => container.querySelector<HTMLButtonElement>('dialog button')!.click())
+  expect(editor.getAttributes('orderedList').start).toBe(7)
+  expect(container.querySelector('dialog')).toBeNull()
+  prompt.mockRestore()
+})
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
 it('locks the affected editor and synchronizes restored text before unlocking', async () => {
   const path = '/book/restore-lock.md'

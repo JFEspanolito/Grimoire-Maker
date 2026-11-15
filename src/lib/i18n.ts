@@ -12,6 +12,10 @@ export const SUPPORTED_LANGUAGES: { id: Language; label: string }[] = [
 export const DICTIONARY = {
   en: {
     // Common
+    'print.title': 'PDF export',
+    'print.failed': 'PDF export failed',
+    'print.continue': 'Continue',
+    'print.dialogNotice': 'PDF export opens the system print dialog. Choose Save to PDF (or Print to File). The app cannot confirm whether a file was saved.',
     'common.cancel': 'Cancel',
     'common.delete': 'Delete',
     'common.save': 'Save',
@@ -644,6 +648,10 @@ export const DICTIONARY = {
   },
   es: {
     // Common
+    'print.title': 'Exportar PDF',
+    'print.failed': 'No se pudo exportar el PDF',
+    'print.continue': 'Continuar',
+    'print.dialogNotice': 'La exportación PDF abre el diálogo de impresión del sistema. Elige Guardar como PDF (o Imprimir a archivo). La aplicación no puede confirmar si se guardó un archivo.',
     'common.cancel': 'Cancelar',
     'common.delete': 'Eliminar',
     'common.save': 'Guardar',

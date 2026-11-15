@@ -13,6 +13,7 @@ import { focusDocumentEnd, insertContentBox } from '../../lib/contentBoxes'
 import { EditorContextMenu, type EditorMenuItem } from './EditorContextMenu'
 import { selectionMarkdown } from './selectionMarkdown'
 import { SaveSnippetDialog } from '../snippets/SaveSnippetDialog'
+import { ConfirmDialog } from '../layout/ConfirmDialog'
 import { continueListNumbering, getPreviousOrderedList, restartListNumbering, setListStart } from './extensions/blockFormat'
 import { useTranslation } from '../../lib/i18n'
 import { useFormatPainterStore } from '../../stores/formatPainterStore'
@@ -36,6 +37,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
 
   const [menu, setMenu] = useState<{ x: number; y: number; markdown: string; actions: PluginContextAction[]; listActions: EditorMenuItem[]; context: PluginContextActionContext } | null>(null)
   const [snippetMarkdown, setSnippetMarkdown] = useState<string | null>(null)
+  const [startNumber, setStartNumber] = useState<string | null>(null)
 
   const editor = useEditor({
     extensions: EDITOR_EXTENSIONS,
@@ -195,13 +197,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
         {
           id: 'host.set-start-number',
           label: t('toolbar.setStartNumber'),
-          run: () => {
-            const input = window.prompt(t('toolbar.promptStartNumber'), String(currentStart))
-            if (input !== null) {
-              const val = parseInt(input.trim(), 10)
-              if (!isNaN(val) && val >= 1) setListStart(editor, val)
-            }
-          },
+          run: () => setStartNumber(String(currentStart)),
         },
       ] : []
 
@@ -260,6 +256,17 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
       </PageView></DocumentPathContext>
       {menu && <EditorContextMenu x={menu.x} y={menu.y} onClose={closeMenu} items={menuItems(menu)} />}
       {snippetMarkdown !== null && <SaveSnippetDialog markdown={snippetMarkdown} onClose={() => setSnippetMarkdown(null)} />}
+      {startNumber !== null && <ConfirmDialog title={t('toolbar.listStartNumber')}
+        message={t('toolbar.promptStartNumber')} cancelLabel={t('common.cancel')} confirmLabel={t('common.save')}
+        confirmDisabled={!/^\d+$/.test(startNumber.trim()) || !Number.isSafeInteger(Number(startNumber)) || Number(startNumber) < 1}
+        onCancel={() => setStartNumber(null)} onConfirm={() => {
+          if (editor) setListStart(editor, Number(startNumber))
+          setStartNumber(null)
+        }}>
+        <input type="number" min="1" step="1" aria-label={t('toolbar.listStartNumber')}
+          value={startNumber} onChange={event => setStartNumber(event.target.value)}
+          className="mt-3 w-full rounded border border-white/20 bg-neutral-800 p-2 text-inherit" />
+      </ConfirmDialog>}
     </>
   )
 }

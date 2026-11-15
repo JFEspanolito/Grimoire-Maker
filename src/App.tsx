@@ -22,6 +22,7 @@ import { useUnsavedClose } from './hooks/useUnsavedClose'
 import { MenuBar } from './components/layout/MenuBar'
 import { NewProjectDialog } from './components/project/NewProjectDialog'
 import { ContextMenu } from './components/layout/ContextMenu'
+import { PrintNoticeDialog } from './components/layout/PrintNoticeDialog'
 import { FindReplaceDialog } from './components/editor/FindReplaceDialog'
 import { FormulaDialog } from './components/editor/FormulaDialog'
 import styles from './App.module.css'
@@ -208,6 +209,7 @@ export default function App() {
           />
         )}
         <ToastHost />
+        <PrintNoticeDialog />
         <AppUpdateDialog />
         {contextMenu && (
           <ContextMenu
