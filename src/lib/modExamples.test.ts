@@ -13,6 +13,22 @@ import { MOD_EXAMPLES } from './modLibrary'
 import { parseDocument } from './frontmatter'
 import readme from '../../README.md?raw'
 
+it('lists every TTRPG rulebook chapter under its actual directory in Contents', () => {
+  const prefix = 'Templates/ttrpg-core-rulebook/'
+  const paths = Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`${prefix}chapters/`) && path.endsWith('.md'))
+  const expected = paths.map(path => path.slice(`${prefix}chapters/`.length).replace(/\.md$/, '')).sort()
+  const contents = MOD_EXAMPLES[`${prefix}index.md`].split('## Contents')[1]
+  let group = ''
+  const listed: string[] = []
+  for (const line of contents.split('\n')) {
+    const heading = /^- \*\*(.+)\*\*/.exec(line)
+    if (heading) group = heading[1]
+    const chapter = /^  - (.+)/.exec(line)
+    if (chapter) listed.push(`${group}/${chapter[1].trim()}`)
+  }
+  expect(listed.sort()).toEqual(expected)
+})
+
 it('documents the shipped template count and snippet category names', () => {
   const templates = Object.keys(MOD_EXAMPLES).filter(path => /^Templates\/[^/]+\/index\.md$/.test(path))
   expect(readme).toContain(`Built-in Project Templates (${templates.length} Complete Blueprints)`)
