@@ -36,6 +36,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   const [shown, setShown] = useState<{ src: string; url: string } | null>(null)
   const [failure, setFailure] = useState<{ src: string; message: string } | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
+  const [decoded, setDecoded] = useState<{ src: string; url: string } | null>(null)
   const stopDrag = useRef<(() => void) | null>(null)
   const imageRef = useRef<HTMLImageElement>(null)
   const [corner, setCorner] = useState<{ left: number; top: number } | null>(null)
@@ -319,6 +320,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     let created: string | null = null
     setShown(null)
     setFailure(null)
+    setDecoded(null)
     const timer = window.setTimeout(() => {
       cancelled = true
       const message = `Image loading timed out: ${src}`
@@ -360,6 +362,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       data-align={align}
       data-anchor={anchor}
       data-frame={frame}
+      data-image-state={error ? 'error' : url && decoded?.src === src && decoded?.url === url ? 'ready' : 'loading'}
       data-column-span={columnSpan === 'all' ? 'all' : undefined}
       data-selected={selected}
     >
@@ -379,8 +382,12 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
           data-width-mm={widthMm ?? undefined}
           style={imageStyle}
           onPointerDown={startDrag}
-          onLoad={placeHandle}
-          onError={() => setFailure({ src, message: `Unable to decode image: ${src}` })}
+          onLoad={() => { setDecoded({ src, url }); placeHandle() }}
+          onError={() => {
+            const message = `Unable to decode image: ${src}`
+            reportError('editor.image.load', new Error(message))
+            setFailure({ src, message })
+          }}
           onDragStart={(event) => { event.preventDefault(); event.stopPropagation() }}
         />
       ) : (

@@ -22,8 +22,15 @@ async function settled(host: HTMLElement) {
   const deadline = Date.now() + SETTLE_TIMEOUT_MS
   const ready = () => {
     const editor = host.querySelector('.ProseMirror')
-    if (!editor || /Loading image…/.test(editor.textContent ?? '')) return false
-    return Array.from(editor.querySelectorAll('img')).every((image) => image.complete)
+    if (!editor) return false
+    if (editor.querySelector('[data-image-state="error"]')) {
+      throw new Error('An image could not be loaded while preparing the document.')
+    }
+    if (editor.querySelector('[data-image-state="loading"]')) return false
+    return Array.from(editor.querySelectorAll('img')).every((image) => {
+      if (image.complete && !image.naturalWidth) throw new Error('An image could not be decoded while preparing the document.')
+      return image.complete
+    })
   }
   while (!ready()) {
     if (Date.now() > deadline) throw new Error('Images took too long to load while preparing the book.')

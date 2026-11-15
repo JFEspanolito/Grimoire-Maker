@@ -26,6 +26,22 @@ it('applies column span to the wrapper while preserving the image width', async 
   } finally { await act(async () => root.unmount()) }
 })
 
+it('marks an image ready only after decode and marks actual image load failures as errors', async () => {
+  mocks.load.mockResolvedValue('blob:map')
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  const props = { node: { attrs: { src: 'map.jpeg', anchor: 'flow' } }, selected: false } as unknown as NodeViewProps
+  try {
+    await act(async () => root.render(<ImageView {...props} />))
+    expect(container.querySelector('.grimoire-image')?.getAttribute('data-image-state')).toBe('loading')
+    await act(async () => container.querySelector('img')!.dispatchEvent(new Event('load')))
+    expect(container.querySelector('.grimoire-image')?.getAttribute('data-image-state')).toBe('ready')
+    await act(async () => container.querySelector('img')!.dispatchEvent(new Event('error')))
+    expect(container.querySelector('.grimoire-image')?.getAttribute('data-image-state')).toBe('error')
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Unable to decode image')
+  } finally { await act(async () => root.unmount()) }
+})
+
 it('expires a stalled read, retries successfully, and revokes late results', async () => {
   vi.useFakeTimers()
   let resolve!: (url: string) => void
@@ -37,8 +53,10 @@ it('expires a stalled read, retries successfully, and revokes late results', asy
   try {
     await act(async () => root.render(<ImageView {...props} />))
     expect(container.textContent).toContain('Loading image')
+    expect(container.querySelector('.grimoire-image')?.getAttribute('data-image-state')).toBe('loading')
     await act(async () => vi.advanceTimersByTimeAsync(15000))
     expect(container.textContent).toContain('timed out')
+    expect(container.querySelector('.grimoire-image')?.getAttribute('data-image-state')).toBe('error')
     await act(async () => container.querySelector<HTMLButtonElement>('button')!.click())
     expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:retry')
     await act(async () => resolve('blob:late'))

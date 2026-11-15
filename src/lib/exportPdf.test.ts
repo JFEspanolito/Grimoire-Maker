@@ -56,6 +56,29 @@ describe('PDF lifecycle', () => {
     expect(document.querySelector('.print-root')).toBeNull()
     expect(document.body.classList.contains('exporting')).toBe(false)
   })
+  it('aborts before removing image failure chips or invoking native export, and releases print state', async () => {
+    document.querySelector('.ProseMirror')!.innerHTML = '<div class="grimoire-image" data-image-state="error"><span class="grimoire-image-chip">Missing map</span></div>'
+    vi.mocked(invoke).mockResolvedValue(undefined)
+    await expect(exportPdf({ ...request, suggestedName: 'book.pdf' })).rejects.toThrow('image')
+    expect(invoke).not.toHaveBeenCalled()
+    expect(document.querySelector('.print-root')).toBeNull()
+    expect(document.body.classList.contains('exporting')).toBe(false)
+    expect(document.querySelector('.grimoire-image-chip')?.textContent).toBe('Missing map')
+    document.querySelector('.ProseMirror')!.innerHTML = '<div data-image-state="loading">Cargando…</div>'
+    await expect(exportPdf({ ...request, suggestedName: 'book.pdf' })).rejects.toThrow('still loading')
+    expect(invoke).not.toHaveBeenCalled()
+    document.querySelector('.ProseMirror')!.innerHTML = '<p>Recovered</p>'
+    await exportPdf({ ...request, suggestedName: 'book.pdf' })
+    expect(invoke).toHaveBeenCalledOnce()
+  })
+  it('validates image state in prepared book content before rendering any pages', async () => {
+    const content = document.createElement('div')
+    content.innerHTML = '<div data-image-state="error">Missing chapter image</div>'
+    await expect(exportPdf({ ...request, suggestedName: 'book.pdf' }, [content])).rejects.toThrow('image')
+    expect(renderNativePages).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalled()
+    expect(document.querySelector('.print-root')).toBeNull()
+  })
   it('excludes visual ruler guides from the paginated document', async () => {
     const guide = document.createElement('div')
     guide.dataset.rulerOverlay = 'true'

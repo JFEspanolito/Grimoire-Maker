@@ -154,6 +154,7 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
     body: template.body,
   })
   const [renderedHtml, setRenderedHtml] = useState<string>('')
+  const [renderError, setRenderError] = useState('')
 
   useEffect(() => {
     const el = dialog.current
@@ -216,12 +217,16 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
   // Render markdown body to HTML for preview
   useEffect(() => {
     let cancelled = false
+    setRenderError('')
     void renderDocumentHtml(previewContent.body, null)
       .then((html) => {
         if (!cancelled) setRenderedHtml(html)
       })
-      .catch(() => {
-        if (!cancelled) setRenderedHtml('')
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRenderedHtml('')
+          setRenderError(`Could not render template preview: ${error instanceof Error ? error.message : String(error)}`)
+        }
       })
     return () => { cancelled = true }
   }, [previewContent.body])
@@ -300,6 +305,7 @@ export function TemplatePreviewModal({ template, templates, hasProject, onClose,
             </div>
           </div>
           <div className={styles.previewViewport}>
+            {renderError && <p role="alert">{renderError}</p>}
             <div
               className={`grimoire-page grimoire-content ${styles.pageContainer}`}
               data-theme={theme}

@@ -72,12 +72,20 @@ function pageRules({ pageSize, bleedMm, marginMm, showPrintMarks }: PageRequest)
 @media print { .print-dialog-dismiss { display: none !important; } }`
 }
 
+/** Reject incomplete images before editor-only failure indicators are removed. */
+function assertImageState(content: HTMLElement): void {
+  if (content.matches('[data-image-state="error"]') || content.querySelector('[data-image-state="error"]')) throw new Error('An image could not be loaded for PDF export.')
+  if (content.matches('[data-image-state="loading"]') || content.querySelector('[data-image-state="loading"]')) throw new Error('An image is still loading. Wait before exporting PDF.')
+}
+
 /** Wraps rendered editor HTML as printable content, without the editor-only machinery. */
 export function printableContent(html: string, columns: number): HTMLElement {
   const content = document.createElement('div')
   content.className = 'grimoire-page'
   content.style.columnCount = String(columns)
   content.innerHTML = `<div class="grimoire-content"><div class="ProseMirror">${html}</div></div>`
+  // Validate before removing the editor's failure chips: otherwise a failed image disappears.
+  assertImageState(content)
   // Editor-only labels would add lines Paged.js measures but the printer never draws.
   content.querySelectorAll('.grimoire-image-chip').forEach((chip) => chip.remove())
   content.querySelectorAll('[data-editor-only], .grimoire-image-resize').forEach((control) => control.remove())
@@ -104,8 +112,10 @@ function buildContent(request: PageRequest): HTMLElement {
  * With no `contents` the active editor is the whole book. Returns the sheet count.
  */
 export async function renderBook(request: PageRequest, target: HTMLElement, contents?: HTMLElement[]): Promise<number> {
+  const documents = contents ?? [buildContent(request)]
+  documents.forEach(assertImageState)
   await prepareThemeBackgrounds(request.theme)
-  for (const content of contents ?? [buildContent(request)]) await renderNativePages(request, target, content)
+  for (const content of documents) await renderNativePages(request, target, content)
   return renumberSheets(request, target)
 }
 

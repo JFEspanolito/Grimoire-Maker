@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TemplatePreviewModal } from './TemplatePreviewModal'
 import type { Template } from '../../lib/templates'
+import { renderDocumentHtml } from '../editor/renderDocumentContent'
 
 vi.mock('../editor/renderDocumentContent', () => ({
   renderDocumentHtml: vi.fn(async (markdown: string) => `<div class="mocked-html">${markdown}</div>`),
@@ -49,6 +50,16 @@ describe('TemplatePreviewModal', () => {
     else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal')
     if (close) Object.defineProperty(HTMLDialogElement.prototype, 'close', close)
     else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close')
+  })
+
+  it('shows rendering failures instead of silently replacing the preview with raw Markdown', async () => {
+    vi.mocked(renderDocumentHtml).mockRejectedValueOnce(new Error('An image could not be loaded.'))
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(<TemplatePreviewModal template={template1} templates={[template1]} hasProject={true} onClose={vi.fn()} onApply={vi.fn()} />))
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain('An image could not be loaded.')
+    } finally { await act(async () => root.unmount()) }
   })
 
   it('renders modal with select box, files list, page preview, and action buttons', async () => {
