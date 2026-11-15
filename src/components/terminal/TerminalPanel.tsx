@@ -11,6 +11,16 @@ interface Props {
   workspace?: string | null
 }
 
+interface TerminalOutput { sessionId: string; data: string }
+interface TerminalExit { sessionId: string }
+// React effects can overlap while native IPC settles. Keep close/start ordered across mounts.
+let lifecycle: Promise<void> = Promise.resolve()
+function scheduleLifecycle(action: () => Promise<void>): Promise<void> {
+  const next = lifecycle.then(action)
+  lifecycle = next.catch(() => undefined)
+  return next
+}
+
 export function TerminalPanel({ workspace }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(240)
@@ -24,6 +34,15 @@ export function TerminalPanel({ workspace }: Props) {
     let isMounted = true
     let unlistenOutput: UnlistenFn | undefined
     let unlistenExit: UnlistenFn | undefined
+    let sessionId: string | null = null
+    const earlyEvents: Array<TerminalOutput | TerminalExit> = []
+    const receive = (payload: TerminalOutput | TerminalExit) => {
+      if (!isMounted) return
+      if (!sessionId) { earlyEvents.push(payload); return }
+      if (payload.sessionId !== sessionId) return
+      if ('data' in payload) term.write(payload.data)
+      else term.write('\r\n\x1b[33m[Process exited]\x1b[0m\r\n')
+    }
 
     const term = new Terminal({
       theme: {
@@ -53,27 +72,30 @@ export function TerminalPanel({ workspace }: Props) {
     if (isTauri()) {
       void (async () => {
         try {
-          unlistenOutput = await listen<string>('terminal-output', (event) => {
-            if (isMounted) term.write(event.payload)
-          })
-          unlistenExit = await listen('terminal-exit', () => {
-            if (isMounted) term.write('\r\n\x1b[33m[Process exited]\x1b[0m\r\n')
-          })
+          unlistenOutput = await listen<TerminalOutput>('terminal-output', (event) => receive(event.payload))
+          if (!isMounted) { unlistenOutput(); return }
+          unlistenExit = await listen<TerminalExit>('terminal-exit', (event) => receive(event.payload))
+          if (!isMounted) { unlistenExit(); return }
 
           term.onData((data) => {
-            void invoke('write_terminal', { data }).catch(() => {})
+            if (isMounted && sessionId) void invoke('write_terminal', { sessionId, data }).catch(() => {})
           })
 
           term.onResize(({ rows, cols }) => {
-            void invoke('resize_terminal', { rows, cols }).catch(() => {})
+            if (isMounted && sessionId) void invoke('resize_terminal', { sessionId, rows, cols }).catch(() => {})
           })
 
-          await invoke('spawn_terminal', {
-            options: {
-              cwd: workspace || undefined,
-              rows: term.rows || 24,
-              cols: term.cols || 80,
-            },
+          await scheduleLifecycle(async () => {
+            if (!isMounted) return
+            sessionId = await invoke<string>('spawn_terminal', {
+              options: { cwd: workspace || undefined, rows: term.rows || 24, cols: term.cols || 80 },
+            })
+            if (!isMounted) {
+              await invoke('close_terminal', { sessionId })
+              sessionId = null
+              return
+            }
+            earlyEvents.splice(0).forEach(receive)
           })
         } catch (error) {
           if (isMounted) {
@@ -110,9 +132,15 @@ export function TerminalPanel({ workspace }: Props) {
       if (unlistenOutput) unlistenOutput()
       if (unlistenExit) unlistenExit()
       term.dispose()
-      terminalRef.current = null
+      earlyEvents.length = 0
+      if (terminalRef.current === term) terminalRef.current = null
       if (isTauri()) {
-        void invoke('close_terminal').catch(() => {})
+        void scheduleLifecycle(async () => {
+          if (sessionId) {
+            await invoke('close_terminal', { sessionId })
+            sessionId = null
+          }
+        }).catch(() => {})
       }
     }
   }, [workspace])

@@ -1,5 +1,5 @@
-use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use serde::Deserialize;
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -7,13 +7,48 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
 
 pub struct ActiveSession {
+    id: String,
+    child: Box<dyn Child + Send + Sync>,
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
 }
 
+impl Drop for ActiveSession {
+    fn drop(&mut self) {
+        if !matches!(self.child.try_wait(), Ok(Some(_))) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct SessionSlot {
+    next_id: u64,
+    active_id: Option<String>,
+    session: Option<ActiveSession>,
+}
+
 #[derive(Default)]
 pub struct TerminalState {
-    pub session: Arc<Mutex<Option<ActiveSession>>>,
+    pub session: Arc<Mutex<SessionSlot>>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalOutput { session_id: String, data: String }
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TerminalExit { session_id: String }
+
+fn retire_session(sessions: &Mutex<SessionSlot>, id: &str) -> Result<(), String> {
+    let mut slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
+    if slot.active_id.as_deref() == Some(id) {
+        slot.active_id = None;
+        slot.session = None;
+    }
+    Ok(())
 }
 
 /// The page chooses only where the terminal opens and its size. The program it runs
@@ -65,145 +100,132 @@ pub async fn spawn_terminal(
     app: AppHandle,
     state: State<'_, TerminalState>,
     options: Option<SpawnOptions>,
-) -> Result<(), String> {
-    let state_path = crate::config_root::path(&app)?.join(crate::config::STATE_FILE);
-    let requested = options.as_ref().and_then(|o| o.cwd.clone());
-    let cwd = tauri::async_runtime::spawn_blocking(move || resolve_cwd(&state_path, requested.as_deref()))
-        .await
-        .map_err(|e| e.to_string())??;
-
-    let pty_system = native_pty_system();
-    let rows = options.as_ref().and_then(|o| o.rows).unwrap_or(24);
-    let cols = options.as_ref().and_then(|o| o.cols).unwrap_or(80);
-
-    let pair = pty_system
-        .openpty(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| format!("Failed to open PTY: {}", e))?;
-
-    let mut cmd = CommandBuilder::new(default_shell());
-    if let Some(cwd) = cwd {
-        cmd.cwd(cwd);
-    }
-
-    let _child = pair
-        .slave
-        .spawn_command(cmd)
-        .map_err(|e| format!("Failed to spawn shell: {}", e))?;
-
-    // Drop slave in the parent process so EOF works on child termination
-    drop(pair.slave);
-
-    let mut reader = pair
-        .master
-        .try_clone_reader()
-        .map_err(|e| format!("Failed to clone PTY reader: {}", e))?;
-
-    let writer = pair
-        .master
-        .take_writer()
-        .map_err(|e| format!("Failed to take PTY writer: {}", e))?;
-
-    let app_handle = app.clone();
-    std::thread::spawn(move || {
-        let mut buffer = [0u8; 4096];
-        while let Ok(n) = reader.read(&mut buffer) {
-            if n == 0 {
-                break;
+) -> Result<String, String> {
+    let sessions = state.session.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let state_path = crate::config_root::path(&app)?.join(crate::config::STATE_FILE);
+        let cwd = resolve_cwd(&state_path, options.as_ref().and_then(|o| o.cwd.as_deref()))?;
+        let mut slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
+        // Retire and reap the old child before starting its replacement.
+        slot.session = None;
+        slot.next_id += 1;
+        let id = slot.next_id.to_string();
+        slot.active_id = Some(id.clone());
+        let pair = native_pty_system().openpty(PtySize {
+            rows: options.as_ref().and_then(|o| o.rows).unwrap_or(24),
+            cols: options.as_ref().and_then(|o| o.cols).unwrap_or(80),
+            pixel_width: 0, pixel_height: 0,
+        }).map_err(|e| format!("Failed to open PTY: {e}"))?;
+        // Obtain fallible handles before spawning, so setup errors cannot orphan a child.
+        let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+        let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+        let mut cmd = CommandBuilder::new(default_shell());
+        if let Some(cwd) = cwd { cmd.cwd(cwd); }
+        let child = pair.slave.spawn_command(cmd).map_err(|e| format!("Failed to spawn shell: {e}"))?;
+        drop(pair.slave);
+        slot.session = Some(ActiveSession { id: id.clone(), child, writer, master: pair.master });
+        drop(slot);
+        let session_id = id.clone();
+        std::thread::spawn(move || {
+            let mut buffer = [0u8; 4096];
+            while let Ok(n) = reader.read(&mut buffer) {
+                if n == 0 { break; }
+                let data = String::from_utf8_lossy(&buffer[..n]).to_string();
+                if app.emit("terminal-output", TerminalOutput { session_id: session_id.clone(), data }).is_err() { break; }
             }
-            let chunk = String::from_utf8_lossy(&buffer[..n]).to_string();
-            if app_handle.emit("terminal-output", chunk).is_err() {
-                break;
-            }
+            drop(reader);
+            let _ = retire_session(&sessions, &session_id);
+            let _ = app.emit("terminal-exit", TerminalExit { session_id });
+        });
+        Ok(id)
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn write_terminal(state: State<'_, TerminalState>, session_id: String, data: String) -> Result<(), String> {
+    let sessions = state.session.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
+        if let Some(session) = slot.session.as_mut().filter(|s| s.id == session_id) {
+            session.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+            session.writer.flush().map_err(|e| e.to_string())?;
         }
-        let _ = app_handle.emit("terminal-exit", ());
-    });
-
-    let mut session_guard = state
-        .session
-        .lock()
-        .map_err(|_| "Failed to lock terminal state".to_string())?;
-
-    *session_guard = Some(ActiveSession {
-        writer,
-        master: pair.master,
-    });
-
-    Ok(())
+        Ok(())
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn write_terminal(
-    state: State<'_, TerminalState>,
-    data: String,
-) -> Result<(), String> {
-    let mut session_guard = state
-        .session
-        .lock()
-        .map_err(|_| "Failed to lock terminal state".to_string())?;
-
-    if let Some(session) = session_guard.as_mut() {
-        session
-            .writer
-            .write_all(data.as_bytes())
-            .map_err(|e| format!("Failed to write to terminal: {}", e))?;
-        session
-            .writer
-            .flush()
-            .map_err(|e| format!("Failed to flush terminal: {}", e))?;
-    }
-    Ok(())
+pub async fn resize_terminal(state: State<'_, TerminalState>, session_id: String, rows: u16, cols: u16) -> Result<(), String> {
+    let sessions = state.session.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
+        if let Some(session) = slot.session.as_ref().filter(|s| s.id == session_id) {
+            session.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub async fn resize_terminal(
-    state: State<'_, TerminalState>,
-    rows: u16,
-    cols: u16,
-) -> Result<(), String> {
-    let session_guard = state
-        .session
-        .lock()
-        .map_err(|_| "Failed to lock terminal state".to_string())?;
-
-    if let Some(session) = session_guard.as_ref() {
-        session
-            .master
-            .resize(PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| format!("Failed to resize terminal: {}", e))?;
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn close_terminal(state: State<'_, TerminalState>) -> Result<(), String> {
-    let mut session_guard = state
-        .session
-        .lock()
-        .map_err(|_| "Failed to lock terminal state".to_string())?;
-
-    *session_guard = None;
-    Ok(())
+pub async fn close_terminal(state: State<'_, TerminalState>, session_id: String) -> Result<(), String> {
+    let sessions = state.session.clone();
+    tauri::async_runtime::spawn_blocking(move || retire_session(&sessions, &session_id))
+        .await.map_err(|e| e.to_string())?
 }
 
 #[cfg(test)]
 mod terminal_tests {
     use super::*;
 
+    #[derive(Debug, Clone)]
+    struct TestChild(Arc<Mutex<Vec<&'static str>>>);
+    impl portable_pty::ChildKiller for TestChild {
+        fn kill(&mut self) -> std::io::Result<()> { self.0.lock().unwrap().push("kill"); Ok(()) }
+        fn clone_killer(&self) -> Box<dyn portable_pty::ChildKiller + Send + Sync> { Box::new(self.clone()) }
+    }
+    impl Child for TestChild {
+        fn try_wait(&mut self) -> std::io::Result<Option<portable_pty::ExitStatus>> { Ok(None) }
+        fn wait(&mut self) -> std::io::Result<portable_pty::ExitStatus> {
+            self.0.lock().unwrap().push("wait"); Ok(portable_pty::ExitStatus::with_exit_code(0))
+        }
+        fn process_id(&self) -> Option<u32> { None }
+        #[cfg(windows)]
+        fn as_raw_handle(&self) -> Option<std::os::windows::io::RawHandle> { None }
+    }
+    fn test_session(id: &str, events: Arc<Mutex<Vec<&'static str>>>) -> ActiveSession {
+        let pair = native_pty_system().openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 }).unwrap();
+        drop(pair.slave);
+        ActiveSession { id: id.into(), child: Box::new(TestChild(events)), writer: Box::new(Vec::<u8>::new()), master: pair.master }
+    }
+
+    #[test]
+    fn retired_children_are_killed_reaped_once_and_stale_cleanup_is_ignored() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sessions = Mutex::new(SessionSlot {
+            next_id: 2, active_id: Some("new".into()), session: Some(test_session("new", events.clone())),
+        });
+        retire_session(&sessions, "old").unwrap();
+        assert!(events.lock().unwrap().is_empty());
+        assert_eq!(sessions.lock().unwrap().session.as_ref().unwrap().id, "new");
+        retire_session(&sessions, "new").unwrap();
+        retire_session(&sessions, "new").unwrap();
+        assert_eq!(*events.lock().unwrap(), vec!["kill", "wait"]);
+        assert!(sessions.lock().unwrap().session.is_none());
+    }
+
+    #[test]
+    fn terminal_events_identify_the_session() {
+        assert_eq!(serde_json::to_value(TerminalOutput { session_id: "id".into(), data: "prompt".into() }).unwrap(),
+            serde_json::json!({ "sessionId": "id", "data": "prompt" }));
+        assert_eq!(serde_json::to_value(TerminalExit { session_id: "id".into() }).unwrap(),
+            serde_json::json!({ "sessionId": "id" }));
+    }
+
     #[test]
     fn terminal_state_defaults_to_none() {
         let state = TerminalState::default();
         let guard = state.session.lock().unwrap();
-        assert!(guard.is_none());
+        assert!(guard.session.is_none());
     }
 
     struct Scratch(std::path::PathBuf);
