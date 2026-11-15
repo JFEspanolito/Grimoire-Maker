@@ -42,3 +42,11 @@ describe('official-only plugin policy', () => {
     expect(installExternalPlugin).not.toHaveBeenCalled()
   })
 })
+
+describe('mod folder picker', () => {
+  it('asks for the whole picked folder, so its files can be read without broad home access', async () => {
+    vi.mocked(open).mockResolvedValueOnce('/downloads/my-theme')
+    await expect(pickModSource('folder', 'Themes')).resolves.toBe('/downloads/my-theme')
+    expect(open).toHaveBeenCalledWith({ directory: true, multiple: false, recursive: true })
+  })
+})

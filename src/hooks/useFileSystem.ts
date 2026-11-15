@@ -117,6 +117,18 @@ async function archiveDraft(root: string): Promise<{ from: string; to: string } 
   return { from: draft, to: archive }
 }
 
+/**
+ * The dialogs grant only the picked file. A document outside the open project also
+ * needs its folder, to show the images next to it and to create its `assets/` folder.
+ * Without that access the document still opens; only its images are unavailable.
+ */
+async function grantDocumentFolder(path: string): Promise<void> {
+  const root = useDocumentStore.getState().workspaceRoot
+  if (root && path.startsWith(`${root}/`)) return
+  try { await invoke('grant_document_folder', { path }) }
+  catch (error) { console.warn('Images next to this document are unavailable', error) }
+}
+
 export function useFileSystem() {
   const { loadFromRaw, setWorkspace } = useDocumentStore.getState()
 
@@ -141,9 +153,11 @@ export function useFileSystem() {
       path = `${draft}/untitled.md`
       for (let suffix = 1; await exists(path); suffix++) path = `${draft}/untitled-${suffix}.md`
     }
+    const picked = !path
     path ??= await save({ filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (!path) return false
     await writeTextFile(path, serializeDocument(snapshot.frontmatter, snapshot.body))
+    if (picked) await grantDocumentFolder(path)
     useDocumentStore.getState().markSnapshotSaved(path, snapshot)
     if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path, true)
     if (createdInDraft && useDocumentStore.getState().workspaceRoot === root) {
@@ -194,7 +208,7 @@ export function useFileSystem() {
 
   const openWorkspace = useCallback(async () => {
     if (!isTauri()) return
-    // `recursive` grants the fs scope to subfolders, needed outside $HOME/$DOCUMENT/$DESKTOP.
+    // `recursive` grants the fs scope to the whole project; nothing is reachable without a grant.
     const dir = await open({ directory: true, recursive: true })
     if (typeof dir !== 'string') return
     await runFileAction(() => activateWorkspace(dir.replaceAll('\\', '/')))
@@ -326,6 +340,7 @@ export function useFileSystem() {
       const selected = path ?? (await open({ filters: [{ name: 'Documents and images', extensions: ['md', 'txt', 'pdf', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'ico'] }] }))
       if (typeof selected !== 'string') return
       const target = selected.replaceAll('\\', '/')
+      await grantDocumentFolder(target)
       const current = useDocumentStore.getState().document
       if (useTabStore.getState().active === target) {
         useExplorerStore.getState().selectPath(target)

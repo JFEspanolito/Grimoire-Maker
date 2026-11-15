@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default window permissions: filesystem and dialogs",
+  "description": "Default window permissions: filesystem and dialogs. No folder is reachable by default: the config root, libraries, projects and picked files are granted at runtime.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -20,12 +20,6 @@
     "fs:allow-copy-file",
     "fs:allow-read-file",
     "fs:allow-write-file",
-    "fs:allow-stat",
-    {
-      "identifier": "fs:scope",
-      "allow": [{ "path": "$HOME/**" }, { "path": "$DOCUMENT/**" }, { "path": "$DESKTOP/**" },
-        { "path": "$APPCONFIG" },
-        { "path": "$APPCONFIG/**" }]
-    }
+    "fs:allow-stat"
   ]
 }

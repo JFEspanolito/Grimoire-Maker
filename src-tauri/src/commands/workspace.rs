@@ -1,9 +1,9 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tauri_plugin_fs::FsExt;
 
 fn normalize(path: &str) -> String {
@@ -45,6 +45,39 @@ pub fn restore_workspace(app: AppHandle, path: String) -> Result<(), String> {
     }
     app.fs_scope()
         .allow_directory(&path, true)
+        .map_err(|e| e.to_string())
+}
+
+/// The folder whose contents a standalone document may read: its own folder, but only
+/// for a file already in scope, and never the home folder or a drive root as a whole.
+fn document_folder(path: &Path, allowed: bool, home: Option<&Path>) -> Result<PathBuf, String> {
+    if !path.is_file() {
+        return Err(format!("\"{}\" is not an existing file", path.display()));
+    }
+    if !allowed {
+        return Err("Only a document you opened or saved can share its folder".into());
+    }
+    let folder = fs::canonicalize(path)
+        .map_err(|e| e.to_string())?
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or("The document has no folder")?;
+    let home = home.and_then(|home| fs::canonicalize(home).ok());
+    if folder.parent().is_none() || home.as_deref() == Some(folder.as_path()) {
+        return Err("Documents directly in your home folder or a drive root keep access to the file only".into());
+    }
+    Ok(path.parent().map(Path::to_path_buf).unwrap_or(folder))
+}
+
+/// Lets a document opened or saved outside a project read the images next to it
+/// (and create its `assets/` folder). The dialog only grants the file itself.
+#[tauri::command]
+pub fn grant_document_folder(app: AppHandle, path: String) -> Result<(), String> {
+    let file = Path::new(&path);
+    let home = app.path().home_dir().ok();
+    let folder = document_folder(file, app.fs_scope().is_allowed(file), home.as_deref())?;
+    app.fs_scope()
+        .allow_directory(&folder, true)
         .map_err(|e| e.to_string())
 }
 
@@ -274,6 +307,30 @@ pub fn delete_from_trash(app: AppHandle, path: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grants_the_folder_of_a_document_the_user_already_picked() {
+        let base = std::env::temp_dir().join(format!("grimoire-docfolder-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let notes = base.join("home/Notes");
+        fs::create_dir_all(&notes).unwrap();
+        fs::write(notes.join("chapter.md"), "# Chapter").unwrap();
+        fs::write(base.join("home/loose.md"), "# Loose").unwrap();
+        let home = base.join("home");
+
+        assert_eq!(document_folder(&notes.join("chapter.md"), true, Some(&home)).unwrap(), notes);
+        assert_eq!(
+            document_folder(&notes.join("chapter.md"), false, Some(&home)).unwrap_err(),
+            "Only a document you opened or saved can share its folder"
+        );
+        assert_eq!(
+            document_folder(&home.join("loose.md"), true, Some(&home)).unwrap_err(),
+            "Documents directly in your home folder or a drive root keep access to the file only"
+        );
+        assert!(document_folder(&notes, true, Some(&home)).is_err());
+        assert!(document_folder(&notes.join("missing.md"), true, Some(&home)).is_err());
+        let _ = fs::remove_dir_all(&base);
+    }
 
     #[test]
     fn renames_project_without_losing_files_or_session_paths() {

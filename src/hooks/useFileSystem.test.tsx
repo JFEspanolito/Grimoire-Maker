@@ -310,6 +310,33 @@ describe('switching Markdown files', () => {
     expect(useDocumentStore.getState().document.dirty).toBe(true)
   })
 
+  it('lets a document opened outside a project read the folder next to it', async () => {
+    vi.mocked(open).mockResolvedValueOnce('C:\\Notes\\loose.md')
+    await actions.openFile()
+    expect(invoke).toHaveBeenCalledWith('grant_document_folder', { path: 'C:/Notes/loose.md' })
+    expect(useDocumentStore.getState().document.path).toBe('C:/Notes/loose.md')
+  })
+
+  it('asks no folder access for a document inside the open project', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    await actions.openFile('/workspace/Draft/two.md')
+    expect(invoke).not.toHaveBeenCalledWith('grant_document_folder', expect.anything())
+  })
+
+  it('still opens the document when its folder cannot be shared', async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(new Error('Documents directly in your home folder or a drive root keep access to the file only'))
+    await actions.openFile('/home/loose.md')
+    expect(useDocumentStore.getState().document.path).toBe('/home/loose.md')
+  })
+
+  it('lets a document saved outside a project read the folder next to it', async () => {
+    useDocumentStore.getState().setBody('# Draft')
+    vi.mocked(save).mockResolvedValueOnce('/notes/new.md')
+    await actions.saveFile()
+    expect(writeTextFile).toHaveBeenCalledWith('/notes/new.md', expect.any(String))
+    expect(invoke).toHaveBeenCalledWith('grant_document_folder', { path: '/notes/new.md' })
+  })
+
   it('does not replace an unsaved document if Save As is cancelled', async () => {
     useDocumentStore.getState().loadFromRaw(null, '# Original')
     useDocumentStore.getState().setBody('# Edited')

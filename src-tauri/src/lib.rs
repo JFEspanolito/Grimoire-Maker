@@ -80,6 +80,7 @@ pub fn run() {
             commands::version_control::git_auto_commit,
             commands::version_control::git_init,
             commands::workspace::restore_workspace,
+            commands::workspace::grant_document_folder,
             commands::workspace::rename_workspace,
             commands::rename_references::snapshot_rename_references,
             commands::rename_references::commit_rename_references,
