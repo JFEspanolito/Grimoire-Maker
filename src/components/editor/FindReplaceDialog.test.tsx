@@ -292,7 +292,7 @@ describe('Project scope', () => {
 
   it('shows a plain message and searches again when the commit is rejected', async () => {
     const { container, buttons, click, unmount } = await project()
-    commitProjectReplace.mockRejectedValue(new Error('changed'))
+    commitProjectReplace.mockRejectedValue(new Error('A document changed since the search: /p/Draft/a.md. Search again.'))
     await act(async () => buttons().find((b) => b.textContent?.startsWith('Replace All'))!.click())
     snapshotProjectTexts.mockClear()
     await click('Yes, replace all')

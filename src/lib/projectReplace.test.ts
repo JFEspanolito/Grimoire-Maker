@@ -39,3 +39,9 @@ describe('projectReplace', () => {
     expect(outcome).toBe('Markdown inventory exceeds 5000 entries')
   })
 })
+it('retains the original native cause when snapshot and commit fail', async () => {
+  const failure = new Error('Permission denied')
+  invoke.mockRejectedValue(failure)
+  await expect(snapshotProjectTexts('/book')).rejects.toMatchObject({ cause: failure })
+  await expect(commitProjectReplace('/book', [])).rejects.toMatchObject({ cause: failure })
+})
