@@ -43,11 +43,37 @@ struct TerminalOutput { session_id: String, data: String }
 struct TerminalExit { session_id: String }
 
 fn retire_session(sessions: &Mutex<SessionSlot>, id: &str) -> Result<(), String> {
-    let mut slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
-    if slot.active_id.as_deref() == Some(id) {
+    let previous = {
+        let mut slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
+        if slot.active_id.as_deref() != Some(id) { return Ok(()); }
         slot.active_id = None;
-        slot.session = None;
+        slot.session.take()
+    };
+    // Child wait and ClosePseudoConsole may block: never run either under the state lock.
+    drop(previous);
+    Ok(())
+}
+
+fn reserve_session(sessions: &Mutex<SessionSlot>) -> Result<String, String> {
+    let (id, previous) = {
+        let mut slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
+        slot.next_id += 1;
+        let id = slot.next_id.to_string();
+        slot.active_id = Some(id.clone());
+        (id, slot.session.take())
+    };
+    drop(previous);
+    Ok(id)
+}
+
+fn install_session(sessions: &Mutex<SessionSlot>, session: ActiveSession) -> Result<(), String> {
+    let mut slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
+    if slot.active_id.as_deref() != Some(&session.id) {
+        drop(slot);
+        drop(session);
+        return Err("Terminal session was superseded before it started".into());
     }
+    slot.session = Some(session);
     Ok(())
 }
 
@@ -134,12 +160,8 @@ pub async fn spawn_terminal(
     tauri::async_runtime::spawn_blocking(move || {
         let state_path = crate::config_root::path(&app)?.join(crate::config::STATE_FILE);
         let cwd = resolve_cwd(&state_path, options.as_ref().and_then(|o| o.cwd.as_deref()))?;
-        let mut slot = sessions.lock().map_err(|_| "Failed to lock terminal state")?;
         // Retire and reap the old child before starting its replacement.
-        slot.session = None;
-        slot.next_id += 1;
-        let id = slot.next_id.to_string();
-        slot.active_id = Some(id.clone());
+        let id = reserve_session(&sessions)?;
         let pair = native_pty_system().openpty(PtySize {
             rows: options.as_ref().and_then(|o| o.rows).unwrap_or(24),
             cols: options.as_ref().and_then(|o| o.cols).unwrap_or(80),
@@ -152,8 +174,7 @@ pub async fn spawn_terminal(
         if let Some(cwd) = cwd { cmd.cwd(cwd); }
         let child = pair.slave.spawn_command(cmd).map_err(|e| format!("Failed to spawn shell: {e}"))?;
         drop(pair.slave);
-        slot.session = Some(ActiveSession { id: id.clone(), child, writer, master: pair.master });
-        drop(slot);
+        install_session(&sessions, ActiveSession { id: id.clone(), child, writer, master: pair.master })?;
         let session_id = id.clone();
         std::thread::spawn(move || {
             let mut buffer = [0u8; 4096];
@@ -251,6 +272,53 @@ mod terminal_tests {
         let pair = native_pty_system().openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 }).unwrap();
         drop(pair.slave);
         ActiveSession { id: id.into(), child: Box::new(TestChild(events)), writer: Box::new(Vec::<u8>::new()), master: pair.master }
+    }
+
+    struct DropProbe {
+        sessions: Arc<Mutex<SessionSlot>>,
+        unlocked: Arc<std::sync::atomic::AtomicBool>,
+    }
+    impl Write for DropProbe {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> { Ok(bytes.len()) }
+        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+    }
+    impl Drop for DropProbe {
+        fn drop(&mut self) {
+            self.unlocked.store(self.sessions.try_lock().is_ok(), std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    #[test]
+    fn terminal_teardown_releases_the_state_mutex_before_destroying_pty_handles() {
+      for replacement in [false, true] {
+        let sessions = Arc::new(Mutex::new(SessionSlot::default()));
+        let unlocked = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let mut session = test_session("old", Arc::new(Mutex::new(Vec::new())));
+        session.writer = Box::new(DropProbe { sessions: sessions.clone(), unlocked: unlocked.clone() });
+        {
+            let mut slot = sessions.lock().unwrap();
+            slot.active_id = Some("old".into()); slot.session = Some(session);
+        }
+        if replacement { reserve_session(&sessions).unwrap(); }
+        else { retire_session(&sessions, "old").unwrap(); }
+        assert!(unlocked.load(std::sync::atomic::Ordering::SeqCst), "PTY destruction ran while the session mutex was held");
+      }
+    }
+
+    #[test]
+    fn a_delayed_start_cannot_replace_or_close_a_newer_reservation() {
+        let sessions = Mutex::new(SessionSlot::default());
+        let first = reserve_session(&sessions).unwrap();
+        let second = reserve_session(&sessions).unwrap();
+        let old_events = Arc::new(Mutex::new(Vec::new()));
+        assert!(install_session(&sessions, test_session(&first, old_events.clone())).is_err());
+        assert_eq!(*old_events.lock().unwrap(), vec!["kill", "wait"]);
+        let current_events = Arc::new(Mutex::new(Vec::new()));
+        install_session(&sessions, test_session(&second, current_events.clone())).unwrap();
+        retire_session(&sessions, &first).unwrap();
+        assert!(current_events.lock().unwrap().is_empty());
+        assert_eq!(sessions.lock().unwrap().active_id.as_deref(), Some(second.as_str()));
+        retire_session(&sessions, &second).unwrap();
+        assert_eq!(*current_events.lock().unwrap(), vec!["kill", "wait"]);
     }
 
     #[test]
