@@ -15,6 +15,18 @@ function job(name) {
 }
 
 describe('release workflow coordination', () => {
+  it('pins every external action to a full commit and keeps release privileges scoped', () => {
+    for (const { source } of workflows) {
+      for (const [, reference] of source.matchAll(/uses:\s*([^\s#]+)/g)) {
+        if (!reference.startsWith('./')) expect(reference).toMatch(/^[\w.-]+\/[\w./-]+@[a-f0-9]{40}$/)
+      }
+      expect(source).toMatch(/permissions:\s*\n\s+contents: read/)
+    }
+    expect(job('build')).not.toContain('contents: write')
+    expect(job('publish')).toContain('contents: write')
+    expect(job('publish')).not.toContain('TAURI_SIGNING_PRIVATE_KEY')
+    expect(release).not.toContain('secrets: inherit')
+  })
   it('validates release tags as data and rejects shell payloads before publication', () => {
     const publisher = job('publish')
     const script = publisher.match(/node --input-type=module <<'VALIDATE_TAG'\r?\n([\s\S]*?)\r?\n\s+VALIDATE_TAG/)?.[1]
