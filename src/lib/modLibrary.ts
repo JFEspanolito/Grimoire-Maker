@@ -6,14 +6,10 @@ import { loadLibraryPaths, type LibraryPaths } from './preferences'
 import { installOfficialPlugin, listOfficialPlugins } from './officialPlugins'
 import type { MigrationFs } from './migratedPlugins'
 
-const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/{Plugins,Legacy}/**/*.{ts,tsx,js,css,json}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
-const allExamples = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
-/** Everything that is seeded or restorable. Legacy sources are never part of it. */
-export const MOD_EXAMPLES = Object.fromEntries(Object.entries(allExamples).filter(([path]) => !path.startsWith('Legacy/')))
+const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/Plugins/**/*.{ts,tsx,js,css,json}', '!../assets/mods/Legacy/**'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+export const MOD_EXAMPLES = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
 /** Plugins that are seeded and offered for restore, including the Zoom and Pixel Ruler packages. */
 export const OFFICIAL_PLUGINS = listOfficialPlugins(MOD_EXAMPLES)
-/** The old trusted sources of plugins that became packages; never seeded, only the baseline for untouched-copy checks. */
-export const LEGACY_PLUGINS = listOfficialPlugins(allExamples, 'Legacy')
 export const modFs: ModFs = {
   exists, readDir, readTextFile, stat,
   mkdir: (path) => mkdir(path, { recursive: true }),

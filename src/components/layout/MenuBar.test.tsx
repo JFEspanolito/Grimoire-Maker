@@ -15,7 +15,7 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useFindStore } from '../../stores/findStore'
-import zoomPlugin from '../../assets/mods/Legacy/zoom/zoom'
+import zoomPlugin from '../../lib/__fixtures__/legacy-plugins/zoom/zoom'
 import { registerPlugin } from '../../plugins/plugin-manager'
 
 const openWorkspace = vi.hoisted(() => vi.fn())

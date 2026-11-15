@@ -29,9 +29,10 @@ vi.mock('@tauri-apps/plugin-fs', async () => {
   }
 })
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: async () => scope.picked, save: async () => scope.saved }))
+import { LEGACY_PLUGINS } from './__fixtures__/legacy-plugins/catalog'
 import { createTemplateZip, readTemplateZip } from './templatePackage'
 import { importTemplateZip, exportTemplateZip, applyTemplateFiles } from './templateActions'
-import { prepareModLibrary, MOD_EXAMPLES, LEGACY_PLUGINS } from './modLibrary'
+import { prepareModLibrary, MOD_EXAMPLES } from './modLibrary'
 import { useModStore } from '../stores/modStore'
 import { useTemplateStore } from '../stores/templateStore'
 import { loadUserTemplates } from './templates'
