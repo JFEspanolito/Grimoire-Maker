@@ -73,7 +73,7 @@ pub(crate) fn prepare_metadata(
 }
 
 /// Extends only an already authorized project directory, never arbitrary hidden paths.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn prepare_project_metadata(
     app: tauri::AppHandle,
     root: String,

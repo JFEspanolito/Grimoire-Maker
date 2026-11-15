@@ -35,7 +35,7 @@ fn is_remembered(app: &AppHandle, path: &str) -> Result<bool, String> {
 /// folder outside `$HOME` would be unreadable after a restart. Access is limited to
 /// folders already recorded as recent workspaces, so this command cannot be used to
 /// widen the scope to an arbitrary path.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn restore_workspace(app: AppHandle, path: String) -> Result<(), String> {
     if !Path::new(&path).is_dir() {
         return Err(format!("\"{path}\" is not an existing folder"));
@@ -197,7 +197,7 @@ fn rename_workspace_in(
 }
 
 /// Renames only the active remembered project, including its persisted workspace and file paths.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_workspace(app: AppHandle, path: String, name: String) -> Result<String, String> {
     let state_path = crate::config_root::path(&app)?
         .join(crate::config::STATE_FILE);
@@ -306,7 +306,7 @@ fn recycle_from_trash_in(
 }
 
 /// Permanently removes a Trash item from the project by moving it to the system recycle bin.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_from_trash(app: AppHandle, path: String) -> Result<(), String> {
     let state_path = crate::config_root::path(&app)?
         .join(crate::config::STATE_FILE);
