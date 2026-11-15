@@ -11,6 +11,30 @@ import { useModStore } from '../../stores/modStore'
 import { useToastStore } from '../../stores/toastStore'
 import { registerPlugin } from '../../plugins/plugin-manager'
 import type { PluginContextAction } from '../../types/plugin'
+import { useFormatPainterStore } from '../../stores/formatPainterStore'
+
+it('cancels pending format painting when the editor unmounts', async () => {
+  useDocumentStore.getState().loadFromRaw('/book/paint.md', 'Text')
+  const container = document.body.appendChild(document.createElement('div'))
+  root = createRoot(container)
+  let editor!: Editor
+  const apply = useFormatPainterStore.getState().apply
+  const applySpy = vi.fn(() => true)
+  try {
+    await act(async () => root?.render(<EditorCanvas onReady={value => { editor = value }} />))
+    await act(async () => useFormatPainterStore.setState({ armed: true, apply: applySpy }))
+    vi.useFakeTimers()
+    await act(async () => editor.view.dom.dispatchEvent(new MouseEvent('pointerup', { bubbles: true })))
+    await act(async () => root?.unmount()); root = null
+    useFormatPainterStore.setState({ armed: true })
+    await act(async () => vi.advanceTimersByTime(20))
+    expect(applySpy).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+    useFormatPainterStore.setState({ armed: false, format: null, apply })
+    container.remove()
+  }
+})
 
 const snippetMocks = vi.hoisted(() => ({ save: vi.fn() }))
 vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: snippetMocks.save }))

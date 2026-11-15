@@ -216,10 +216,13 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     let dom: HTMLElement
     try { dom = editor.view.dom } catch { return }
 
+    let pendingPaint: ReturnType<typeof setTimeout> | undefined
     const onPointerUp = (event: globalThis.MouseEvent) => {
       if (dom.contains(event.target as Node)) {
-        setTimeout(() => {
-          if (useFormatPainterStore.getState().armed) {
+        clearTimeout(pendingPaint)
+        pendingPaint = setTimeout(() => {
+          pendingPaint = undefined
+          if (!editor.isDestroyed && useFormatPainterStore.getState().armed) {
             useFormatPainterStore.getState().apply(editor)
           }
         }, 10)
@@ -235,6 +238,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     document.addEventListener('pointerup', onPointerUp)
     document.addEventListener('keydown', onKeyDown)
     return () => {
+      clearTimeout(pendingPaint)
       document.removeEventListener('pointerup', onPointerUp)
       document.removeEventListener('keydown', onKeyDown)
     }
