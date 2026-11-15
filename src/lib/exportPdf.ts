@@ -24,8 +24,8 @@ export interface PageRequest {
 }
 
 export interface ExportRequest extends PageRequest {
-  /** Absolute destination chosen by the user (`.pdf`). */
-  outputPath?: string
+  /** Filename suggestion only; Rust owns destination selection. */
+  suggestedName?: string
   route?: PdfRoute
 }
 
@@ -158,14 +158,13 @@ export async function exportPdf(request: ExportRequest, contents?: HTMLElement[]
       await printDialog()
       return
     }
-    if (!request.outputPath) throw new Error('PDF output path is required')
     const { widthMm, heightMm } = PAGE_SIZES[request.pageSize]
     await invoke('export_pdf', {
       options: {
         pageWidthMm: widthMm,
         pageHeightMm: heightMm,
         bleedMm: request.bleedMm,
-        outputPath: request.outputPath,
+        suggestedName: request.suggestedName,
       },
     })
   } finally {

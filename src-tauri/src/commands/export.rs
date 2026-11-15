@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
+use tauri::Manager;
+use tauri_plugin_dialog::DialogExt;
 
 /// The dialog route does not promise a destination or a successful saved file.
 #[tauri::command]
@@ -14,8 +16,7 @@ pub fn pdf_export_route() -> &'static str {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug)]
 pub struct ExportOptions {
     /// Trim (finished) page size in millimetres, without bleed.
     pub page_width_mm: f64,
@@ -23,6 +24,44 @@ pub struct ExportOptions {
     pub bleed_mm: f64,
     /// Destination chosen by the user; must end in `.pdf`.
     pub output_path: String,
+}
+
+/// The renderer supplies layout and a filename suggestion, never a destination.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExportRequest {
+    page_width_mm: f64,
+    page_height_mm: f64,
+    bleed_mm: f64,
+    suggested_name: Option<String>,
+}
+
+fn suggested_filename(value: Option<&str>) -> String {
+    let name = value.unwrap_or("document.pdf").rsplit(['/', '\\']).next().unwrap_or("");
+    let name: String = name.chars().map(|c| {
+        if c.is_control() || ":*?\"<>|".contains(c) { '_' } else { c }
+    }).collect();
+    let name = name.trim().trim_matches('.');
+    if name.is_empty() { return "document.pdf".into(); }
+    if name.to_ascii_lowercase().ends_with(".pdf") { name.into() } else { format!("{name}.pdf") }
+}
+
+fn select_export_options(
+    request: ExportRequest,
+    pick: impl FnOnce(&str) -> Result<Option<PathBuf>, String>,
+) -> Result<Option<ExportOptions>, String> {
+    crate::pdf::validate_page_size(request.page_width_mm, request.page_height_mm, request.bleed_mm)?;
+    let Some(path) = pick(&suggested_filename(request.suggested_name.as_deref()))? else {
+        return Ok(None);
+    };
+    let options = ExportOptions {
+        page_width_mm: request.page_width_mm,
+        page_height_mm: request.page_height_mm,
+        bleed_mm: request.bleed_mm,
+        output_path: path.to_str().ok_or("PDF destination is not valid Unicode")?.into(),
+    };
+    crate::pdf::validate(&options)?;
+    Ok(Some(options))
 }
 
 fn open_pdf_in(path: &Path, launch: impl FnOnce(&Path) -> Result<(), String>) -> Result<(), String> {
@@ -61,8 +100,17 @@ fn open_exported_pdf(path: &Path) -> Result<(), String> {
 #[tauri::command]
 pub async fn export_pdf(
     window: tauri::WebviewWindow,
-    options: ExportOptions,
+    options: ExportRequest,
 ) -> Result<(), String> {
+    let app = window.app_handle().clone();
+    let options = tauri::async_runtime::spawn_blocking(move || {
+        select_export_options(options, |name| {
+            app.dialog().file().set_title("Export PDF").add_filter("PDF", &["pdf"])
+                .set_file_name(name).blocking_save_file()
+                .map(|file| file.into_path().map_err(|error| error.to_string())).transpose()
+        })
+    }).await.map_err(|error| error.to_string())??;
+    let Some(options) = options else { return Ok(()); };
     crate::pdf::render(&window, &options).await?;
     open_exported_pdf(Path::new(&options.output_path))
 }
@@ -70,6 +118,36 @@ pub async fn export_pdf(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn export_ipc_cannot_choose_the_output_path() {
+        let payload = serde_json::json!({
+            "pageWidthMm": 210.0, "pageHeightMm": 297.0, "bleedMm": 0.0,
+            "outputPath": "C:/arbitrary/book.pdf"
+        });
+        assert!(serde_json::from_value::<ExportRequest>(payload).is_err());
+    }
+
+    #[test]
+    fn export_uses_only_the_native_selection_and_preserves_cancel() {
+        let request = || ExportRequest {
+            page_width_mm: 210.0, page_height_mm: 297.0, bleed_mm: 3.0,
+            suggested_name: Some("C:\\untrusted\\suggested.pdf".into()),
+        };
+        assert!(select_export_options(request(), |name| {
+            assert_eq!(name, "suggested.pdf");
+            Ok(None)
+        }).unwrap().is_none());
+        let selected = select_export_options(request(), |_| Ok(Some(PathBuf::from("chosen.pdf"))))
+            .unwrap().unwrap();
+        assert_eq!(selected.output_path, "chosen.pdf");
+        assert_eq!(selected.bleed_mm, 3.0);
+        let mut oversized = request();
+        oversized.page_width_mm = 1000.0;
+        assert!(select_export_options(oversized, |_| panic!("invalid paper must not open a dialog")).is_err());
+        assert_eq!(suggested_filename(Some("../bad:name")), "bad_name.pdf");
+        assert_eq!(suggested_filename(Some("../..")), "document.pdf");
+    }
 
     #[test]
     fn opens_exported_pdf_with_native_path_and_rejects_non_pdf_targets() {

@@ -13,13 +13,21 @@ use crate::commands::export::ExportOptions;
 #[cfg(windows)]
 mod webview2;
 
-fn validate(options: &ExportOptions) -> Result<(), String> {
-    let sizes_ok = [options.page_width_mm, options.page_height_mm]
+pub(crate) fn validate_page_size(width: f64, height: f64, bleed: f64) -> Result<(), String> {
+    let sizes_ok = [width, height]
         .iter()
         .all(|v| v.is_finite() && *v > 0.0);
-    if !sizes_ok || !options.bleed_mm.is_finite() || options.bleed_mm < 0.0 {
+    if !sizes_ok || !bleed.is_finite() || bleed < 0.0 {
         return Err("Invalid page size or bleed".into());
     }
+    if width + 2.0 * bleed > 1000.0 || height + 2.0 * bleed > 1000.0 {
+        return Err("PDF paper dimensions including bleed must not exceed 1000 mm".into());
+    }
+    Ok(())
+}
+
+pub(crate) fn validate(options: &ExportOptions) -> Result<(), String> {
+    validate_page_size(options.page_width_mm, options.page_height_mm, options.bleed_mm)?;
     let path = Path::new(&options.output_path);
     if !path
         .extension()
@@ -43,5 +51,32 @@ pub async fn render(window: &WebviewWindow, options: &ExportOptions) -> Result<(
     {
         let _ = window;
         Err("Use the system print dialog to save a PDF on this platform".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paper_size_including_bleed_is_bounded_before_rendering() {
+        let mut options = ExportOptions {
+            page_width_mm: 1000.0, page_height_mm: 1000.0, bleed_mm: 0.0,
+            output_path: "book.pdf".into(),
+        };
+        assert!(validate(&options).is_ok());
+        options.bleed_mm = 0.1;
+        assert!(validate(&options).is_err(), "bleed must count towards the paper limit");
+        options.bleed_mm = 0.0;
+        options.page_width_mm = 1000.1;
+        assert!(validate(&options).is_err());
+        options.page_width_mm = 210.0;
+        options.page_height_mm = 1000.1;
+        assert!(validate(&options).is_err());
+        options.page_height_mm = 297.0;
+        for invalid in [f64::NAN, f64::INFINITY, -1.0] {
+            options.bleed_mm = invalid;
+            assert!(validate(&options).is_err());
+        }
     }
 }

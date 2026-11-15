@@ -1,5 +1,4 @@
 import { useRef } from 'react'
-import { save } from '@tauri-apps/plugin-dialog'
 import { invoke } from '@tauri-apps/api/core'
 import { exportPdf, PDF_ROUTE, type PdfRoute } from '../lib/exportPdf'
 import { defaultPdfName, pageRequest, type BookPlan } from '../lib/exportSettings'
@@ -19,15 +18,10 @@ export function usePrint() {
     pending.current = true
     try {
       const route = isTauri() ? await invoke<PdfRoute>('pdf_export_route') : PDF_ROUTE.DIALOG
-      const outputPath = route === PDF_ROUTE.FILE ? await save({
-        defaultPath: `${defaultPdfName(book?.plan)}.pdf`,
-        filters: [{ name: 'PDF', extensions: ['pdf'] }],
-      }) : undefined
-      if (route === PDF_ROUTE.FILE && !outputPath) return
       if (route === PDF_ROUTE.DIALOG) {
         window.alert('PDF export opens the system print dialog. Choose Save to PDF (or Print to File). The app cannot confirm whether a file was saved.')
       }
-      const request = { ...pageRequest(book?.plan), outputPath: outputPath ?? undefined, route }
+      const request = { ...pageRequest(book?.plan), suggestedName: route === PDF_ROUTE.FILE ? `${defaultPdfName(book?.plan)}.pdf` : undefined, route }
       if (book) await exportPdf(request, book.contents)
       else await exportPdf(request)
     } catch (e) {

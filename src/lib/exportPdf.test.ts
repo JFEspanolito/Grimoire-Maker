@@ -27,8 +27,11 @@ describe('PDF lifecycle', () => {
   it('keeps paginated content through native PDF completion', async () => {
     let finish!: () => void
     vi.mocked(invoke).mockReturnValue(new Promise<void>((resolve) => { finish = resolve }))
-    const pending = exportPdf({ ...request, outputPath: '/book.pdf' })
+    const pending = exportPdf({ ...request, suggestedName: 'book.pdf' })
     await vi.waitFor(() => expect(invoke).toHaveBeenCalled())
+    expect(invoke).toHaveBeenCalledWith('export_pdf', {
+      options: { pageWidthMm: 210, pageHeightMm: 297, bleedMm: 0, suggestedName: 'book.pdf' },
+    })
     expect(document.querySelector('.print-root')).not.toBeNull()
     finish()
     await pending
@@ -49,7 +52,7 @@ describe('PDF lifecycle', () => {
   })
   it('cleans styles and print DOM after native failure', async () => {
     vi.mocked(invoke).mockRejectedValueOnce(new Error('Printer failed'))
-    await expect(exportPdf({ ...request, outputPath: '/book.pdf' })).rejects.toThrow('Printer failed')
+    await expect(exportPdf({ ...request, suggestedName: 'book.pdf' })).rejects.toThrow('Printer failed')
     expect(document.querySelector('.print-root')).toBeNull()
     expect(document.body.classList.contains('exporting')).toBe(false)
   })
@@ -59,7 +62,7 @@ describe('PDF lifecycle', () => {
     guide.textContent = 'Editor-only row guide'
     document.body.append(guide)
     vi.mocked(invoke).mockResolvedValueOnce(undefined)
-    await exportPdf({ ...request, outputPath: '/book.pdf' })
+    await exportPdf({ ...request, suggestedName: 'book.pdf' })
     const content = vi.mocked(renderNativePages).mock.calls[0]![2]
     expect(content.textContent).toBe('Text')
     expect(content.querySelector('[data-ruler-overlay]')).toBeNull()
@@ -68,7 +71,7 @@ describe('PDF lifecycle', () => {
   it('preserves box layout and children without editing controls, selection, or node-view wrappers', async () => {
     document.querySelector('.ProseMirror')!.innerHTML = '<div class="grimoire-content-box ProseMirror-selectednode" data-placement="free" data-selected="true" style="position:absolute;left:12mm;top:18mm;width:80mm"><div data-editor-only="true">Move content box</div><div data-node-view-content-react><div data-node-view-content><h2>Grouped</h2><table><tbody><tr><td>Kept</td></tr></tbody></table></div></div></div>'
     vi.mocked(invoke).mockResolvedValueOnce(undefined)
-    await exportPdf({ ...request, outputPath: '/book.pdf' })
+    await exportPdf({ ...request, suggestedName: 'book.pdf' })
     const content = vi.mocked(renderNativePages).mock.calls[0]![2]
     const box = content.querySelector<HTMLElement>('.grimoire-content-box')!
     expect(box.textContent).toBe('GroupedKept')
@@ -87,7 +90,7 @@ describe('PDF lifecycle', () => {
     const pending = exportPdf({ ...request, route: 'dialog' })
     await vi.waitFor(() => expect(window.print).toHaveBeenCalled())
     expect(vi.mocked(renderNativePages).mock.calls[0]![2].textContent).toContain('Active pane')
-    await expect(exportPdf({ ...request, outputPath: '/another.pdf' })).rejects.toThrow('already running')
+    await expect(exportPdf({ ...request, suggestedName: 'another.pdf' })).rejects.toThrow('already running')
     expect(document.querySelectorAll('.print-root')).toHaveLength(1)
     document.querySelector<HTMLButtonElement>('.print-dialog-dismiss')!.click()
     await pending
@@ -95,7 +98,7 @@ describe('PDF lifecycle', () => {
   })
   it('never falls back to an inactive document when the managed active pane is empty', async () => {
     document.body.innerHTML = '<section data-active-editor="false"><div class="grimoire-content"><div class="ProseMirror">Inactive document</div></div></section><section data-active-editor="true"></section>'
-    await expect(exportPdf({ ...request, outputPath: '/book.pdf' })).rejects.toThrow('Editor content not found')
+    await expect(exportPdf({ ...request, suggestedName: 'book.pdf' })).rejects.toThrow('Editor content not found')
     expect(invoke).not.toHaveBeenCalled()
     expect(document.querySelector('.print-root')).toBeNull()
   })

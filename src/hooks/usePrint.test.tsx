@@ -39,19 +39,19 @@ it('does not export an inactive Markdown editor while a binary preview is focuse
   expect(save).not.toHaveBeenCalled()
   expect(exportPdf).not.toHaveBeenCalled()
 })
-it('preserves Windows save-path export and cancel', async () => {
+it('delegates Windows destination selection to Rust with only a filename suggestion', async () => {
   vi.mocked(invoke).mockResolvedValue('file')
-  vi.mocked(save).mockResolvedValueOnce('/book.pdf').mockResolvedValueOnce(null)
   await print()
-  expect(exportPdf).toHaveBeenCalledWith(expect.objectContaining({ route: 'file', outputPath: '/book.pdf' }))
-  await print()
+  expect(exportPdf).toHaveBeenCalledWith(expect.objectContaining({ route: 'file', suggestedName: expect.stringMatching(/\.pdf$/) }))
+  expect(vi.mocked(exportPdf).mock.calls[0]![0]).not.toHaveProperty('outputPath')
+  expect(save).not.toHaveBeenCalled()
   expect(exportPdf).toHaveBeenCalledOnce()
 })
 it('uses the print-dialog route without requesting or promising a saved filename', async () => {
   vi.mocked(invoke).mockResolvedValue('dialog')
   await print()
   expect(save).not.toHaveBeenCalled()
-  expect(exportPdf).toHaveBeenCalledWith(expect.objectContaining({ route: 'dialog', outputPath: undefined }))
+  expect(exportPdf).toHaveBeenCalledWith(expect.objectContaining({ route: 'dialog', suggestedName: undefined }))
   expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('cannot confirm'))
 })
 it('prevents duplicate actions and releases the lock after failure', async () => {
