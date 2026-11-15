@@ -1,5 +1,6 @@
 // Generates or updates the official Tauri v2 static update manifest (latest.json).
 // Scans the bundle output directory for signed updater bundles (*.sig) and builds the platforms map.
+// Windows prefers the signed Tauri v2 EXE over a legacy NSIS ZIP; ambiguous preferred bundles fail.
 //
 // Usage:
 //   node scripts/generate-update-manifest.mjs [--tag <tag>] [--version <version>] [--bundle-dir <path>] [--out <path>] [--notes <notes>] [--existing <path>]
@@ -66,7 +67,6 @@ export function detectPlatforms(filename) {
 }
 
 export function createManifest({
-  version,
   tag,
   notes = '',
   bundles = [],
@@ -85,9 +85,19 @@ export function createManifest({
   if (!manifest.pub_date) manifest.pub_date = pubDate
   if (!manifest.platforms) manifest.platforms = {}
 
+  const windowsBundles = bundles.filter(bundle => detectPlatforms(bundle.bundleFileName).includes('windows-x86_64'))
+  const windowsExecutables = windowsBundles.filter(bundle => bundle.bundleFileName.toLowerCase().endsWith('.exe'))
+  const preferredWindows = windowsExecutables.length > 0 ? windowsExecutables : windowsBundles
+  const distinctWindows = new Map(preferredWindows.map(bundle => [resolve(bundle.bundlePath), bundle]))
+  if (distinctWindows.size > 1) {
+    throw new Error('Ambiguous signed updater bundles for windows-x86_64: expected one preferred EXE or one legacy ZIP')
+  }
+  const selectedWindows = distinctWindows.values().next().value
+
   for (const bundle of bundles) {
-    const signature = readFileSync(bundle.sigPath, 'utf8').trim()
     const platforms = detectPlatforms(bundle.bundleFileName)
+    if (platforms.includes('windows-x86_64') && resolve(bundle.bundlePath) !== resolve(selectedWindows.bundlePath)) continue
+    const signature = readFileSync(bundle.sigPath, 'utf8').trim()
     if (bundle.bundleFileName.toLowerCase().endsWith('.app.tar.gz') && platforms.length === 0) {
       throw new Error(`macOS updater bundle needs an explicit architecture or _universal suffix: ${bundle.bundleFileName}`)
     }
@@ -130,7 +140,6 @@ export function generateManifest(options = {}) {
 
   const bundles = findSignedBundles(bundleDir)
   const manifest = createManifest({
-    version,
     tag,
     notes: options.notes,
     bundles,

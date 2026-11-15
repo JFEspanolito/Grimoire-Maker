@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -93,14 +93,20 @@ describe('release workflow coordination', () => {
   })
   it('combines the signed updater bundles from both platforms without existing release state', () => {
     const scratch = mkdtempSync(join(tmpdir(), 'grimoire-release-manifest-'))
-    console.info(`release manifest scratch retained: ${scratch}`)
-    for (const [name, signature] of [['Book_x64-setup.exe', 'windows-signature'], ['Book_universal.app.tar.gz', 'mac-signature']]) {
-      writeFileSync(join(scratch, name), 'bundle')
-      writeFileSync(join(scratch, `${name}.sig`), signature)
+    const ownedFiles = []
+    try {
+      for (const [name, signature] of [['Book_x64-setup.exe', 'windows-signature'], ['Book_universal.app.tar.gz', 'mac-signature']]) {
+        ownedFiles.push(join(scratch, name), join(scratch, `${name}.sig`))
+        writeFileSync(join(scratch, name), 'bundle')
+        writeFileSync(join(scratch, `${name}.sig`), signature)
+      }
+      const manifest = createManifest({ tag: 'v0.1.17', bundles: findSignedBundles(scratch) })
+      expect(manifest.platforms['windows-x86_64'].signature).toBe('windows-signature')
+      expect(manifest.platforms['darwin-aarch64'].signature).toBe('mac-signature')
+      expect(manifest.platforms['darwin-x86_64'].signature).toBe('mac-signature')
+    } finally {
+      for (const file of ownedFiles) rmSync(file, { force: true })
+      rmdirSync(scratch)
     }
-    const manifest = createManifest({ tag: 'v0.1.17', bundles: findSignedBundles(scratch) })
-    expect(manifest.platforms['windows-x86_64'].signature).toBe('windows-signature')
-    expect(manifest.platforms['darwin-aarch64'].signature).toBe('mac-signature')
-    expect(manifest.platforms['darwin-x86_64'].signature).toBe('mac-signature')
   })
 })
