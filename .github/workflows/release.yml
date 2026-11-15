@@ -138,6 +138,17 @@ jobs:
     env:
       TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
     steps:
+      - name: Validate release tag
+        shell: bash
+        run: |
+          node --input-type=module <<'VALIDATE_TAG'
+          const tag = process.env.TAG ?? ''
+          if (/\s/.test(tag) || !/^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(tag)) {
+            console.error('Release tag must be a version such as v1.2.3 or v1.2.3-rc.1')
+            process.exit(1)
+          }
+          VALIDATE_TAG
+
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
 

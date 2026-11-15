@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
 import { createManifest, findSignedBundles } from './generate-update-manifest.mjs'
 
 const workflowsDir = new URL('../.github/workflows/', import.meta.url)
@@ -14,6 +15,23 @@ function job(name) {
 }
 
 describe('release workflow coordination', () => {
+  it('validates release tags as data and rejects shell payloads before publication', () => {
+    const publisher = job('publish')
+    const script = publisher.match(/node --input-type=module <<'VALIDATE_TAG'\r?\n([\s\S]*?)\r?\n\s+VALIDATE_TAG/)?.[1]
+    expect(script).toBeDefined()
+    expect(publisher.indexOf("<<'VALIDATE_TAG'")).toBeLessThan(publisher.indexOf('actions/download-artifact@'))
+    expect(publisher).toContain('--tag "$TAG"')
+    expect(publisher).toContain('tag_name: ${{ env.TAG }}')
+    for (const tag of ['v0.1.17', 'v1.2.3-rc.1+build.2', '', 'v1.2.3; echo injected', '$(echo injected)', '`echo injected`', 'v1.2.3\ninjected', 'v1.2.3\n', '--help']) {
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+        env: { ...process.env, TAG: tag }, encoding: 'utf8',
+      })
+      const valid = ['v0.1.17', 'v1.2.3-rc.1+build.2'].includes(tag)
+      expect(result.status, tag).toBe(valid ? 0 : 1)
+      expect(result.stdout, tag).toBe('')
+      expect(result.stderr, tag).toBe(valid ? '' : 'Release tag must be a version such as v1.2.3 or v1.2.3-rc.1\n')
+    }
+  })
   it('runs reusable mandatory quality checks before building release artifacts', () => {
     const ci = readFileSync(new URL('ci.yml', workflowsDir), 'utf8')
     expect(ci).toContain('pull_request:')
