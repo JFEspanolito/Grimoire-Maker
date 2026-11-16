@@ -114,8 +114,7 @@ export const GrimoireTable = Table.extend({
             state.write(' |')
             state.ensureNewLine()
             if (!i) {
-              const delimiterRow = Array.from({ length: row.childCount }, () => '---')
-              state.write(`| ${delimiterRow.join(' | ')} |`)
+              state.write(delimiterRow(row))
               state.ensureNewLine()
             }
           })
@@ -128,11 +127,36 @@ export const GrimoireTable = Table.extend({
   },
 })
 
+type ColumnAlign = 'left' | 'center' | 'right'
+const DELIMITERS: Record<ColumnAlign, string> = { left: ':--', center: ':-:', right: '--:' }
+
+/** GFM column alignment, read from the `text-align` markdown-it puts on each cell. */
+const alignAttribute = {
+  align: {
+    default: null,
+    parseHTML: (element: HTMLElement): ColumnAlign | null => {
+      const align = element.style.textAlign
+      return align === 'left' || align === 'center' || align === 'right' ? align : null
+    },
+    renderHTML: (attributes: Record<string, unknown>) => (attributes.align ? { style: `text-align: ${String(attributes.align)}` } : {}),
+  },
+}
+
+const AlignedTableHeader = TableHeader.extend({ addAttributes() { return { ...this.parent?.(), ...alignAttribute } } })
+const AlignedTableCell = TableCell.extend({ addAttributes() { return { ...this.parent?.(), ...alignAttribute } } })
+
+/** Delimiter row of a Markdown table: one `---` per column, marked with its alignment. */
+export function delimiterRow(header: PMNode): string {
+  const cells: string[] = []
+  header.forEach(cell => { cells.push(DELIMITERS[cell.attrs.align as ColumnAlign] ?? '---') })
+  return `| ${cells.join(' | ')} |`
+}
+
 export const TableExtensions = [
   GrimoireTable.configure({ resizable: true, lastColumnResizable: true, cellMinWidth: 25 }),
   TableRow,
-  TableHeader,
-  TableCell,
+  AlignedTableHeader,
+  AlignedTableCell,
 ]
 
 function cell(type: 'tableHeader' | 'tableCell', text?: string): object {
