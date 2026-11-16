@@ -14,6 +14,9 @@ const itemsIn = (menu: HTMLElement) => Array.from(menu.querySelectorAll<HTMLElem
   '[role="menuitem"]:not(:disabled):not([aria-disabled="true"])',
 )).filter(item => !item.closest('[hidden], [aria-hidden="true"]'))
 
+const isEnabledItem = (target: EventTarget | null) =>
+  target instanceof Element && !!target.closest('[role="menuitem"]:not(:disabled):not([aria-disabled="true"])')
+
 /** Shared pointer and keyboard behavior for the application's right-click menus. */
 export function ContextMenu({ x, y, label, onClose, children, className, style }: Props) {
   const menu = useRef<HTMLDivElement>(null)
@@ -92,7 +95,13 @@ export function ContextMenu({ x, y, label, onClose, children, className, style }
     onFocus={event => {
       if (menu.current) itemsIn(menu.current).forEach(item => { item.tabIndex = item === event.target ? 0 : -1 })
     }}
+    // Focus goes back before the item's action runs, so an action that moves focus (a dialog) keeps it.
     onClickCapture={event => {
-      if (event.target instanceof Element && event.target.closest('[role="menuitem"]:not(:disabled):not([aria-disabled="true"])')) close(true)
+      if (isEnabledItem(event.target) && previousFocus.current?.isConnected) previousFocus.current.focus()
+    }}
+    // Close only after the item's own click handler ran: closing in the capture phase unmounted the
+    // menu before the click reached the item in the browser, so no action ever ran.
+    onClick={event => {
+      if (isEnabledItem(event.target)) onClose(true)
     }}>{children}</div>
 }

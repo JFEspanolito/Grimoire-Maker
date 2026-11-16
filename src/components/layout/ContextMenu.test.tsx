@@ -92,3 +92,14 @@ it('moves through editor actions with arrows, Home and End', async () => {
   await act(async () => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })))
   expect(document.activeElement).toBe(buttons[0])
 })
+
+it('runs the chosen action before closing, so a close that unmounts the menu cannot cancel it', async () => {
+  // In the browser React flushes the close between the capture and bubble phases of a real click,
+  // unmounting the item before its handler; a script click cannot show that, so pin the order.
+  const order: string[] = []
+  await act(async () => root?.render(<ContextMenu x={0} y={0} label="Actions" onClose={restore => order.push(`close:${restore}`)}>
+    <button role="menuitem" onClick={() => order.push('action')}>Copy file path</button>
+  </ContextMenu>))
+  await act(async () => host.querySelector('button')!.click())
+  expect(order).toEqual(['action', 'close:true'])
+})
