@@ -62,6 +62,7 @@ pub fn run() {
         .manage(commands::terminal::TerminalState::default())
         .invoke_handler(tauri::generate_handler![
             fs_scope::prepare_project_metadata,
+            fs_scope::prepare_document_save,
             config_root::config_root,
             config_root::is_portable,
             commands::files::list_markdown_files,

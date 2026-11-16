@@ -178,4 +178,49 @@ mod tests {
         std::fs::remove_file(&secret).unwrap();
         std::fs::remove_dir(&root).unwrap();
     }
+
+    #[test]
+    fn save_sibling_is_granted_only_for_markdown_in_an_authorized_folder() {
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        let scope = Scope::new(
+            &app,
+            &FsScope::Scope {
+                allow: vec![],
+                deny: vec![],
+                require_literal_leading_dot: Some(true),
+            },
+        )
+        .unwrap();
+        let root = std::env::temp_dir().join(format!("grimoire-save-scope-{}", std::process::id()));
+        std::fs::create_dir_all(root.join("Draft")).unwrap();
+        scope.allow_directory(&root, true).unwrap();
+        let document = root.join("Draft").join("one.md");
+        assert!(!scope.is_allowed(root.join("Draft").join(".one.md.saving.md")));
+
+        prepare_save(&scope, &document).unwrap();
+        assert!(scope.is_allowed(root.join("Draft").join(".one.md.saving.md")));
+        assert!(!scope.is_allowed(root.join("Draft").join(".two.md.saving.md")));
+        assert!(!scope.is_allowed(root.join("Draft").join(".env")));
+
+        for refused in [
+            root.join("Draft").join("notes.txt"),
+            root.join("Draft").join(".hidden.md"),
+            root.join("Draft").join("..").join("one.md"),
+            std::path::PathBuf::from("Draft/one.md"),
+        ] {
+            assert!(prepare_save(&scope, &refused).is_err(), "{}", refused.display());
+        }
+
+        // A document granted alone, without its folder, keeps writing in place.
+        let loose = root.with_file_name(format!("grimoire-save-loose-{}", std::process::id()));
+        std::fs::create_dir_all(&loose).unwrap();
+        scope.allow_file(loose.join("alone.md")).unwrap();
+        assert!(prepare_save(&scope, &loose.join("alone.md")).is_err());
+        assert!(!scope.is_allowed(loose.join(".alone.md.saving.md")));
+
+        std::fs::remove_dir_all(&root).unwrap();
+        std::fs::remove_dir_all(&loose).unwrap();
+    }
 }

@@ -573,7 +573,8 @@ export function useFileSystem() {
         const known = state.diskContents[path]
         if (known !== undefined) {
           const disk = await readTextFile(path).catch(() => null)
-          if (disk !== null && disk !== known) {
+          // Equal to the buffer means another part of the app wrote these same bytes: no conflict.
+          if (disk !== null && disk !== known && disk !== serializeDocument(snapshot.frontmatter, snapshot.body)) {
             failures.push(`${path}: changed on disk since it was opened; save it manually to overwrite`)
             continue
           }

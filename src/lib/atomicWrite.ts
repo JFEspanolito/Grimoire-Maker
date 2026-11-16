@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core'
 import { rename, writeTextFile } from '@tauri-apps/plugin-fs'
 
 /** Hidden sibling a document is written to before it replaces the original. */
@@ -8,12 +9,14 @@ export function savingPath(path: string): string {
 
 /**
  * Writes beside the target and renames over it, so a crash or a concurrent Git read never sees a
- * half-written document. The hidden `.md` name stays inside a document folder's granted scope
- * (which admits only Markdown and text) and out of the file tree, which skips dotfiles.
+ * half-written document. The hidden name stays out of the file tree and search, which skip
+ * dotfiles; Rust grants exactly that sibling, because on macOS and Linux a folder grant never
+ * covers hidden files.
  */
 export async function writeTextFileAtomically(path: string, text: string): Promise<void> {
   const temporary = savingPath(path)
   try {
+    await invoke('prepare_document_save', { path })
     await writeTextFile(temporary, text)
   } catch {
     // Some documents are granted alone, without their folder (for example one saved directly in the

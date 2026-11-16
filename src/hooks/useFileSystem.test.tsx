@@ -892,3 +892,17 @@ it('manual save still overwrites a file changed on disk', async () => {
   await actions.saveFile()
   expect(disk.get('/a.md')).toBe('mine')
 })
+
+it('autosave treats a file already holding the buffer as saved, as after a plugin writes it', async () => {
+  const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A')
+  store.loadFromRaw('/a.md', 'A')
+  disk.set('/a.md', 'written by plugin')
+  store.setRawForPath('/a.md', 'written by plugin')
+  await actions.autoSave()
+  expect(disk.get('/a.md')).toBe('written by plugin')
+  expect(useDocumentStore.getState().document.dirty).toBe(false)
+  store.setBody('later edit')
+  await actions.autoSave()
+  expect(disk.get('/a.md')).toBe('later edit')
+})

@@ -13,7 +13,7 @@ const openFile = vi.hoisted(() => vi.fn())
 const snapshotProjectTexts = vi.hoisted(() => vi.fn())
 const commitProjectReplace = vi.hoisted(() => vi.fn())
 const autoCommitChanges = vi.hoisted(() => vi.fn())
-vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openFile }), isTauri: () => false }))
+vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openFile }), isTauri: () => false, runFileAction: (action: () => Promise<unknown>) => action() }))
 vi.mock('../../lib/projectReplace', () => ({ snapshotProjectTexts, commitProjectReplace }))
 vi.mock('../../lib/versionControl', () => ({ autoCommitChanges }))
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { findMatches, type SearchMatch } from './extensions/searchHighlight'
-import { useFileSystem } from '../../hooks/useFileSystem'
+import { useFileSystem, runFileAction } from '../../hooks/useFileSystem'
 import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import {
   applyProjectReplace, ProjectChangedError, searchProject, selectInEditor, undoProjectReplace,
@@ -190,7 +190,8 @@ function FindPanel({ editor }: { editor: Editor | null }) {
     // A safety commit first; without a repository the user is told this cannot be undone through git.
     let versioned = true
     try {
-      const result = await autoCommitChanges(root, 'Before replace all')
+      // Queued with saves so the safety commit never stages a document while it is being written.
+      const result = await runFileAction(() => autoCommitChanges(root, 'Before replace all'))
       versioned = result !== 'noRepository' && result !== 'gitUnavailable'
     } catch (error) {
       reportError('find.autoCommit', error)
