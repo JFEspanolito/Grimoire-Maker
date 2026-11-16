@@ -26,6 +26,7 @@ const merge = (user: ThemeInfo[], fromTemplates: ThemeInfo[]): ThemeInfo[] => [
   ...user,
   ...fromTemplates,
 ]
+let reloadSequence = 0
 
 export const useThemeStore = create<ThemeState>((set) => ({
   themes: BUILTIN_THEMES,
@@ -34,6 +35,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
   dir: null,
   errors: [],
   reload: async () => {
+    const sequence = ++reloadSequence
     try {
       const disabled = await prepareModLibrary()
         .then((paths) => readDisabledMods(paths.preferences))
@@ -43,9 +45,11 @@ export const useThemeStore = create<ThemeState>((set) => ({
           .filter((id) => id.startsWith('Themes/'))
           .map((id) => id.slice('Themes/'.length)),
       )
-      const { dir, themes, errors } = await loadUserThemes(disabledThemeIds)
+      const { dir, themes, errors } = await loadUserThemes(disabledThemeIds, () => sequence === reloadSequence)
+      if (sequence !== reloadSequence) return
       set((s) => ({ userThemes: themes, themes: merge(themes, s.templateThemes), dir, errors }))
     } catch (e) {
+      if (sequence !== reloadSequence) return
       set({ errors: [`Could not read the themes folder: ${e instanceof Error ? e.message : String(e)}`] })
     }
   },

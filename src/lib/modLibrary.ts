@@ -6,14 +6,10 @@ import { loadLibraryPaths, type LibraryPaths } from './preferences'
 import { installOfficialPlugin, listOfficialPlugins } from './officialPlugins'
 import type { MigrationFs } from './migratedPlugins'
 
-const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/{Plugins,Legacy}/**/*.{ts,tsx,js,css,json}'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
-const allExamples = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
-/** Everything that is seeded or restorable. Legacy sources are never part of it. */
-export const MOD_EXAMPLES = Object.fromEntries(Object.entries(allExamples).filter(([path]) => !path.startsWith('Legacy/')))
+const exampleFiles = import.meta.glob(['../assets/mods/**/*.md', '../assets/mods/Plugins/**/*.{ts,tsx,js,css,json}', '!../assets/mods/Legacy/**'], { query: '?raw', import: 'default', eager: true }) as Record<string, string>
+export const MOD_EXAMPLES = Object.fromEntries(Object.entries(exampleFiles).map(([path, text]) => [path.split('/assets/mods/')[1], text]))
 /** Plugins that are seeded and offered for restore, including the Zoom and Pixel Ruler packages. */
 export const OFFICIAL_PLUGINS = listOfficialPlugins(MOD_EXAMPLES)
-/** The old trusted sources of plugins that became packages; never seeded, only the baseline for untouched-copy checks. */
-export const LEGACY_PLUGINS = listOfficialPlugins(allExamples, 'Legacy')
 export const modFs: ModFs = {
   exists, readDir, readTextFile, stat,
   mkdir: (path) => mkdir(path, { recursive: true }),
@@ -36,9 +32,9 @@ export function prepareModLibrary(): Promise<ModLibraryPaths> {
 /** Libraries that ship examples: the folder name inside a library root and the matching key of the configured paths. */
 const SEEDED = [['Snippets', 'snippets'], ['Plugins', 'plugins'], ['Templates', 'templates']] as const
 /** Per-library markers that let an upgrade add newer examples without replacing edited ones. */
-const UPGRADE_MARKERS = [['Templates', 'templates', '.editorial-templates-v3-seeded'], ['Plugins', 'plugins', '.executable-plugins-v2-seeded'], ['Snippets', 'snippets', '.rol-adventures-snippets-v2-seeded']] as const
+const UPGRADE_MARKERS = [['Templates', 'templates', '.editorial-templates-v3-seeded'], ['Plugins', 'plugins', '.executable-plugins-v2-seeded'], ['Snippets', 'snippets', '.rpg-adventures-snippets-v3-seeded']] as const
 const RETIRED_FOLDERS: Partial<Record<(typeof SEEDED)[number][1], readonly string[]>> = {
-  snippets: ['Dungeons and Dragons', 'Rol', 'Rol Adventures'],
+  // Existing snippet folders may contain edited adventures; seed new names additively.
   templates: ['classic-fantasy', 'quick-one-shot', 'a5-zine'],
 }
 

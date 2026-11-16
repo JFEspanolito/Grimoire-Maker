@@ -14,6 +14,31 @@ beforeEach(() => {
   root = createRoot(container)
 })
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.resetAllMocks() })
+
+it('aborts a manual check on unmount', async () => {
+  vi.mocked(checkForAppUpdates).mockResolvedValueOnce(null)
+  await act(async () => root.render(<AboutUpdates />))
+  let finish!: (value: null) => void
+  vi.mocked(checkForAppUpdates).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+  await act(async () => container.querySelector('button')!.click())
+  const signal = vi.mocked(checkForAppUpdates).mock.calls[1][0]
+  await act(async () => root.render(null))
+  expect(signal?.aborted).toBe(true)
+  await act(async () => finish(null))
+})
+
+it('keeps a dismissed version hidden when a later manual check finds it again', async () => {
+  const update = { hasUpdate: true, currentVersion: '1.0.0', latestVersion: 'v9.9.1', releaseUrl: 'https://example.test/release' }
+  vi.mocked(checkForAppUpdates).mockResolvedValueOnce(update)
+  await act(async () => root.render(<AboutUpdates />))
+  await act(async () => container.querySelector('button')!.click())
+  await act(async () => root.render(null))
+  vi.mocked(checkForAppUpdates).mockResolvedValueOnce(null)
+  await act(async () => root.render(<AboutUpdates />))
+  vi.mocked(checkForAppUpdates).mockResolvedValueOnce(update)
+  await act(async () => container.querySelector('button')!.click())
+  expect(container.querySelector('section')).toBeNull()
+})
 it('checks automatically once in StrictMode, links to the release and dismisses for this session', async () => {
   const info = { hasUpdate: true, currentVersion: '1.0.0', latestVersion: 'v1.2.0', releaseUrl: 'https://github.com/JFEspanolito/Grimoire-Maker/releases/tag/v1.2.0' }
   vi.mocked(checkForAppUpdates).mockResolvedValue(info)

@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
+import { useSettingsStore } from '../../stores/settingsStore'
 import { useDocumentStore } from '../../stores/documentStore'
 import { EditorCanvas } from './EditorCanvas'
 import { EditorToolbar } from './EditorToolbar'
@@ -11,6 +12,30 @@ import { useModStore } from '../../stores/modStore'
 import { useToastStore } from '../../stores/toastStore'
 import { registerPlugin } from '../../plugins/plugin-manager'
 import type { PluginContextAction } from '../../types/plugin'
+import { useFormatPainterStore } from '../../stores/formatPainterStore'
+
+it('cancels pending format painting when the editor unmounts', async () => {
+  useDocumentStore.getState().loadFromRaw('/book/paint.md', 'Text')
+  const container = document.body.appendChild(document.createElement('div'))
+  root = createRoot(container)
+  let editor!: Editor
+  const apply = useFormatPainterStore.getState().apply
+  const applySpy = vi.fn(() => true)
+  try {
+    await act(async () => root?.render(<EditorCanvas onReady={value => { editor = value }} />))
+    await act(async () => useFormatPainterStore.setState({ armed: true, apply: applySpy }))
+    vi.useFakeTimers()
+    await act(async () => editor.view.dom.dispatchEvent(new MouseEvent('pointerup', { bubbles: true })))
+    await act(async () => root?.unmount()); root = null
+    useFormatPainterStore.setState({ armed: true })
+    await act(async () => vi.advanceTimersByTime(20))
+    expect(applySpy).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+    useFormatPainterStore.setState({ armed: false, format: null, apply })
+    container.remove()
+  }
+})
 
 const snippetMocks = vi.hoisted(() => ({ save: vi.fn() }))
 vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: snippetMocks.save }))
@@ -20,7 +45,83 @@ vi.mock('../../lib/images', () => ({
 }))
 
 let root: Root | null = null
+it('updates existing formula tooltips when the app language changes', async () => {
+  const previous = useSettingsStore.getState().language
+  useSettingsStore.setState({ language: 'en' })
+  useDocumentStore.getState().loadFromRaw('/book/math.md', '<span data-type="math-formula" data-latex="x+1" data-display="block"></span>')
+  const container = document.body.appendChild(document.createElement('div'))
+  root = createRoot(container)
+  try {
+    await act(async () => root?.render(<EditorCanvas onReady={() => {}} />))
+    const formula = container.querySelector<HTMLElement>('[data-type="math-formula"]')!
+    expect(formula.title).toContain('Double-click to edit')
+    await act(async () => useSettingsStore.setState({ language: 'es' }))
+    expect(formula.title).toBe('Fórmula (en bloque): x+1 — Haz doble clic para editar')
+  } finally {
+    await act(async () => useSettingsStore.setState({ language: previous }))
+  }
+})
+it('edits list numbering in an app dialog and cancels without changing the list', async () => {
+  const prompt = vi.spyOn(window, 'prompt').mockReturnValue(null)
+  HTMLDialogElement.prototype.showModal = function () { this.open = true }
+  HTMLDialogElement.prototype.close = function () { this.open = false }
+  useDocumentStore.getState().loadFromRaw('/book/list.md', '1. First\n2. Second')
+  const container = document.body.appendChild(document.createElement('div'))
+  root = createRoot(container)
+  let editor!: Editor
+  await act(async () => root?.render(<EditorCanvas onReady={value => { editor = value }} />))
+  // jsdom has no text Range geometry for ProseMirror's scroll-to-selection.
+  editor.view.setProps({ handleScrollToSelection: () => true })
+  await act(async () => editor.commands.setTextSelection(4))
+  const open = async () => {
+    await act(async () => container.querySelector('li p')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
+    await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).at(-1)!.click())
+  }
+  await open()
+  expect(prompt).not.toHaveBeenCalled()
+  expect(container.querySelector('dialog')?.open).toBe(true)
+  const input = container.querySelector<HTMLInputElement>('dialog input')!
+  const change = async (value: string) => {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+  await change('0')
+  expect(container.querySelector<HTMLButtonElement>('dialog button:last-child')!.disabled).toBe(true)
+  await change('7')
+  await act(async () => container.querySelector<HTMLButtonElement>('dialog button:last-child')!.click())
+  expect(editor.getAttributes('orderedList').start).toBe(7)
+  await open()
+  await act(async () => container.querySelector<HTMLButtonElement>('dialog button')!.click())
+  expect(editor.getAttributes('orderedList').start).toBe(7)
+  expect(container.querySelector('dialog')).toBeNull()
+  prompt.mockRestore()
+})
 beforeAll(() => Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true))
+it('locks the affected editor and synchronizes restored text before unlocking', async () => {
+  const path = '/book/restore-lock.md'
+  useDocumentStore.getState().loadFromRaw(path, '# Before')
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  let currentEditor: import('@tiptap/react').Editor | undefined
+  await act(async () => root?.render(<EditorCanvas path={path} onReady={(editor) => { currentEditor = editor }} />))
+  try {
+    await act(async () => useDocumentStore.getState().beginRestore([path]))
+    expect(currentEditor!.isEditable).toBe(false)
+    await act(async () => currentEditor!.commands.insertContent('stale plugin edit'))
+    expect(useDocumentStore.getState().document.body).toBe('# Before')
+    expect(currentEditor!.getText()).not.toContain('stale plugin edit')
+    await act(async () => useDocumentStore.getState().restoreFromDisk(path, '# Restored'))
+    expect(currentEditor!.getText().trim()).toBe('Restored')
+    expect(currentEditor!.isEditable).toBe(false)
+  } finally {
+    await act(async () => useDocumentStore.getState().endRestore())
+  }
+  expect(currentEditor!.isEditable).toBe(true)
+})
+
 it('keeps the loaded image node view across repeated section alignment', async () => {
   useDocumentStore.getState().loadFromRaw('/book/Draft/Chapter 1/page.md', 'asd\n\n<img src="../../Assets/Chapter 1/FB_IMG_1736916217646.jpg" alt="FB_IMG_1736916217646" data-align="center" data-width-mm="55" data-frame="shadow" />')
   const container = document.createElement('div')

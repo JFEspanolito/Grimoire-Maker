@@ -56,9 +56,13 @@ export function ExportPdfDialog({ onClose, onExport }: { onClose: () => void; on
     }
   }, [])
 
+  const [previewSource, setPreviewSource] = useState({ theme, bookKey, showPrintMarks })
+  if (previewSource.theme !== theme || previewSource.bookKey !== bookKey || previewSource.showPrintMarks !== showPrintMarks) {
+    setPreviewSource({ theme, bookKey, showPrintMarks })
+    setStatus({ kind: 'loading' })
+  }
   useEffect(() => {
     let cancelled = false
-    setStatus({ kind: 'loading' })
     // Layout is measured in an unzoomed, off-screen stage; the visible copy is only scaled.
     const stage = document.createElement('div')
     stage.dataset.theme = theme

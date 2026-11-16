@@ -1,10 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import styles from './ConfirmDialog.module.css'
 
 interface Props {
   title: string
   message: string
+  children?: ReactNode
   cancelLabel?: string
+  hideCancel?: boolean
   secondaryLabel?: string
   confirmLabel: string
   /** Styles the confirm button as destructive. */
@@ -19,7 +21,9 @@ interface Props {
 export function ConfirmDialog({
   title,
   message,
+  children,
   cancelLabel = 'Cancel',
+  hideCancel = false,
   secondaryLabel,
   confirmLabel,
   danger = false,
@@ -45,12 +49,13 @@ export function ConfirmDialog({
     onCancel={(event) => { event.preventDefault(); onCancel() }}>
     <h2 id="confirm-title">{title}</h2>
     <p id="confirm-message">{message}</p>
+    {children}
     <footer>
-      <button ref={cancel} type="button" onClick={onCancel}>{cancelLabel}</button>
+      {!hideCancel && <button ref={cancel} type="button" onClick={onCancel}>{cancelLabel}</button>}
       {secondaryLabel && onSecondary && (
         <button type="button" onClick={onSecondary}>{secondaryLabel}</button>
       )}
-      <button type="button" disabled={confirmDisabled} className={danger ? styles.danger : styles.primary} onClick={onConfirm}>
+      <button ref={hideCancel ? cancel : undefined} type="button" disabled={confirmDisabled} className={danger ? styles.danger : styles.primary} onClick={onConfirm}>
         {confirmLabel}
       </button>
     </footer>

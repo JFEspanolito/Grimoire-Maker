@@ -37,6 +37,15 @@
   .grimoire-box-controls { display: none !important; }
   .grimoire-content-box { outline: none !important; }
 }
+/* Source the editor keeps but cannot render (comments, unknown HTML, footnotes, wikilinks, task markers). */
+.grimoire-raw-markdown {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.85em;
+  opacity: 0.6;
+  white-space: pre-wrap;
+}
+.page-preview .grimoire-raw-markdown-comment { display: none !important; }
+@media print { .grimoire-raw-markdown-comment { display: none !important; } }
 
 html,
 body,

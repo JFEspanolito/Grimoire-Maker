@@ -1,8 +1,55 @@
+// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createManifest, detectPlatforms, findSignedBundles } from './generate-update-manifest.mjs'
+
+it.each([
+  ['EXE first', ['a/Book_x64-setup.exe', 'z/Book_x64-setup.nsis.zip'], 'Book_x64-setup.exe'],
+  ['EXE last', ['z/Book_x64-setup.exe', 'a/Book_x64-setup.nsis.zip'], 'Book_x64-setup.exe'],
+  ['ZIP only', ['a/Book_x64-setup.nsis.zip'], 'Book_x64-setup.nsis.zip'],
+  ['ambiguous EXEs', ['a/Book_x64-setup.exe', 'b/Other_x64-setup.exe'], null],
+  ['ambiguous ZIPs', ['a/Book_x64-setup.nsis.zip', 'b/Other_x64-setup.nsis.zip'], null],
+])('selects Windows updater through the CLI: %s', (_label, files, expected) => {
+  const scratch = mkdtempSync(join(tmpdir(), 'grimoire-manifest-selection-'))
+  try {
+    for (const [index, file] of files.entries()) {
+      const path = join(scratch, file)
+      mkdirSync(join(path, '..'), { recursive: true })
+      writeFileSync(path, 'bundle')
+      writeFileSync(`${path}.sig`, `signature-${index}`)
+    }
+    const out = join(scratch, 'latest.json')
+    if (!expected) writeFileSync(out, 'previous output')
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('./generate-update-manifest.mjs', import.meta.url)), '--tag', 'v0.2.0', '--bundle-dir', scratch, '--out', out], { encoding: 'utf8' })
+    expect(result.status).toBe(expected ? 0 : 1)
+    if (expected) {
+      expect(result.stderr).toBe('')
+      expect(result.stdout).toContain(`Generated update manifest at ${out} with ${files.length} signed bundle(s).`)
+      expect(result.stdout).toContain('Platforms configured: windows-x86_64')
+      const manifest = JSON.parse(readFileSync(out, 'utf8'))
+      expect(manifest.platforms['windows-x86_64']).toEqual({
+        url: `https://github.com/JFEspanolito/Grimoire-Maker/releases/download/v0.2.0/${expected}`,
+        signature: 'signature-0',
+      })
+    } else {
+      expect(result.stdout).toBe('')
+      expect(result.stderr).toContain('Ambiguous signed updater bundles for windows-x86_64')
+      expect(readFileSync(out, 'utf8')).toBe('previous output')
+    }
+  } finally {
+    for (const file of files) {
+      rmSync(join(scratch, file), { force: true })
+      rmSync(join(scratch, `${file}.sig`), { force: true })
+    }
+    for (const directory of new Set(files.map(file => dirname(join(scratch, file))))) rmdirSync(directory)
+    rmSync(join(scratch, 'latest.json'), { force: true })
+    rmdirSync(scratch)
+  }
+})
 
 describe('generate-update-manifest', () => {
   let testDir
@@ -19,7 +66,8 @@ describe('generate-update-manifest', () => {
   it('detects platform identifiers correctly from bundle filenames', () => {
     expect(detectPlatforms('Grimoire Maker_0.2.0_x64-setup.nsis.zip')).toEqual(['windows-x86_64'])
     expect(detectPlatforms('Grimoire Maker_0.1.12_x64-setup.exe')).toEqual(['windows-x86_64'])
-    expect(detectPlatforms('Grimoire Maker.app.tar.gz')).toEqual(['darwin-aarch64', 'darwin-x86_64'])
+    expect(detectPlatforms('Grimoire Maker.app.tar.gz')).toEqual([])
+    expect(detectPlatforms('Grimoire Maker_universal.app.tar.gz')).toEqual(['darwin-aarch64', 'darwin-x86_64'])
     expect(detectPlatforms('Grimoire Maker_aarch64.app.tar.gz')).toEqual(['darwin-aarch64'])
     expect(detectPlatforms('Grimoire Maker_x64.app.tar.gz')).toEqual(['darwin-x86_64'])
   })
@@ -34,6 +82,14 @@ describe('generate-update-manifest', () => {
     expect(found).toHaveLength(1)
     expect(found[0].bundleFileName).toBe('app-setup.nsis.zip')
     expect(found[0].sigFileName).toBe('app-setup.nsis.zip.sig')
+  })
+
+  it('rejects a signed macOS archive whose architecture is unknown', () => {
+    writeFileSync(join(testDir, 'Book.app.tar.gz'), 'arm-only bundle')
+    writeFileSync(join(testDir, 'Book.app.tar.gz.sig'), 'mac-signature')
+
+    expect(() => createManifest({ tag: 'v0.2.0', bundles: findSignedBundles(testDir) }))
+      .toThrow('macOS updater bundle needs an explicit architecture or _universal suffix')
   })
 
   it('creates valid manifest and merges with existing platforms', () => {

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { findMatches, type SearchMatch } from './extensions/searchHighlight'
-import { useFileSystem } from '../../hooks/useFileSystem'
+import { useFileSystem, runFileAction } from '../../hooks/useFileSystem'
 import { friendlyErrorMessage, reportError } from '../../lib/errorLogging'
 import {
   applyProjectReplace, ProjectChangedError, searchProject, selectInEditor, undoProjectReplace,
@@ -40,12 +40,17 @@ function FindPanel({ editor }: { editor: Editor | null }) {
   const matcherError = useMemo(() => buildMatcher(query).error ?? '', [query])
 
   /* ---- This file ---- */
-  const [fileMatches, setFileMatches] = useState<SearchMatch[]>([])
+  const [fileMatches, setFileMatches] = useState<SearchMatch[]>(() => editor && !editor.isDestroyed ? findMatches(editor.state.doc, query) : [])
   const refresh = useCallback(() => {
     const next = editor && !editor.isDestroyed ? findMatches(editor.state.doc, query) : []
     setFileMatches((previous) => sameMatches(previous, next) ? previous : next)
   }, [editor, query])
-  useEffect(refresh, [refresh])
+  const [matchSource, setMatchSource] = useState({ editor, query })
+  if (matchSource.editor !== editor || matchSource.query !== query) {
+    setMatchSource({ editor, query })
+    const next = editor && !editor.isDestroyed ? findMatches(editor.state.doc, query) : []
+    setFileMatches(previous => sameMatches(previous, next) ? previous : next)
+  }
   // Typing in the page keeps the counter current, a moment after the last keystroke.
   useEffect(() => {
     if (!editor) return
@@ -55,7 +60,7 @@ function FindPanel({ editor }: { editor: Editor | null }) {
     return () => { editor.off('update', later); clearTimeout(timer) }
   }, [editor, refresh])
   // The page highlights the matches in both scopes (in Project scope: the ones in the file on screen).
-  useEffect(() => { editor?.commands.setSearch(query) }, [editor, query])
+  useEffect(() => { if (editor && !editor.isDestroyed) editor.commands.setSearch(query) }, [editor, query])
   useEffect(() => () => { if (editor && !editor.isDestroyed) editor.commands.setSearch({ term: '', caseSensitive: false }) }, [editor])
   const selection = useEditorState({ editor, selector: ({ editor: e }) => e ? `${e.state.selection.from}:${e.state.selection.to}` : '' })
 
@@ -91,34 +96,39 @@ function FindPanel({ editor }: { editor: Editor | null }) {
 
   /* ---- Project ---- */
   const [search, setSearch] = useState<ProjectSearch | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState(scope === 'project' && !!root && !!term)
   const [message, setMessage] = useState('')
   const [unchecked, setUnchecked] = useState<ReadonlySet<string>>(new Set())
   const [current, setCurrent] = useState(-1)
   const [confirm, setConfirm] = useState<{ versioned: boolean } | null>(null)
   const [rerun, setRerun] = useState(0)
-  const sequence = useRef(0)
   const pending = useRef<{ match: ProjectMatch; text: string; from: Editor | null } | null>(null)
   const lastReplace = find.lastReplace
   const flat = useMemo(() => search?.files.flatMap((file) => file.matches) ?? [], [search])
   const selectedIds = useMemo(() => new Set(flat.filter((match) => !unchecked.has(match.id)).map((match) => match.id)), [flat, unchecked])
   const selectedFiles = useMemo(() => (search?.files ?? []).filter((file) => file.matches.some((match) => selectedIds.has(match.id))).length, [search, selectedIds])
 
-  useEffect(() => {
+  const [searchSource, setSearchSource] = useState({ scope, root, term, query, rerun, activeBody })
+  if (searchSource.scope !== scope || searchSource.root !== root || searchSource.term !== term
+    || searchSource.query !== query || searchSource.rerun !== rerun || searchSource.activeBody !== activeBody) {
+    setSearchSource({ scope, root, term, query, rerun, activeBody })
     setConfirm(null)
-    if (scope !== 'project' || !root || !term) { setSearch(null); setBusy(false); return }
-    const id = ++sequence.current
-    setBusy(true)
+    setBusy(scope === 'project' && !!root && !!term)
+    if (scope !== 'project' || !root || !term) setSearch(null)
+  }
+  useEffect(() => {
+    if (scope !== 'project' || !root || !term) return
+    let active = true
     const timer = setTimeout(() => {
       searchProject(root, query).then((result) => {
-        if (sequence.current !== id) return
+        if (!active) return
         const ids = new Set(result.files.flatMap((file) => file.matches.map((match) => match.id)))
         setSearch(result)
         setUnchecked((previous) => new Set([...previous].filter((key) => ids.has(key))))
         setCurrent(-1)
         setBusy(false)
       }).catch((error: unknown) => {
-        if (sequence.current !== id) return
+        if (!active) return
         reportError('find.project', error)
         setSearch(null)
         setMessage(friendlyErrorMessage(error))
@@ -126,7 +136,7 @@ function FindPanel({ editor }: { editor: Editor | null }) {
       })
     }, 200)
     // A newer search (or closing the panel) cancels this one: its result is never applied.
-    return () => { clearTimeout(timer); sequence.current++ }
+    return () => { active = false; clearTimeout(timer) }
   }, [scope, root, term, query, rerun, activeBody])
 
   const relative = (path: string) => root && path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path
@@ -180,7 +190,8 @@ function FindPanel({ editor }: { editor: Editor | null }) {
     // A safety commit first; without a repository the user is told this cannot be undone through git.
     let versioned = true
     try {
-      const result = await autoCommitChanges(root, 'Before replace all')
+      // Queued with saves so the safety commit never stages a document while it is being written.
+      const result = await runFileAction(() => autoCommitChanges(root, 'Before replace all'))
       versioned = result !== 'noRepository' && result !== 'gitUnavailable'
     } catch (error) {
       reportError('find.autoCommit', error)
@@ -206,13 +217,12 @@ function FindPanel({ editor }: { editor: Editor | null }) {
 
   /* ---- Shared behaviour ---- */
   const step = (direction: 1 | -1) => scope === 'project' ? stepProject(direction) : stepFile(direction)
-  const stepRef = useRef(step)
-  stepRef.current = step
+  const onStep = useEffectEvent(step)
   const handledStep = useRef(find.step.token)
   useEffect(() => {
     if (find.step.token === handledStep.current) return
     handledStep.current = find.step.token
-    stepRef.current(find.step.direction)
+    onStep(find.step.direction)
   }, [find.step])
   useEffect(() => {
     const field = find.focusTarget === 'replace' ? replaceInput.current : findInput.current

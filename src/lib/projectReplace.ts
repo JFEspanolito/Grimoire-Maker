@@ -9,7 +9,7 @@ export async function snapshotProjectTexts(root: string): Promise<ProjectText[]>
   try {
     return await invoke<ProjectText[]>('snapshot_project_texts', { root })
   } catch (error) {
-    throw new Error(friendlyErrorMessage(error))
+    throw new Error(friendlyErrorMessage(error), { cause: error })
   }
 }
 
@@ -22,6 +22,6 @@ export async function commitProjectReplace(root: string, changes: ProjectChange[
   try {
     return await invoke<string[]>('commit_project_replace', { root, changes, knownPaths: knownPaths ?? null })
   } catch (error) {
-    throw new Error(friendlyErrorMessage(error))
+    throw new Error(friendlyErrorMessage(error), { cause: error })
   }
 }

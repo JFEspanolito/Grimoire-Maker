@@ -222,17 +222,21 @@ fn publish_one(root: &Path, reg: &mut Registry, folder: &str, package: &Package,
     let (staging, fingerprint) = stage(root, package, index)?;
     let dir = format!("{}-{}", manifest.version, short(&fingerprint));
     let plugin_dir = root.join(&manifest.id);
-    let destination = plugin_dir.join(&dir);
 
     // Our own earlier copy that no longer matches its fingerprint is rebuilt from the folder.
-    let known = reg.plugins.get(&manifest.id).is_some_and(|r| r.versions.iter().any(|v| v.dir == dir && v.source == LOCAL_SOURCE));
-    if known
-        && destination.exists()
-        && plugin_install::fingerprint_dir(&destination).as_deref() != Ok(fingerprint.as_str())
-        && registry::plain_dir(&plugin_dir)
-        && registry::plain_dir(&destination)
+    // Destructive repair must use the stored identity, never the incoming manifest's path.
+    let registered = reg.plugins.get_key_value(&manifest.id).and_then(|(id, record)| {
+        record.versions.iter().find(|version| version.dir == dir && version.source == LOCAL_SOURCE)
+            .map(|version| root.join(id).join(&version.dir))
+    });
+    if let Some(registered) = registered.filter(|path| path.exists()
+        && plugin_install::fingerprint_dir(path).as_deref() != Ok(fingerprint.as_str()))
     {
-        if let Err(error) = fs::remove_dir_all(&destination) {
+        if !registry::plain_dir(&plugin_dir) || !registry::plain_dir(&registered) {
+            let _ = fs::remove_dir_all(&staging);
+            return Err("Could not repair a linked synced copy".into());
+        }
+        if let Err(error) = fs::remove_dir_all(&registered) {
             let _ = fs::remove_dir_all(&staging);
             return Err(format!("Could not repair the synced copy: {error}"));
         }
@@ -507,6 +511,28 @@ mod tests {
         // An unchanged follow-up leaves an active plugin active.
         assert!(!scratch.sync().packages[0].changed);
         assert_eq!(record(&scratch, "community.zoom").state, "active");
+    }
+
+    #[test]
+    fn an_unregistered_copy_is_never_deleted_to_make_room_for_a_local_package() {
+        let scratch = Scratch::new("unregistered-repair");
+        folder(&scratch, "zoom", "community.zoom", "1.0.0", "safe");
+        scratch.sync();
+        let dir = record(&scratch, "community.zoom").latest;
+        let copy = scratch.root().join("community.zoom").join(&dir).join("dist/index.js");
+        fs::write(&copy, "keep unregistered content").unwrap();
+        let mut reg = registry::load_registry(&scratch.root()).unwrap();
+        reg.plugins.remove("community.zoom");
+        registry::save_registry(&scratch.root(), &reg).unwrap();
+        let before = registry_bytes(&scratch);
+
+        let result = scratch.sync();
+
+        assert_eq!(result.errors.len(), 1);
+        assert!(result.packages.is_empty());
+        assert_eq!(fs::read_to_string(&copy).unwrap(), "keep unregistered content");
+        assert_eq!(registry_bytes(&scratch), before);
+        assert!(scratch.plugins().join("zoom/dist/index.js").is_file());
     }
 
     #[test]

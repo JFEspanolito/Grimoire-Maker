@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { strToU8, zipSync } from 'fflate'
 import { FilePreview } from './FilePreview'
+import { useSettingsStore } from '../../stores/settingsStore'
 
 const fs = vi.hoisted(() => ({ readFile: vi.fn(), stat: vi.fn() }))
 const reportError = vi.hoisted(() => vi.fn())
@@ -22,6 +23,19 @@ beforeEach(() => {
 })
 afterEach(async () => { await act(async () => root.unmount()); vi.unstubAllGlobals() })
 const show = async (path: string) => { await act(async () => root.render(<FilePreview path={path} />)) }
+
+it('translates preview notices without changing file content or names', async () => {
+  const previous = useSettingsStore.getState().language
+  useSettingsStore.setState({ language: 'es' })
+  try {
+    await show('H:/Research/notes.xyz')
+    expect(host.querySelector('[aria-label="Vista previa de archivo de solo lectura"]')).not.toBeNull()
+    expect(host.textContent).toContain('No hay vista previa disponible')
+    expect(host.textContent).toContain('notes.xyz')
+  } finally {
+    useSettingsStore.setState({ language: previous })
+  }
+})
 
 it('reads images as binary blobs and revokes their URL when the tab changes', async () => {
   await show('H:/Research/map.png')

@@ -1,94 +1,188 @@
-name: Build & Release (Installer + Portable)
+name: Build & Release (Windows + macOS)
 
 on:
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag to publish (leave empty to build artifacts only)'
+        required: false
+        default: ''
   push:
     tags:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
+
+# A tag has one complete release producer, even if it is dispatched again.
+concurrency:
+  group: release-${{ inputs.tag_name || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
-  build-windows:
-    name: Windows (NSIS Installer + Portable ZIP)
-    runs-on: windows-latest
+  quality:
+    uses: ./.github/workflows/ci.yml
 
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: quality
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: Windows
+          - os: macos-latest
+            platform: macOS
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6.1.0
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           version: 9
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7.1.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: 'pnpm'
 
       - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable (2026-11-15)
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2.9.3
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           workspaces: 'src-tauri -> target'
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Full NSIS Installer
+      - name: Build full NSIS installer
+        if: runner.os == 'Windows'
         run: pnpm build:installer:signed
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
-      - name: Package Portable Edition ZIP
+      - name: Package portable Windows edition
+        if: runner.os == 'Windows'
         run: node scripts/make-portable.mjs
 
-      - name: Download existing latest.json from release (if any)
-        if: startsWith(github.ref, 'refs/tags/v')
-        continue-on-error: true
+      - name: Install both macOS architecture targets
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Build universal macOS DMG
+        if: runner.os == 'macOS'
+        run: pnpm exec tauri build --bundles dmg,app --target universal-apple-darwin
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Label the universal updater archive
+        if: runner.os == 'macOS'
         shell: bash
+        env:
+          BUNDLE_DIR: src-tauri/target/universal-apple-darwin/release/bundle/macos
         run: |
-          mkdir -p release
-          curl -sSL -f -o release/existing-latest.json "https://github.com/JFEspanolito/Grimoire-Maker/releases/download/${{ github.ref_name }}/latest.json" || true
+          shopt -s nullglob
+          archives=( "$BUNDLE_DIR"/*.app.tar.gz )
+          if [[ ${#archives[@]} -ne 1 || ! -f "${archives[0]}.sig" ]]; then
+            echo 'Expected exactly one signed universal macOS updater archive' >&2
+            exit 1
+          fi
+          archive="${archives[0]}"
+          universal="${archive%.app.tar.gz}_universal.app.tar.gz"
+          mv "$archive" "$universal"
+          mv "$archive.sig" "$universal.sig"
 
-      - name: Generate Update Manifest (latest.json)
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: node scripts/generate-update-manifest.mjs --tag ${{ github.ref_name }} --existing release/existing-latest.json
-
-      - name: Upload Full Installer artifact
-        uses: actions/upload-artifact@v7.0.2
+      - name: Upload Windows installer artifacts
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: GrimoireMaker-Installer-x64
+          name: release-windows-installer
           path: |
             src-tauri/target/release/bundle/nsis/*-setup.exe*
             src-tauri/target/release/bundle/nsis/*-setup.nsis.zip*
-            release/latest.json
-          if-no-files-found: warn
+          if-no-files-found: error
 
-      - name: Upload Portable Edition artifact
-        uses: actions/upload-artifact@v7.0.2
+      - name: Upload portable Windows artifact
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: GrimoireMaker-Portable-x64
+          name: release-windows-portable
           path: release/GrimoireMaker-portable-*-x64.zip
           if-no-files-found: error
 
-      - name: Publish GitHub Release (on tag push)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v3.0.3
+      - name: Upload macOS artifacts
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
+          name: release-macos-packages
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz*
+          if-no-files-found: error
+
+  publish:
+    name: Publish complete release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag_name != '')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
+    steps:
+      - name: Validate release tag
+        shell: bash
+        run: |
+          node --input-type=module <<'VALIDATE_TAG'
+          const tag = process.env.TAG ?? ''
+          if (/\s/.test(tag) || !/^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(tag)) {
+            console.error('Release tag must be a version such as v1.2.3 or v1.2.3-rc.1')
+            process.exit(1)
+          }
+          VALIDATE_TAG
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Download all completed build artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          path: release/bundles
+          merge-multiple: true
+
+      - name: Generate combined update manifest
+        shell: bash
+        run: |
+          node scripts/generate-update-manifest.mjs --tag "$TAG" --bundle-dir release/bundles --out release/latest.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs'
+          const { platforms } = JSON.parse(readFileSync('release/latest.json', 'utf8'))
+          if (['windows-x86_64', 'darwin-aarch64', 'darwin-x86_64'].some(key => !platforms[key])) {
+            throw new Error('Windows and both macOS architectures are required before publishing')
+          }
+          NODE
+
+      - name: Publish all artifacts and the combined manifest
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ env.TAG }}
           draft: false
           prerelease: false
           generate_release_notes: true
           files: |
-            src-tauri/target/release/bundle/nsis/*-setup.exe
-            src-tauri/target/release/bundle/nsis/*-setup.exe.sig
-            src-tauri/target/release/bundle/nsis/*-setup.nsis.zip
-            src-tauri/target/release/bundle/nsis/*-setup.nsis.zip.sig
+            release/bundles/**/*
             release/latest.json
-            release/GrimoireMaker-portable-*-x64.zip

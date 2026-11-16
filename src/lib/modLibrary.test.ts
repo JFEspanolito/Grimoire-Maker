@@ -1,6 +1,9 @@
+import { LEGACY_PLUGINS } from './__fixtures__/legacy-plugins/catalog'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { exists, readTextFile, rename, stat, writeTextFile } from '@tauri-apps/plugin-fs'
-import { LEGACY_PLUGINS, MOD_EXAMPLES, OFFICIAL_PLUGINS, readDisabledMods, writeDisabledMods } from './modLibrary'
+import * as library from './modLibrary'
+import librarySource from './modLibrary.ts?raw'
+import { MOD_EXAMPLES, OFFICIAL_PLUGINS, readDisabledMods, writeDisabledMods } from './modLibrary'
 
 vi.mock('@tauri-apps/plugin-fs', () => ({ exists: vi.fn(), mkdir: vi.fn(), readDir: vi.fn(), readTextFile: vi.fn(), remove: vi.fn(), rename: vi.fn(), stat: vi.fn(), writeTextFile: vi.fn() }))
 beforeEach(() => { vi.resetAllMocks(); vi.mocked(stat).mockResolvedValue({ size: 100 } as Awaited<ReturnType<typeof stat>>) })
@@ -29,6 +32,10 @@ it('ships declarative content plus complete executable Zoom and Ruler packages',
   }
   expect(OFFICIAL_PLUGINS.map(plugin => plugin.folder)).toEqual(['bookmarks', 'pixel-ruler', 'quotes', 'zoom'])
   expect(OFFICIAL_PLUGINS.find(plugin => plugin.folder === 'zoom')).toMatchObject({ label: 'Zoom' })
+})
+it('excludes historical sources from the production catalog and its asset glob', () => {
+  expect(library).not.toHaveProperty('LEGACY_PLUGINS')
+  expect(librarySource).toContain("'!../assets/mods/Legacy/**'")
 })
 it('keeps the old trusted sources apart as the legacy baseline, never as seedable examples', () => {
   expect(Object.keys(MOD_EXAMPLES).some(path => path.startsWith('Legacy/'))).toBe(false)

@@ -568,7 +568,12 @@ export function buildTemplateExport(
   ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
 
   const id = slugify(name, 'template')
-  const description = meta.description?.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/g, '').trim().slice(0, 2000)
+  const description = meta.description?.replace(/\r\n?/g, '\n').replace(/[\s\S]/g, character => {
+    const code = character.charCodeAt(0)
+    const control = (code < 32 || code === 127) && character !== '\t' && character !== '\n' && character !== '\r'
+    const invisible = /[\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/.test(character)
+    return control || invisible ? '' : character
+  }).trim().slice(0, 2000)
   const author = cleanLine(meta.author ?? '', 120)
   const rootDirectory = hasDraft ? 'Draft' : cleanLine(root.slice(root.lastIndexOf('/') + 1), 100)
   const manifest: TemplateManifest = {

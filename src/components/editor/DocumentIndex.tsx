@@ -1,10 +1,13 @@
+import { useTranslation } from '../../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { useDocumentStore } from '../../stores/documentStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { documentLabel } from '../../lib/documentLabel'
 import styles from './DocumentIndex.module.css'
 
-interface Entry { level: 1 | 2 | 3; text: string; page: number; element: HTMLElement }
+interface Entry { id: number; level: 1 | 2 | 3; text: string; page: number; element: HTMLElement }
+const headingIds = new WeakMap<HTMLElement, number>()
+let nextHeadingId = 0
 
 /** Reads the rendered headings so page numbers match the sheets the writer actually sees. */
 function collectEntries(pane: HTMLElement): Entry[] {
@@ -13,13 +16,16 @@ function collectEntries(pane: HTMLElement): Entry[] {
   return Array.from(pane.querySelectorAll<HTMLElement>('.ProseMirror h1, .ProseMirror h2, .ProseMirror h3'))
     .filter((heading) => heading.textContent?.trim())
     .map((element) => {
+      let id = headingIds.get(element)
+      if (id === undefined) { id = ++nextHeadingId; headingIds.set(element, id) }
       const top = element.getBoundingClientRect().top
       const page = Math.max(1, sheets.filter((sheetTop) => sheetTop <= top + 1).length)
-      return { level: Number(element.tagName[1]) as 1 | 2 | 3, text: element.textContent!.trim(), page, element }
+      return { id, level: Number(element.tagName[1]) as 1 | 2 | 3, text: element.textContent!.trim(), page, element }
     })
 }
 
 export function DocumentIndex({ path, visible }: { path: string | null; visible: boolean }) {
+  const { t } = useTranslation();
   const enabled = useSettingsStore((s) => s.panels.documentIndex)
   const body = useDocumentStore((s) => s.buffers[path ?? '__untitled__']?.body ?? (s.document.path === path ? s.document.body : ''))
   const title = useDocumentStore((s) => (s.buffers[path ?? '__untitled__'] ?? s.document).frontmatter.title)
@@ -38,18 +44,18 @@ export function DocumentIndex({ path, visible }: { path: string | null; visible:
 
   if (!enabled) return null
   return <div ref={anchor} className={styles.anchor}>
-    <nav className={styles.panel} aria-label="Document index">
+    <nav className={styles.panel} aria-label={t('ui.document_index')}>
       <h2>{name}</h2>
       {entries.length > 0 ? (
         <ol>
-          {entries.map((entry, index) => <li key={index} data-level={entry.level}>
+          {entries.map((entry) => <li key={entry.id} data-level={entry.level}>
             <button type="button" onClick={() => entry.element.scrollIntoView({ block: 'start', behavior: 'smooth' })}>
               <span className={styles.text}>{entry.text}</span><span className={styles.page}>{entry.page}</span>
             </button>
           </li>)}
         </ol>
       ) : (
-        <p className={styles.empty}>No headings found</p>
+        <p className={styles.empty}>{t('ui.no_headings_found')}</p>
       )}
     </nav>
   </div>

@@ -1,11 +1,44 @@
 import { setupBinder, type BinderFs } from './binder'
 
-export const DEMO_MARKDOWN = `# Welcome to Grimoire Maker
+export const DEMO_MARKDOWN = `---
+title: Welcome to Grimoire Maker
+columns: 2
+---
+# Welcome to Grimoire Maker
 
-Start writing your adventure here. Drag blocks from the **Snippets** palette,
-or edit the Markdown directly: the page view is the source of truth.
+Thank you for using Grimoire Maker! Whatever you need—feedback, questions, bug
+reports, or feature requests—you can reach out anytime via **Help → Report an Issue**:
 
-> Read-aloud boxes and statblocks are stored as plain Markdown blocks.
+- [Report a Bug](https://github.com/JFEspanolito/Grimoire-Maker/issues/new?template=bug_report.md)
+- [Request a Feature](https://github.com/JFEspanolito/Grimoire-Maker/issues/new?template=feature_request.md)
+
+## Getting Started
+
+We recommend opening **Help → Tutorial** for a quick walkthrough of the interface.
+
+- **Snippets:** Drag reusable blocks (statblocks, read-aloud boxes, character sheets, and tables) from the **Snippets** panel directly onto the page, or double-click to insert at your cursor.
+- **Templates:** Use ready-made layouts and themes for adventures, rulebooks, zines, and manuals, or share your own via **File → Export as Template…**.
+
+<div data-type="column-break"></div>
+
+## Quick Examples
+
+This page uses \`columns: 2\` in its frontmatter and a **Column Break** (**Insert → Column Break**) to flow into two columns.
+
+> **Read-aloud box:** Plain Markdown blockquotes work great for boxed narrative text.
+
+### Sample Encounter Table
+
+| d6 | Encounter | Difficulty |
+| --- | --- | --- |
+| 1–2 | Goblin Scouts | Easy |
+| 3–4 | Whispering Statue | Medium |
+| 5–6 | Ashbound Wyrmling | Hard |
+
+---
+
+*Made with love*  
+[@jfespanolito](https://www.jfespanolito.dev/linktree)
 `
 
 interface ProjectFs extends BinderFs {

@@ -2,9 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 import configSource from '../../../src-tauri/tauri.conf.json?raw'
 import packageSource from '../../../package.json?raw'
 import styles from './AppInfoDialog.module.css'
+import { TUTORIAL_STEPS, type TourStep } from './tutorialSteps'
+export { TUTORIAL_STEPS } from './tutorialSteps'
 import { localContributors, urlGithubBugReport, urlGithubFeatureRequest, urlGithubRepo } from '../../data/contributors'
 import { AboutUpdates } from './AboutUpdates'
 import { useTranslation } from '../../lib/i18n'
+import { PANEL_IDS, useSettingsStore, type PanelVisibility } from '../../stores/settingsStore'
 
 const INFO_DIALOG = { ABOUT: 'about', TUTORIAL: 'tutorial' } as const
 export type InfoDialogKind = (typeof INFO_DIALOG)[keyof typeof INFO_DIALOG]
@@ -37,59 +40,6 @@ async function fetchContributors(signal: AbortSignal): Promise<typeof localContr
   throw new Error('Contributors response exceeds the supported page limit')
 }
 
-interface TourStep {
-  title: string
-  selectors: readonly string[]
-  placement: 'right' | 'center' | 'bottom' | 'bottom-end' | 'left'
-  description: string
-  usage: string
-}
-
-export const TUTORIAL_STEPS: readonly TourStep[] = [
-  {
-    title: 'Project Files, Templates & Git',
-    selectors: ['[data-tour="project-sidebar"]', 'aside'],
-    placement: 'right',
-    description: 'Organize your manual in Draft, Research, and Trash, start from ready-made book Templates, and record local history with Git · Source control.',
-    usage: 'Use + File or + Folder to create content, drag files between folders, open images/PDF/DOCX in read-only preview tabs, or commit changes in the Git panel.',
-  },
-  {
-    title: 'Tabs, Split View & Page Editor',
-    selectors: ['[data-tour="editor-workspace"]', 'main'],
-    placement: 'center',
-    description: 'Write in Markdown directly on physical sheets with independent multi-tab editing, side-by-side Split View, and 1 or 2 column layouts.',
-    usage: 'Click any sheet to start writing, open multiple documents in tabs, or use View → Split View and Columns to compare and lay out chapters.',
-  },
-  {
-    title: 'Formatting, Images & Alignment Guides',
-    selectors: ['[role="toolbar"][aria-label="Formatting"]'],
-    placement: 'bottom',
-    description: 'Apply headings, lists, and emphasis, insert illustrations with text wrap or free placement, and add millimetre alignment guides.',
-    usage: 'Click Image to import illustrations (use Push text to wrap paragraphs or Over text to drag across pages) and open Guides to add + Row or + Column lines.',
-  },
-  {
-    title: 'Page View, Zoom & Print Ruler',
-    selectors: ['[role="group"][aria-label="Editor tools"]'],
-    placement: 'bottom-end',
-    description: 'Inspect your book as single sheets or open-book facing spreads, scale the workspace, and verify physical margins and bleed.',
-    usage: 'Switch Page view between Single page and Spread, change Zoom (or press Ctrl + mouse wheel), and toggle Ruler to inspect page measurements.',
-  },
-  {
-    title: 'Snippets & Properties',
-    selectors: ['[data-tour="snippets-sidebar"]'],
-    placement: 'left',
-    description: 'Insert reusable RPG blocks inside movable Content Boxes and configure global book credits or per-page layout overrides.',
-    usage: 'Drag Snippets (Character Sheet, Statblock, Read-aloud, d6/d100 tables) onto a page, and edit book title, authors, artists, or page columns in Properties.',
-  },
-  {
-    title: 'Themes, Mods & Export PDF',
-    selectors: ['[aria-label="Application menu"]'],
-    placement: 'bottom',
-    description: 'Customize visual themes, manage installed mod packages, configure auto-save intervals, and publish your finished manual to PDF.',
-    usage: 'Open Settings → Preferences or Mod Manager to customize themes and mods, and select File → Export PDF… to generate and open your print-ready PDF.',
-  },
-]
-
 interface SpotlightRect {
   left: number
   top: number
@@ -105,13 +55,14 @@ function findTourTarget(selectors: readonly string[]): Element | null {
   return null
 }
 
-function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['placement']): CSSProperties {
+function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['placement'], popoverHeight: number): CSSProperties {
   if (!rect || typeof window === 'undefined') return {}
   const vw = window.innerWidth || 1280
   const vh = window.innerHeight || 800
   const cardWidth = Math.min(380, vw - 32)
+  const cardHeight = Math.max(260, popoverHeight)
   const clampX = (x: number) => Math.max(16, Math.min(vw - cardWidth - 16, x))
-  const clampY = (y: number) => Math.max(16, Math.min(vh - 260, y))
+  const clampY = (y: number) => Math.max(5, Math.min(vh - cardHeight - 5, y))
 
   if (placement === 'right') {
     return { left: `${clampX(rect.left + rect.width + 16)}px`, top: `${clampY(rect.top + 16)}px` }
@@ -125,6 +76,9 @@ function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['pl
   if (placement === 'bottom') {
     return { left: `${clampX(rect.left)}px`, top: `${clampY(rect.top + rect.height + 14)}px` }
   }
+  if (placement === 'top') {
+    return { left: `${clampX(rect.left + (rect.width - cardWidth) / 2)}px`, top: `${clampY(rect.top - cardHeight - 14)}px` }
+  }
   return {
     left: `${clampX(rect.left + (rect.width - cardWidth) / 2)}px`,
     top: `${clampY(rect.top + 32)}px`,
@@ -134,22 +88,41 @@ function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['pl
 export function AppInfoDialog({ kind, onClose }: Props) {
   const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
+  const popoverRef = useRef<HTMLElement>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null)
+  const [popoverHeight, setPopoverHeight] = useState(320)
   const isTutorial = kind === INFO_DIALOG.TUTORIAL
   const [contributors, setContributors] = useState<typeof localContributors>([])
   const [creditsLoading, setCreditsLoading] = useState(true)
   const [localCredits, setLocalCredits] = useState(false)
+  const [creditsKind, setCreditsKind] = useState(kind)
+  if (creditsKind !== kind) {
+    setCreditsKind(kind)
+    if (!isTutorial) {
+      setCreditsLoading(true)
+      setLocalCredits(false)
+      setContributors([])
+    }
+  }
   const title = isTutorial ? 'Tutorial' : 'About'
   const currentStep = TUTORIAL_STEPS[stepIndex] ?? TUTORIAL_STEPS[0]
+  const panels = useSettingsStore((s) => s.panels)
+
+  useLayoutEffect(() => {
+    if (!isTutorial) return
+    const previousPanels = { ...useSettingsStore.getState().panels }
+    const allShown = Object.fromEntries(PANEL_IDS.map((id) => [id, true])) as PanelVisibility
+    useSettingsStore.getState().restorePanels(allShown)
+    return () => {
+      useSettingsStore.getState().restorePanels(previousPanels)
+    }
+  }, [isTutorial])
 
   useEffect(() => {
     if (isTutorial) return
     const controller = new AbortController()
     let active = true
-    setCreditsLoading(true)
-    setLocalCredits(false)
-    setContributors([])
     const fallback = () => {
       if (!active) return
       setContributors(localContributors)
@@ -187,6 +160,10 @@ export function AppInfoDialog({ kind, onClose }: Props) {
   useLayoutEffect(() => {
     if (!isTutorial) return
     const measure = () => {
+      const cardHeight = popoverRef.current?.getBoundingClientRect().height
+      if (cardHeight && cardHeight > 0) {
+        setPopoverHeight((prev) => (Math.abs(prev - cardHeight) > 1 ? cardHeight : prev))
+      }
       const target = findTourTarget(currentStep.selectors)
       const rect = target?.getBoundingClientRect()
       if (rect && rect.width > 0 && rect.height > 0) {
@@ -201,13 +178,20 @@ export function AppInfoDialog({ kind, onClose }: Props) {
       }
     }
     measure()
+    const raf = window.requestAnimationFrame(measure)
+    const target = findTourTarget(currentStep.selectors)
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    if (target) observer?.observe(target)
+    if (popoverRef.current) observer?.observe(popoverRef.current)
     window.addEventListener('resize', measure)
     window.addEventListener('scroll', measure, true)
     return () => {
+      window.cancelAnimationFrame(raf)
+      observer?.disconnect()
       window.removeEventListener('resize', measure)
       window.removeEventListener('scroll', measure, true)
     }
-  }, [isTutorial, currentStep])
+  }, [isTutorial, currentStep, panels])
 
   if (isTutorial) {
     const isLast = stepIndex === TUTORIAL_STEPS.length - 1
@@ -234,8 +218,9 @@ export function AppInfoDialog({ kind, onClose }: Props) {
           } : undefined}
         />
         <section
+          ref={popoverRef}
           className={`${styles.popover} ${spotlight ? styles.floatingPopover : ''}`}
-          style={computePopoverStyle(spotlight, currentStep.placement)}
+          style={computePopoverStyle(spotlight, currentStep.placement, popoverHeight)}
           aria-label="Tutorial step"
         >
           <header className={styles.header}>

@@ -320,6 +320,7 @@ pub(crate) fn inventory_in(
     allowed: &dyn Fn(&Path) -> bool,
     skip: &dyn Fn(&Path, &str) -> bool,
 ) -> Result<Vec<LockedDocument>, String> {
+    #[allow(clippy::too_many_arguments)] // Recursive walk threading its accumulators and filters.
     fn walk(
         path: &Path,
         depth: usize,

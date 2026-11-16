@@ -25,7 +25,7 @@
 .tourOverlay::backdrop { background: transparent; }
 .fullBackdrop { position: fixed; inset: 0; background: rgba(10, 10, 12, 0.72); pointer-events: none; }
 .spotlight { position: fixed; border: 2px solid #cfb37c; border-radius: .4rem; box-shadow: 0 0 0 9999px rgba(10, 10, 12, 0.74), 0 0 1.25rem rgba(207, 179, 124, 0.45); pointer-events: none; transition: left 180ms ease, top 180ms ease, width 180ms ease, height 180ms ease; }
-.popover { position: fixed; inset: 0; margin: auto; width: min(23.75rem, calc(100vw - 2rem)); height: fit-content; padding: 1.1rem 1.2rem; border: 1px solid #cfb37c; border-radius: .45rem; background: #272623; box-shadow: 0 .75rem 2rem rgba(0, 0, 0, 0.65); z-index: 2; }
+.popover { position: fixed; inset: 0; margin: auto; width: min(23.75rem, calc(100vw - 2rem)); max-height: calc(100vh - 10px); overflow-y: auto; height: fit-content; padding: 1.1rem 1.2rem; border: 1px solid #cfb37c; border-radius: .45rem; background: #272623; box-shadow: 0 .75rem 2rem rgba(0, 0, 0, 0.65); z-index: 2; }
 .floatingPopover { inset: auto; margin: 0; }
 .stepBadge { display: inline-block; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #cfb37c; margin-bottom: .2rem; }
 .stepTitle { font-size: 1.05rem; font-weight: 600; color: #f0eee9; }

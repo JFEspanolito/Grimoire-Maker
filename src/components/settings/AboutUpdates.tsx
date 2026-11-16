@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { checkForAppUpdates, type UpdateInfo } from '../../lib/versionCheck'
 import { useTranslation } from '../../lib/i18n'
 import styles from './AppInfoDialog.module.css'
@@ -11,8 +11,11 @@ export function AboutUpdates() {
   const [info, setInfo] = useState<UpdateInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [dismissed, setDismissed] = useState(false)
+  const mounted = useRef(false)
+  const manualCheck = useRef<AbortController | null>(null)
 
   useEffect(() => {
+    mounted.current = true
     const controller = new AbortController()
     let active = true
     // One check per opening, including React StrictMode effect replay.
@@ -30,7 +33,7 @@ export function AboutUpdates() {
         if (active) setLoading(false)
       }
     })
-    return () => { active = false; controller.abort() }
+    return () => { active = false; mounted.current = false; controller.abort(); manualCheck.current?.abort() }
   }, [])
 
   if (dismissed) return null
@@ -44,13 +47,19 @@ export function AboutUpdates() {
         type="button"
         style={{ marginTop: '0.4rem', fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
         onClick={() => {
+          manualCheck.current?.abort()
+          const controller = new AbortController()
+          manualCheck.current = controller
           setLoading(true)
-          void checkForAppUpdates().then((res) => {
+          void checkForAppUpdates(controller.signal).then((res) => {
+            if (!mounted.current || controller.signal.aborted) return
             setInfo(res)
-            setLoading(false)
+            setDismissed(!!res && dismissedVersions.has(res.latestVersion))
           }).catch(() => {
+            if (!mounted.current || controller.signal.aborted) return
             setInfo(null)
-            setLoading(false)
+          }).finally(() => {
+            if (mounted.current && !controller.signal.aborted) setLoading(false)
           })
         }}
       >

@@ -13,7 +13,7 @@ const openFile = vi.hoisted(() => vi.fn())
 const snapshotProjectTexts = vi.hoisted(() => vi.fn())
 const commitProjectReplace = vi.hoisted(() => vi.fn())
 const autoCommitChanges = vi.hoisted(() => vi.fn())
-vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openFile }), isTauri: () => false }))
+vi.mock('../../hooks/useFileSystem', () => ({ useFileSystem: () => ({ openFile }), isTauri: () => false, runFileAction: (action: () => Promise<unknown>) => action() }))
 vi.mock('../../lib/projectReplace', () => ({ snapshotProjectTexts, commitProjectReplace }))
 vi.mock('../../lib/versionControl', () => ({ autoCommitChanges }))
 
@@ -114,7 +114,7 @@ describe('floating panel', () => {
 
   it('keeps counting while the page changes', async () => {
     const { find, set, status, unmount } = await open('dragon')
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     await set(find, 'dragon')
     expect(status()).toBe('1 match')
     await act(async () => { editor!.commands.insertContentAt(editor!.state.doc.content.size - 1, ' dragon') })
@@ -292,7 +292,7 @@ describe('Project scope', () => {
 
   it('shows a plain message and searches again when the commit is rejected', async () => {
     const { container, buttons, click, unmount } = await project()
-    commitProjectReplace.mockRejectedValue(new Error('changed'))
+    commitProjectReplace.mockRejectedValue(new Error('A document changed since the search: /p/Draft/a.md. Search again.'))
     await act(async () => buttons().find((b) => b.textContent?.startsWith('Replace All'))!.click())
     snapshotProjectTexts.mockClear()
     await click('Yes, replace all')

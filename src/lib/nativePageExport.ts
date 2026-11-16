@@ -73,7 +73,7 @@ async function waitForImages(content: HTMLElement) {
     const failed = () => finish(new Error('An image could not be loaded for PDF export.'))
     image.addEventListener('load', loaded, { once: true })
     image.addEventListener('error', failed, { once: true })
-    if (image.complete) image.naturalWidth ? loaded() : failed()
+    if (image.complete) { if (image.naturalWidth) loaded(); else failed() }
   })))
 }
 

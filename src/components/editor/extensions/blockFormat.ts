@@ -149,6 +149,14 @@ export const BlockFormat = Extension.create({
       },
       heading(state, node) {
         if (isFormatted(node)) return writeHtml(state, node)
+        // A setext heading (`Title` over `=====`) stays one when it is still level 1 or 2 on one line.
+        const underline = node.attrs.setext === '=' && node.attrs.level === 1 ? '=' : node.attrs.setext === '-' && node.attrs.level === 2 ? '-' : null
+        if (underline && !node.textContent.includes('\n')) {
+          state.renderInline(node, false)
+          state.write(`\n${state.repeat(underline, Math.max(3, node.textContent.length))}`)
+          state.closeBlock(node)
+          return
+        }
         state.write(`${state.repeat('#', node.attrs.level)} `)
         state.renderInline(node, false)
         state.closeBlock(node)

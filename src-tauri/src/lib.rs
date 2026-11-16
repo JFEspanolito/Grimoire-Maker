@@ -62,6 +62,7 @@ pub fn run() {
         .manage(commands::terminal::TerminalState::default())
         .invoke_handler(tauri::generate_handler![
             fs_scope::prepare_project_metadata,
+            fs_scope::prepare_document_save,
             config_root::config_root,
             config_root::is_portable,
             commands::files::list_markdown_files,
@@ -80,6 +81,9 @@ pub fn run() {
             commands::version_control::git_auto_commit,
             commands::version_control::git_init,
             commands::workspace::restore_workspace,
+            commands::workspace::grant_document_folder,
+            commands::app_state::read_app_state,
+            commands::app_state::write_app_state,
             commands::workspace::rename_workspace,
             commands::rename_references::snapshot_rename_references,
             commands::rename_references::commit_rename_references,

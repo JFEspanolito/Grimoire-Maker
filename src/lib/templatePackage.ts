@@ -72,7 +72,7 @@ export function isSafePackagePath(name: string): boolean {
 }
 
 const INVISIBLE_GLOBAL = new RegExp(INVISIBLE_CHARS.source, 'g')
-const CONTROL_GLOBAL = /[\u0000-\u001f\u007f-\u009f]+/g
+const CONTROL_GLOBAL = /\p{Cc}+/gu
 
 /** One line of user text: no control, zero-width or bidirectional characters, single spaces, bounded. */
 export function cleanLine(value: string, max: number): string {
@@ -184,8 +184,11 @@ function manifestText(value: unknown, key: string, { max, required = false, mult
     return undefined
   }
   if (typeof value !== 'string') throw new PackageError(`template.json: "${key}" must be text`)
-  const control = multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/ : /[\u0000-\u001f\u007f]/
-  if (control.test(value) || INVISIBLE_CHARS.test(value)) throw new PackageError(`template.json: "${key}" contains control or invisible characters`)
+  const hasControl = Array.from(value).some(character => {
+    const code = character.charCodeAt(0)
+    return (code < 32 || code === 127) && !(multiline && (character === '\t' || character === '\n' || character === '\r'))
+  })
+  if (hasControl || INVISIBLE_CHARS.test(value)) throw new PackageError(`template.json: "${key}" contains control or invisible characters`)
   if (value.length > max) throw new PackageError(`template.json: "${key}" is longer than ${max} characters`)
   if (required && !value.trim()) throw new PackageError(`template.json needs a "${key}"`)
   return value

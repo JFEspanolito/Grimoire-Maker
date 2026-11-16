@@ -1,10 +1,12 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { invoke } from '@tauri-apps/api/core'
 import { writeTextFile } from '@tauri-apps/plugin-fs'
 import { saveSettings } from './preferences'
-import { watchSettings } from './appState'
+import { loadAppState, rememberWorkspace, updateAppState, watchSettings } from './appState'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useSessionStore } from '../stores/sessionStore'
 
+vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
 vi.mock('./preferences', () => ({ saveSettings: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: vi.fn(), mkdir: vi.fn(), readTextFile: vi.fn(), writeTextFile: vi.fn(),
@@ -87,4 +89,28 @@ it('persists language through setting.json when changed', async () => {
   await Promise.resolve()
   expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ language: 'es' }))
   useSettingsStore.getState().setLanguage('en')
+})
+
+describe('session state owned by Rust', () => {
+  it('reads the session through Rust and drops malformed fields', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ lastWorkspace: 'C:/book', recentWorkspaces: ['C:/book', 7], lastFile: 'C:/book/a.md', settings: null })
+    await expect(loadAppState()).resolves.toEqual({ lastWorkspace: 'C:/book', recentWorkspaces: ['C:/book'], lastFile: 'C:/book/a.md', settings: {} })
+    expect(invoke).toHaveBeenCalledWith('read_app_state')
+  })
+
+  it('saves the session through Rust, never by writing the file itself', async () => {
+    vi.mocked(invoke).mockImplementation(async (command, args) => command === 'read_app_state' ? {} : (args as { state: unknown }).state)
+    const saved = await updateAppState(rememberWorkspace('C:/book'))
+    expect(saved).toMatchObject({ lastWorkspace: 'C:/book', recentWorkspaces: ['C:/book'] })
+    expect(invoke).toHaveBeenCalledWith('write_app_state', { state: expect.objectContaining({ lastWorkspace: 'C:/book' }) })
+    expect(writeTextFile).not.toHaveBeenCalled()
+  })
+
+  it('passes on a refusal from Rust', async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === 'read_app_state') return {}
+      throw new Error('"C:/" is not a project folder you opened')
+    })
+    await expect(updateAppState(rememberWorkspace('C:/'))).rejects.toThrow('"C:/" is not a project folder you opened')
+  })
 })

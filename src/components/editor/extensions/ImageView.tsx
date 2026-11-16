@@ -36,6 +36,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   const [shown, setShown] = useState<{ src: string; url: string } | null>(null)
   const [failure, setFailure] = useState<{ src: string; message: string } | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
+  const [decoded, setDecoded] = useState<{ src: string; url: string } | null>(null)
   const stopDrag = useRef<(() => void) | null>(null)
   const imageRef = useRef<HTMLImageElement>(null)
   const [corner, setCorner] = useState<{ left: number; top: number } | null>(null)
@@ -43,11 +44,23 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   const placeHandle = () => {
     const image = imageRef.current
     const page = image?.closest('.grimoire-page')
-    if (!image || !page) return
+    if (!image || !page) { setCorner(null); return }
     const rect = image.getBoundingClientRect()
-    if (!rect.width) return
+    if (!rect.width) { setCorner(null); return }
     // Viewport pixels: the handle lives outside the page, so it can never alter the page layout.
     const next = { left: rect.left + rect.width, top: rect.top + rect.height }
+    const clips = (overflow: string) => /auto|scroll|hidden|clip/.test(overflow)
+    let visible = next.left >= 0 && next.left <= window.innerWidth && next.top >= 0 && next.top <= window.innerHeight
+    for (let parent = image.parentElement; parent && visible; parent = parent.parentElement) {
+      const style = getComputedStyle(parent)
+      const clipX = clips(style.overflowX || style.overflow)
+      const clipY = clips(style.overflowY || style.overflow)
+      if (!clipX && !clipY) continue
+      const bounds = parent.getBoundingClientRect()
+      if ((clipX && (next.left < bounds.left || next.left > bounds.right))
+        || (clipY && (next.top < bounds.top || next.top > bounds.bottom))) visible = false
+    }
+    if (!visible) { setCorner(null); return }
     // Sub-pixel noise must not re-render.
     setCorner((old) => old && Math.abs(old.left - next.left) < 0.3 && Math.abs(old.top - next.top) < 0.3 ? old : next)
   }
@@ -58,10 +71,13 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     const image = imageRef.current
     const page = image?.closest('.grimoire-page')
     if (!image || !page || typeof ResizeObserver === 'undefined') return
-    // Only the image: the page also resizes because of the handle itself (it is absolute inside a
-    // spread's fragmented stack), which made the handle and the page chase each other forever.
+    // The portaled handle cannot alter the image or clipping viewport's layout.
     const observer = new ResizeObserver(placeHandle)
     observer.observe(image)
+    for (let parent = image.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent)
+      if (/auto|scroll|hidden|clip/.test(`${style.overflow} ${style.overflowX} ${style.overflowY}`)) observer.observe(parent)
+    }
     // The handle is fixed to the viewport, so it follows scrolling and window changes itself.
     window.addEventListener('scroll', placeHandle, true)
     window.addEventListener('resize', placeHandle)
@@ -317,8 +333,6 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
   useEffect(() => {
     let cancelled = false
     let created: string | null = null
-    setShown(null)
-    setFailure(null)
     const timer = window.setTimeout(() => {
       cancelled = true
       const message = `Image loading timed out: ${src}`
@@ -345,6 +359,14 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
     }
   }, [src, documentPath, loadAttempt])
 
+  const [loadSource, setLoadSource] = useState({ src, documentPath, loadAttempt })
+  if (loadSource.src !== src || loadSource.documentPath !== documentPath || loadSource.loadAttempt !== loadAttempt) {
+    setLoadSource({ src, documentPath, loadAttempt })
+    setShown(null)
+    setFailure(null)
+    setDecoded(null)
+  }
+
   const url = shown && shown.src === src ? shown.url : null
   const error = failure && failure.src === src ? failure.message : null
   const imageStyle: CSSProperties = {
@@ -360,6 +382,7 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
       data-align={align}
       data-anchor={anchor}
       data-frame={frame}
+      data-image-state={error ? 'error' : url && decoded?.src === src && decoded?.url === url ? 'ready' : 'loading'}
       data-column-span={columnSpan === 'all' ? 'all' : undefined}
       data-selected={selected}
     >
@@ -379,8 +402,12 @@ export function ImageView({ node, selected, updateAttributes, editor, getPos }: 
           data-width-mm={widthMm ?? undefined}
           style={imageStyle}
           onPointerDown={startDrag}
-          onLoad={placeHandle}
-          onError={() => setFailure({ src, message: `Unable to decode image: ${src}` })}
+          onLoad={() => { setDecoded({ src, url }); placeHandle() }}
+          onError={() => {
+            const message = `Unable to decode image: ${src}`
+            reportError('editor.image.load', new Error(message))
+            setFailure({ src, message })
+          }}
           onDragStart={(event) => { event.preventDefault(); event.stopPropagation() }}
         />
       ) : (

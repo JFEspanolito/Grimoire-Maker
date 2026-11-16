@@ -12,13 +12,21 @@ function parseScalar(raw: string): string | number | boolean {
   if (value === 'true') return true
   if (value === 'false') return false
   if (value !== '' && !Number.isNaN(Number(value))) return Number(value)
-  if (/^(".*"|'.*')$/.test(value)) return value.slice(1, -1)
+  if (/^".*"$/.test(value)) {
+    try {
+      const decoded: unknown = JSON.parse(value)
+      if (typeof decoded === 'string') return decoded
+    } catch { /* Keep legacy hand-written quoted values that are not valid JSON. */ }
+    return value.slice(1, -1)
+  }
+  if (/^'.*'$/.test(value)) return value.slice(1, -1).replaceAll("''", "'")
   return value
 }
 
 function formatScalar(value: unknown): string {
   if (typeof value === 'string') {
     return /^[\w .,-]+$/.test(value) && value.trim() === value && Number.isNaN(Number(value))
+      && value !== 'true' && value !== 'false'
       ? value
       : JSON.stringify(value)
   }

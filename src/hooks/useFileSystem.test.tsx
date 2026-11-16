@@ -16,6 +16,11 @@ import { useSettingsStore } from '../stores/settingsStore'
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }))
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }))
+// Atomicity is covered in atomicWrite.test.ts; here the write lands on the target like any other.
+vi.mock('../lib/atomicWrite', async () => {
+  const fs = await import('@tauri-apps/plugin-fs')
+  return { writeTextFileAtomically: (path: string, text: string) => fs.writeTextFile(path, text) }
+})
 vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: vi.fn(),
   mkdir: vi.fn(),
@@ -39,6 +44,8 @@ const emptyState = (): AppState => ({ lastWorkspace: null, recentWorkspaces: [],
 let state: AppState
 let actions: ReturnType<typeof useFileSystem>
 let directories: Set<string>
+/** Files written during a test, read back by later reads; other reads return '# Next chapter'. */
+let disk: Map<string, string>
 let root: Root | null = null
 
 function Harness({ onReady }: { onReady: (value: ReturnType<typeof useFileSystem>) => void }) {
@@ -61,8 +68,9 @@ beforeEach(async () => {
   vi.mocked(open).mockResolvedValue('/workspace')
   vi.mocked(save).mockResolvedValue('/workspace/Draft/untitled.md')
   vi.mocked(invoke).mockResolvedValue(undefined)
-  vi.mocked(readTextFile).mockResolvedValue('# Next chapter')
-  vi.mocked(writeTextFile).mockResolvedValue(undefined)
+  disk = new Map()
+  vi.mocked(readTextFile).mockImplementation(async (path) => disk.get(String(path)) ?? '# Next chapter')
+  vi.mocked(writeTextFile).mockImplementation(async (path, text) => { disk.set(String(path), String(text)) })
   vi.mocked(loadAppState).mockImplementation(async () => state)
   vi.mocked(applyTemplateFiles).mockResolvedValue('/workspace/Draft/pack/index.md')
   vi.mocked(updateAppState).mockImplementation(async (change) => (state = change(state)))
@@ -310,6 +318,38 @@ describe('switching Markdown files', () => {
     expect(useDocumentStore.getState().document.dirty).toBe(true)
   })
 
+  it('lets a document opened outside a project read the folder next to it', async () => {
+    vi.mocked(open).mockResolvedValueOnce('C:\\Notes\\loose.md')
+    await actions.openFile()
+    expect(invoke).toHaveBeenCalledWith('grant_document_folder', { path: 'C:/Notes/loose.md' })
+    expect(useDocumentStore.getState().document.path).toBe('C:/Notes/loose.md')
+  })
+
+  it('asks no folder access for a document inside the open project', async () => {
+    useDocumentStore.getState().setWorkspace('/workspace', [])
+    await actions.openFile('/workspace/Draft/two.md')
+    expect(invoke).not.toHaveBeenCalledWith('grant_document_folder', expect.anything())
+  })
+
+  it('asks no folder access for a PDF or image opened outside a project', async () => {
+    await actions.openFile('/downloads/manual.pdf')
+    expect(invoke).not.toHaveBeenCalledWith('grant_document_folder', expect.anything())
+  })
+
+  it('still opens the document when its folder cannot be shared', async () => {
+    vi.mocked(invoke).mockRejectedValueOnce(new Error('Documents directly in your home folder or a drive root keep access to the file only'))
+    await actions.openFile('/home/loose.md')
+    expect(useDocumentStore.getState().document.path).toBe('/home/loose.md')
+  })
+
+  it('lets a document saved outside a project read the folder next to it', async () => {
+    useDocumentStore.getState().setBody('# Draft')
+    vi.mocked(save).mockResolvedValueOnce('/notes/new.md')
+    await actions.saveFile()
+    expect(writeTextFile).toHaveBeenCalledWith('/notes/new.md', expect.any(String))
+    expect(invoke).toHaveBeenCalledWith('grant_document_folder', { path: '/notes/new.md' })
+  })
+
   it('does not replace an unsaved document if Save As is cancelled', async () => {
     useDocumentStore.getState().loadFromRaw(null, '# Original')
     useDocumentStore.getState().setBody('# Edited')
@@ -331,6 +371,36 @@ afterEach(async () => {
 })
 
 describe('workspace opening', () => {
+  it.each(['openWorkspace', 'openRecent', 'createProject'] as const)('keeps the current workspace intact when native session persistence rejects %s', async (action) => {
+    const path = '/previous/Draft/chapter.md'
+    state = { ...emptyState(), lastWorkspace: '/previous', recentWorkspaces: ['/previous'], lastFile: path }
+    useDocumentStore.getState().setWorkspace('/previous', [{ name: 'chapter.md', path, isDirectory: false }])
+    useDocumentStore.getState().loadFromRaw(path, '# Previous chapter')
+    useTabStore.getState().reset(path)
+    useExplorerStore.getState().selectPath(path)
+    useSessionStore.getState().setRecentWorkspaces(['/previous'])
+    useSessionStore.getState().setWorkspaceError(null)
+    const previous = useDocumentStore.getState()
+    const tabs = useTabStore.getState()
+    const saved = structuredClone(state)
+    vi.mocked(updateAppState).mockRejectedValueOnce(new Error('Folder is not a project you opened'))
+
+    if (action === 'createProject') expect(await actions.createProject('Rejected')).toBe(false)
+    else if (action === 'openRecent') await actions.openRecent('/workspace')
+    else await actions.openWorkspace()
+
+    expect(useDocumentStore.getState().workspaceRoot).toBe('/previous')
+    expect(useDocumentStore.getState().tree).toBe(previous.tree)
+    expect(useDocumentStore.getState().document).toBe(previous.document)
+    expect(useDocumentStore.getState().buffers).toBe(previous.buffers)
+    expect(useTabStore.getState().paths).toEqual(tabs.paths)
+    expect(useTabStore.getState().active).toBe(path)
+    expect(useExplorerStore.getState().selectedPath).toBe(path)
+    expect(useSessionStore.getState().recentWorkspaces).toEqual(['/previous'])
+    expect(useSessionStore.getState().workspaceError).toContain('Folder is not a project you opened')
+    expect(state).toEqual(saved)
+  })
+
   it('creates binder sections when opening an empty project and remembers it', async () => {
     await actions.openWorkspace()
 
@@ -653,6 +723,7 @@ it('restores appearance from setting.json rather than stale session settings', a
 
 it('autosaves named dirty buffers without dialogs or switching the focused tab', async () => {
   const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A'); disk.set('/b.md', 'B')
   store.loadFromRaw('/a.md', 'A'); store.setBody('edited A')
   store.loadFromRaw('/b.md', 'B'); store.setBody('edited B')
   store.loadFromRaw(null, ''); store.setBody('untitled edit')
@@ -669,6 +740,7 @@ it('autosaves named dirty buffers without dialogs or switching the focused tab',
 
 it('autosave preserves edits made during writing and continues after an individual failure', async () => {
   const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A'); disk.set('/b.md', 'B')
   store.loadFromRaw('/a.md', 'A'); store.setBody('edited A')
   store.loadFromRaw('/b.md', 'B'); store.setBody('edited B')
   vi.mocked(writeTextFile).mockImplementationOnce(async () => { throw new Error('disk full') })
@@ -683,10 +755,13 @@ it('autosave preserves edits made during writing and continues after an individu
 
 it.each(['manual-first', 'automatic-first'])('serializes both save paths (%s) and takes queued snapshots at execution time', async (order) => {
   const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A')
   store.loadFromRaw('/a.md', 'A'); store.setBody('first')
   useTabStore.getState().reset('/a.md')
   let finish!: () => void
-  vi.mocked(writeTextFile).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve }))
+  vi.mocked(writeTextFile).mockImplementationOnce((path, text) => new Promise<void>(resolve => {
+    finish = () => { disk.set(String(path), String(text)); resolve() }
+  }))
   const first = order === 'manual-first' ? actions.saveFile() : actions.autoSave()
   await vi.waitFor(() => expect(writeTextFile).toHaveBeenCalledOnce())
   store.setBody('second')
@@ -770,4 +845,74 @@ describe('file rename references', () => {
     expect(useDocumentStore.getState().document.body).toBe('[self](old.md)')
     expect(useTabStore.getState().active).toBe('/workspace/Draft/old.md')
   })
+})
+
+it('autosave skips a buffer closed while an earlier document was being written', async () => {
+  const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A'); disk.set('/b.md', 'B')
+  store.loadFromRaw('/a.md', 'A'); store.setBody('edited A')
+  store.loadFromRaw('/b.md', 'B'); store.setBody('discarded B')
+  vi.mocked(writeTextFile).mockImplementationOnce(async (path, text) => {
+    disk.set(String(path), String(text))
+    useDocumentStore.getState().forget('/b.md')
+  })
+  await actions.autoSave()
+  expect(writeTextFile).toHaveBeenCalledExactlyOnceWith('/a.md', 'edited A')
+  expect(disk.get('/b.md')).toBe('B')
+})
+
+it('autosave refuses to overwrite a file changed on disk and leaves the edit unsaved', async () => {
+  const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A')
+  store.loadFromRaw('/a.md', 'A'); store.setBody('edited A')
+  disk.set('/a.md', 'changed elsewhere')
+  await expect(actions.autoSave()).rejects.toThrow('/a.md: changed on disk since it was opened; save it manually to overwrite')
+  expect(writeTextFile).not.toHaveBeenCalled()
+  expect(disk.get('/a.md')).toBe('changed elsewhere')
+  expect(useDocumentStore.getState().document.dirty).toBe(true)
+  expect(useSessionStore.getState().workspaceError).toContain('changed on disk')
+})
+
+it('autosave keeps working after its own previous save', async () => {
+  const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A')
+  store.loadFromRaw('/a.md', 'A'); store.setBody('one')
+  await actions.autoSave()
+  store.setBody('two')
+  await actions.autoSave()
+  expect(disk.get('/a.md')).toBe('two')
+})
+
+it('manual save still overwrites a file changed on disk', async () => {
+  const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A')
+  store.loadFromRaw('/a.md', 'A'); store.setBody('mine')
+  useTabStore.getState().reset('/a.md')
+  disk.set('/a.md', 'changed elsewhere')
+  await actions.saveFile()
+  expect(disk.get('/a.md')).toBe('mine')
+})
+
+it('autosave treats a file already holding the buffer as saved, as after a plugin writes it', async () => {
+  const store = useDocumentStore.getState()
+  disk.set('/a.md', 'A')
+  store.loadFromRaw('/a.md', 'A')
+  disk.set('/a.md', 'written by plugin')
+  store.setRawForPath('/a.md', 'written by plugin')
+  await actions.autoSave()
+  expect(disk.get('/a.md')).toBe('written by plugin')
+  expect(useDocumentStore.getState().document.dirty).toBe(false)
+  store.setBody('later edit')
+  await actions.autoSave()
+  expect(disk.get('/a.md')).toBe('later edit')
+})
+
+it('recreates Welcome.md at the Draft root and opens it in a tab', async () => {
+  disk.set('/workspace', '')
+  useDocumentStore.getState().setWorkspace('/workspace', [])
+  await actions.createWelcomeFile()
+  expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/Welcome.md', expect.stringContaining('# Welcome to Grimoire Maker'))
+  expect(disk.get('/workspace/Draft/Welcome.md')).toContain('# Welcome to Grimoire Maker')
+  expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/Welcome.md')
+  expect(useTabStore.getState().active).toBe('/workspace/Draft/Welcome.md')
 })

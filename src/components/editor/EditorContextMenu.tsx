@@ -1,9 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { ContextMenu } from '../layout/ContextMenu'
 import styles from './EditorContextMenu.module.css'
+import type { ReactNode } from 'react'
 
 export interface EditorMenuItem {
   id: string
   label: string
+  icon?: ReactNode
   run: () => void
 }
 
@@ -17,26 +19,13 @@ interface Props {
 
 /** The page editor's single right-click menu: host items and plugin items in one list. */
 export function EditorContextMenu({ x, y, items, onClose }: Props) {
-  const menu = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    menu.current?.querySelector<HTMLButtonElement>('button')?.focus()
-    const close = (event: Event) => { if (!menu.current?.contains(event.target as Node)) onClose() }
-    const blur = () => onClose()
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(true) }
-    document.addEventListener('pointerdown', close, true)
-    document.addEventListener('keydown', key)
-    window.addEventListener('blur', blur)
-    return () => {
-      document.removeEventListener('pointerdown', close, true)
-      document.removeEventListener('keydown', key)
-      window.removeEventListener('blur', blur)
-    }
-  }, [onClose])
   return (
-    <div ref={menu} className={styles.menu} role="menu" aria-label="Editor actions" style={{ left: x, top: y }}>
+    <ContextMenu className={styles.menu} label="Editor actions" x={x} y={y} onClose={onClose}>
       {items.map((item) => (
-        <button key={item.id} type="button" role="menuitem" onClick={() => { onClose(true); item.run() }}>{item.label}</button>
+        <button key={item.id} type="button" role="menuitem" onClick={item.run}>
+          {item.icon && <span aria-hidden="true">{item.icon} </span>}{item.label}
+        </button>
       ))}
-    </div>
+    </ContextMenu>
   )
 }

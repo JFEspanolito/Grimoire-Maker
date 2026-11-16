@@ -1,6 +1,6 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { copyFile, exists, mkdir, readFile } from '@tauri-apps/plugin-fs'
-import { assetFolder, imageReference, normalizePath, relativePath } from './assetPaths'
+import { assetFolder, imageReference, isPathInside, normalizePath, relativePath } from './assetPaths'
 
 const MIME: Record<string, string> = {
   png: 'image/png',
@@ -24,7 +24,7 @@ const isAbsolute = (src: string): boolean => /^[a-zA-Z]:[\\/]|^\//.test(src)
 export async function loadImageUrl(src: string, documentPath: string | null): Promise<string> {
   if (isInline(src)) return src
   let path = isAbsolute(src)
-    ? src.replaceAll('\\', '/')
+    ? normalizePath(src)
     : documentPath
       ? normalizePath(`${dirOf(documentPath.replaceAll('\\', '/'))}/${src}`)
       : null
@@ -37,7 +37,7 @@ export async function loadImageUrl(src: string, documentPath: string | null): Pr
     let decoded: string
     try { decoded = decodeURIComponent(src.replace(/[?#].*$/, '')) }
     catch { throw error }
-    const fallback = isAbsolute(decoded) ? decoded.replaceAll('\\', '/')
+    const fallback = isAbsolute(decoded) ? normalizePath(decoded)
       : documentPath ? normalizePath(`${dirOf(documentPath.replaceAll('\\', '/'))}/${decoded}`) : null
     if (!fallback || fallback === path) throw error
     path = fallback
@@ -68,7 +68,7 @@ export async function importImage(documentPath: string, workspaceRoot: string | 
 
   const source = picked.replaceAll('\\', '/')
   // An image that already lives in the project is referenced in place: no second copy.
-  if (projectRoot && source.startsWith(`${projectRoot}/`)) return imageReference(documentPath, source)
+  if (projectRoot && isPathInside(source, projectRoot)) return imageReference(documentPath, source)
   const assets = assetFolder(documentPath, workspaceRoot) ?? `${dirOf(documentPath)}/assets`
   if (!(await exists(assets))) await mkdir(assets, { recursive: true })
 

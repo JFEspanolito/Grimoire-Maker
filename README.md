@@ -57,21 +57,22 @@ Most writing tools force a choice between clean plain-text authoring (Markdown e
 - **Sci-Fi:** Uppercase tracked headers and cyan-accented panels for cyberpunk and futuristic technical manuals.
 - **Theme Customizer:** Override colors, import repeating header/footer artwork, and configure 6-slot running headers/footers (`{book}`, `{title}`, `{author}`, `{coAuthor}`, `{page}`, `{pages}`).
 
-### Built-in Project Templates (8 Complete Blueprints)
+### Built-in Project Templates (9 Complete Blueprints)
 
 1. **Book / Novel:** Frontmatter, prologue, multi-part chapter structure, epilogue, and author notes.
 2. **Poetry Collection:** Sectioned movements, epigraphs, individual poem layouts, and index of first lines.
-3. **Corporate / Technical Report:** Executive summary, methodology, findings, risk matrix, and appendices.
-4. **Academic Paper / Whitepaper:** Abstract, literature review, methodology, results, discussion, and references.
-5. **Magazine / Zine Issue:** Editorial letter, feature articles, interviews, columns, and review spreads.
-6. **Worldbuilding / Lore Bible:** Cosmology, geography, factions, timelines, magic/technology systems, and glossary.
-7. **RPG Adventure:** Adventure overview, dramatic hooks, act-by-act scenes, NPCs, locations, and appendices.
-8. **TTRPG Core Rulebook / Homebrew Manual:** 9-part layered rulebook architecture covering preliminaries, core engine, character creation, combat, subsystems, GM tools, bestiary, equipment, and quick reference sheets.
+3. **Executive Report:** Executive summary, findings, recommendations, action planning, and appendices.
+4. **Thesis / Academic Paper:** Abstract, literature review, methodology, results, discussion, and references.
+5. **Independent Zine:** Editorial letter, feature articles, interviews, columns, and review spreads.
+6. **Operations Manual:** Procedures, roles, checklists, incident handling, and reference material.
+7. **Family Cookbook:** Recipe sections, kitchen notes, menus, and a recipe index.
+8. **RPG Adventure:** Adventure overview, dramatic hooks, act-by-act scenes, NPCs, locations, and appendices.
+9. **TTRPG Core Rulebook / Homebrew Manual:** Introduction, core mechanics, character creation, player options, GM guidance, and quick-reference material.
 
 ### Built-in Snippet Library
 
-- **General Editorial Categories:** `Academic and Reports`, `Books and Novels`, `Corporate and Business`, `Creative and Journalism`, `Personal and Minimal`, and `Technical Documentation`.
-- **Rol Adventures (Nested System Library):** Organized with collapsible sub-groups for:
+- **Editorial Categories:** `Academic and Reports`, `Literary and Narrative`, `Poetry and Lyric`, `Recipes and Guides`, and `Zines and Newsletters`.
+- **RPG Adventures (Nested System Library):** Organized with collapsible sub-groups for:
   - `General & Utilities` (Read-aloud boxes, dice tables, called shots, quest contracts, room entries, loot tables)
   - `D&D 5e`, `Pathfinder 2e`, `Call of Cthulhu`, `Ars Magica 5e`, `Hitos`, `Fabula Ultima`, and `Daggerheart` (system-specific character sheets, statblocks, and reference blocks).
 
@@ -95,7 +96,7 @@ Grimoire Maker is built around an open, shareable modding ecosystem. Users can f
 2. Choose the download package for your operating system:
    - **Windows Full Installer (`Grimoire.Maker_<version>_x64-setup.exe`):** Standard NSIS per-user installer with Start Menu/Desktop shortcuts and uninstaller.
    - **Windows Portable Edition (`GrimoireMaker-portable-<version>-x64.zip`):** Zero-install archive containing `Grimoire Maker.exe`, `portable.flag`, and `README-portable.txt`. Keeps all settings, mods, logs, and WebView2 data inside a self-contained `Data\` folder next to the executable.
-   - **macOS Disk Image (`Grimoire.Maker_<version>_aarch64.dmg`):** Standard Apple Disk Image for Apple Silicon (M1/M2/M3/M4) Macs. Mount and drag into `/Applications`.
+   - **macOS Disk Image (`.dmg`):** Universal release for Apple Silicon and Intel Macs. Mount and drag into `/Applications`. The release workflow does not configure Apple Developer ID signing or notarization; see the [macOS installation guide](docs/installer_mac.md#3-macos-security--gatekeeper-troubleshooting) for Apple's app-specific **Open Anyway** procedure. The updater package signature does not replace Apple signing or notarization.
 3. Launch **Grimoire Maker**. On first launch, default Templates, Snippets, Themes, and Plugins are automatically seeded into your configuration folder.
 
 ### Option B: Build from Source (Developers)
@@ -186,8 +187,8 @@ Describe the purpose and structure of your template here.
 
 **Snippets** are reusable Markdown blocks stored inside `Mods/Snippets/`. Folder hierarchy directly controls how snippets are grouped in the **Snippets** sidebar palette:
 
-- **Top-level folder** → Main collapsible category (e.g., `Mods/Snippets/Rol Adventures/`)
-- **Nested subfolder** → Collapsible subgroup inside that category (e.g., `Mods/Snippets/Rol Adventures/D&D 5e/`)
+- **Top-level folder** → Main collapsible category (e.g., `Mods/Snippets/RPG Adventures/`)
+- **Nested subfolder** → Collapsible subgroup inside that category (e.g., `Mods/Snippets/RPG Adventures/D&D 5e/`)
 - **`.md` file** → Draggable/double-clickable snippet item
 
 ```text

@@ -15,7 +15,7 @@ import { useSessionStore } from '../../stores/sessionStore'
 import { useTabStore } from '../../stores/tabStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useFindStore } from '../../stores/findStore'
-import zoomPlugin from '../../assets/mods/Legacy/zoom/zoom'
+import zoomPlugin from '../../lib/__fixtures__/legacy-plugins/zoom/zoom'
 import { registerPlugin } from '../../plugins/plugin-manager'
 
 const openWorkspace = vi.hoisted(() => vi.fn())
@@ -36,6 +36,26 @@ vi.mock('../../lib/snippetLibrary', () => ({ saveSnippetToLibrary: vi.fn() }))
 vi.mock('../settings/PreferencesDialog', async () => {
   const { createElement } = await import('react')
   return { PreferencesDialog: (props: { initialCustomizing?: boolean }) => createElement('div', { 'data-testid': 'preferences', 'data-customizing': String(!!props.initialCustomizing) }) }
+})
+
+it('translates menu accessibility names and panel actions into Spanish', async () => {
+  const previous = useSettingsStore.getState().language
+  useSettingsStore.setState({ language: 'es' })
+  const container = document.createElement('div')
+  const root = createRoot(container)
+  const toggle = vi.fn()
+  try {
+    await act(async () => root.render(<MenuBar visiblePanels={useSettingsStore.getState().panels} onTogglePanel={toggle} />))
+    expect(container.querySelector('[aria-label="Menú de la aplicación"]')).not.toBeNull()
+    expect(container.querySelector('[aria-label="Alternar barra lateral principal"]')).not.toBeNull()
+    const files = container.querySelector<HTMLButtonElement>('[aria-label="Ocultar panel de archivos"], [aria-label="Mostrar panel de archivos"]')!
+    expect(files).not.toBeNull()
+    await act(async () => files.click())
+    expect(toggle).toHaveBeenCalledWith('files')
+  } finally {
+    await act(async () => root.unmount())
+    useSettingsStore.setState({ language: previous })
+  }
 })
 
 it('groups application actions in keyboard-accessible menus', async () => {
@@ -252,7 +272,7 @@ it('opens About and Tutorial from Help, closes menus, and restores Help focus', 
   try {
     await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
     const help = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Help')! as HTMLDetailsElement
-    for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'Step 1 of 6']]) {
+    for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'Step 1 of 9']]) {
       help.open = true
       const action = Array.from(help.querySelectorAll('button')).find((button) => button.textContent === label)
       expect(action).toBeDefined()
@@ -479,7 +499,7 @@ it('translates menu summaries dynamically when language is changed', async () =>
     expect(settingsButtonsEs).toEqual(['Administrador de mods', 'Preferencias…', 'Buscar actualizaciones…'])
 
     const helpButtonsEs = Array.from(menusEs[5].querySelectorAll('button')).map((b) => b.textContent)
-    expect(helpButtonsEs).toEqual(['Reportar un error…', 'Sugerir una función…', 'Tutorial', 'Acerca de'])
+    expect(helpButtonsEs).toEqual(['Reportar un error…', 'Sugerir una función…', 'Archivo de bienvenida', 'Tutorial', 'Acerca de'])
   } finally {
     useSettingsStore.setState({ language: 'en' })
     container.remove()

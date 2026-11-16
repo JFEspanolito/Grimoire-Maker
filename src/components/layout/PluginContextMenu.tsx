@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { usePluginRegistry } from '../../plugins/plugin-manager'
 import type { PluginContextAction, PluginContextActionContext } from '../../types/plugin'
 import { useTabStore } from '../../stores/tabStore'
+import { ContextMenu } from './ContextMenu'
+import { contextActionApplies, runContextAction } from '../../lib/pluginContextActions'
 
 interface MenuState {
   x: number
@@ -18,7 +20,7 @@ export function PluginContextMenu() {
   useEffect(() => {
     const handleContextMenu = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
-      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return
+      if (target?.closest('input, textarea, [contenteditable="true"], .ProseMirror')) return
 
       const selectionText = window.getSelection()?.toString().trim() ?? ''
       const path = useTabStore.getState().active
@@ -31,57 +33,33 @@ export function PluginContextMenu() {
         y: e.clientY,
       }
 
-      const activeActions = contextActions.filter((action) => {
-        try {
-          return !action.when || action.when(ctx)
-        } catch {
-          return false
-        }
-      })
+      const activeActions = contextActions.filter(action => contextActionApplies(action, ctx))
 
       if (activeActions.length > 0) {
         e.preventDefault()
-        const x = Math.min(e.clientX, window.innerWidth - 180)
-        const y = Math.min(e.clientY, window.innerHeight - (activeActions.length * 36 + 20))
-        setMenu({ x, y, actions: activeActions, context: ctx })
+        setMenu({ x: e.clientX, y: e.clientY, actions: activeActions, context: ctx })
       } else {
         setMenu(null)
       }
     }
 
-    const handleClickOutside = () => {
-      setMenu(null)
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenu(null)
-    }
-
     window.addEventListener('contextmenu', handleContextMenu)
-    window.addEventListener('pointerdown', handleClickOutside)
-    window.addEventListener('keydown', handleKeyDown)
 
     return () => {
       window.removeEventListener('contextmenu', handleContextMenu)
-      window.removeEventListener('pointerdown', handleClickOutside)
-      window.removeEventListener('keydown', handleKeyDown)
     }
   }, [contextActions])
 
   if (!menu) return null
 
   return createPortal(
-    <div
-      role="menu"
-      aria-label="Context Actions"
+    <ContextMenu
+      label="Context Actions"
+      x={menu.x} y={menu.y} onClose={() => setMenu(null)}
       style={{
-        position: 'fixed',
-        left: menu.x,
-        top: menu.y,
         zIndex: 9999,
       }}
       className="min-w-44 rounded-md border border-[#4a4539] bg-[#22201d] p-1 shadow-2xl shadow-black/80 font-sans text-xs text-[#f0eee9]"
-      onPointerDown={(e) => e.stopPropagation()}
     >
       {menu.actions.map((action) => (
         <button
@@ -90,20 +68,15 @@ export function PluginContextMenu() {
           role="menuitem"
           className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs font-medium text-[#f0eee9] transition-colors hover:bg-white/10 focus:bg-white/10 focus:outline-none"
           onClick={() => {
-            try {
-              action.run(menu.context)
-            } catch (err) {
-              console.error('Error running context action:', err)
-            }
+            runContextAction(action, menu.context)
             setMenu(null)
           }}
         >
-          {action.id === 'quotes.add' && <span aria-hidden="true">❝</span>}
-          {action.id === 'bookmarks.add' && <span aria-hidden="true">🔖</span>}
+          {action.icon && <span aria-hidden="true">{action.icon}</span>}
           {action.label}
         </button>
       ))}
-    </div>,
+    </ContextMenu>,
     document.body
   )
 }

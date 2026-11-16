@@ -24,7 +24,11 @@ function ProjectFields({ root }: { root: string }) {
   useEffect(() => {
     if (!useProjectStore.getState().entries[root]?.ready) void useProjectStore.getState().load(root)
   }, [root])
-  useEffect(() => { setDraft(entry.settings) }, [entry.settings])
+  const [draftSource, setDraftSource] = useState(entry.settings)
+  if (draftSource !== entry.settings) {
+    setDraftSource(entry.settings)
+    setDraft(entry.settings)
+  }
   const persist = async () => {
     const current = useProjectStore.getState().entries[root]
     if (!current?.ready || current.busy) return false

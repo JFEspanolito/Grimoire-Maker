@@ -11,39 +11,36 @@ A structured publication framework for tabletop roleplaying game rulebooks, sett
 
 ## Contents
 
-- **Frontmatter & Legal**
-  - Cover and Title Page
-  - Credits, Table of Contents and Legal (ORC / OGL / CC)
-- **Introduction - Foundations**
-  - What is this Game and Tone
-  - The Golden Rule and Dice Resolution Basics
-- **Chapter 1 - Character Creation**
-  - Step-by-Step Creation Guide
-  - Origins, Heritages or Ancestries
-  - Archetypes, Roles or Classes
-  - Skills, Feats and Talents
-  - Starting Gear and Encumbrance
-- **Chapter 2 - Core Engine & Resolution**
-  - Action Checks, Difficulties and Degrees of Success
-  - Time, Rounds, and Exploration Cycles
-  - Hazards, Environment, and Resource Depletion
-- **Chapter 3 - Combat & Tactics**
-  - Initiative and Action Economy
-  - Attack, Defense, and Damage Resolution
-  - Conditions, Injuries, and Recovery
-- **Chapter 4 - Special Subsystems & Powers**
-  - Magic, Technology, or Psionic Systems
-  - Power / Spell List and Upgrades
-- **Chapter 5 - Game Master Toolkit**
-  - Running Sessions and Adjudication
-  - Building Encounters, Zones, and Hazards
-  - Progression, Rewards, and Downtime
-- **Appendix A - Bestiary & Threats**
-  - Anatomy of a Creature Statblock
-  - Minions, Elites, and Bosses Catalog
-- **Appendix B - Equipment & Artifacts**
-  - Arms, Armor, and Sundries Tables
-  - Rare Artifacts and Unique Relics
-- **Index & Quick Reference Sheet**
-  - Rules Cheat Sheet (Backcover)
-  - Alphabetical Rules Index
+- **00 - Preliminaries**
+  - 00 - Cover and Title
+  - 01 - Credits, License and Table of Contents
+- **01 - Introduction**
+  - 01 - Welcome and Core Concept
+  - 02 - Basic Rules and Dice Mechanics
+- **02 - Character Creation**
+  - 01 - Step-by-Step Creation Guide
+  - 02 - Ancestries and Origins
+  - 03 - Archetypes and Classes
+  - 04 - Talents and Skills
+  - 05 - Starting Equipment
+- **03 - Core Rules System**
+  - 01 - Action Resolution and Checks
+  - 02 - Exploration and Attrition
+  - 03 - Combat Rules
+  - 04 - Conditions and Recovery
+- **04 - Special Subsystems**
+  - 01 - Magic or Technology Rules
+  - 02 - Spell and Power Catalog
+- **05 - Game Master Guide**
+  - 01 - Running Sessions and Adjudication
+  - 02 - Encounter and Zone Design
+  - 03 - Progression and Rewards
+- **Appendix A - Bestiary**
+  - 01 - How to Read a Statblock
+  - 02 - Creature and NPC Catalog
+- **Appendix B - Items and Equipment**
+  - 01 - Weapons, Armor and Gear Tables
+  - 02 - Artifacts and Relics
+- **Quick Reference**
+  - Alphabetical Index
+  - Rules Cheat Sheet

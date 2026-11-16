@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readTextFile, rename, writeTextFile, readFile, writeFile, stat } from '@tauri-apps/plugin-fs'
+import { writeTextFileAtomically } from '../lib/atomicWrite'
 import { importFiles, type ImportSection } from '../lib/fileImport'
 import { loadSettings } from '../lib/preferences'
 import { useDocumentStore } from '../stores/documentStore'
@@ -16,7 +17,7 @@ import {
   type AppState,
 } from '../lib/appState'
 import { remapPath, splitBinder } from '../lib/binder'
-import { initializeProject } from '../lib/newProject'
+import { DEMO_MARKDOWN, initializeProject } from '../lib/newProject'
 import { currentImportSection, useExplorerStore } from '../stores/explorerStore'
 import { serializeDocument } from '../lib/frontmatter'
 import { applyTemplateFiles } from '../lib/templateActions'
@@ -44,6 +45,7 @@ async function readTree(dir: string): Promise<FileNode[]> {
 
 const parentOf = (path: string): string => path.slice(0, path.lastIndexOf('/'))
 
+
 function isDirectoryNode(tree: FileNode[], targetPath: string): boolean | null {
   for (const node of tree) {
     if (node.path === targetPath) return node.isDirectory
@@ -57,7 +59,7 @@ function isDirectoryNode(tree: FileNode[], targetPath: string): boolean | null {
 let pendingRestore: Promise<void> | null = null
 let fileActionQueue: Promise<unknown> = Promise.resolve()
 
-function runFileAction<T>(action: () => Promise<T>): Promise<T> {
+export function runFileAction<T>(action: () => Promise<T>): Promise<T> {
   const next = fileActionQueue.then(action)
   fileActionQueue = next.catch(() => undefined)
   return next
@@ -117,6 +119,18 @@ async function archiveDraft(root: string): Promise<{ from: string; to: string } 
   return { from: draft, to: archive }
 }
 
+/**
+ * The dialogs grant only the picked file. A document outside the open project also
+ * needs its folder, to show the images next to it and to create its `assets/` folder.
+ * Without that access the document still opens; only its images are unavailable.
+ */
+async function grantDocumentFolder(path: string): Promise<void> {
+  const root = useDocumentStore.getState().workspaceRoot
+  if ((root && path.startsWith(`${root}/`)) || !/\.(md|txt)$/i.test(path)) return
+  try { await invoke('grant_document_folder', { path }) }
+  catch (error) { console.warn('Images next to this document are unavailable', error) }
+}
+
 export function useFileSystem() {
   const { loadFromRaw, setWorkspace } = useDocumentStore.getState()
 
@@ -141,9 +155,14 @@ export function useFileSystem() {
       path = `${draft}/untitled.md`
       for (let suffix = 1; await exists(path); suffix++) path = `${draft}/untitled-${suffix}.md`
     }
+    const picked = !path
     path ??= await save({ filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (!path) return false
-    await writeTextFile(path, serializeDocument(snapshot.frontmatter, snapshot.body))
+    const text = serializeDocument(snapshot.frontmatter, snapshot.body)
+    // A path picked in the save dialog is the only granted file until its folder is granted below.
+    if (picked) await writeTextFile(path, text)
+    else await writeTextFileAtomically(path, text)
+    if (picked) await grantDocumentFolder(path)
     useDocumentStore.getState().markSnapshotSaved(path, snapshot)
     if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path, true)
     if (createdInDraft && useDocumentStore.getState().workspaceRoot === root) {
@@ -182,7 +201,15 @@ export function useFileSystem() {
       : tree)
     const markdown = initial && /\.md$/i.test(initial)
     const raw = markdown ? await readTextFile(initial) : ''
-    await remember((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
+    // Native acceptance must succeed before the UI switches to this project.
+    try {
+      const state = await updateAppState((state) => ({ ...rememberWorkspace(root)(state), lastFile: initial }))
+      useSessionStore.getState().setRecentWorkspaces(state.recentWorkspaces)
+    } catch (e) {
+      console.warn('Could not save app state', e)
+      useSessionStore.getState().setWorkspaceError(`Could not save session: ${e instanceof Error ? e.message : String(e)}`)
+      return
+    }
     setWorkspace(root, tree)
     useDocumentStore.getState().resetDocuments()
     if (!initial || markdown) loadFromRaw(initial, raw)
@@ -190,11 +217,11 @@ export function useFileSystem() {
     useExplorerStore.getState().selectPath(null)
     useSessionStore.getState().setWorkspaceError(null)
     notifyRepositoryChanged()
-  }, [loadFromRaw, saveAllDocuments, remember, setWorkspace])
+  }, [loadFromRaw, saveAllDocuments, setWorkspace])
 
   const openWorkspace = useCallback(async () => {
     if (!isTauri()) return
-    // `recursive` grants the fs scope to subfolders, needed outside $HOME/$DOCUMENT/$DESKTOP.
+    // `recursive` grants the fs scope to the whole project; nothing is reachable without a grant.
     const dir = await open({ directory: true, recursive: true })
     if (typeof dir !== 'string') return
     await runFileAction(() => activateWorkspace(dir.replaceAll('\\', '/')))
@@ -326,6 +353,7 @@ export function useFileSystem() {
       const selected = path ?? (await open({ filters: [{ name: 'Documents and images', extensions: ['md', 'txt', 'pdf', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'ico'] }] }))
       if (typeof selected !== 'string') return
       const target = selected.replaceAll('\\', '/')
+      await grantDocumentFolder(target)
       const current = useDocumentStore.getState().document
       if (useTabStore.getState().active === target) {
         useExplorerStore.getState().selectPath(target)
@@ -354,6 +382,26 @@ export function useFileSystem() {
       throw e
     }),
     [loadFromRaw, persistCurrentDocument, remember],
+  )
+
+  const createWelcomeFile = useCallback(
+    async () => {
+      const root = useDocumentStore.getState().workspaceRoot
+      if (!root) return
+      let path = ''
+      await runFileAction(async () => {
+        const draft = splitBinder(useDocumentStore.getState().tree)?.draft?.path ?? `${root}/Draft`
+        if (!(await exists(draft))) await mkdir(draft, { recursive: true })
+        path = `${draft}/Welcome.md`
+        await writeTextFile(path, DEMO_MARKDOWN)
+        await refreshTree()
+        if (useDocumentStore.getState().buffers[path] || useDocumentStore.getState().document.path === path) {
+          loadFromRaw(path, DEMO_MARKDOWN)
+        }
+      })
+      if (path) await openFile(path, true)
+    },
+    [loadFromRaw, openFile, refreshTree],
   )
 
   /** Brings back last session: page setup, workspace folder and the file that was open. */
@@ -531,13 +579,28 @@ export function useFileSystem() {
 
   const autoSave = useCallback(() => runFileAction(async () => {
     if (!isTauri()) return
-    const state = useDocumentStore.getState()
-    const snapshots = Object.values({ ...state.buffers, [state.document.path ?? '__untitled__']: state.document })
+    const initial = useDocumentStore.getState()
+    const paths = Object.values({ ...initial.buffers, [initial.document.path ?? '__untitled__']: initial.document })
+      .flatMap(document => document.path && document.dirty ? [document.path] : [])
     const failures: string[] = []
-    for (const snapshot of snapshots) {
-      if (!snapshot.path || !snapshot.dirty) continue
-      try { await persistDocument(snapshot) }
-      catch (error) { failures.push(`${snapshot.path}: ${error instanceof Error ? error.message : String(error)}`) }
+    for (const path of paths) {
+      // Each buffer is read again right before its write: earlier writes yield, and a tab
+      // closed or saved meanwhile must not be written from a stale copy.
+      const state = useDocumentStore.getState()
+      const snapshot = state.document.path === path ? state.document : state.buffers[path]
+      if (!snapshot?.dirty) continue
+      try {
+        const known = state.diskContents[path]
+        if (known !== undefined) {
+          const disk = await readTextFile(path).catch(() => null)
+          // Equal to the buffer means another part of the app wrote these same bytes: no conflict.
+          if (disk !== null && disk !== known && disk !== serializeDocument(snapshot.frontmatter, snapshot.body)) {
+            failures.push(`${path}: changed on disk since it was opened; save it manually to overwrite`)
+            continue
+          }
+        }
+        await persistDocument(snapshot)
+      } catch (error) { failures.push(`${path}: ${error instanceof Error ? error.message : String(error)}`) }
     }
     if (failures.length) {
       const error = new Error(`Auto save failed: ${failures.join('; ')}`)
@@ -562,6 +625,7 @@ export function useFileSystem() {
     closeTab,
     applyTemplate,
     createFile,
+    createWelcomeFile,
     createFolder,
     renameEntry,
     openFolder,

@@ -1,3 +1,5 @@
+import { fromMarkdown } from 'mdast-util-from-markdown'
+
 const WORDS_PER_PAGE = 300
 const WORDS_PER_MINUTE = 238
 const TOP_WORDS = 10
@@ -26,6 +28,15 @@ const ENTITIES: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>
 
 /** Drops Markdown and embedded HTML syntax so only the prose a reader sees is counted. */
 function plainText(markdown: string) {
+  // Use Markdown positions so fence lengths, languages and nested code follow the parser.
+  const ranges: [number, number][] = []
+  function collect(node: { type: string; position?: { start: { offset?: number }; end: { offset?: number } }; children?: readonly Parameters<typeof collect>[0][] }) {
+    if (node.type === 'code' && node.position?.start.offset !== undefined && node.position.end.offset !== undefined) {
+      ranges.push([node.position.start.offset, node.position.end.offset])
+    } else node.children?.forEach(collect)
+  }
+  collect(fromMarkdown(markdown))
+  for (const [start, end] of ranges.reverse()) markdown = markdown.slice(0, start) + '\n' + markdown.slice(end)
   return markdown
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<\/(?:p|h[1-6]|li|tr|blockquote|div)\s*>/gi, '\n')
@@ -37,7 +48,8 @@ function plainText(markdown: string) {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/^\s{0,3}(?:#{1,6}|>|[-*+]|\d+\.)\s+/gm, '')
     .replace(/^\s*(?:[-*_]\s*){3,}$/gm, '')
-    .replace(/[*_`~]/g, '')
+    .replace(/(?<!\w)_{1,2}(?=\S)|(?<=\S)_{1,2}(?!\w)/g, '')
+    .replace(/[*`~]/g, '')
 }
 
 const wordsOf = (text: string) => text.match(WORD) ?? []

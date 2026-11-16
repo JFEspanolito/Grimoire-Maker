@@ -66,12 +66,20 @@ export function GitRollbackDialog({
   const dialog = useRef<HTMLDialogElement>(null)
   const [selectedHash, setSelectedHash] = useState<string>(commits[0]?.hash ?? '')
   const [diff, setDiff] = useState<GitDiff | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(!!commits.length)
   const [error, setError] = useState('')
   const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set())
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
 
   const selectedCommit = commits.find((c) => c.hash === selectedHash) ?? commits[0] ?? null
+  const selectedCommitHash = selectedCommit?.hash
+  const [diffSource, setDiffSource] = useState({ workspace, hash: selectedCommitHash })
+  if (diffSource.workspace !== workspace || diffSource.hash !== selectedCommitHash) {
+    setDiffSource({ workspace, hash: selectedCommitHash })
+    setLoading(!!selectedCommitHash)
+    setError('')
+    setDiff(null)
+  }
 
   useEffect(() => {
     const element = dialog.current
@@ -80,12 +88,9 @@ export function GitRollbackDialog({
   }, [])
 
   useEffect(() => {
-    if (!selectedCommit) return
+    if (!selectedCommitHash) return
     let active = true
-    setLoading(true)
-    setError('')
-    setDiff(null)
-    diffCommit(workspace, selectedCommit.hash)
+    diffCommit(workspace, selectedCommitHash)
       .then((result) => {
         if (active) setDiff(result)
       })
@@ -98,18 +103,19 @@ export function GitRollbackDialog({
     return () => {
       active = false
     }
-  }, [workspace, selectedCommit?.hash])
+  }, [workspace, selectedCommitHash])
 
   const sections = useMemo(
     () => groupRowsByFile(splitDiff(diff?.text ?? ''), activeRelativePath),
     [diff?.text, activeRelativePath],
   )
 
-  useEffect(() => {
-    // Auto-check all files in the version by default, and start all file sections collapsed (Expanded = false)
+  const [sectionSource, setSectionSource] = useState(sections)
+  if (sectionSource !== sections) {
+    setSectionSource(sections)
     setCheckedFiles(new Set(sections.map((section) => section.file)))
     setExpandedFiles(new Set())
-  }, [sections])
+  }
 
   const toggleChecked = (file: string) => {
     setCheckedFiles((prev) => {

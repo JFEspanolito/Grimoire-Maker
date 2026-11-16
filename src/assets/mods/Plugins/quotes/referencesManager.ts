@@ -230,7 +230,7 @@ async function doSyncReferences(root: string, quote: Quote): Promise<{ targetPat
         }
 
         // Detect document numbering style
-        const matchBracket = /^\[(\d+)\][\.\s]+(.+)$/.exec(line)
+        const matchBracket = /^\[(\d+)\][.\s]+(.+)$/.exec(line)
         const matchDot = /^(\d+)\.[\s]+(.+)$/.exec(line)
         if (matchBracket) {
           hasBracketNumbering = true
@@ -401,7 +401,7 @@ async function doSyncReferenceItem(root: string, refItem: ReferenceItem): Promis
         }
 
         // Detect document numbering style
-        const matchBracket = /^\[(\d+)\][\.\s]+(.+)$/.exec(line)
+        const matchBracket = /^\[(\d+)\][.\s]+(.+)$/.exec(line)
         const matchDot = /^(\d+)\.[\s]+(.+)$/.exec(line)
         if (matchBracket) {
           hasBracketNumbering = true

@@ -3,6 +3,11 @@ import { DICTIONARY, getTranslation, SUPPORTED_LANGUAGES } from './i18n'
 import { useSettingsStore } from '../stores/settingsStore'
 
 describe('i18n catalog and translation lookup', () => {
+  it('interpolates filenames as data without interpreting their placeholder-like contents', () => {
+    expect(getTranslation('ui.restoreFile', 'es', { path: '{commit}.md', commit: 'abc123' }))
+      .toBe('Se restauró {commit}.md a su versión anterior a abc123.')
+    expect(getTranslation('ui.closeDocument', 'en', { name: 'Chapter' })).toBe('Close Chapter')
+  })
   it('supports English and Spanish', () => {
     expect(SUPPORTED_LANGUAGES.map((l) => l.id)).toEqual(['en', 'es'])
   })

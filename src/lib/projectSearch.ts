@@ -104,6 +104,12 @@ export interface AppliedChange {
 /** Thrown when the documents changed after the search; nothing was replaced. */
 export class ProjectChangedError extends Error {}
 
+function isNativeConflict(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  return message === 'The project documents changed since the search (a file was added or removed). Search again.'
+    || /^A document changed since the search: [\s\S]+\. Search again\.$/.test(message)
+}
+
 const currentDocument = (path: string): GrimoireDocument | undefined => {
   const state = useDocumentStore.getState()
   return [...Object.values(state.buffers), state.document].find((document) => document.path && keyOf(document.path) === keyOf(path))
@@ -137,8 +143,9 @@ export async function applyProjectReplace(root: string, search: ProjectSearch, q
   const files = changes.filter((change) => change.kind === 'file')
   if (files.length) {
     const payload: ProjectChange[] = files.map((change) => ({ path: change.snapshotPath!, before: change.before, after: change.after }))
-    try { await commitProjectReplace(root, payload, search.knownPaths) } catch {
-      throw new ProjectChangedError('Some files changed on disk since the search, so nothing was replaced. The search was run again.')
+    try { await commitProjectReplace(root, payload, search.knownPaths) } catch (error) {
+      if (!isNativeConflict(error)) throw error
+      throw new ProjectChangedError('Some files changed on disk since the search, so nothing was replaced. The search was run again.', { cause: error })
     }
   }
   for (const buffer of buffers) useDocumentStore.getState().setBodyForPath(buffer.path, buffer.after)
@@ -149,13 +156,15 @@ export async function applyProjectReplace(root: string, search: ProjectSearch, q
 export async function undoProjectReplace(root: string, applied: AppliedChange[]): Promise<{ restored: number; skipped: string[] }> {
   const skipped: string[] = []
   const disk: AppliedChange[] = []
+  const buffers: { path: string; before: string; expected: string }[] = []
   let restored = 0
   for (const change of applied) {
     const open = currentDocument(change.path)
     if (open) {
       const after = change.kind === 'buffer' ? change.after : parseDocument(change.after).body
       const before = change.kind === 'buffer' ? change.before : parseDocument(change.before).body
-      if (open.body === after) { useDocumentStore.getState().setBodyForPath(change.path, before); restored++ } else skipped.push(change.path)
+      if (open.body === after) buffers.push({ path: change.path, before, expected: after })
+      else skipped.push(change.path)
     } else if (change.kind === 'file') disk.push(change)
     else skipped.push(change.path)
   }
@@ -165,7 +174,15 @@ export async function undoProjectReplace(root: string, applied: AppliedChange[])
       const knownPaths = (await snapshotProjectTexts(root)).map((entry) => entry.path)
       await commitProjectReplace(root, disk.map((change) => ({ path: change.snapshotPath!, before: change.after, after: change.before })), knownPaths)
       restored += disk.length
-    } catch { skipped.push(...disk.map((change) => change.path)) }
+    } catch (error) {
+      if (!isNativeConflict(error)) throw error
+      skipped.push(...disk.map((change) => change.path))
+    }
+  }
+  for (const buffer of buffers) {
+    if (currentDocument(buffer.path)?.body !== buffer.expected) { skipped.push(buffer.path); continue }
+    useDocumentStore.getState().setBodyForPath(buffer.path, buffer.before)
+    restored++
   }
   return { restored, skipped }
 }

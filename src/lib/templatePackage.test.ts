@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { strToU8, zipSync } from 'fflate'
+import { parseDocument, serializeDocument } from './frontmatter'
 import {
   APP_VERSION,
   LIMITS,
@@ -21,6 +22,14 @@ const zip = (files: Record<string, string | Uint8Array>): Uint8Array =>
   zipSync(Object.fromEntries(Object.entries(files).map(([k, v]) => [k, typeof v === 'string' ? text(v) : v])))
 
 const INDEX = '---\ntitle: Test\n---\n# Hello\n'
+
+it.each(["O'Brien says \"hi\" at C:\\x", 'C:\\x\\book.md', "It's a title"])(
+  'round-trips template scalar %j through document saves', (title) => {
+    const document = parseDocument(`---\ntitle: ${yamlScalar(title)}\n---\nBody`)
+    expect(document.frontmatter.title).toBe(title)
+    expect(parseDocument(serializeDocument(document.frontmatter, document.body))).toEqual(document)
+  },
+)
 
 describe('readTemplateZip: layout', () => {
   it('reads a package whose files sit at the zip root', () => {

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { TextSelection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import { useDocumentStore } from '../../stores/documentStore'
+import { isDocumentRestoring, useDocumentStore } from '../../stores/documentStore'
 import { emitPluginEvent, setPluginHost, usePluginRegistry } from '../../plugins/plugin-manager'
 import type { PluginContextAction, PluginContextActionContext } from '../../types/plugin'
-import { reportError } from '../../lib/errorLogging'
+import { contextActionApplies, runContextAction } from '../../lib/pluginContextActions'
 import { PageView } from './PageView'
 import { EDITOR_EXTENSIONS } from './editorExtensions'
 import { DocumentPathContext } from './DocumentPathContext'
@@ -13,6 +13,7 @@ import { focusDocumentEnd, insertContentBox } from '../../lib/contentBoxes'
 import { EditorContextMenu, type EditorMenuItem } from './EditorContextMenu'
 import { selectionMarkdown } from './selectionMarkdown'
 import { SaveSnippetDialog } from '../snippets/SaveSnippetDialog'
+import { ConfirmDialog } from '../layout/ConfirmDialog'
 import { continueListNumbering, getPreviousOrderedList, restartListNumbering, setListStart } from './extensions/blockFormat'
 import { useTranslation } from '../../lib/i18n'
 import { useFormatPainterStore } from '../../stores/formatPainterStore'
@@ -36,6 +37,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
 
   const [menu, setMenu] = useState<{ x: number; y: number; markdown: string; actions: PluginContextAction[]; listActions: EditorMenuItem[]; context: PluginContextActionContext } | null>(null)
   const [snippetMarkdown, setSnippetMarkdown] = useState<string | null>(null)
+  const [startNumber, setStartNumber] = useState<string | null>(null)
 
   const editor = useEditor({
     extensions: EDITOR_EXTENSIONS,
@@ -45,10 +47,32 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     },
     onUpdate: ({ editor: e }) => {
       const store = useDocumentStore.getState()
+      const target = path === undefined ? store.document.path : path
+      if (isDocumentRestoring(store, target)) {
+        const current = store.document.path === target ? store.document : store.buffers[target ?? '__untitled__']
+        e.commands.setContent(current?.body ?? '', { emitUpdate: false })
+        return
+      }
       store.setBodyForPath(path === undefined ? store.document.path : path, getMarkdown(e))
       emitPluginEvent('document:changed')
     },
   })
+
+  useEffect(() => {
+    if (!editor) return
+    const sync = () => {
+      if (editor.isDestroyed) return
+      const store = useDocumentStore.getState()
+      const restoring = isDocumentRestoring(store, documentPath ?? null)
+      editor.setEditable(!restoring, false)
+      if (restoring) {
+        const current = store.document.path === documentPath ? store.document : store.buffers[documentPath ?? '__untitled__']
+        if (current && getMarkdown(editor) !== current.body) editor.commands.setContent(current.body, { emitUpdate: false })
+      }
+    }
+    sync()
+    return useDocumentStore.subscribe(sync)
+  }, [editor, documentPath])
 
   useEffect(() => editor ? registerSnippetDropTarget(editor, documentPath ?? null) : undefined, [editor, documentPath])
 
@@ -151,9 +175,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
         target, path: documentPath ?? null, x: event.clientX, y: event.clientY,
         selectionText: from === to ? '' : editor.state.doc.textBetween(from, to, '\n'),
       }
-      const actions = usePluginRegistry.getState().contextActions.filter((action) => {
-        try { return action.when ? action.when(context) === true : true } catch (error) { reportError('plugin.contextAction.when', error); return false }
-      })
+      const actions = usePluginRegistry.getState().contextActions.filter(action => contextActionApplies(action, context))
       const isOrdered = editor.isActive('orderedList')
       if (!markdown && !actions.length && !isOrdered) return
       event.preventDefault()
@@ -175,13 +197,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
         {
           id: 'host.set-start-number',
           label: t('toolbar.setStartNumber'),
-          run: () => {
-            const input = window.prompt(t('toolbar.promptStartNumber'), String(currentStart))
-            if (input !== null) {
-              const val = parseInt(input.trim(), 10)
-              if (!isNaN(val) && val >= 1) setListStart(editor, val)
-            }
-          },
+          run: () => setStartNumber(String(currentStart)),
         },
       ] : []
 
@@ -200,10 +216,13 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     let dom: HTMLElement
     try { dom = editor.view.dom } catch { return }
 
+    let pendingPaint: ReturnType<typeof setTimeout> | undefined
     const onPointerUp = (event: globalThis.MouseEvent) => {
       if (dom.contains(event.target as Node)) {
-        setTimeout(() => {
-          if (useFormatPainterStore.getState().armed) {
+        clearTimeout(pendingPaint)
+        pendingPaint = setTimeout(() => {
+          pendingPaint = undefined
+          if (!editor.isDestroyed && useFormatPainterStore.getState().armed) {
             useFormatPainterStore.getState().apply(editor)
           }
         }, 10)
@@ -219,6 +238,7 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
     document.addEventListener('pointerup', onPointerUp)
     document.addEventListener('keydown', onKeyDown)
     return () => {
+      clearTimeout(pendingPaint)
       document.removeEventListener('pointerup', onPointerUp)
       document.removeEventListener('keydown', onKeyDown)
     }
@@ -227,10 +247,10 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
   const menuItems = (current: NonNullable<typeof menu>): EditorMenuItem[] => [
     ...current.listActions,
     ...current.actions.map((action) => ({
-      id: action.id, label: String(action.label),
-      run: () => { try { action.run(current.context) } catch (error) { reportError('plugin.contextAction.run', error) } },
+      id: action.id, label: String(action.label), icon: action.icon,
+      run: () => runContextAction(action, current.context),
     })),
-    ...(current.markdown ? [{ id: 'host.save-snippet', label: 'Save Selection as Snippet...', run: () => setSnippetMarkdown(current.markdown) }] : []),
+    ...(current.markdown ? [{ id: 'host.save-snippet', label: t('ui.save_selection_as_snippet'), run: () => setSnippetMarkdown(current.markdown) }] : []),
   ]
 
   return (
@@ -240,6 +260,17 @@ export function EditorCanvas({ onReady, path, active = true }: Props) {
       </PageView></DocumentPathContext>
       {menu && <EditorContextMenu x={menu.x} y={menu.y} onClose={closeMenu} items={menuItems(menu)} />}
       {snippetMarkdown !== null && <SaveSnippetDialog markdown={snippetMarkdown} onClose={() => setSnippetMarkdown(null)} />}
+      {startNumber !== null && <ConfirmDialog title={t('toolbar.listStartNumber')}
+        message={t('toolbar.promptStartNumber')} cancelLabel={t('common.cancel')} confirmLabel={t('common.save')}
+        confirmDisabled={!/^\d+$/.test(startNumber.trim()) || !Number.isSafeInteger(Number(startNumber)) || Number(startNumber) < 1}
+        onCancel={() => setStartNumber(null)} onConfirm={() => {
+          if (editor) setListStart(editor, Number(startNumber))
+          setStartNumber(null)
+        }}>
+        <input type="number" min="1" step="1" aria-label={t('toolbar.listStartNumber')}
+          value={startNumber} onChange={event => setStartNumber(event.target.value)}
+          className="mt-3 w-full rounded border border-white/20 bg-neutral-800 p-2 text-inherit" />
+      </ConfirmDialog>}
     </>
   )
 }

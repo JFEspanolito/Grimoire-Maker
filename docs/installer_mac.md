@@ -1,21 +1,22 @@
 # macOS Build & Installation Guide
 
-Grimoire Maker ships for macOS as an Apple Disk Image (`.dmg`) containing the universal application bundle (`Grimoire Maker.app`).
+The release workflow builds a universal macOS application bundle (`Grimoire Maker.app`) and packages it in an Apple Disk Image (`.dmg`). That universal build supports both Apple Silicon and Intel Macs. Local build commands target the host architecture unless an explicit target is supplied.
 
 | Artifact | How to build | Output |
 | --- | --- | --- |
 | macOS Disk Image (local/unsigned) | `pnpm build:dmg` | `src-tauri/target/release/bundle/dmg/Grimoire.Maker_<version>_<arch>.dmg` |
-| macOS Disk Image (signed) | `pnpm build:dmg:signed` | `src-tauri/target/release/bundle/dmg/Grimoire.Maker_<version>_<arch>.dmg` |
+| macOS Disk Image (updater-signed) | `pnpm build:dmg:signed` | `src-tauri/target/release/bundle/dmg/Grimoire.Maker_<version>_<arch>.dmg` |
+| Universal macOS release | `pnpm exec tauri build --bundles dmg,app --target universal-apple-darwin` | `src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg` |
 
-Both commands execute `tauri build --bundles dmg,app`, which compiles the frontend first (`pnpm build`, including strict typechecking via `tsc -b`) before invoking `cargo build --release`.
+The two host-architecture commands execute `tauri build --bundles dmg,app`, which compiles the frontend first (`pnpm build`, including strict typechecking via `tsc -b`) before invoking `cargo build --release`.
+
+The universal release first installs the Rust targets with `rustup target add aarch64-apple-darwin x86_64-apple-darwin`. Its signed updater archive is labelled `*_universal.app.tar.gz`, with the matching `*.sig` renamed alongside it without changing either file's contents. The manifest generator requires an explicit architecture or this universal suffix; an unqualified `.app.tar.gz` is not assumed to support Intel.
 
 ---
 
 ## 1. Installation Workflow
 
-1. Download the `.dmg` asset matching your Mac architecture from [GitHub Releases](https://github.com/JFEspanolito/Grimoire-Maker/releases):
-   - **Apple Silicon (M1/M2/M3/M4):** `Grimoire.Maker_<version>_aarch64.dmg`
-   - **Intel x64:** `Grimoire.Maker_<version>_x64.dmg`
+1. Download the universal `.dmg` asset from [GitHub Releases](https://github.com/JFEspanolito/Grimoire-Maker/releases). When using an older architecture-specific release, choose `_aarch64.dmg` for Apple Silicon or `_x64.dmg` for Intel; an Apple Silicon-only build will not run on an Intel Mac.
 2. Double-click the `.dmg` file to mount the disk image.
 3. Drag **Grimoire Maker.app** into your `/Applications` folder.
 4. Eject the mounted disk image.
@@ -43,16 +44,18 @@ On first launch, default Templates, Snippets, Themes, and Plugins are automatica
 
 ## 3. macOS Security & Gatekeeper Troubleshooting
 
-If installing a release that is self-signed or pending Apple Notarization, macOS Gatekeeper may display a warning:
-> *"Grimoire Maker" cannot be opened because Apple cannot check it for malicious software.*  
-> or *"Grimoire Maker is damaged and can't be opened."*
+The current release workflow does not configure Apple Developer ID signing or Apple notarization. Its `TAURI_SIGNING_PRIVATE_KEY` signs updater packages for the in-app updater; that signature does not establish an Apple-verified developer identity or notarize the application. Gatekeeper may therefore block the first launch.
 
-### Resolution
-1. **From Finder:** Right-click (or Control-click) `Grimoire Maker.app` in `/Applications` and select **Open**. Click **Open** again in the confirmation prompt.
-2. **From Terminal (Remove quarantine flag):**
-   ```bash
-   xattr -cr "/Applications/Grimoire Maker.app"
-   ```
+### Open a trusted download
+
+Only proceed if you trust the official download and believe it has not been altered. Following [Apple's instructions for an app that has not been notarized](https://support.apple.com/en-us/102445):
+
+1. Download from this project's [GitHub Releases](https://github.com/JFEspanolito/Grimoire-Maker/releases), install the app in `/Applications`, and attempt to open it once.
+2. Dismiss the blocked-launch dialog. Open **System Settings → Privacy & Security**.
+3. Find the entry for **Grimoire Maker** and select **Open Anyway**.
+4. Authenticate if requested, then confirm **Open**. This creates an exception for this application.
+
+Leave Gatekeeper enabled. If macOS reports malware, damage, or modification, do not bypass that warning: delete the download and obtain a fresh copy from the official release. If the warning persists or **Open Anyway** is unavailable, stop and report the exact message rather than removing quarantine attributes.
 
 ---
 

@@ -4,6 +4,8 @@ import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { LoadedLibraryPaths } from './preferences'
+// Real filesystem seeding competes with other workers on Windows. Let it finish before cleanup.
+vi.setConfig({ testTimeout: 30000, hookTimeout: 60000 })
 const scope = vi.hoisted(() => ({ root: '', rejectRename: false, picked: '', saved: '', reads: [] as string[], paths: null as LoadedLibraryPaths | null }))
 vi.mock('./preferences', async (original) => {
   const actual = await original<typeof import('./preferences')>()
@@ -27,9 +29,10 @@ vi.mock('@tauri-apps/plugin-fs', async () => {
   }
 })
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: async () => scope.picked, save: async () => scope.saved }))
+import { LEGACY_PLUGINS } from './__fixtures__/legacy-plugins/catalog'
 import { createTemplateZip, readTemplateZip } from './templatePackage'
 import { importTemplateZip, exportTemplateZip, applyTemplateFiles } from './templateActions'
-import { prepareModLibrary, MOD_EXAMPLES, LEGACY_PLUGINS } from './modLibrary'
+import { prepareModLibrary, MOD_EXAMPLES } from './modLibrary'
 import { useModStore } from '../stores/modStore'
 import { useTemplateStore } from '../stores/templateStore'
 import { loadUserTemplates } from './templates'
@@ -100,6 +103,15 @@ it('configured paths survive reload, keep disabled IDs and legacy templates, and
   expect(scope.reads.some(path => path.endsWith('.js'))).toBe(false)
 })
 
+it('adds the renamed RPG examples without deleting edited retired snippet folders', async () => {
+  await put('Mods/Snippets/Rol Adventures/Community/custom.md', '---\nsnippetName: My edited notes\n---\nKeep my adventure')
+  await fs.rm(`${scope.root}/Mods/Snippets/.rpg-adventures-snippets-v3-seeded`, { force: true })
+  await prepareModLibrary()
+  expect(await fs.readFile(`${scope.root}/Mods/Snippets/Rol Adventures/Community/custom.md`, 'utf8')).toContain('Keep my adventure')
+  expect(await fs.readFile(`${scope.root}/Mods/Snippets/RPG Adventures/General & Utilities/loot-table-d100.md`, 'utf8')).toContain('snippetName: Loot table (d100)')
+  expect(await fs.readFile(`${scope.root}/Mods/Snippets/.rpg-adventures-snippets-v3-seeded`, 'utf8')).toBe('1\n')
+})
+
 const exampleKeys = (folder: string) => Object.keys(MOD_EXAMPLES).filter(path => path.startsWith(`${folder}/`)).map(path => path.slice(folder.length + 1))
 const present = (path: string) => fs.access(path).then(() => true, () => false)
 it('seeds the shipped examples into native-managed folders (portable Data or installer content root) exactly once', async () => {
@@ -113,7 +125,7 @@ it('seeds the shipped examples into native-managed folders (portable Data or ins
   for (const relative of exampleKeys('Templates')) expect(await present(`${managedPaths.templates}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Snippets')) expect(await present(`${managedPaths.snippets}/${relative}`)).toBe(true)
   for (const relative of exampleKeys('Plugins')) expect(await present(`${managedPaths.plugins}/${relative}`)).toBe(true)
-  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.editorial-templates-v3-seeded`, `${managedPaths.plugins}/.executable-plugins-v2-seeded`, `${managedPaths.snippets}/.rol-adventures-snippets-v2-seeded`]) expect(await present(marker)).toBe(true)
+  for (const marker of [`${content}/.examples-seeded`, `${managedPaths.templates}/.editorial-templates-v3-seeded`, `${managedPaths.plugins}/.executable-plugins-v2-seeded`, `${managedPaths.snippets}/.rpg-adventures-snippets-v3-seeded`]) expect(await present(marker)).toBe(true)
   expect(await present(`${managedPaths.themes}/.examples-seeded`)).toBe(false)
   // A removed or edited example is never restored or replaced on the next start.
   const removed = exampleKeys('Templates')[0]

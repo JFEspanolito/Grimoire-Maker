@@ -21,6 +21,8 @@ import { useTabStore } from './stores/tabStore'
 import { useUnsavedClose } from './hooks/useUnsavedClose'
 import { MenuBar } from './components/layout/MenuBar'
 import { NewProjectDialog } from './components/project/NewProjectDialog'
+import { ContextMenu } from './components/layout/ContextMenu'
+import { PrintNoticeDialog } from './components/layout/PrintNoticeDialog'
 import { FindReplaceDialog } from './components/editor/FindReplaceDialog'
 import { FormulaDialog } from './components/editor/FormulaDialog'
 import styles from './App.module.css'
@@ -36,6 +38,7 @@ import { useAppUpdateStore } from './stores/appUpdateStore'
 import { TerminalPanel } from './components/terminal/TerminalPanel'
 import { openExternalUrl } from './lib/openUrl'
 import { AppUpdateDialog } from './components/settings/AppUpdateDialog'
+import { reportError } from './lib/errorLogging'
 
 export default function App() {
   const { t } = useTranslation()
@@ -81,22 +84,15 @@ export default function App() {
   useEffect(() => {
     const onContextMenu = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
-      if (target?.closest('input, textarea')) return
+      if (target?.closest('input, textarea, [contenteditable="true"], .ProseMirror')) return
       if (event.defaultPrevented) return
       event.preventDefault()
       setContextMenu({ x: event.clientX, y: event.clientY })
     }
-    const onPointerDown = () => setContextMenu(null)
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setContextMenu(null) }
-
     window.addEventListener('contextmenu', onContextMenu)
-    window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       window.removeEventListener('contextmenu', onContextMenu)
-      window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
 
@@ -153,8 +149,8 @@ export default function App() {
       await reloadThemes()
       await reloadTemplates()
     }
-    void reload()
-    const onFocus = () => void reload()
+    const onFocus = () => { void reload().catch(error => reportError('library.reload', error)) }
+    onFocus()
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [reloadThemes, reloadTemplates])
@@ -170,7 +166,7 @@ export default function App() {
               {visiblePanels.files && <FileTree />}
               {visiblePanels.templates && <TemplateCatalog />}
               </div>
-              <div className={styles.sourceControl}>
+              <div className={styles.sourceControl} data-tour="git-source-control">
                 <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.git} aria-controls="source-control-panel"
                   onClick={() => togglePanel('git')} title={repository.error ? `Git status unavailable: ${repository.error}` : 'Source control'}>
                   Git{(visiblePanels.files || visiblePanels.templates || visiblePanels.git) && ' · Source control'}
@@ -194,7 +190,7 @@ export default function App() {
                 width={snippetsWidth} otherWidth={sidebarCollapsed ? 40 : sidebarWidth} direction={-1} onResize={setSnippetsWidth} />
               <aside id="snippets-sidebar" data-tour="snippets-sidebar" style={{ width: snippetsWidth }} className={styles.snippets}>
                 <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
-                <div className={styles.sourceControl}>
+                <div className={styles.sourceControl} data-tour="git-source-control">
                   <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
                     onClick={() => togglePanel('properties')}>{t('properties.title')}</button>
                   {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /><ExportPageSnippetButton /></div>}
@@ -214,14 +210,13 @@ export default function App() {
           />
         )}
         <ToastHost />
+        <PrintNoticeDialog />
         <AppUpdateDialog />
         {contextMenu && (
-          <div
-            role="menu"
-            aria-label={t('common.reload')}
+          <ContextMenu
+            label={t('common.reload')}
+            x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}
             className="fixed z-50 min-w-36 rounded border border-white/20 bg-neutral-800 p-1 shadow-xl text-sm"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            onPointerDown={(e) => e.stopPropagation()}
           >
             <button
               type="button"
@@ -231,7 +226,7 @@ export default function App() {
             >
               ↻ {t('common.reload')}
             </button>
-          </div>
+          </ContextMenu>
         )}
         {pendingReload && (
           <ConfirmDialog

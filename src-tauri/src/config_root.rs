@@ -44,6 +44,14 @@ pub fn initialize(app: &AppHandle) -> Result<(), String> {
         .allow_directory(&root, true)
         .map_err(|error| error.to_string())?;
     crate::fs_scope::allow_owned_file(&app.fs_scope(), &root.join("Mods"), ".examples-seeded")?;
+    // The remembered projects decide what Git, replace and the terminal may touch, so only
+    // Rust writes the session (see commands::app_state). A forbidden path wins over the grant.
+    for file in [crate::config::STATE_FILE, "state.json.tmp"] {
+        app.fs_scope()
+            .forbid_file(root.join(file))
+            .map_err(|error| error.to_string())?;
+    }
+    crate::fs_scope::protect_preferences(&app.fs_scope(), &root)?;
     if !app.manage(PreparedRoot {
         path: root,
         mode,
@@ -202,7 +210,7 @@ pub(crate) fn rebased_path(value: &str, old: &Path, new: &Path) -> Option<String
     let old = normalized(old.to_str()?);
     let pieces: Vec<_> = value.split('/').collect();
     let prefix: Vec<_> = old.split('/').collect();
-    if pieces.len() < prefix.len() || pieces.iter().any(|part| *part == "..") {
+    if pieces.len() < prefix.len() || pieces.contains(&"..") {
         return None;
     }
     for (actual, expected) in pieces.iter().zip(&prefix) {

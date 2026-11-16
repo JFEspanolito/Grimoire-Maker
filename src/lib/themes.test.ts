@@ -19,3 +19,14 @@ it('loads the configured CSS directory and rejects linked files', async () => {
   expect(result.themes).toEqual([{ id: 'custom', name: 'Custom', builtin: false }])
   expect(readTextFile).not.toHaveBeenCalledWith('/custom/themes/linked.css')
 })
+
+it('does not install CSS from a superseded theme scan', async () => {
+  vi.mocked(loadLibraryPaths).mockResolvedValue({ plugins: '/plugins', snippets: '/snippets', templates: '/templates', themes: '/custom/themes', logs: '/logs' })
+  vi.mocked(exists).mockResolvedValue(true)
+  vi.mocked(readDir).mockResolvedValue([{ name: 'custom.css', isDirectory: false, isFile: true, isSymlink: false }])
+  vi.mocked(readTextFile).mockResolvedValue("[data-theme='custom'] { color: red }")
+  const style = document.getElementById('grimoire-user-themes') ?? document.head.appendChild(document.createElement('style'))
+  style.id = 'grimoire-user-themes'; style.textContent = '/* newer CSS */'
+  await loadUserThemes(new Set(), () => false)
+  expect(style.textContent).toBe('/* newer CSS */')
+})

@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 
 export interface PluginCommand {
   id: string
@@ -42,6 +42,8 @@ export interface PluginContextActionContext {
 export interface PluginContextAction {
   id: string
   label: string
+  /** Optional trusted-plugin icon; rendered decoratively beside the label. */
+  icon?: ReactNode
   /** Hides the item for a click it does not apply to; a throw counts as false. */
   when?(context: PluginContextActionContext): boolean
   run(context: PluginContextActionContext): void

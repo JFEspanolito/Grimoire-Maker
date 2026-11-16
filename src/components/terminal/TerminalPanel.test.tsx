@@ -28,6 +28,24 @@ afterEach(async () => {
 })
 
 describe('TerminalPanel', () => {
+  it('translates controls without replacing the running terminal when the language changes', async () => {
+    const previous = useSettingsStore.getState().language
+    useSettingsStore.setState({ language: 'en' })
+    const container = document.createElement('div')
+    root = createRoot(container)
+    try {
+      await act(async () => root?.render(<TerminalPanel workspace="/mock/path" />))
+      const terminal = container.querySelector('.xterm')
+      expect(terminal).not.toBeNull()
+      await act(async () => useSettingsStore.setState({ language: 'es' }))
+      expect(container.querySelector('[aria-label="Limpiar terminal"]')).not.toBeNull()
+      expect(container.querySelector('[aria-label="Cerrar panel del terminal"]')).not.toBeNull()
+      expect(container.querySelector('[aria-label="Redimensionar panel del terminal"]')).not.toBeNull()
+      expect(container.querySelector('.xterm')).toBe(terminal)
+    } finally {
+      await act(async () => useSettingsStore.setState({ language: previous }))
+    }
+  })
   it('renders header, title, badge and controls', async () => {
     const container = document.createElement('div')
     root = createRoot(container)

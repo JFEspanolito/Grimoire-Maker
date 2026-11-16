@@ -521,7 +521,7 @@ describe('buildTemplateExport', () => {
       '![b](c:%2FUsers%2FBob%2Fy.png)',
       '![c](C%3A%5CUsers%5CBob%5Cz.png)',
       '![d](C:%255CUsers%255CBob%255Cw.png)',
-      '![e](\\server\share\Bob\q.png)',
+      String.raw`![e](\\server\share\Bob\q.png)`,
       '![f](file:%2F%2F%2FC:%2FUsers%2FBob%2Fr.png)',
       '<img srcset="C:/Users/Bob/x.png 1x, D:\\Users\\Bob\\x2.png 2x, ../Assets/ok.png 3x" src="d:/Users/Bob/s.png">',
       "<img srcset='C:/Users/Bob Smith/x.png 1x'>",

@@ -68,11 +68,14 @@ export function FormulaDialog() {
   const [latex, setLatex] = useState(initialLatex)
   const [display, setDisplay] = useState<FormulaDisplay>(initialDisplay)
 
-  useEffect(() => {
-    if (!open) return
-    setLatex(initialLatex)
-    setDisplay(initialDisplay)
-  }, [open, initialLatex, initialDisplay])
+  const [source, setSource] = useState({ open, initialLatex, initialDisplay })
+  if (source.open !== open || source.initialLatex !== initialLatex || source.initialDisplay !== initialDisplay) {
+    setSource({ open, initialLatex, initialDisplay })
+    if (open) {
+      setLatex(initialLatex)
+      setDisplay(initialDisplay)
+    }
+  }
 
   useEffect(() => {
     if (!open) return

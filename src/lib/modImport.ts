@@ -294,7 +294,8 @@ async function importSingleSnippet(fs: PackageFs, snippetsDir: string, path: str
 export async function pickModSource(source: ModImportSource, kind: ModKind): Promise<string | null> {
   if (kind === MOD_KIND.PLUGINS) throw new PackageError('Only shipped official plugins are supported. Plugin imports are unavailable.')
   if (source === 'folder') {
-    const picked = await open({ directory: true, multiple: false })
+    // `recursive` grants the folder's contents, not just the folder itself.
+    const picked = await open({ directory: true, multiple: false, recursive: true })
     return typeof picked === 'string' ? picked.replaceAll('\\', '/') : null
   }
   const extensions = kind === MOD_KIND.THEMES ? ['zip', 'css']

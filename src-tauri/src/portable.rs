@@ -205,7 +205,7 @@ fn decode_hint_text(bytes: &[u8]) -> Result<String, String> {
         if body.len() % 2 != 0 {
             return Err("the hint is not valid UTF-16".into());
         }
-        let units: Vec<u16> = body.chunks_exact(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]])).collect();
+        let units: Vec<u16> = body.as_chunks::<2>().0.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
         return String::from_utf16(&units).map_err(|_| "the hint is not valid UTF-16".to_string());
     }
     std::str::from_utf8(bytes).map(str::to_owned).map_err(|_| "the hint is not valid UTF-8".to_string())

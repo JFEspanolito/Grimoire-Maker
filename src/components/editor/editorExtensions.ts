@@ -11,6 +11,8 @@ import { MathFormula } from './extensions/formula'
 import { Section, SectionDocument } from './extensions/section'
 import { ColumnBreak } from './extensions/columnBreak'
 import { SearchHighlight } from './extensions/searchHighlight'
+import { RawMarkdownBlock, RawMarkdownInline } from './extensions/rawMarkdown'
+import { SourceSyntax } from './extensions/sourceSyntax'
 
 /** What the page editor can read and write; the book export renders documents with the same set. */
 export const EDITOR_EXTENSIONS = [
@@ -32,5 +34,9 @@ export const EDITOR_EXTENSIONS = [
   ReadAloud,
   CharacterSheet,
   SearchHighlight,
+  // Last before Markdown so its DOM pass sees every other extension's parse rules and output.
+  RawMarkdownBlock,
+  RawMarkdownInline,
+  SourceSyntax,
   Markdown.configure({ html: true, tightLists: true, breaks: false }),
 ]

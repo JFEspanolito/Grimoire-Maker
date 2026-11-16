@@ -3,6 +3,20 @@ use std::path::Path;
 use tauri::scope::fs::Scope;
 use tauri_plugin_fs::FsExt;
 
+/// Saved library paths authorize access on startup; only native commands may change them.
+pub(crate) fn protect_preferences(scope: &Scope, root: &Path) -> Result<(), String> {
+    // Legacy paths and installer selections also feed the preferences migration.
+    for name in [
+        "setting.json",
+        "library-paths.json",
+        "install-content-root.txt",
+        "install-content-root-v2.txt",
+    ] {
+        scope.forbid_file(root.join(name)).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 pub(crate) fn allow_owned_file(scope: &Scope, root: &Path, name: &str) -> Result<(), String> {
     let path = root.join(name);
     match std::fs::symlink_metadata(&path) {
@@ -58,8 +72,35 @@ pub(crate) fn prepare_metadata(
     Ok(())
 }
 
+/// Grants the hidden sibling (`.<name>.saving.md`) a Markdown document is written to before it
+/// replaces the original. Only for a document whose folder is already authorized; a document
+/// granted alone keeps writing in place.
+pub(crate) fn prepare_save(scope: &Scope, document: &Path) -> Result<(), String> {
+    let name = document
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("Invalid document path")?;
+    let parent = document.parent().ok_or("Invalid document path")?;
+    if !document.is_absolute()
+        || document.components().any(|part| matches!(part, std::path::Component::ParentDir))
+        || name.starts_with('.')
+        || !name.to_ascii_lowercase().ends_with(".md")
+    {
+        return Err("Only Markdown documents can be saved through a temporary file".into());
+    }
+    if !scope.is_allowed(document) || !scope.is_allowed(parent.join("grimoire-save-probe.md")) {
+        return Err("Document folder is not authorized".into());
+    }
+    allow_owned_file(scope, parent, &format!(".{name}.saving.md"))
+}
+
+#[tauri::command(async)]
+pub fn prepare_document_save(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    prepare_save(&app.fs_scope(), Path::new(&path))
+}
+
 /// Extends only an already authorized project directory, never arbitrary hidden paths.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn prepare_project_metadata(
     app: tauri::AppHandle,
     root: String,

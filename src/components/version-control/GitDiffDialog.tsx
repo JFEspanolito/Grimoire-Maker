@@ -15,7 +15,13 @@ export function GitDiffDialog({ path, staged, diff, loading, error, onClose }: P
     return () => element?.close()
   }, [])
   // Single-file diff dialog already displays the file name in the header, so filter out the duplicate file row
-  const rows = splitDiff(diff?.text ?? '').filter(row => row.file === undefined)
+  const occurrences = new Map<string, number>()
+  const rows = splitDiff(diff?.text ?? '').filter(row => row.file === undefined).map(row => {
+    const identity = JSON.stringify([path, row.original, row.incoming, row.note])
+    const occurrence = occurrences.get(identity) ?? 0
+    occurrences.set(identity, occurrence + 1)
+    return { ...row, key: `${identity}:${occurrence}` }
+  })
   return <dialog ref={dialog} className={styles.dialog} aria-labelledby="git-diff-title"
     onCancel={event => { event.preventDefault(); onClose() }}>
     <header className={styles.header}>
@@ -28,7 +34,7 @@ export function GitDiffDialog({ path, staged, diff, loading, error, onClose }: P
     {diff?.binary ? <p>{t('git.diff.binary')}</p> : <div className={styles.scroll} tabIndex={0} aria-label={t('git.diff.sideBySide')}>
       <table className={styles.table}>
         <thead><tr><th scope="col">{t('git.diff.original')}</th><th scope="col">{t('git.diff.incoming')}</th></tr></thead>
-        <tbody>{rows.map((row, index) => <tr key={index}>
+        <tbody>{rows.map((row) => <tr key={row.key}>
           {row.note !== undefined ? <td colSpan={2} className={styles.note}>{row.note}</td>
             : (['original', 'incoming'] as const).map(side => {
               const line = row[side]

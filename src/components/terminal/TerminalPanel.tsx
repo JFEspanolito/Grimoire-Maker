@@ -1,3 +1,4 @@
+import { getTranslation, useTranslation } from '../../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -11,7 +12,18 @@ interface Props {
   workspace?: string | null
 }
 
+interface TerminalOutput { sessionId: string; data: string }
+interface TerminalExit { sessionId: string }
+// React effects can overlap while native IPC settles. Keep close/start ordered across mounts.
+let lifecycle: Promise<void> = Promise.resolve()
+function scheduleLifecycle(action: () => Promise<void>): Promise<void> {
+  const next = lifecycle.then(action)
+  lifecycle = next.catch(() => undefined)
+  return next
+}
+
 export function TerminalPanel({ workspace }: Props) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(240)
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null)
@@ -19,11 +31,22 @@ export function TerminalPanel({ workspace }: Props) {
   const togglePanel = useSettingsStore((s) => s.togglePanel)
 
   useEffect(() => {
+    const translate = (key: Parameters<typeof getTranslation>[0]) => getTranslation(key, useSettingsStore.getState().language)
     if (!containerRef.current) return
 
     let isMounted = true
     let unlistenOutput: UnlistenFn | undefined
     let unlistenExit: UnlistenFn | undefined
+    let sessionId: string | null = null
+    const pendingResize: { size?: { rows: number; cols: number } } = {}
+    const earlyEvents: Array<TerminalOutput | TerminalExit> = []
+    const receive = (payload: TerminalOutput | TerminalExit) => {
+      if (!isMounted) return
+      if (!sessionId) { earlyEvents.push(payload); return }
+      if (payload.sessionId !== sessionId) return
+      if ('data' in payload) term.write(payload.data)
+      else term.write(`\r\n\x1b[33m${translate('ui.process_exited')}\x1b[0m\r\n`)
+    }
 
     const term = new Terminal({
       theme: {
@@ -53,38 +76,46 @@ export function TerminalPanel({ workspace }: Props) {
     if (isTauri()) {
       void (async () => {
         try {
-          unlistenOutput = await listen<string>('terminal-output', (event) => {
-            if (isMounted) term.write(event.payload)
-          })
-          unlistenExit = await listen('terminal-exit', () => {
-            if (isMounted) term.write('\r\n\x1b[33m[Process exited]\x1b[0m\r\n')
-          })
+          unlistenOutput = await listen<TerminalOutput>('terminal-output', (event) => receive(event.payload))
+          if (!isMounted) { unlistenOutput(); return }
+          unlistenExit = await listen<TerminalExit>('terminal-exit', (event) => receive(event.payload))
+          if (!isMounted) { unlistenExit(); return }
 
           term.onData((data) => {
-            void invoke('write_terminal', { data }).catch(() => {})
+            if (isMounted && sessionId) void invoke('write_terminal', { sessionId, data }).catch(() => {})
           })
 
           term.onResize(({ rows, cols }) => {
-            void invoke('resize_terminal', { rows, cols }).catch(() => {})
+            pendingResize.size = { rows, cols }
+            if (isMounted && sessionId) void invoke('resize_terminal', { sessionId, rows, cols }).catch(() => {})
           })
 
-          await invoke('spawn_terminal', {
-            options: {
-              cwd: workspace || undefined,
-              rows: term.rows || 24,
-              cols: term.cols || 80,
-            },
+          await scheduleLifecycle(async () => {
+            if (!isMounted) return
+            sessionId = await invoke<string>('spawn_terminal', {
+              options: { cwd: workspace || undefined, rows: term.rows || 24, cols: term.cols || 80 },
+            })
+            if (!isMounted) {
+              await invoke('close_terminal', { sessionId })
+              sessionId = null
+              return
+            }
+            if (pendingResize.size) {
+              void invoke('resize_terminal', { sessionId, ...pendingResize.size }).catch(() => {})
+              pendingResize.size = undefined
+            }
+            earlyEvents.splice(0).forEach(receive)
           })
         } catch (error) {
           if (isMounted) {
-            term.writeln(`\x1b[31mFailed to start terminal session: ${String(error)}\x1b[0m`)
+            term.writeln(`\x1b[31m${getTranslation('ui.terminalFailed', useSettingsStore.getState().language, { error: String(error) })}\x1b[0m`)
           }
         }
       })()
     } else {
-      term.writeln('\x1b[33m[Grimoire Maker Terminal - Web Preview]\x1b[0m')
-      term.writeln('PTY process execution is active in the Tauri desktop application.')
-      term.writeln('Run `agy` directly inside the desktop terminal.\r\n')
+      term.writeln(`\x1b[33m${translate('ui.grimoire_maker_terminal_web_preview')}\x1b[0m`)
+      term.writeln(translate('ui.pty_process_execution_is_active_in_the_tauri_desktop_application'))
+      term.writeln(`${translate('ui.run_agy_directly_inside_the_desktop_terminal')}\r\n`)
       term.onData((data) => {
         if (data === '\r') {
           term.write('\r\n$ ')
@@ -98,21 +129,31 @@ export function TerminalPanel({ workspace }: Props) {
     }
 
     const onResizeWindow = () => {
+      if (!isMounted) return
       try {
         fitAddon.fit()
       } catch {}
     }
     window.addEventListener('resize', onResizeWindow)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onResizeWindow)
+    observer?.observe(containerRef.current)
 
     return () => {
       isMounted = false
       window.removeEventListener('resize', onResizeWindow)
+      observer?.disconnect()
       if (unlistenOutput) unlistenOutput()
       if (unlistenExit) unlistenExit()
       term.dispose()
-      terminalRef.current = null
+      earlyEvents.length = 0
+      if (terminalRef.current === term) terminalRef.current = null
       if (isTauri()) {
-        void invoke('close_terminal').catch(() => {})
+        void scheduleLifecycle(async () => {
+          if (sessionId) {
+            await invoke('close_terminal', { sessionId })
+            sessionId = null
+          }
+        }).catch(() => {})
       }
     }
   }, [workspace])
@@ -142,14 +183,14 @@ export function TerminalPanel({ workspace }: Props) {
   return (
     <section
       id="terminal-panel"
-      aria-label="Terminal"
+      aria-label={t('ui.terminal')}
       className={styles.panel}
       style={{ height }}
     >
       <div
         role="separator"
         aria-orientation="horizontal"
-        aria-label="Resize terminal panel"
+        aria-label={t('ui.resize_terminal_panel')}
         className={styles.handle}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -157,14 +198,14 @@ export function TerminalPanel({ workspace }: Props) {
       />
       <header className={styles.header}>
         <div className={styles.title}>
-          <span>Terminal</span>
+          <span>{t('ui.terminal')}</span>
         </div>
         <div className={styles.actions}>
           <button
             type="button"
             className={styles.actionButton}
-            aria-label="Clear terminal"
-            title="Clear terminal"
+            aria-label={t('ui.clear_terminal')}
+            title={t('ui.clear_terminal')}
             onClick={clearTerminal}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -175,8 +216,8 @@ export function TerminalPanel({ workspace }: Props) {
           <button
             type="button"
             className={styles.actionButton}
-            aria-label="Close terminal panel"
-            title="Close terminal"
+            aria-label={t('ui.close_terminal_panel')}
+            title={t('ui.close_terminal')}
             onClick={() => togglePanel('bottomPanel')}
           >
             ✕

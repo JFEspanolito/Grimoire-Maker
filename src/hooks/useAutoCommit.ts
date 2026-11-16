@@ -4,7 +4,7 @@ import { useDocumentStore } from '../stores/documentStore'
 import { autoCommitChanges } from '../lib/versionControl'
 import { notifyRepositoryChanged } from '../lib/repositoryEvents'
 import { reportError } from '../lib/errorLogging'
-import { isTauri } from './useFileSystem'
+import { isTauri, runFileAction } from './useFileSystem'
 
 /** Commit saved project files only; automatic saving remains independent. */
 export function useAutoCommit(ready: boolean): void {
@@ -24,7 +24,8 @@ export function useAutoCommit(ready: boolean): void {
       if (running.current) { schedule(); return }
       running.current = true
       try {
-        const result = await autoCommitChanges(workspace!, message)
+        // Queued with saves so Git never stages a document while it is being written.
+        const result = await runFileAction(() => autoCommitChanges(workspace!, message))
         if (result === 'committed' || result === 'indexUpdated') notifyRepositoryChanged()
       } catch (error) {
         reportError('git.autoCommit', error)

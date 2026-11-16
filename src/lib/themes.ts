@@ -129,7 +129,7 @@ export interface UserThemes {
  * Scans `<configRoot>/themes/*.css`, creating the folder on first run, and
  * installs every valid file. A bad file is reported in `errors`, never fatal.
  */
-export async function loadUserThemes(disabledIds: ReadonlySet<string> = new Set()): Promise<UserThemes> {
+export async function loadUserThemes(disabledIds: ReadonlySet<string> = new Set(), isCurrent: () => boolean = () => true): Promise<UserThemes> {
   const dir = (await loadLibraryPaths()).themes
   if (!(await exists(dir))) await mkdir(dir, { recursive: true })
 
@@ -177,8 +177,10 @@ export async function loadUserThemes(disabledIds: ReadonlySet<string> = new Set(
     }
   }
 
-  installBuiltinThemes(themes.map(theme => theme.id))
-  applyStyle('grimoire-user-themes', chunks.join('\n'))
+  if (isCurrent()) {
+    installBuiltinThemes(themes.map(theme => theme.id))
+    applyStyle('grimoire-user-themes', chunks.join('\n'))
+  }
   return { dir, themes, errors }
 }
 

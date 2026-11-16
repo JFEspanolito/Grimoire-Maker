@@ -94,6 +94,18 @@ describe('VersionControlPanel', () => {
     expect(actions.commitChanges).not.toHaveBeenCalled()
   })
 
+  it('blocks reverting an affected dirty buffer before Git changes the file', async () => {
+    useDocumentStore.getState().loadFromRaw('/books/chapter.md', '# Disk')
+    useDocumentStore.getState().setBody('# Unsaved')
+    await render('/books')
+    await click('Revert chapter.md')
+    const confirm = Array.from(container.querySelectorAll('dialog button')).find((button) => button.textContent === 'Revert')!
+    await act(async () => (confirm as HTMLButtonElement).click())
+    expect(actions.revertChange).not.toHaveBeenCalled()
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('unsaved changes')
+    expect(useDocumentStore.getState().document.body).toBe('# Unsaved')
+  })
+
   it('refreshes changes after an automatic commit event without mutating Git', async () => {
     await render()
     actions.getRepositoryStatus.mockResolvedValue({ ...repository, entries: [] })
