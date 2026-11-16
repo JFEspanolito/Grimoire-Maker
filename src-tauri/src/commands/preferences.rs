@@ -609,7 +609,7 @@ pub fn restore_scopes(app: &AppHandle) -> Result<LibraryPaths, String> {
 
 // Caller holds CHANGES, so the paths it gets stay current for as long as it keeps the lock.
 pub(super) fn restore_scopes_locked(app: &AppHandle) -> Result<LibraryPaths, String> {
-    let config = crate::config_root::path(&app)?;
+    let config = crate::config_root::path(app)?;
     let paths = read_paths(&config)?;
     let mut locks = Vec::new();
     for path in paths.all() {

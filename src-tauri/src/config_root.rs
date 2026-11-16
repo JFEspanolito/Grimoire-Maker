@@ -210,7 +210,7 @@ pub(crate) fn rebased_path(value: &str, old: &Path, new: &Path) -> Option<String
     let old = normalized(old.to_str()?);
     let pieces: Vec<_> = value.split('/').collect();
     let prefix: Vec<_> = old.split('/').collect();
-    if pieces.len() < prefix.len() || pieces.iter().any(|part| *part == "..") {
+    if pieces.len() < prefix.len() || pieces.contains(&"..") {
         return None;
     }
     for (actual, expected) in pieces.iter().zip(&prefix) {

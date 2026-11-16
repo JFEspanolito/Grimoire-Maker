@@ -801,25 +801,6 @@ fn commit_diff_in(root: &Path, commit: &str, path: Option<&str>) -> Result<GitDi
         return Err("Invalid commit identifier".into());
     }
     checked(root, &["rev-parse", "--verify", &format!("{commit}^{{commit}}")])?;
-    let _args = vec![
-        "diff",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--no-color",
-        "--ignore-submodules=all",
-        "--no-renames",
-    ];
-    let _ = [
-        "show",
-        "--format=",
-        "--root",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--no-color",
-        "--ignore-submodules=all",
-        "--no-renames",
-        commit,
-    ];
     let mut args = vec![
         "show",
         "--format=",

@@ -30,6 +30,44 @@ fn list_in(root: &Path, allowed: &impl Fn(&Path) -> bool, max_depth: usize) -> R
     Ok(found)
 }
 
+fn walk(
+    dir: &Path,
+    root: &Path,
+    allowed: &impl Fn(&Path) -> bool,
+    depth: usize,
+    max_depth: usize,
+    out: &mut Vec<String>,
+) -> Result<(), String> {
+    if depth > max_depth {
+        return Err("Markdown search exceeded the directory depth limit".into());
+    }
+    for entry in fs::read_dir(dir).map_err(|error| error.to_string())? {
+        let path = entry.map_err(|error| error.to_string())?.path();
+        let hidden = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with('.'));
+        if hidden || !allowed(&path) {
+            continue;
+        }
+        let info = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+        if crate::safe_copy::reject_special(&info).is_err() {
+            continue;
+        }
+        let canonical = fs::canonicalize(&path).map_err(|error| error.to_string())?;
+        if !canonical.starts_with(root) || !allowed(&canonical) {
+            continue;
+        }
+        if info.is_dir() {
+            let _directory = crate::safe_copy::open_checked(&path, true)?;
+            walk(&path, root, allowed, depth + 1, max_depth, out)?;
+        } else if path.extension().is_some_and(|e| e == "md") {
+            out.push(path.to_string_lossy().into_owned());
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,42 +141,4 @@ mod tests {
             .args(["/C", "mklink", "/J"])
             .arg(link).arg(target).output().unwrap().status.success());
     }
-}
-
-fn walk(
-    dir: &Path,
-    root: &Path,
-    allowed: &impl Fn(&Path) -> bool,
-    depth: usize,
-    max_depth: usize,
-    out: &mut Vec<String>,
-) -> Result<(), String> {
-    if depth > max_depth {
-        return Err("Markdown search exceeded the directory depth limit".into());
-    }
-    for entry in fs::read_dir(dir).map_err(|error| error.to_string())? {
-        let path = entry.map_err(|error| error.to_string())?.path();
-        let hidden = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| n.starts_with('.'));
-        if hidden || !allowed(&path) {
-            continue;
-        }
-        let info = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
-        if crate::safe_copy::reject_special(&info).is_err() {
-            continue;
-        }
-        let canonical = fs::canonicalize(&path).map_err(|error| error.to_string())?;
-        if !canonical.starts_with(root) || !allowed(&canonical) {
-            continue;
-        }
-        if info.is_dir() {
-            let _directory = crate::safe_copy::open_checked(&path, true)?;
-            walk(&path, root, allowed, depth + 1, max_depth, out)?;
-        } else if path.extension().is_some_and(|e| e == "md") {
-            out.push(path.to_string_lossy().into_owned());
-        }
-    }
-    Ok(())
 }

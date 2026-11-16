@@ -12,7 +12,7 @@ fn normalize(path: &str) -> String {
 
 /// Whether `path` is one of the workspaces recorded in `state.json`.
 fn is_remembered(app: &AppHandle, path: &str) -> Result<bool, String> {
-    let state_path = crate::config_root::path(&app)?
+    let state_path = crate::config_root::path(app)?
         .join(crate::config::STATE_FILE);
     let Ok(raw) = fs::read_to_string(state_path) else {
         return Ok(false);
