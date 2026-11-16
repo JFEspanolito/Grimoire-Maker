@@ -3,21 +3,40 @@ import { Fragment, type Mark, type Node as PMNode } from '@tiptap/pm/model'
 import { getHTMLFromFragment } from '@tiptap/react'
 
 /**
- * Remembers which of the equivalent Markdown spellings the author used (bullet `*`/`+`/`-`,
- * emphasis `_`/`*`, strong `__`/`**`, setext headings, two-space hard breaks) and writes the same
- * one back. Content created in the editor keeps the defaults: `-`, `*`, `**`, `#` and `\`.
+ * Remembers which of the equivalent Markdown spellings the author used and writes the same one
+ * back: bullet `*`/`+`/`-`, emphasis `_`/`*`, strong `__`/`**`, setext headings, two-space hard
+ * breaks, reference links (`[text][1]` with their `[1]: url` definitions) and the number of blank
+ * lines between blocks. Content created in the editor keeps the defaults: `-`, `*`, `**`, `#`, `\`,
+ * inline links and one blank line.
  */
 
 const MARKUP_ATTR = 'data-md-markup'
+const GAP_ATTR = 'data-md-gap'
+const REFERENCE_ATTR = 'data-md-reference'
+const REFERENCE_HREF_ATTR = 'data-md-reference-href'
 
 interface MdToken {
-  type: string; markup: string; children: MdToken[] | null
+  type: string; markup: string; content: string; level: number; nesting: number
+  map: [number, number] | null; children: MdToken[] | null
   attrSet(name: string, value: string): void
+  attrGet(name: string): string | null
 }
-type InlineRule = (state: { tokens: MdToken[] }, silent: boolean) => boolean
+interface MdInlineState {
+  src: string; pos: number; tokens: MdToken[]
+  md: { helpers: { parseLinkLabel(state: MdInlineState, start: number, disableNested?: boolean): number } }
+}
+interface MdBlockState {
+  line: number; blkIndent: number
+  getLines(begin: number, end: number, indent: number, keepLastLF: boolean): string
+  push(type: string, tag: string, nesting: number): MdToken
+}
+type InlineRule = (state: MdInlineState, silent: boolean) => boolean
+type BlockRule = (state: MdBlockState, startLine: number, endLine: number, silent: boolean) => boolean
+interface Ruler<F> { at(name: string, fn: F, options?: { alt?: string[] }): void; __rules__: { name: string; fn: F; alt: string[] }[] }
 interface MarkdownIt {
-  core: { ruler: { push(name: string, fn: (state: { tokens: MdToken[] }) => void): void } }
-  inline: { ruler: { at(name: string, fn: InlineRule): void; __rules__: { name: string; fn: InlineRule }[] } }
+  core: { ruler: { push(name: string, fn: (state: { tokens: MdToken[]; src?: string }) => void): void } }
+  block: { ruler: Ruler<BlockRule> }
+  inline: { ruler: Ruler<InlineRule> }
   renderer: { rules: Record<string, (tokens: MdToken[], index: number) => string> }
   __grimoireSourceSyntax?: boolean
 }
@@ -48,7 +67,42 @@ export function setupSourceSyntax(md: MarkdownIt): void {
       return matched
     })
   }
-  md.core.ruler.push('grimoire_source_syntax', state => {
+  // A reference definition leaves no token; keep its source as a raw block (rawMarkdown.ts renders it).
+  const reference = md.block.ruler.__rules__.find(rule => rule.name === 'reference')
+  // `at` replaces `fn` on this same rule object, so keep the original function first.
+  const referenceRule = reference?.fn
+  if (reference) {
+    md.block.ruler.at('reference', (state, startLine, endLine, silent) => {
+      const matched = referenceRule!(state, startLine, endLine, silent)
+      if (matched && !silent) {
+        const token = state.push('raw_markdown_block', '', 0)
+        token.content = state.getLines(startLine, state.line, state.blkIndent, false).replace(/\n$/, '')
+        token.map = [startLine, state.line]
+      }
+      return matched
+    }, { alt: [...reference.alt] })
+  }
+  // Remember how a reference link was written (`[1]`, `[]` or nothing after the text) and its address.
+  const link = md.inline.ruler.__rules__.find(rule => rule.name === 'link')
+  const linkRule = link?.fn
+  if (link) {
+    md.inline.ruler.at('link', (state, silent) => {
+      const start = state.pos
+      const before = state.tokens.length
+      const matched = linkRule!(state, silent)
+      // Pending text before the link is flushed into its own token first.
+      const open = state.tokens.slice(before).find(token => token.type === 'link_open')
+      if (!matched || silent || open?.type !== 'link_open') return matched
+      const labelEnd = state.md.helpers.parseLinkLabel(state, start, true)
+      const after = labelEnd < 0 ? '(' : state.src.slice(labelEnd + 1, state.pos)
+      if (!after.startsWith('(')) {
+        open.attrSet(REFERENCE_ATTR, after)
+        open.attrSet(REFERENCE_HREF_ATTR, open.attrGet('href') ?? '')
+      }
+      return matched
+    }, { alt: [...link.alt] })
+  }
+  md.core.ruler.push('grimoire_source_syntax', (state: { tokens: MdToken[]; src?: string }) => {
     const visit = (tokens: MdToken[]) => {
       for (const token of tokens) {
         const setext = token.type === 'heading_open' && (token.markup === '=' || token.markup === '-')
@@ -57,6 +111,22 @@ export function setupSourceSyntax(md: MarkdownIt): void {
       }
     }
     visit(state.tokens)
+    // Blank lines before each top-level block, when not the usual one. Counted from the source,
+    // because a list's line range also covers the blank lines after it.
+    const lines = (state.src ?? '').split('\n')
+    const blank = (line: number) => line >= 0 && line < lines.length && !lines[line].trim()
+    let previousEnd: number | null = null
+    for (const token of state.tokens) {
+      if (token.level !== 0 || token.nesting === -1 || !token.map) continue
+      if (previousEnd !== null) {
+        let gap = 0
+        for (let line = token.map[0] - 1; line >= previousEnd && blank(line); line--) gap++
+        if (gap !== 1) token.attrSet(GAP_ATTR, String(gap))
+      }
+      let end = token.map[1]
+      while (end > token.map[0] && blank(end - 1)) end--
+      previousEnd = end
+    }
   })
   md.renderer.rules.hardbreak = (tokens, index) => tokens[index].markup === '  ' ? `<br ${MARKUP_ATTR}="spaces">` : '<br>'
 }
@@ -73,7 +143,9 @@ const markupAttribute = (allowed: readonly string[]) => ({
 })
 
 type MarkSpecs = Record<string, { open: unknown; close: unknown; sourceMarkup?: boolean }>
-type MarkString = (this: { marks: MarkSpecs }, mark: Mark, open: boolean, parent: PMNode, index: number) => string
+interface PatchedState { marks: MarkSpecs; inAutolink?: boolean; closed: unknown; flushClose(size?: number): void }
+type MarkString = (this: PatchedState, mark: Mark, open: boolean, parent: PMNode, index: number) => string
+type Render = (this: PatchedState, node: PMNode, parent: PMNode, index: number) => void
 const patchedStates = new WeakSet<object>()
 
 /**
@@ -83,11 +155,25 @@ const patchedStates = new WeakSet<object>()
  * prototype is patched once, from the first state this extension's serializers see.
  */
 function preserveMarkDelimiters(state: object): void {
-  const prototype = Object.getPrototypeOf(state) as { markString: MarkString }
+  const prototype = Object.getPrototypeOf(state) as { markString: MarkString; render: Render }
   if (patchedStates.has(prototype)) return
   patchedStates.add(prototype)
+  const render = prototype.render
+  prototype.render = function (node, parent, index) {
+    const gap = node.attrs?.gapBefore as unknown
+    // flushClose(n) ends the previous block with n - 1 blank lines.
+    if (typeof gap === 'number' && this.closed) this.flushClose(gap + 1)
+    return render.call(this, node, parent, index)
+  }
   const original = prototype.markString
   prototype.markString = function (mark, open, parent, index) {
+    // A reference link whose address still matches its definition is written the way it was read.
+    const reference = mark.attrs.reference as unknown
+    if (mark.type.name === 'link' && typeof reference === 'string' && mark.attrs.href === mark.attrs.referenceHref) {
+      if (!open) return `]${reference}`
+      this.inAutolink = false
+      return '['
+    }
     const info = this.marks[mark.type.name]
     const markup = mark.attrs.markup as unknown
     if (!info?.sourceMarkup || typeof markup !== 'string') return original.call(this, mark, open, parent, index)
@@ -112,7 +198,29 @@ export const SourceSyntax = Extension.create({
       { types: ['bold'], attributes: markupAttribute(['**', '__']) },
       { types: ['hardBreak'], attributes: markupAttribute(['spaces']) },
       // Read by the heading serializer in blockFormat.ts.
-      { types: ['heading'], attributes: { setext: markupAttribute(['=', '-']).markup } },
+      { types: ['heading'], attributes: { setext: { ...markupAttribute(['=', '-']).markup, keepOnSplit: false } } },
+      {
+        types: ['link'],
+        attributes: {
+          reference: { default: null, rendered: false, parseHTML: (element: HTMLElement) => element.getAttribute(REFERENCE_ATTR) },
+          referenceHref: { default: null, rendered: false, parseHTML: (element: HTMLElement) => element.getAttribute(REFERENCE_HREF_ATTR) },
+        },
+      },
+      {
+        types: ['paragraph', 'heading', 'bulletList', 'orderedList', 'blockquote', 'table', 'horizontalRule', 'rawMarkdownBlock'],
+        attributes: {
+          gapBefore: {
+            default: null,
+            rendered: false,
+            // A block split off with Enter is new content: one blank line, like anything typed.
+            keepOnSplit: false,
+            parseHTML: (element: HTMLElement) => {
+              const gap = Number(element.getAttribute(GAP_ATTR) ?? NaN)
+              return Number.isInteger(gap) && gap >= 0 && gap <= 100 ? gap : null
+            },
+          },
+        },
+      },
     ]
   },
 
@@ -145,17 +253,29 @@ export const SourceSyntax = Extension.create({
       // Storage is rebuilt from `addStorage` on every read, so the override has to live there (as in blockFormat.ts).
       if (extension) (extension.config as { addStorage?: () => unknown }).addStorage = () => ({ markdown: { serialize, parse: {} } })
     }
-  },
-
-  onCreate() {
-    // Serialize one hard break so the state prototype is patched before any document is saved.
-    const { schema } = this.editor
-    const serializer = (this.editor.storage as unknown as { markdown?: { serializer?: { serialize(node: PMNode): string } } }).markdown?.serializer
-    if (!serializer || !schema.nodes.hardBreak) return
-    try {
-      serializer.serialize(schema.nodes.paragraph.create(null, [schema.nodes.hardBreak.create(), schema.text('x')]))
-    } catch {
-      // The probe only primes the patch; bullet lists and hard breaks also apply it on first use.
+    // Every node serializer patches the state first, so the patch is in place before the first
+    // mark or gap of any document is written (the create event fires too late for a probe).
+    for (const extension of extensions) {
+      if (extension.type !== 'node') continue
+      const config = extension.config as { addStorage?: (...args: unknown[]) => unknown }
+      const addStorage = config.addStorage
+      if (!addStorage) continue
+      config.addStorage = function (this: unknown, ...args: unknown[]) {
+        const storage = addStorage.apply(this, args) as { markdown?: { serialize?: (...rest: unknown[]) => unknown } } | undefined
+        const serialize = storage?.markdown?.serialize
+        if (typeof serialize !== 'function') return storage
+        return {
+          ...storage,
+          markdown: {
+            ...storage!.markdown,
+            serialize(this: unknown, state: object, ...rest: unknown[]) {
+              preserveMarkDelimiters(state)
+              return serialize.call(this, state, ...rest)
+            },
+          },
+        }
+      }
     }
   },
+
 })

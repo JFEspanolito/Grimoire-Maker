@@ -9,7 +9,7 @@ import { DOMParser as PMDOMParser, type Node as PMNode, type Schema } from '@tip
 
 interface MarkdownState { write(text: string): void; closeBlock(node: PMNode): void }
 
-interface MdToken { type: string; content: string; children: MdToken[] | null; map: [number, number] | null }
+interface MdToken { type: string; content: string; markup: string; info: string; meta: unknown; children: MdToken[] | null; map: [number, number] | null }
 interface MdBlockState {
   src: string; bMarks: number[]; eMarks: number[]; tShift: number[]; sCount: number[]; blkIndent: number; line: number
   isEmpty(line: number): boolean
@@ -27,13 +27,14 @@ interface MarkdownIt {
   block: { ruler: Ruler<MdBlockState> }
   inline: { ruler: Ruler<MdInlineState> }
   core: { ruler: Ruler<MdCoreState> }
-  renderer: { rules: Record<string, (tokens: MdToken[], index: number) => string> }
+  renderer: { rules: Record<string, (tokens: MdToken[], index: number) => string>; renderAttrs(token: MdToken): string }
   utils: { escapeHtml(text: string): string }
   __grimoireRawMarkdown?: boolean
 }
 
 const BLOCK_ATTR = 'data-raw-markdown'
 const INLINE_ATTR = 'data-raw-markdown-inline'
+const DISPLAY_ATTR = 'data-raw-markdown-display'
 /** Structural table elements ProseMirror passes through without a rule of their own. */
 const TRANSPARENT = new Set(['THEAD', 'TBODY', 'TFOOT', 'COLGROUP', 'COL'])
 const FOOTNOTE_DEFINITION = /^\[\^[^\]\s]+\]:/
@@ -80,6 +81,21 @@ function taskMarkers(state: MdCoreState): void {
   }
 }
 
+/**
+ * Entities (`&copy;`) and backslash escapes (`\<`) decode to plain characters, which the serializer
+ * would re-escape its own way; keep each as its source, displayed as the character it stands for.
+ */
+function entitiesAndEscapes(state: MdCoreState): void {
+  for (const token of state.tokens) {
+    for (const child of token.children ?? []) {
+      if (child.type !== 'text_special' || (child.info !== 'entity' && child.info !== 'escape')) continue
+      child.meta = { display: child.content }
+      child.type = 'raw_markdown_inline'
+      child.content = child.markup
+    }
+  }
+}
+
 export function setupRawMarkdown(md: MarkdownIt): void {
   // tiptap-markdown runs every extension's setup on each parse; register the rules once.
   if (md.__grimoireRawMarkdown) return
@@ -87,8 +103,14 @@ export function setupRawMarkdown(md: MarkdownIt): void {
   md.block.ruler.before('reference', 'raw_footnote_definition', footnoteDefinition as Rule<MdBlockState>, { alt: ['paragraph', 'reference'] })
   md.inline.ruler.before('link', 'raw_markdown_inline', inlineSource as Rule<MdInlineState>)
   md.core.ruler.after('inline', 'raw_task_marker', taskMarkers)
-  md.renderer.rules.raw_markdown_block = (tokens, index) => `<div ${BLOCK_ATTR}="${md.utils.escapeHtml(tokens[index].content)}"></div>`
-  md.renderer.rules.raw_markdown_inline = (tokens, index) => `<span ${INLINE_ATTR}="${md.utils.escapeHtml(tokens[index].content)}"></span>`
+  md.core.ruler.before('text_join', 'raw_entities_and_escapes', entitiesAndEscapes)
+  md.renderer.rules.raw_markdown_block = (tokens, index) =>
+    `<div ${BLOCK_ATTR}="${md.utils.escapeHtml(tokens[index].content)}"${md.renderer.renderAttrs(tokens[index])}></div>`
+  md.renderer.rules.raw_markdown_inline = (tokens, index) => {
+    const { content, meta } = tokens[index]
+    const display = (meta as { display?: string } | null)?.display
+    return `<span ${INLINE_ATTR}="${md.utils.escapeHtml(content)}"${display === undefined ? '' : ` ${DISPLAY_ATTR}="${md.utils.escapeHtml(display)}"`}></span>`
+  }
 }
 
 function isKnown(element: Element, parser: PMDOMParser): boolean {
@@ -169,13 +191,26 @@ export const RawMarkdownInline = Node.create({
   selectable: true,
 
   addAttributes() {
-    return { source: { default: '', parseHTML: element => element.getAttribute(INLINE_ATTR) ?? '', rendered: false } }
+    return {
+      source: { default: '', parseHTML: element => element.getAttribute(INLINE_ATTR) ?? '', rendered: false },
+      /** Character an entity or escape stands for; shown instead of the source. */
+      display: { default: null, parseHTML: element => element.getAttribute(DISPLAY_ATTR), rendered: false },
+    }
   },
   parseHTML() {
     return [{ tag: `span[${INLINE_ATTR}]` }]
   },
   renderHTML({ node }) {
-    return ['span', { [INLINE_ATTR]: node.attrs.source, class: rawClass(node.attrs.source), contenteditable: 'false' }, node.attrs.source]
+    const { source, display } = node.attrs as { source: string; display: string | null }
+    if (display !== null) return ['span', { [INLINE_ATTR]: source, [DISPLAY_ATTR]: display, class: 'grimoire-raw-markdown-text', contenteditable: 'false' }, display]
+    return ['span', { [INLINE_ATTR]: source, class: rawClass(source), contenteditable: 'false' }, source]
+  },
+  renderText({ node }) {
+    return (node.attrs.display as string | null) ?? ''
+  },
+  extendNodeSchema(extension) {
+    // Document text (search, word counts) reads the displayed character, as for typed text.
+    return extension.name === 'rawMarkdownInline' ? { leafText: (node: PMNode) => (node.attrs.display as string | null) ?? '' } : {}
   },
   addStorage() {
     return {
