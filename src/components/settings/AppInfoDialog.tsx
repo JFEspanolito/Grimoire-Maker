@@ -7,6 +7,7 @@ export { TUTORIAL_STEPS } from './tutorialSteps'
 import { localContributors, urlGithubBugReport, urlGithubFeatureRequest, urlGithubRepo } from '../../data/contributors'
 import { AboutUpdates } from './AboutUpdates'
 import { useTranslation } from '../../lib/i18n'
+import { PANEL_IDS, useSettingsStore, type PanelVisibility } from '../../stores/settingsStore'
 
 const INFO_DIALOG = { ABOUT: 'about', TUTORIAL: 'tutorial' } as const
 export type InfoDialogKind = (typeof INFO_DIALOG)[keyof typeof INFO_DIALOG]
@@ -54,13 +55,14 @@ function findTourTarget(selectors: readonly string[]): Element | null {
   return null
 }
 
-function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['placement']): CSSProperties {
+function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['placement'], popoverHeight: number): CSSProperties {
   if (!rect || typeof window === 'undefined') return {}
   const vw = window.innerWidth || 1280
   const vh = window.innerHeight || 800
   const cardWidth = Math.min(380, vw - 32)
+  const cardHeight = Math.max(260, popoverHeight)
   const clampX = (x: number) => Math.max(16, Math.min(vw - cardWidth - 16, x))
-  const clampY = (y: number) => Math.max(16, Math.min(vh - 260, y))
+  const clampY = (y: number) => Math.max(5, Math.min(vh - cardHeight - 5, y))
 
   if (placement === 'right') {
     return { left: `${clampX(rect.left + rect.width + 16)}px`, top: `${clampY(rect.top + 16)}px` }
@@ -74,6 +76,9 @@ function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['pl
   if (placement === 'bottom') {
     return { left: `${clampX(rect.left)}px`, top: `${clampY(rect.top + rect.height + 14)}px` }
   }
+  if (placement === 'top') {
+    return { left: `${clampX(rect.left + (rect.width - cardWidth) / 2)}px`, top: `${clampY(rect.top - cardHeight - 14)}px` }
+  }
   return {
     left: `${clampX(rect.left + (rect.width - cardWidth) / 2)}px`,
     top: `${clampY(rect.top + 32)}px`,
@@ -83,8 +88,10 @@ function computePopoverStyle(rect: SpotlightRect | null, placement: TourStep['pl
 export function AppInfoDialog({ kind, onClose }: Props) {
   const { t } = useTranslation()
   const dialog = useRef<HTMLDialogElement>(null)
+  const popoverRef = useRef<HTMLElement>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null)
+  const [popoverHeight, setPopoverHeight] = useState(320)
   const isTutorial = kind === INFO_DIALOG.TUTORIAL
   const [contributors, setContributors] = useState<typeof localContributors>([])
   const [creditsLoading, setCreditsLoading] = useState(true)
@@ -100,6 +107,17 @@ export function AppInfoDialog({ kind, onClose }: Props) {
   }
   const title = isTutorial ? 'Tutorial' : 'About'
   const currentStep = TUTORIAL_STEPS[stepIndex] ?? TUTORIAL_STEPS[0]
+  const panels = useSettingsStore((s) => s.panels)
+
+  useLayoutEffect(() => {
+    if (!isTutorial) return
+    const previousPanels = { ...useSettingsStore.getState().panels }
+    const allShown = Object.fromEntries(PANEL_IDS.map((id) => [id, true])) as PanelVisibility
+    useSettingsStore.getState().restorePanels(allShown)
+    return () => {
+      useSettingsStore.getState().restorePanels(previousPanels)
+    }
+  }, [isTutorial])
 
   useEffect(() => {
     if (isTutorial) return
@@ -142,6 +160,10 @@ export function AppInfoDialog({ kind, onClose }: Props) {
   useLayoutEffect(() => {
     if (!isTutorial) return
     const measure = () => {
+      const cardHeight = popoverRef.current?.getBoundingClientRect().height
+      if (cardHeight && cardHeight > 0) {
+        setPopoverHeight((prev) => (Math.abs(prev - cardHeight) > 1 ? cardHeight : prev))
+      }
       const target = findTourTarget(currentStep.selectors)
       const rect = target?.getBoundingClientRect()
       if (rect && rect.width > 0 && rect.height > 0) {
@@ -156,13 +178,20 @@ export function AppInfoDialog({ kind, onClose }: Props) {
       }
     }
     measure()
+    const raf = window.requestAnimationFrame(measure)
+    const target = findTourTarget(currentStep.selectors)
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    if (target) observer?.observe(target)
+    if (popoverRef.current) observer?.observe(popoverRef.current)
     window.addEventListener('resize', measure)
     window.addEventListener('scroll', measure, true)
     return () => {
+      window.cancelAnimationFrame(raf)
+      observer?.disconnect()
       window.removeEventListener('resize', measure)
       window.removeEventListener('scroll', measure, true)
     }
-  }, [isTutorial, currentStep])
+  }, [isTutorial, currentStep, panels])
 
   if (isTutorial) {
     const isLast = stepIndex === TUTORIAL_STEPS.length - 1
@@ -189,8 +218,9 @@ export function AppInfoDialog({ kind, onClose }: Props) {
           } : undefined}
         />
         <section
+          ref={popoverRef}
           className={`${styles.popover} ${spotlight ? styles.floatingPopover : ''}`}
-          style={computePopoverStyle(spotlight, currentStep.placement)}
+          style={computePopoverStyle(spotlight, currentStep.placement, popoverHeight)}
           aria-label="Tutorial step"
         >
           <header className={styles.header}>

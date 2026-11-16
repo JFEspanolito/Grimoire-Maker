@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import configSource from '../../../src-tauri/tauri.conf.json?raw'
 import packageSource from '../../../package.json?raw'
 import { AppInfoDialog, TUTORIAL_STEPS } from './AppInfoDialog'
+import { DEFAULT_PANELS, PANEL_IDS, useSettingsStore } from '../../stores/settingsStore'
 import { localContributors } from '../../data/contributors'
 
 // Update-check behavior is covered independently in AboutUpdates.test.tsx.
@@ -124,32 +125,32 @@ it('falls back after a timeout and ignores a late GitHub response', async () => 
   expect(container.querySelector('#app-contributors')?.textContent).not.toContain('late-response')
 })
 
-it('runs the 6-step spotlight tutorial with Next, Back, Skip Tour, X, Escape, and focus restoration', async () => {
+it('runs the 9-step spotlight tutorial with Next, Back, Skip Tour, X, Escape, and focus restoration', async () => {
   const sidebar = document.createElement('aside')
   sidebar.setAttribute('data-tour', 'project-sidebar')
   vi.spyOn(sidebar, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 40, 260, 600))
   document.body.append(sidebar)
   try {
     await act(async () => root.render(<AppInfoDialog kind="tutorial" onClose={close} />))
-    expect(TUTORIAL_STEPS).toHaveLength(6)
+    expect(TUTORIAL_STEPS).toHaveLength(9)
     expect(container.querySelector('[aria-label="Updates"]')).toBeNull()
-    expect(container.textContent).toContain('Step 1 of 6')
-    expect(container.textContent).toContain('Project Files, Templates & Git')
+    expect(container.textContent).toContain('Step 1 of 9')
+    expect(container.textContent).toContain('Project Files & Templates')
     expect(container.querySelector('[data-tour-spotlight]')).not.toBeNull()
 
     const next = () => Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Next')!
     await act(async () => next().click())
-    expect(container.textContent).toContain('Step 2 of 6')
-    expect(container.textContent).toContain('Tabs, Split View & Page Editor')
+    expect(container.textContent).toContain('Step 2 of 9')
+    expect(container.textContent).toContain('Git · Source Control')
 
     const back = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Back')!
     await act(async () => back.click())
-    expect(container.textContent).toContain('Step 1 of 6')
+    expect(container.textContent).toContain('Step 1 of 9')
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       await act(async () => next().click())
     }
-    expect(container.textContent).toContain('Step 6 of 6')
+    expect(container.textContent).toContain('Step 9 of 9')
     expect(container.textContent).toContain('Themes, Mods & Export PDF')
     const finish = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Finish')!
     await act(async () => finish.click())
@@ -167,5 +168,41 @@ it('runs the 6-step spotlight tutorial with Next, Back, Skip Tour, X, Escape, an
     expect(document.activeElement).toBe(trigger)
   } finally {
     sidebar.remove()
+  }
+})
+
+it('temporarily reveals hidden panels during the tutorial and restores them on close', async () => {
+  const initialPanels = { ...DEFAULT_PANELS, git: false, properties: false, snippets: false, bottomPanel: false }
+  useSettingsStore.getState().restorePanels(initialPanels)
+  try {
+    await act(async () => root.render(<AppInfoDialog kind="tutorial" onClose={close} />))
+    for (const id of PANEL_IDS) {
+      expect(useSettingsStore.getState().panels[id]).toBe(true)
+    }
+    await act(async () => root.unmount())
+    expect(useSettingsStore.getState().panels).toEqual(initialPanels)
+  } finally {
+    useSettingsStore.getState().restorePanels(DEFAULT_PANELS)
+  }
+})
+
+it('clamps the tutorial popover above the bottom edge by at least its height + 5px', async () => {
+  const gitPanel = document.createElement('div')
+  gitPanel.setAttribute('data-tour', 'git-source-control')
+  vi.spyOn(gitPanel, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 650, 260, 140))
+  document.body.append(gitPanel)
+  const originalInnerHeight = window.innerHeight
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+  try {
+    await act(async () => root.render(<AppInfoDialog kind="tutorial" onClose={close} />))
+    const popover = container.querySelector<HTMLElement>('[aria-label="Tutorial step"]')!
+    vi.spyOn(popover, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 380, 340))
+    const next = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'Next')!
+    await act(async () => next.click())
+    const top = parseFloat(popover.style.top)
+    expect(top).toBeLessThanOrEqual(800 - 340 - 5)
+  } finally {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
+    gitPanel.remove()
   }
 })

@@ -313,6 +313,7 @@ export const DICTIONARY = {
     'menu.help.reportIssue': 'Report an Issue',
     'menu.help.reportBug': 'Report Bug…',
     'menu.help.requestFeature': 'Request Feature…',
+    'menu.help.welcomeFile': 'Welcome File',
     'menu.help.tutorial': 'Tutorial',
     'menu.help.about': 'About',
 
@@ -1167,6 +1168,7 @@ export const DICTIONARY = {
     'menu.help.reportIssue': 'Reportar un problema',
     'menu.help.reportBug': 'Reportar un error…',
     'menu.help.requestFeature': 'Sugerir una función…',
+    'menu.help.welcomeFile': 'Archivo de bienvenida',
     'menu.help.tutorial': 'Tutorial',
     'menu.help.about': 'Acerca de',
 

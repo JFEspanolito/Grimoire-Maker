@@ -166,7 +166,7 @@ export default function App() {
               {visiblePanels.files && <FileTree />}
               {visiblePanels.templates && <TemplateCatalog />}
               </div>
-              <div className={styles.sourceControl}>
+              <div className={styles.sourceControl} data-tour="git-source-control">
                 <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.git} aria-controls="source-control-panel"
                   onClick={() => togglePanel('git')} title={repository.error ? `Git status unavailable: ${repository.error}` : 'Source control'}>
                   Git{(visiblePanels.files || visiblePanels.templates || visiblePanels.git) && ' · Source control'}
@@ -190,7 +190,7 @@ export default function App() {
                 width={snippetsWidth} otherWidth={sidebarCollapsed ? 40 : sidebarWidth} direction={-1} onResize={setSnippetsWidth} />
               <aside id="snippets-sidebar" data-tour="snippets-sidebar" style={{ width: snippetsWidth }} className={styles.snippets}>
                 <div className={styles.explorer}>{visiblePanels.snippets && <SnippetPalette editor={activeEditor} />}</div>
-                <div className={styles.sourceControl}>
+                <div className={styles.sourceControl} data-tour="git-source-control">
                   <button type="button" className={styles.gitToggle} aria-expanded={visiblePanels.properties} aria-controls="properties-panel"
                     onClick={() => togglePanel('properties')}>{t('properties.title')}</button>
                   {visiblePanels.properties && <div id="properties-panel" className={styles.gitPanel}><PropertiesPanel editor={activeEditor} /><ExportPageSnippetButton /></div>}

@@ -906,3 +906,13 @@ it('autosave treats a file already holding the buffer as saved, as after a plugi
   await actions.autoSave()
   expect(disk.get('/a.md')).toBe('later edit')
 })
+
+it('recreates Welcome.md at the Draft root and opens it in a tab', async () => {
+  disk.set('/workspace', '')
+  useDocumentStore.getState().setWorkspace('/workspace', [])
+  await actions.createWelcomeFile()
+  expect(writeTextFile).toHaveBeenCalledWith('/workspace/Draft/Welcome.md', expect.stringContaining('# Welcome to Grimoire Maker'))
+  expect(disk.get('/workspace/Draft/Welcome.md')).toContain('# Welcome to Grimoire Maker')
+  expect(useDocumentStore.getState().document.path).toBe('/workspace/Draft/Welcome.md')
+  expect(useTabStore.getState().active).toBe('/workspace/Draft/Welcome.md')
+})

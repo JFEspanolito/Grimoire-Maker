@@ -17,7 +17,7 @@ import {
   type AppState,
 } from '../lib/appState'
 import { remapPath, splitBinder } from '../lib/binder'
-import { initializeProject } from '../lib/newProject'
+import { DEMO_MARKDOWN, initializeProject } from '../lib/newProject'
 import { currentImportSection, useExplorerStore } from '../stores/explorerStore'
 import { serializeDocument } from '../lib/frontmatter'
 import { applyTemplateFiles } from '../lib/templateActions'
@@ -384,6 +384,26 @@ export function useFileSystem() {
     [loadFromRaw, persistCurrentDocument, remember],
   )
 
+  const createWelcomeFile = useCallback(
+    async () => {
+      const root = useDocumentStore.getState().workspaceRoot
+      if (!root) return
+      let path = ''
+      await runFileAction(async () => {
+        const draft = splitBinder(useDocumentStore.getState().tree)?.draft?.path ?? `${root}/Draft`
+        if (!(await exists(draft))) await mkdir(draft, { recursive: true })
+        path = `${draft}/Welcome.md`
+        await writeTextFile(path, DEMO_MARKDOWN)
+        await refreshTree()
+        if (useDocumentStore.getState().buffers[path] || useDocumentStore.getState().document.path === path) {
+          loadFromRaw(path, DEMO_MARKDOWN)
+        }
+      })
+      if (path) await openFile(path, true)
+    },
+    [loadFromRaw, openFile, refreshTree],
+  )
+
   /** Brings back last session: page setup, workspace folder and the file that was open. */
   const restoreSession = useCallback((): Promise<void> => {
     if (!isTauri()) return Promise.resolve()
@@ -605,6 +625,7 @@ export function useFileSystem() {
     closeTab,
     applyTemplate,
     createFile,
+    createWelcomeFile,
     createFolder,
     renameEntry,
     openFolder,

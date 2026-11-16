@@ -264,6 +264,7 @@ export function MenuBar({ visiblePanels, onTogglePanel, editor = null }: Props) 
           </div>
         </details>
         <hr />
+        <button type="button" disabled={!workspace} onClick={() => void run(() => actions.createWelcomeFile())}>{t('menu.help.welcomeFile')}</button>
         <button type="button" onClick={() => openInfo('tutorial')}>{t('menu.help.tutorial')}</button>
         <button type="button" onClick={() => openInfo('about')}>{t('menu.help.about')}</button>
       </div>

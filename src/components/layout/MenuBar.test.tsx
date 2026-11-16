@@ -272,7 +272,7 @@ it('opens About and Tutorial from Help, closes menus, and restores Help focus', 
   try {
     await act(async () => root.render(<MenuBar visiblePanels={{ files: true, templates: true, snippets: true, git: true, properties: true }} onTogglePanel={() => {}} />))
     const help = Array.from(container.querySelectorAll('nav > details')).find((menu) => menu.querySelector('summary')?.textContent === 'Help')! as HTMLDetailsElement
-    for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'Step 1 of 6']]) {
+    for (const [label, content] of [['About', 'apps@jfespanolito.dev'], ['Tutorial', 'Step 1 of 9']]) {
       help.open = true
       const action = Array.from(help.querySelectorAll('button')).find((button) => button.textContent === label)
       expect(action).toBeDefined()
@@ -499,7 +499,7 @@ it('translates menu summaries dynamically when language is changed', async () =>
     expect(settingsButtonsEs).toEqual(['Administrador de mods', 'Preferencias…', 'Buscar actualizaciones…'])
 
     const helpButtonsEs = Array.from(menusEs[5].querySelectorAll('button')).map((b) => b.textContent)
-    expect(helpButtonsEs).toEqual(['Reportar un error…', 'Sugerir una función…', 'Tutorial', 'Acerca de'])
+    expect(helpButtonsEs).toEqual(['Reportar un error…', 'Sugerir una función…', 'Archivo de bienvenida', 'Tutorial', 'Acerca de'])
   } finally {
     useSettingsStore.setState({ language: 'en' })
     container.remove()
