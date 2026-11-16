@@ -53,6 +53,7 @@ it('uses application identity, contact, and an accessible GitHub icon link and l
     expect(container.querySelector('[data-credits]')).toBeNull()
     expect(container.querySelector('a[href="https://github.com/JFEspanolito/Grimoire-Maker/issues/new?template=bug_report.md"]')?.textContent).toBe('Report Bug')
     expect(container.querySelector('a[href="https://github.com/JFEspanolito/Grimoire-Maker/issues/new?template=feature_request.md"]')?.textContent).toBe('Request Feature')
+    expect(container.querySelector('a[href="https://www.jfespanolito.dev/apps/grimoire/privacy"]')?.textContent).toBe('Privacy Policy')
     expect(fetch).toHaveBeenCalledTimes(1)
     await act(async () => root.render(<AppInfoDialog kind="about" onClose={close} />))
     expect(fetch).toHaveBeenCalledTimes(1)

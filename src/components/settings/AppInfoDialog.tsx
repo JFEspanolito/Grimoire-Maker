@@ -4,7 +4,7 @@ import packageSource from '../../../package.json?raw'
 import styles from './AppInfoDialog.module.css'
 import { TUTORIAL_STEPS, type TourStep } from './tutorialSteps'
 export { TUTORIAL_STEPS } from './tutorialSteps'
-import { localContributors, urlGithubBugReport, urlGithubFeatureRequest, urlGithubRepo } from '../../data/contributors'
+import { localContributors, urlGithubBugReport, urlGithubFeatureRequest, urlGithubRepo, urlPrivacyPolicy } from '../../data/contributors'
 import { AboutUpdates } from './AboutUpdates'
 import { useTranslation } from '../../lib/i18n'
 import { PANEL_IDS, useSettingsStore, type PanelVisibility } from '../../stores/settingsStore'
@@ -293,6 +293,8 @@ export function AppInfoDialog({ kind, onClose }: Props) {
           <a href={urlGithubBugReport} target="_blank" rel="noopener noreferrer">{t('about.reportBug')}</a>
           <span aria-hidden="true" className={styles.bullet}>·</span>
           <a href={urlGithubFeatureRequest} target="_blank" rel="noopener noreferrer">{t('about.requestFeature')}</a>
+          <span aria-hidden="true" className={styles.bullet}>·</span>
+          <a href={urlPrivacyPolicy} target="_blank" rel="noopener noreferrer">{t('about.privacyPolicy')}</a>
         </div>
       </section>
       <section aria-labelledby="app-credits-title">
