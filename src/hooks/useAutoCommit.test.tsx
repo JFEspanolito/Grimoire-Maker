@@ -5,8 +5,8 @@ import { useAutoCommit } from './useAutoCommit'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useDocumentStore } from '../stores/documentStore'
 
-const mocks = vi.hoisted(() => ({ commit: vi.fn(), native: vi.fn(), notify: vi.fn(), report: vi.fn() }))
-vi.mock('./useFileSystem', () => ({ isTauri: mocks.native }))
+const mocks = vi.hoisted(() => ({ commit: vi.fn(), native: vi.fn(), notify: vi.fn(), report: vi.fn(), queue: vi.fn((action: () => Promise<unknown>) => action()) }))
+vi.mock('./useFileSystem', () => ({ isTauri: mocks.native, runFileAction: mocks.queue }))
 vi.mock('../lib/versionControl', () => ({ autoCommitChanges: mocks.commit }))
 vi.mock('../lib/repositoryEvents', () => ({ notifyRepositoryChanged: mocks.notify }))
 vi.mock('../lib/errorLogging', () => ({ reportError: mocks.report }))
@@ -79,4 +79,15 @@ it('reports failures and refreshes possible partial staging without unhandled re
   expect(mocks.notify).toHaveBeenCalledOnce()
   await act(async () => vi.advanceTimersByTimeAsync(1200000))
   expect(mocks.commit).toHaveBeenCalledTimes(2)
+})
+it('waits for queued file saves before committing', async () => {
+  let release!: () => void
+  const pendingSave = new Promise<void>(resolve => { release = resolve })
+  mocks.queue.mockImplementationOnce(async (action: () => Promise<unknown>) => { await pendingSave; return action() })
+  await act(async () => root.render(<Harness />))
+  await act(async () => vi.advanceTimersByTimeAsync(1200000))
+  expect(mocks.queue).toHaveBeenCalledOnce()
+  expect(mocks.commit).not.toHaveBeenCalled()
+  await act(async () => release())
+  expect(mocks.commit).toHaveBeenCalledExactlyOnceWith('/book', 'update content automatically')
 })

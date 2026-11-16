@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { exists, mkdir, readDir, readTextFile, rename, writeTextFile, readFile, writeFile, stat } from '@tauri-apps/plugin-fs'
+import { writeTextFileAtomically } from '../lib/atomicWrite'
 import { importFiles, type ImportSection } from '../lib/fileImport'
 import { loadSettings } from '../lib/preferences'
 import { useDocumentStore } from '../stores/documentStore'
@@ -43,6 +44,7 @@ async function readTree(dir: string): Promise<FileNode[]> {
 }
 
 const parentOf = (path: string): string => path.slice(0, path.lastIndexOf('/'))
+
 
 function isDirectoryNode(tree: FileNode[], targetPath: string): boolean | null {
   for (const node of tree) {
@@ -156,7 +158,10 @@ export function useFileSystem() {
     const picked = !path
     path ??= await save({ filters: [{ name: 'Markdown', extensions: ['md'] }] })
     if (!path) return false
-    await writeTextFile(path, serializeDocument(snapshot.frontmatter, snapshot.body))
+    const text = serializeDocument(snapshot.frontmatter, snapshot.body)
+    // A path picked in the save dialog is the only granted file until its folder is granted below.
+    if (picked) await writeTextFile(path, text)
+    else await writeTextFileAtomically(path, text)
     if (picked) await grantDocumentFolder(path)
     useDocumentStore.getState().markSnapshotSaved(path, snapshot)
     if (useDocumentStore.getState().document.path === path) useTabStore.getState().open(path, true)
@@ -554,13 +559,27 @@ export function useFileSystem() {
 
   const autoSave = useCallback(() => runFileAction(async () => {
     if (!isTauri()) return
-    const state = useDocumentStore.getState()
-    const snapshots = Object.values({ ...state.buffers, [state.document.path ?? '__untitled__']: state.document })
+    const initial = useDocumentStore.getState()
+    const paths = Object.values({ ...initial.buffers, [initial.document.path ?? '__untitled__']: initial.document })
+      .flatMap(document => document.path && document.dirty ? [document.path] : [])
     const failures: string[] = []
-    for (const snapshot of snapshots) {
-      if (!snapshot.path || !snapshot.dirty) continue
-      try { await persistDocument(snapshot) }
-      catch (error) { failures.push(`${snapshot.path}: ${error instanceof Error ? error.message : String(error)}`) }
+    for (const path of paths) {
+      // Each buffer is read again right before its write: earlier writes yield, and a tab
+      // closed or saved meanwhile must not be written from a stale copy.
+      const state = useDocumentStore.getState()
+      const snapshot = state.document.path === path ? state.document : state.buffers[path]
+      if (!snapshot?.dirty) continue
+      try {
+        const known = state.diskContents[path]
+        if (known !== undefined) {
+          const disk = await readTextFile(path).catch(() => null)
+          if (disk !== null && disk !== known) {
+            failures.push(`${path}: changed on disk since it was opened; save it manually to overwrite`)
+            continue
+          }
+        }
+        await persistDocument(snapshot)
+      } catch (error) { failures.push(`${path}: ${error instanceof Error ? error.message : String(error)}`) }
     }
     if (failures.length) {
       const error = new Error(`Auto save failed: ${failures.join('; ')}`)
